@@ -18,6 +18,7 @@ import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
+import { TaskEditModal } from '@/ui/TaskEditModal';
 
 // Alışkanlık + bugünkü durumu + serisi bir arada (UI'ın ihtiyacı olan görünüm modeli).
 interface HabitView {
@@ -50,6 +51,7 @@ export default function TodayScreen() {
   const [habits, setHabits] = useState<HabitView[]>([]);
   const [newTask, setNewTask] = useState('');
   const [newHabit, setNewHabit] = useState('');
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Tüm ekran verisini repository'lerden yeniden okur. Her mutasyondan sonra çağrılır.
   const reload = useCallback(() => {
@@ -133,20 +135,26 @@ export default function TodayScreen() {
           tasks.map((t) => {
             const done = t.completed_at !== null;
             return (
-              <Pressable key={t.id} style={styles.card} onPress={() => toggleTask(t)}>
-                <View
-                  style={[
-                    styles.checkbox,
-                    done ? styles.checkboxDone : { borderColor: PRIORITY_COLOR[t.priority] },
-                  ]}
-                >
-                  {done && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-                <Text style={[styles.cardTitle, done && styles.cardTitleDone]}>{t.title}</Text>
+              <View key={t.id} style={styles.card}>
+                {/* Sol: kutu — dokununca tamamla/geri al */}
+                <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
+                  <View
+                    style={[
+                      styles.checkbox,
+                      done ? styles.checkboxDone : { borderColor: PRIORITY_COLOR[t.priority] },
+                    ]}
+                  >
+                    {done && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                </Pressable>
+                {/* Gövde: dokununca düzenleme panelini aç */}
+                <Pressable style={styles.cardBody} onPress={() => setEditingTask(t)}>
+                  <Text style={[styles.cardTitle, done && styles.cardTitleDone]}>{t.title}</Text>
+                </Pressable>
                 {!done && (
                   <View style={[styles.priorityDot, { backgroundColor: PRIORITY_COLOR[t.priority] }]} />
                 )}
-              </Pressable>
+              </View>
             );
           })
         )}
@@ -187,6 +195,13 @@ export default function TodayScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* Görev düzenleme paneli — bir göreve dokununca açılır */}
+      <TaskEditModal
+        task={editingTask}
+        onClose={() => setEditingTask(null)}
+        onChanged={reload}
+      />
     </SafeAreaView>
   );
 }
@@ -264,6 +279,7 @@ const styles = StyleSheet.create({
   },
   checkboxDone: { backgroundColor: '#10b981', borderColor: '#10b981' },
   checkmark: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  cardBody: { flex: 1, paddingVertical: 4 },
   cardTitle: { flex: 1, fontSize: 15, color: '#0f172a' },
   cardTitleDone: { color: '#94a3b8', textDecorationLine: 'line-through' },
   priorityDot: { width: 8, height: 8, borderRadius: 4 },
