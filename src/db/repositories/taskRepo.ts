@@ -1,0 +1,146 @@
+// Görev (Task) repository.
+// UI asla SQL görmez - sadece bu fonksiyonları çağırır.
+// Her yazma işlemi updated_at'i tazeler ve synced=0 yapar (senkron bekliyor).
+
+import { getDb } from '../database';
+import { newId, nowIso, parseJson, toJson } from '../../lib/helpers';
+import type { Task, Priority, Recurrence } from '../../types/models';
+
+// DB'den gelen ham satırı uygulama tipine çevirir (recurrence JSON parse).
+function rowToTask(row: any): Task {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title,
+    due_date: row.due_date,
+    priority: row.priority as Priority,
+    recurrence: parseJson<Recurrence>(row.recurrence),
+    completed_at: row.completed_at,
+    updated_at: row.updated_at,
+    deleted_at: row.deleted_at,
+    synced: row.synced,
+  };
+}
+
+export interface CreateTaskInput {
+  user_id: string;
+  title: string;
+  due_date?: string | null;
+  priority?: Priority;
+  recurrence?: Recurrence | null;
+}
+
+export const taskRepo = {
+  // Yeni görev oluşturur.
+  create(input: CreateTaskInput): Task {
+    const db = getDb();
+    const id = newId();
+    const now = nowIso();
+    db.runSync(
+      `INSERT INTO tasks
+       (id, user_id, title, due_date, priority, recurrence, completed_at, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0)`,
+      [
+        id,
+        input.user_id,
+        input.title,
+        input.due_date ?? null,
+        input.priority ?? 'medium',
+        toJson(input.recurrence ?? null),
+        now,
+      ]
+    );
+    return this.getById(id)!;
+  },
+
+  // ID ile tek görev getirir (silinmemiş).
+  getById(id: string): Task | null {
+    const db = getDb();
+    const row = db.getFirstSync<any>(
+      `SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL`,
+      [id]
+    );
+    return row ? rowToTask(row) : null;
+  },
+
+  // Bir kullanıcının tüm aktif görevleri (son tarihe göre sıralı).
+  listByUser(userId: string): Task[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM tasks
+       WHERE user_id = ? AND deleted_at IS NULL
+       ORDER BY (due_date IS NULL), due_date ASC`,
+      [userId]
+    );
+    return rows.map(rowToTask);
+  },
+
+  // "Bugün" ekranı için: bugün veya daha önce vadesi gelen, tamamlanmamış görevler.
+  listDueToday(userId: string, today: string): Task[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM tasks
+       WHERE user_id = ? AND deleted_at IS NULL
+         AND completed_at IS NULL
+         AND due_date IS NOT NULL AND date(due_date) <= ?
+       ORDER BY due_date ASC`,
+      [userId, today]
+    );
+    return rows.map(rowToTask);
+  },
+
+  // "Bugün" ekranının gösterdiği liste: listDueToday'den farkı, BUGÜN tamamlanan
+  // görevleri de döndürür ki kutuya basınca görev kaybolmasın - işaretli/üstü
+  // çizili olarak gün boyu listede kalsın, ertesi gün kendiliğinden düşsün.
+  // Tamamlananlar listenin altına, tamamlanmamışlar vadeye göre üste sıralanır.
+  listForToday(userId: string, today: string): Task[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM tasks
+       WHERE user_id = ? AND deleted_at IS NULL
+         AND due_date IS NOT NULL
+         AND (
+           (completed_at IS NULL AND date(due_date) <= ?)
+           OR (completed_at IS NOT NULL AND date(completed_at, 'localtime') = ?)
+         )
+       ORDER BY (completed_at IS NOT NULL), due_date ASC`,
+      [userId, today, today]
+    );
+    return rows.map(rowToTask);
+  },
+
+  // Görevi tamamlandı olarak işaretle (ya da geri al).
+  setCompleted(id: string, completed: boolean): void {
+    const db = getDb();
+    db.runSync(
+      `UPDATE tasks SET completed_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+      [completed ? nowIso() : null, nowIso(), id]
+    );
+  },
+
+  // Görev alanlarını günceller.
+  update(id: string, fields: Partial<CreateTaskInput>): void {
+    const db = getDb();
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (fields.title !== undefined) { sets.push('title = ?'); vals.push(fields.title); }
+    if (fields.due_date !== undefined) { sets.push('due_date = ?'); vals.push(fields.due_date); }
+    if (fields.priority !== undefined) { sets.push('priority = ?'); vals.push(fields.priority); }
+    if (fields.recurrence !== undefined) { sets.push('recurrence = ?'); vals.push(toJson(fields.recurrence)); }
+    if (sets.length === 0) return;
+    sets.push('updated_at = ?'); vals.push(nowIso());
+    sets.push('synced = 0');
+    vals.push(id);
+    db.runSync(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`, vals);
+  },
+
+  // Soft delete - kayıt kalır, deleted_at işaretlenir (senkronda geri gelmesin diye).
+  softDelete(id: string): void {
+    const db = getDb();
+    const now = nowIso();
+    db.runSync(
+      `UPDATE tasks SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+      [now, now, id]
+    );
+  },
+};
