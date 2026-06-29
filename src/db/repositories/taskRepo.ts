@@ -109,6 +109,22 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
+  // Belirli bir GÜNE vadeli görevler (tamamlanmış dahil). "Bugün" ekranında
+  // başka bir güne gezinildiğinde o günün görevlerini net göstermek için.
+  // listForToday'den farkı: kümülatif "<=" yok, sadece tam o gün; geçmiş günde
+  // devreden görevlerle karışmaz.
+  listByDueDate(userId: string, date: string): Task[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM tasks
+       WHERE user_id = ? AND deleted_at IS NULL
+         AND due_date IS NOT NULL AND date(due_date) = ?
+       ORDER BY (completed_at IS NOT NULL), due_date ASC`,
+      [userId, date]
+    );
+    return rows.map(rowToTask);
+  },
+
   // Görevi tamamlandı olarak işaretle (ya da geri al).
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
