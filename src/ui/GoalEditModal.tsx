@@ -1,0 +1,278 @@
+// Hedef düzenleme paneli (alttan açılan modal).
+// "Hedefler" ekranında bir hedefin başlığına dokununca açılır.
+// Sayısal hedefte: başlık, hedef değeri, birim ve mevcut değer düzenlenir.
+// Tarihli hedefte: başlık ve son tarih düzenlenir.
+// goal_type DEĞİŞTİRİLMEZ — tip değişimi alanları tutarsız bırakır (salt gösterilir).
+// Görev/alışkanlık modallarıyla simetrik. Mimari kural: SQL yok - yalnızca goalRepo.
+
+import { useEffect, useState } from 'react';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { goalRepo } from '@/db';
+import type { Goal } from '@/db';
+import { colors, shortDate } from '@/ui/theme';
+
+interface Props {
+  goal: Goal | null; // null = panel kapalı
+  onClose: () => void;
+  onChanged: () => void; // kaydet/sil sonrası parent listeyi tazelesin
+}
+
+function toYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function GoalEditModal({ goal, onClose, onChanged }: Props) {
+  const [title, setTitle] = useState('');
+  const [target, setTarget] = useState(''); // sayısal hedef değeri (metin)
+  const [unit, setUnit] = useState('');
+  const [current, setCurrent] = useState(''); // sayısal mevcut değer (metin)
+  const [deadline, setDeadline] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Panel her açıldığında formu seçilen hedefin değerleriyle doldur.
+  useEffect(() => {
+    if (goal) {
+      setTitle(goal.title);
+      setTarget(goal.target_value != null ? String(goal.target_value) : '');
+      setUnit(goal.unit ?? '');
+      setCurrent(String(goal.current_value));
+      setDeadline(goal.deadline ? goal.deadline.slice(0, 10) : null);
+      setShowPicker(false);
+      setConfirmDelete(false);
+    }
+  }, [goal]);
+
+  if (!goal) return null;
+  const numeric = goal.goal_type === 'numeric';
+
+  const save = () => {
+    const t = title.trim();
+    if (!t) return;
+    if (numeric) {
+      const targetNum = parseFloat(target.replace(',', '.'));
+      const currentNum = parseFloat(current.replace(',', '.'));
+      goalRepo.update(goal.id, {
+        title: t,
+        target_value: Number.isFinite(targetNum) ? targetNum : null,
+        unit: unit.trim() || null,
+        current_value: Number.isFinite(currentNum) ? currentNum : 0,
+      });
+    } else {
+      goalRepo.update(goal.id, { title: t, deadline });
+    }
+    onChanged();
+    onClose();
+  };
+
+  const remove = () => {
+    goalRepo.softDelete(goal.id);
+    onChanged();
+    onClose();
+  };
+
+  const onPickDate = (_e: unknown, picked?: Date) => {
+    setShowPicker(Platform.OS === 'ios');
+    if (picked) setDeadline(toYmd(picked));
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+
+      <View style={styles.sheet}>
+        <View style={styles.handle} />
+        <Text style={styles.heading}>Hedefi düzenle</Text>
+
+        {/* Tip (salt gösterim) */}
+        <Text style={styles.typeTag}>{numeric ? 'Sayısal hedef' : 'Tarihli hedef'}</Text>
+
+        {/* Başlık */}
+        <Text style={styles.label}>Başlık</Text>
+        <TextInput
+          style={styles.input}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Hedef başlığı"
+          placeholderTextColor="#94a3b8"
+        />
+
+        {numeric ? (
+          <>
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>Hedef değer</Text>
+                <TextInput
+                  style={styles.input}
+                  value={target}
+                  onChangeText={setTarget}
+                  keyboardType="numeric"
+                  placeholder="örn. 100"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>Birim</Text>
+                <TextInput
+                  style={styles.input}
+                  value={unit}
+                  onChangeText={setUnit}
+                  placeholder="km, kitap"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+            </View>
+
+            <Text style={styles.label}>Mevcut değer</Text>
+            <TextInput
+              style={styles.input}
+              value={current}
+              onChangeText={setCurrent}
+              keyboardType="numeric"
+              placeholder="örn. 40"
+              placeholderTextColor="#94a3b8"
+            />
+          </>
+        ) : (
+          <>
+            <Text style={styles.label}>Son tarih</Text>
+            <View style={styles.dateRow}>
+              <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
+                <Text style={styles.dateBtnText}>
+                  {deadline ? shortDate(deadline) : 'Tarih seç'}
+                </Text>
+              </Pressable>
+              {deadline && (
+                <Pressable style={styles.clearBtn} onPress={() => setDeadline(null)}>
+                  <Text style={styles.clearBtnText}>Temizle</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {showPicker && (
+              <DateTimePicker
+                value={deadline ? new Date(`${deadline}T00:00:00`) : new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                onChange={onPickDate}
+              />
+            )}
+          </>
+        )}
+
+        {/* Eylemler */}
+        <View style={styles.actions}>
+          <Pressable
+            style={[styles.deleteBtn, confirmDelete && styles.deleteBtnConfirm]}
+            onPress={() => (confirmDelete ? remove() : setConfirmDelete(true))}
+          >
+            <Text style={[styles.deleteBtnText, confirmDelete && styles.deleteBtnTextConfirm]}>
+              {confirmDelete ? 'Silmek için tekrar bas' : 'Sil'}
+            </Text>
+          </Pressable>
+          <Pressable style={styles.saveBtn} onPress={save}>
+            <Text style={styles.saveBtnText}>Kaydet</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)' },
+  sheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#cbd5e1',
+    marginBottom: 16,
+  },
+  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 8 },
+  typeTag: {
+    alignSelf: 'flex-start',
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    backgroundColor: colors.primarySoft,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  input: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12,
+  },
+  row: { flexDirection: 'row', gap: 12 },
+  col: { flex: 1 },
+  dateRow: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+  dateBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  dateBtnText: { fontSize: 15, color: '#0f172a' },
+  clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
+  clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
+  actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  deleteBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+  },
+  deleteBtnConfirm: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
+  deleteBtnText: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
+  deleteBtnTextConfirm: { color: '#fff' },
+  saveBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#4f46e5',
+  },
+  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+});

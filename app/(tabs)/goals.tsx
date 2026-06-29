@@ -11,6 +11,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal, GoalType } from '@/db';
 import { useAppData } from '@/ui/AppData';
+import { GoalEditModal } from '@/ui/GoalEditModal';
 import { colors, shared, shortDate } from '@/ui/theme';
 
 function toYmd(d: Date): string {
@@ -37,6 +38,7 @@ export default function GoalsScreen() {
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Goal | null>(null); // null = panel kapalı
 
   // Ekleme formu
   const [title, setTitle] = useState('');
@@ -183,7 +185,10 @@ export default function GoalsScreen() {
             return (
               <View key={goal.id} style={styles.goalCard}>
                 <View style={styles.goalHead}>
-                  <Text style={styles.goalTitle}>{goal.title}</Text>
+                  {/* Başlığa dokununca düzenleme paneli açılır */}
+                  <Pressable style={styles.titleArea} onPress={() => setEditing(goal)}>
+                    <Text style={styles.goalTitle}>{goal.title}</Text>
+                  </Pressable>
                   <Pressable onPress={() => remove(goal.id)} hitSlop={8}>
                     <Text style={[styles.del, armed && styles.delArmed]}>
                       {armed ? 'Emin?' : 'Sil'}
@@ -228,6 +233,12 @@ export default function GoalsScreen() {
           })
         )}
       </ScrollView>
+
+      <GoalEditModal
+        goal={editing}
+        onClose={() => setEditing(null)}
+        onChanged={reload}
+      />
     </SafeAreaView>
   );
 }
@@ -275,7 +286,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   goalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  goalTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.text },
+  titleArea: { flex: 1 },
+  goalTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
   del: { fontSize: 13, fontWeight: '600', color: colors.faint, paddingLeft: 12 },
   delArmed: { color: '#dc2626' },
 

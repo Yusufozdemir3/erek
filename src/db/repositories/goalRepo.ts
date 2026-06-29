@@ -62,6 +62,43 @@ export const goalRepo = {
     return rows.map(rowToGoal);
   },
 
+  // Hedefin tanımını günceller (başlık, hedef değeri, birim, son tarih, mevcut değer).
+  // goal_type değiştirilmez — tip değişimi alanları tutarsız bırakır.
+  // current_value verilirse 0..target_value aralığına sıkıştırılır.
+  update(
+    id: string,
+    fields: Partial<{
+      title: string;
+      target_value: number | null;
+      unit: string | null;
+      deadline: string | null;
+      current_value: number;
+    }>
+  ): void {
+    const db = getDb();
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (fields.title !== undefined) { sets.push('title = ?'); vals.push(fields.title); }
+    if (fields.target_value !== undefined) { sets.push('target_value = ?'); vals.push(fields.target_value); }
+    if (fields.unit !== undefined) { sets.push('unit = ?'); vals.push(fields.unit); }
+    if (fields.deadline !== undefined) { sets.push('deadline = ?'); vals.push(fields.deadline); }
+    if (fields.current_value !== undefined) {
+      // Hedef belirliyse aşmasın; negatif olmasın. Hedef bu çağrıda da değişebilir.
+      const cap = fields.target_value !== undefined
+        ? fields.target_value
+        : (this.getById(id)?.target_value ?? null);
+      let v = fields.current_value;
+      if (v < 0) v = 0;
+      if (cap != null && v > cap) v = cap;
+      sets.push('current_value = ?'); vals.push(v);
+    }
+    if (sets.length === 0) return;
+    sets.push('updated_at = ?'); vals.push(nowIso());
+    sets.push('synced = 0');
+    vals.push(id);
+    db.runSync(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
+  },
+
   // Sayısal hedefte ilerlemeyi artırır (örn. +5 km). Hedefi aşmaz.
   addProgress(id: string, amount: number): void {
     const db = getDb();
