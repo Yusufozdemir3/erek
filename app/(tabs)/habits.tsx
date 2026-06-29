@@ -7,13 +7,16 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
+import type { Habit } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
+import { HabitEditModal } from '@/ui/HabitEditModal';
 import { colors, shared } from '@/ui/theme';
 
 interface HabitView {
   id: string;
   title: string;
+  remindAt: string | null; // "HH:MM" hatırlatma saati
   completedToday: boolean;
   streak: number;
   week: boolean[]; // son 7 gün, en eskiden bugüne
@@ -40,6 +43,7 @@ export default function HabitsScreen() {
 
   const [habits, setHabits] = useState<HabitView[]>([]);
   const [newHabit, setNewHabit] = useState('');
+  const [editing, setEditing] = useState<Habit | null>(null); // null = panel kapalı
 
   const reload = useCallback(() => {
     const week = lastDays(7);
@@ -55,6 +59,7 @@ export default function HabitsScreen() {
         return {
           id: h.id,
           title: h.title,
+          remindAt: h.remind_at,
           completedToday: completed.has(today),
           streak: habitRepo.currentStreak(h.id),
           week: week.map((d) => completed.has(d)),
@@ -76,6 +81,10 @@ export default function HabitsScreen() {
   const toggleToday = (h: HabitView) => {
     habitRepo.toggleLog(h.id, today, !h.completedToday);
     reload();
+  };
+
+  const openEdit = (h: HabitView) => {
+    setEditing(habitRepo.getById(h.id));
   };
 
   return (
@@ -110,9 +119,13 @@ export default function HabitsScreen() {
                     {h.completedToday && <Text style={shared.checkmark}>✓</Text>}
                   </View>
                 </Pressable>
-                <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
-                  {h.title}
-                </Text>
+                {/* Başlığa dokununca düzenleme paneli açılır */}
+                <Pressable style={styles.titleArea} onPress={() => openEdit(h)}>
+                  <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
+                    {h.title}
+                  </Text>
+                  {h.remindAt && <Text style={styles.remind}>🔔 {h.remindAt}</Text>}
+                </Pressable>
                 {h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>}
               </View>
               {/* Son 7 gün */}
@@ -125,6 +138,12 @@ export default function HabitsScreen() {
           ))
         )}
       </ScrollView>
+
+      <HabitEditModal
+        habit={editing}
+        onClose={() => setEditing(null)}
+        onChanged={reload}
+      />
     </SafeAreaView>
   );
 }
@@ -132,6 +151,8 @@ export default function HabitsScreen() {
 const styles = StyleSheet.create({
   habitCard: { flexDirection: 'column', alignItems: 'stretch' },
   habitTop: { flexDirection: 'row', alignItems: 'center' },
+  titleArea: { flex: 1 },
+  remind: { fontSize: 12, color: '#64748b', marginTop: 2 },
   week: { flexDirection: 'row', gap: 6, marginTop: 12, marginLeft: 34 },
   dayDot: {
     width: 16,
