@@ -22,6 +22,7 @@
       "expo-router",
       "expo-sqlite",
       "expo-asset",
+      "expo-notifications",
       "@react-native-community/datetimepicker"
     ],
     "experiments": {

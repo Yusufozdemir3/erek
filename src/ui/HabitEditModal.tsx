@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -17,6 +18,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
+import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
 
 interface Props {
   habit: Habit | null; // null = panel kapalı
@@ -69,10 +71,24 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
     habitRepo.update(habit.id, { title: t, remind_at: remindAt });
     onChanged();
     onClose();
+    // Veriyi yazdıktan sonra bildirimi güncelle (saat değiştiyse yeniden kurar,
+    // kaldırıldıysa iptal eder). Güncel hali DB'den alınır.
+    const updated = habitRepo.getById(habit.id);
+    if (updated) {
+      scheduleHabitReminder(updated).then((ok) => {
+        if (!ok) {
+          Alert.alert(
+            'Bildirim izni yok',
+            'Hatırlatma kaydedildi ama bildirim gönderebilmek için izin gerekiyor. Telefon ayarlarından bu uygulamaya bildirim izni verebilirsin.'
+          );
+        }
+      });
+    }
   };
 
   const remove = () => {
     habitRepo.softDelete(habit.id);
+    cancelHabitReminder(habit.id);
     onChanged();
     onClose();
   };

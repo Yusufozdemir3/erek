@@ -5,8 +5,9 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { initDataLayer } from '@/db';
+import { habitRepo, initDataLayer } from '@/db';
 import type { User } from '@/db';
+import { rescheduleAllReminders } from '@/lib/notifications';
 
 interface AppData {
   user: User;
@@ -30,7 +31,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Şemayı kurar, anonim kullanıcıyı garantiler. Yalnızca ilk açılışta çalışır.
     initDataLayer()
-      .then(({ user }) => setUser(user))
+      .then(({ user }) => {
+        setUser(user);
+        // Açılışta mevcut hatırlatmaları DB'yi baz alarak yeniden programla
+        // (cihaz reboot'u / uygulama güncellemesi onları temizlemiş olabilir).
+        // İzin yoksa sessizce çıkar; hata uygulamayı bloklamasın.
+        rescheduleAllReminders(habitRepo.listByUser(user.id)).catch(() => {});
+      })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
