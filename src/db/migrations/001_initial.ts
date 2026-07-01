@@ -86,8 +86,16 @@ export const migration002 = `
 ALTER TABLE habit_logs ADD COLUMN synced INTEGER NOT NULL DEFAULT 0;
 `;
 
+// Migration 003: alışkanlıklara görsel kimlik (emoji ikon + renk).
+// İkisi de opsiyonel (NULL) — mevcut alışkanlıklar varsayılan görünümde kalır.
+export const migration003 = `
+ALTER TABLE habits ADD COLUMN icon  TEXT;
+ALTER TABLE habits ADD COLUMN color TEXT;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
   { version: 2, sql: migration002 },
+  { version: 3, sql: migration003 },
 ];

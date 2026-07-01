@@ -32,7 +32,7 @@ const TABLES: TableCfg[] = [
   },
   {
     table: 'habits',
-    cols: ['id', 'user_id', 'goal_id', 'title', 'remind_at', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'goal_id', 'title', 'remind_at', 'icon', 'color', 'updated_at', 'deleted_at'],
     hasUserId: true,
   },
   {

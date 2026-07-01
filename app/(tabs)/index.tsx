@@ -15,11 +15,14 @@ import type { Task } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
+import { HabitToggle } from '@/ui/HabitToggle';
 import { colors, PRIORITY_COLOR, shared } from '@/ui/theme';
 
 interface HabitView {
   id: string;
   title: string;
+  icon: string | null;
+  color: string | null;
   completed: boolean; // seçilen günde tamamlandı mı
   streak: number;
 }
@@ -72,6 +75,8 @@ export default function TodayScreen() {
       habitRepo.listByUser(user.id).map((h) => ({
         id: h.id,
         title: h.title,
+        icon: h.icon,
+        color: h.color,
         completed: habitRepo.isCompletedOn(h.id, selectedDate),
         streak: habitRepo.currentStreak(h.id),
       }))
@@ -160,9 +165,7 @@ export default function TodayScreen() {
 
               {habits.map((h) => (
                 <Pressable key={h.id} style={shared.card} onPress={() => toggleHabit(h)}>
-                  <View style={[shared.checkbox, h.completed && shared.checkboxDone]}>
-                    {h.completed && <Text style={shared.checkmark}>✓</Text>}
-                  </View>
+                  <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                   <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                     {h.title}
                   </Text>

@@ -11,12 +11,15 @@ import type { Habit } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { HabitEditModal } from '@/ui/HabitEditModal';
+import { HabitToggle } from '@/ui/HabitToggle';
 import { colors, shared } from '@/ui/theme';
 
 interface HabitView {
   id: string;
   title: string;
   remindAt: string | null; // "HH:MM" hatırlatma saati
+  icon: string | null;
+  color: string | null;
   completedToday: boolean;
   streak: number;
   week: boolean[]; // son 7 gün, en eskiden bugüne
@@ -60,6 +63,8 @@ export default function HabitsScreen() {
           id: h.id,
           title: h.title,
           remindAt: h.remind_at,
+          icon: h.icon,
+          color: h.color,
           completedToday: completed.has(today),
           streak: habitRepo.currentStreak(h.id),
           week: week.map((d) => completed.has(d)),
@@ -115,9 +120,7 @@ export default function HabitsScreen() {
             <View key={h.id} style={[shared.card, styles.habitCard]}>
               <View style={styles.habitTop}>
                 <Pressable onPress={() => toggleToday(h)} hitSlop={8}>
-                  <View style={[shared.checkbox, h.completedToday && shared.checkboxDone]}>
-                    {h.completedToday && <Text style={shared.checkmark}>✓</Text>}
-                  </View>
+                  <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                 </Pressable>
                 {/* Başlığa dokununca düzenleme paneli açılır */}
                 <Pressable style={styles.titleArea} onPress={() => openEdit(h)}>
@@ -153,7 +156,7 @@ const styles = StyleSheet.create({
   habitTop: { flexDirection: 'row', alignItems: 'center' },
   titleArea: { flex: 1 },
   remind: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  week: { flexDirection: 'row', gap: 6, marginTop: 12, marginLeft: 34 },
+  week: { flexDirection: 'row', gap: 6, marginTop: 12, marginLeft: 42 },
   dayDot: {
     width: 16,
     height: 16,

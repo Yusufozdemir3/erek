@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +20,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
 import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
+import { HABIT_COLORS, HABIT_ICONS } from '@/ui/theme';
 
 interface Props {
   habit: Habit | null; // null = panel kapalı
@@ -50,6 +52,8 @@ function hmToDate(hm: string | null): Date {
 export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const [title, setTitle] = useState('');
   const [remindAt, setRemindAt] = useState<string | null>(null); // "HH:MM" | null
+  const [icon, setIcon] = useState<string | null>(null);         // emoji | null
+  const [color, setColor] = useState<string | null>(null);       // "#rrggbb" | null
   const [showPicker, setShowPicker] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -58,6 +62,8 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
     if (habit) {
       setTitle(habit.title);
       setRemindAt(habit.remind_at);
+      setIcon(habit.icon);
+      setColor(habit.color);
       setShowPicker(false);
       setConfirmDelete(false);
     }
@@ -68,7 +74,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const save = () => {
     const t = title.trim();
     if (!t) return;
-    habitRepo.update(habit.id, { title: t, remind_at: remindAt });
+    habitRepo.update(habit.id, { title: t, remind_at: remindAt, icon, color });
     onChanged();
     onClose();
     // Veriyi yazdıktan sonra bildirimi güncelle (saat değiştiyse yeniden kurar,
@@ -106,6 +112,10 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 
       <View style={styles.sheet}>
         <View style={styles.handle} />
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         <Text style={styles.heading}>Alışkanlığı düzenle</Text>
 
         {/* Başlık */}
@@ -141,6 +151,40 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
           />
         )}
 
+        {/* İkon (emoji) — seçili olana tekrar basınca kaldırılır */}
+        <Text style={styles.label}>İkon</Text>
+        <View style={styles.iconGrid}>
+          {HABIT_ICONS.map((em) => {
+            const sel = icon === em;
+            return (
+              <Pressable
+                key={em}
+                style={[styles.iconCell, sel && styles.iconCellSel]}
+                onPress={() => setIcon(sel ? null : em)}
+              >
+                <Text style={styles.iconText}>{em}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Renk — seçili olana tekrar basınca varsayılana döner */}
+        <Text style={styles.label}>Renk</Text>
+        <View style={styles.colorRow}>
+          {HABIT_COLORS.map((c) => {
+            const sel = color === c;
+            return (
+              <Pressable
+                key={c}
+                style={[styles.swatch, { backgroundColor: c }, sel && styles.swatchSel]}
+                onPress={() => setColor(sel ? null : c)}
+              >
+                {sel && <Text style={styles.swatchCheck}>✓</Text>}
+              </Pressable>
+            );
+          })}
+        </View>
+
         {/* Eylemler */}
         <View style={styles.actions}>
           <Pressable
@@ -155,6 +199,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
             <Text style={styles.saveBtnText}>Kaydet</Text>
           </Pressable>
         </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -168,6 +213,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 32,
+    maxHeight: '88%',
   },
   handle: {
     alignSelf: 'center',
@@ -197,6 +243,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  iconCell: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  iconCellSel: { borderColor: '#4f46e5', backgroundColor: '#e0e7ff', borderWidth: 2 },
+  iconText: { fontSize: 20 },
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  swatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchSel: { borderWidth: 3, borderColor: '#0f172a' },
+  swatchCheck: { color: '#fff', fontSize: 14, fontWeight: '800' },
   dateBtn: {
     flex: 1,
     paddingVertical: 12,
