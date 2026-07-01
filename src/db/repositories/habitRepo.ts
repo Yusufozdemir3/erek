@@ -3,8 +3,8 @@
 // Sebebi: türetilmiş veriyi saklamak senkronda tutarsızlık yaratır. Tek doğru kaynak loglar.
 
 import { getDb } from '../database';
-import { newId, nowIso, todayDate } from '../../lib/helpers';
-import type { Habit, HabitLog } from '../../types/models';
+import { isScheduledOn, newId, nowIso, parseJson, todayDate, toJson } from '../../lib/helpers';
+import type { Habit, HabitLog, Recurrence } from '../../types/models';
 
 function rowToHabit(row: any): Habit {
   return {
@@ -15,6 +15,7 @@ function rowToHabit(row: any): Habit {
     remind_at: row.remind_at,
     icon: row.icon,
     color: row.color,
+    schedule: parseJson<Recurrence>(row.schedule),
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -28,6 +29,7 @@ export interface CreateHabitInput {
   goal_id?: string | null;
   icon?: string | null;
   color?: string | null;
+  schedule?: Recurrence | null;
 }
 
 export const habitRepo = {
@@ -37,8 +39,8 @@ export const habitRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO habits
-       (id, user_id, goal_id, title, remind_at, icon, color, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
+       (id, user_id, goal_id, title, remind_at, icon, color, schedule, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
       [
         id,
         input.user_id,
@@ -47,6 +49,7 @@ export const habitRepo = {
         input.remind_at ?? null,
         input.icon ?? null,
         input.color ?? null,
+        toJson(input.schedule ?? null),
         now,
       ]
     );
@@ -80,6 +83,7 @@ export const habitRepo = {
     if (fields.goal_id !== undefined) { sets.push('goal_id = ?'); vals.push(fields.goal_id); }
     if (fields.icon !== undefined) { sets.push('icon = ?'); vals.push(fields.icon); }
     if (fields.color !== undefined) { sets.push('color = ?'); vals.push(fields.color); }
+    if (fields.schedule !== undefined) { sets.push('schedule = ?'); vals.push(toJson(fields.schedule)); }
     if (sets.length === 0) return;
     sets.push('updated_at = ?'); vals.push(nowIso());
     sets.push('synced = 0');
@@ -125,10 +129,14 @@ export const habitRepo = {
     return row?.completed === 1;
   },
 
-  // STREAK HESABI: bugünden (ya da dünden) geriye doğru kesintisiz tamamlanan gün sayısı.
-  // Bugün henüz işaretlenmemişse seriyi bozmuş sayılmaz - dünden başlar.
+  // STREAK HESABI: bugünden geriye doğru, alışkanlığın PLANLI günlerini sayar.
+  // Yalnızca schedule'a göre vadeli günler dikkate alınır — plansız günlerdeki
+  // boşluk seriyi bozmaz (ör. Pzt/Çar/Cum alışkanlığında Salı önemsiz).
+  // Bugün planlıysa ve henüz işaretlenmemişse seriyi bozmaz (bir önceki planlı
+  // günden devam eder). İlk kaçırılan planlı günde durur.
   currentStreak(habitId: string): number {
     const db = getDb();
+    const schedule = this.getById(habitId)?.schedule ?? null;
     const rows = db.getAllSync<any>(
       `SELECT log_date FROM habit_logs
        WHERE habit_id = ? AND completed = 1
@@ -137,28 +145,29 @@ export const habitRepo = {
     );
     if (rows.length === 0) return 0;
 
-    const completedDates = new Set(rows.map((r) => r.log_date));
+    const completed = new Set<string>(rows.map((r) => r.log_date));
+    const today = todayDate();
     let streak = 0;
-    const cursor = new Date(todayDate());
+    const cursor = new Date(`${today}T00:00:00`);
 
-    // Bugün tamamlanmadıysa, seriyi dünden saymaya başla.
-    const todayStr = todayDate();
-    if (!completedDates.has(todayStr)) {
-      cursor.setDate(cursor.getDate() - 1);
-    }
-
-    // Geriye doğru kesintisiz tamamlanan günleri say.
-    while (true) {
+    // Geriye doğru gün gün yürü; yalnızca planlı günleri değerlendir.
+    // Üst sınır ~2+ yılı kapsar (haftalık planda seyrek günler için geniş).
+    for (let i = 0; i < 800; i++) {
       const y = cursor.getFullYear();
       const m = String(cursor.getMonth() + 1).padStart(2, '0');
       const d = String(cursor.getDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${d}`;
-      if (completedDates.has(dateStr)) {
-        streak++;
-        cursor.setDate(cursor.getDate() - 1);
-      } else {
-        break;
+
+      if (isScheduledOn(schedule, dateStr)) {
+        if (completed.has(dateStr)) {
+          streak++;
+        } else if (dateStr === today) {
+          // Bugün henüz işaretlenmedi — seriyi bozma, atla.
+        } else {
+          break;
+        }
       }
+      cursor.setDate(cursor.getDate() - 1);
     }
     return streak;
   },

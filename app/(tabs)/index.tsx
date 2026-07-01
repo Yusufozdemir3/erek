@@ -12,7 +12,7 @@ import { useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { todayDate } from '@/lib/helpers';
+import { isScheduledOn, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
@@ -72,14 +72,18 @@ export default function TodayScreen() {
         : taskRepo.listByDueDate(user.id, selectedDate)
     );
     setHabits(
-      habitRepo.listByUser(user.id).map((h) => ({
-        id: h.id,
-        title: h.title,
-        icon: h.icon,
-        color: h.color,
-        completed: habitRepo.isCompletedOn(h.id, selectedDate),
-        streak: habitRepo.currentStreak(h.id),
-      }))
+      habitRepo
+        .listByUser(user.id)
+        // Yalnızca seçilen günde planlı (vadeli) alışkanlıklar görünsün.
+        .filter((h) => isScheduledOn(h.schedule, selectedDate))
+        .map((h) => ({
+          id: h.id,
+          title: h.title,
+          icon: h.icon,
+          color: h.color,
+          completed: habitRepo.isCompletedOn(h.id, selectedDate),
+          streak: habitRepo.currentStreak(h.id),
+        }))
     );
   }, [user.id, selectedDate, today]);
 

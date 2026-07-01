@@ -18,9 +18,20 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo } from '@/db';
-import type { Habit } from '@/db';
+import type { Habit, Recurrence } from '@/db';
 import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
 import { HABIT_COLORS, HABIT_ICONS } from '@/ui/theme';
+
+// Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
+const WEEKDAY_OPTIONS = [
+  { label: 'Pzt', wd: 1 },
+  { label: 'Sal', wd: 2 },
+  { label: 'Çar', wd: 3 },
+  { label: 'Per', wd: 4 },
+  { label: 'Cum', wd: 5 },
+  { label: 'Cmt', wd: 6 },
+  { label: 'Paz', wd: 0 },
+];
 
 interface Props {
   habit: Habit | null; // null = panel kapalı
@@ -54,6 +65,8 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const [remindAt, setRemindAt] = useState<string | null>(null); // "HH:MM" | null
   const [icon, setIcon] = useState<string | null>(null);         // emoji | null
   const [color, setColor] = useState<string | null>(null);       // "#rrggbb" | null
+  const [everyDay, setEveryDay] = useState(true);                // her gün mü
+  const [weekdays, setWeekdays] = useState<number[]>([]);        // belirli günler (JS getDay)
   const [showPicker, setShowPicker] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -64,17 +77,36 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
       setRemindAt(habit.remind_at);
       setIcon(habit.icon);
       setColor(habit.color);
+      const sch = habit.schedule;
+      if (sch && sch.freq === 'weekly' && (sch.weekdays?.length ?? 0) > 0) {
+        setEveryDay(false);
+        setWeekdays(sch.weekdays!);
+      } else {
+        setEveryDay(true);
+        setWeekdays([]);
+      }
       setShowPicker(false);
       setConfirmDelete(false);
     }
   }, [habit]);
+
+  const toggleWeekday = (wd: number) => {
+    setWeekdays((prev) =>
+      prev.includes(wd) ? prev.filter((x) => x !== wd) : [...prev, wd]
+    );
+  };
 
   if (!habit) return null;
 
   const save = () => {
     const t = title.trim();
     if (!t) return;
-    habitRepo.update(habit.id, { title: t, remind_at: remindAt, icon, color });
+    // "Belirli günler" seçili ama hiç gün yoksa "her gün" (null) kabul edilir.
+    const schedule: Recurrence | null =
+      everyDay || weekdays.length === 0
+        ? null
+        : { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) };
+    habitRepo.update(habit.id, { title: t, remind_at: remindAt, icon, color, schedule });
     onChanged();
     onClose();
     // Veriyi yazdıktan sonra bildirimi güncelle (saat değiştiyse yeniden kurar,
@@ -185,6 +217,46 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
           })}
         </View>
 
+        {/* Sıklık — her gün ya da haftanın belirli günleri */}
+        <Text style={styles.label}>Sıklık</Text>
+        <View style={styles.freqRow}>
+          <Pressable
+            style={[styles.freqBtn, everyDay && styles.freqBtnSel]}
+            onPress={() => setEveryDay(true)}
+          >
+            <Text style={[styles.freqBtnText, everyDay && styles.freqBtnTextSel]}>Her gün</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.freqBtn, !everyDay && styles.freqBtnSel]}
+            onPress={() => {
+              setEveryDay(false);
+              // Boşsa yardımcı olsun diye bugünün gününü seçili getir.
+              if (weekdays.length === 0) setWeekdays([new Date().getDay()]);
+            }}
+          >
+            <Text style={[styles.freqBtnText, !everyDay && styles.freqBtnTextSel]}>
+              Belirli günler
+            </Text>
+          </Pressable>
+        </View>
+
+        {!everyDay && (
+          <View style={styles.dayRow}>
+            {WEEKDAY_OPTIONS.map(({ label, wd }) => {
+              const sel = weekdays.includes(wd);
+              return (
+                <Pressable
+                  key={wd}
+                  style={[styles.dayChip, sel && styles.dayChipSel]}
+                  onPress={() => toggleWeekday(wd)}
+                >
+                  <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
         {/* Eylemler */}
         <View style={styles.actions}>
           <Pressable
@@ -266,6 +338,32 @@ const styles = StyleSheet.create({
   },
   swatchSel: { borderWidth: 3, borderColor: '#0f172a' },
   swatchCheck: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  freqRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  freqBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  freqBtnSel: { borderColor: '#4f46e5', backgroundColor: '#e0e7ff', borderWidth: 2 },
+  freqBtnText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  freqBtnTextSel: { color: '#4f46e5' },
+  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  dayChip: {
+    width: 42,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  dayChipSel: { borderColor: '#4f46e5', backgroundColor: '#4f46e5' },
+  dayChipText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  dayChipTextSel: { color: '#fff' },
   dateBtn: {
     flex: 1,
     paddingVertical: 12,

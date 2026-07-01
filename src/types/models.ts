@@ -54,6 +54,7 @@ export interface Habit extends SyncFields {
   remind_at: string | null;      // "08:30" gibi, günlük hatırlatma saati
   icon: string | null;           // emoji (görsel kimlik), null = yok
   color: string | null;          // hex renk "#rrggbb", null = varsayılan
+  schedule: Recurrence | null;   // hangi günler geçerli; null = her gün
 }
 
 // Her gün bir alışkanlığı işaretlediğinde bir kayıt oluşur.

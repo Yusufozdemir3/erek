@@ -51,10 +51,11 @@ function parseHm(hm: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
-// Bir alışkanlık için günlük hatırlatmayı kurar. remind_at yoksa varsa olanı iptal eder.
-// İzin yoksa false döner ki çağıran kullanıcıyı uyarabilsin.
+// Bir alışkanlık için hatırlatmayı kurar. remind_at yoksa varsa olanı iptal eder.
+// Sıklığa göre: her gün ise tek DAILY tetikleyici (id); belirli günler ise her
+// gün için ayrı WEEKLY tetikleyici (id#weekday). İzin yoksa false döner.
 export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
-  // Önce eskisini temizle (saat değişmiş ya da kaldırılmış olabilir).
+  // Önce tüm eski tetikleyicileri temizle (saat/gün değişmiş ya da kaldırılmış olabilir).
   await cancelHabitReminder(habit.id);
 
   if (!habit.remind_at) return true; // hatırlatma yok — yapılacak bir şey yok
@@ -64,27 +65,49 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   const granted = await ensurePermission();
   if (!granted) return false;
 
-  await Notifications.scheduleNotificationAsync({
-    identifier: habit.id,
-    content: {
-      title: 'Alışkanlık zamanı',
-      body: habit.title,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: time.hour,
-      minute: time.minute,
-    },
-  });
+  const content = { title: 'Alışkanlık zamanı', body: habit.title };
+  const sched = habit.schedule;
+  const weekdays = sched && sched.freq === 'weekly' ? sched.weekdays ?? [] : [];
+
+  if (weekdays.length > 0) {
+    // Belirli günler: her seçili gün için ayrı haftalık tetikleyici.
+    for (const wd of weekdays) {
+      await Notifications.scheduleNotificationAsync({
+        identifier: `${habit.id}#${wd}`,
+        content,
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+          weekday: wd + 1, // expo: 1=Pazar ... 7=Cumartesi (JS getDay 0=Pazar)
+          hour: time.hour,
+          minute: time.minute,
+        },
+      });
+    }
+  } else {
+    // Her gün (schedule yok ya da daily).
+    await Notifications.scheduleNotificationAsync({
+      identifier: habit.id,
+      content,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: time.hour,
+        minute: time.minute,
+      },
+    });
+  }
   return true;
 }
 
-// Bir alışkanlığın hatırlatmasını iptal eder. Zaten yoksa sessizce geçer.
+// Bir alışkanlığın hatırlatmasını iptal eder. Günlük (id) ve olası tüm haftalık
+// (id#0 .. id#6) tetikleyicileri kapsar. Zaten yoksa sessizce geçer.
 export async function cancelHabitReminder(habitId: string): Promise<void> {
-  try {
-    await Notifications.cancelScheduledNotificationAsync(habitId);
-  } catch {
-    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+  const ids = [habitId, ...Array.from({ length: 7 }, (_, wd) => `${habitId}#${wd}`)];
+  for (const id of ids) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+    }
   }
 }
 

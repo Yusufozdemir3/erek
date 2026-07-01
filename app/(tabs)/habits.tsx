@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
-import { todayDate } from '@/lib/helpers';
+import { scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
@@ -20,6 +20,7 @@ interface HabitView {
   remindAt: string | null; // "HH:MM" hatırlatma saati
   icon: string | null;
   color: string | null;
+  days: string | null;     // "Pzt·Çar·Cum" (belirli günlerse), her günse null
   completedToday: boolean;
   streak: number;
   week: boolean[]; // son 7 gün, en eskiden bugüne
@@ -65,6 +66,7 @@ export default function HabitsScreen() {
           remindAt: h.remind_at,
           icon: h.icon,
           color: h.color,
+          days: h.schedule ? scheduleLabel(h.schedule) : null,
           completedToday: completed.has(today),
           streak: habitRepo.currentStreak(h.id),
           week: week.map((d) => completed.has(d)),
@@ -127,7 +129,13 @@ export default function HabitsScreen() {
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
                     {h.title}
                   </Text>
-                  {h.remindAt && <Text style={styles.remind}>🔔 {h.remindAt}</Text>}
+                  {(h.days || h.remindAt) && (
+                    <Text style={styles.remind}>
+                      {[h.days, h.remindAt ? `🔔 ${h.remindAt}` : null]
+                        .filter(Boolean)
+                        .join('  ·  ')}
+                    </Text>
+                  )}
                 </Pressable>
                 {h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>}
               </View>

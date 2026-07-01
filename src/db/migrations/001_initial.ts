@@ -93,9 +93,16 @@ ALTER TABLE habits ADD COLUMN icon  TEXT;
 ALTER TABLE habits ADD COLUMN color TEXT;
 `;
 
+// Migration 004: alışkanlıklara sıklık/tekrar kuralı (schedule).
+// JSON (Recurrence) ya da NULL. NULL = her gün (mevcut davranış, geriye uyumlu).
+export const migration004 = `
+ALTER TABLE habits ADD COLUMN schedule TEXT;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
   { version: 2, sql: migration002 },
   { version: 3, sql: migration003 },
+  { version: 4, sql: migration004 },
 ];

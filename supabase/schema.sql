@@ -28,14 +28,16 @@ create table if not exists public.habits (
   remind_at  text,
   icon       text,
   color      text,
+  schedule   text,
   updated_at timestamptz not null,
   deleted_at timestamptz
 );
 
 -- Mevcut projelere yeni kolonları ekle (create table if not exists mevcut tabloyu
 -- değiştirmez; bu dosyayı yeniden çalıştırınca eksik kolonlar böyle eklenir).
-alter table public.habits add column if not exists icon  text;
-alter table public.habits add column if not exists color text;
+alter table public.habits add column if not exists icon     text;
+alter table public.habits add column if not exists color    text;
+alter table public.habits add column if not exists schedule text;
 
 create table if not exists public.tasks (
   id           uuid primary key,
