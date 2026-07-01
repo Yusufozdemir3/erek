@@ -99,10 +99,19 @@ export const migration004 = `
 ALTER TABLE habits ADD COLUMN schedule TEXT;
 `;
 
+// Migration 005: nicel takip. habits'e günlük hedef (target_amount) + birim (unit);
+// habit_logs'a o gün yapılan miktar (amount). target_amount NULL = ikili alışkanlık.
+export const migration005 = `
+ALTER TABLE habits ADD COLUMN target_amount REAL;
+ALTER TABLE habits ADD COLUMN unit TEXT;
+ALTER TABLE habit_logs ADD COLUMN amount REAL NOT NULL DEFAULT 0;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
   { version: 2, sql: migration002 },
   { version: 3, sql: migration003 },
   { version: 4, sql: migration004 },
+  { version: 5, sql: migration005 },
 ];

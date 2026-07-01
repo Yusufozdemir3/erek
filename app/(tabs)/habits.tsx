@@ -12,6 +12,7 @@ import { scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
+import { AmountStepper } from '@/ui/AmountStepper';
 import { colors, shared } from '@/ui/theme';
 
 interface HabitView {
@@ -21,6 +22,9 @@ interface HabitView {
   icon: string | null;
   color: string | null;
   days: string | null;     // "Pzt·Çar·Cum" (belirli günlerse), her günse null
+  target: number | null;   // nicel hedef; null = ikili
+  unit: string | null;
+  amount: number;          // bugün yapılan miktar
   completedToday: boolean;
   streak: number;
   week: boolean[]; // son 7 gün, en eskiden bugüne
@@ -67,6 +71,9 @@ export default function HabitsScreen() {
           icon: h.icon,
           color: h.color,
           days: h.schedule ? scheduleLabel(h.schedule) : null,
+          target: h.target_amount,
+          unit: h.unit,
+          amount: habitRepo.getAmountOn(h.id, today),
           completedToday: completed.has(today),
           streak: habitRepo.currentStreak(h.id),
           week: week.map((d) => completed.has(d)),
@@ -87,6 +94,11 @@ export default function HabitsScreen() {
 
   const toggleToday = (h: HabitView) => {
     habitRepo.toggleLog(h.id, today, !h.completedToday);
+    reload();
+  };
+
+  const adjustToday = (h: HabitView, delta: number) => {
+    habitRepo.incrementAmount(h.id, today, delta, h.target);
     reload();
   };
 
@@ -121,9 +133,15 @@ export default function HabitsScreen() {
           habits.map((h) => (
             <View key={h.id} style={[shared.card, styles.habitCard]}>
               <View style={styles.habitTop}>
-                <Pressable onPress={() => toggleToday(h)} hitSlop={8}>
+                {/* Nicel alışkanlıkta daire yalnızca durum gösterir (dokunmaz);
+                    ikili alışkanlıkta daireye dokununca bugünü işaretler. */}
+                {h.target != null ? (
                   <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
-                </Pressable>
+                ) : (
+                  <Pressable onPress={() => toggleToday(h)} hitSlop={8}>
+                    <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
+                  </Pressable>
+                )}
                 {/* Başlığa dokununca düzenleme paneli açılır */}
                 <Pressable style={styles.titleArea} onPress={() => openEdit(h)}>
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
@@ -137,7 +155,17 @@ export default function HabitsScreen() {
                     </Text>
                   )}
                 </Pressable>
-                {h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>}
+                {h.target != null ? (
+                  <AmountStepper
+                    amount={h.amount}
+                    target={h.target}
+                    unit={h.unit}
+                    onDec={() => adjustToday(h, -1)}
+                    onInc={() => adjustToday(h, 1)}
+                  />
+                ) : (
+                  h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>
+                )}
               </View>
               {/* Son 7 gün */}
               <View style={styles.week}>

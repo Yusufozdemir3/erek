@@ -16,6 +16,7 @@ import { isScheduledOn, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
+import { AmountStepper } from '@/ui/AmountStepper';
 import { colors, PRIORITY_COLOR, shared } from '@/ui/theme';
 
 interface HabitView {
@@ -23,7 +24,10 @@ interface HabitView {
   title: string;
   icon: string | null;
   color: string | null;
-  completed: boolean; // seçilen günde tamamlandı mı
+  target: number | null; // nicel hedef; null = ikili
+  unit: string | null;
+  amount: number;        // seçilen günde yapılan miktar
+  completed: boolean;    // seçilen günde tamamlandı mı
   streak: number;
 }
 
@@ -81,6 +85,9 @@ export default function TodayScreen() {
           title: h.title,
           icon: h.icon,
           color: h.color,
+          target: h.target_amount,
+          unit: h.unit,
+          amount: habitRepo.getAmountOn(h.id, selectedDate),
           completed: habitRepo.isCompletedOn(h.id, selectedDate),
           streak: habitRepo.currentStreak(h.id),
         }))
@@ -98,6 +105,11 @@ export default function TodayScreen() {
 
   const toggleHabit = (h: HabitView) => {
     habitRepo.toggleLog(h.id, selectedDate, !h.completed);
+    reload();
+  };
+
+  const adjustHabit = (h: HabitView, delta: number) => {
+    habitRepo.incrementAmount(h.id, selectedDate, delta, h.target);
     reload();
   };
 
@@ -167,15 +179,33 @@ export default function TodayScreen() {
                 );
               })}
 
-              {habits.map((h) => (
-                <Pressable key={h.id} style={shared.card} onPress={() => toggleHabit(h)}>
-                  <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
-                  <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
-                    {h.title}
-                  </Text>
-                  {h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>}
-                </Pressable>
-              ))}
+              {habits.map((h) =>
+                h.target != null ? (
+                  // Nicel alışkanlık: sayaç ile miktar gir.
+                  <View key={h.id} style={shared.card}>
+                    <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
+                    <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
+                      {h.title}
+                    </Text>
+                    <AmountStepper
+                      amount={h.amount}
+                      target={h.target}
+                      unit={h.unit}
+                      onDec={() => adjustHabit(h, -1)}
+                      onInc={() => adjustHabit(h, 1)}
+                    />
+                  </View>
+                ) : (
+                  // İkili alışkanlık: karta dokununca işaretle.
+                  <Pressable key={h.id} style={shared.card} onPress={() => toggleHabit(h)}>
+                    <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
+                    <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
+                      {h.title}
+                    </Text>
+                    {h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>}
+                  </Pressable>
+                )
+              )}
             </>
           )}
         </View>

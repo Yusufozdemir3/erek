@@ -67,6 +67,8 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const [color, setColor] = useState<string | null>(null);       // "#rrggbb" | null
   const [everyDay, setEveryDay] = useState(true);                // her gün mü
   const [weekdays, setWeekdays] = useState<number[]>([]);        // belirli günler (JS getDay)
+  const [targetText, setTargetText] = useState('');              // günlük hedef (metin)
+  const [unit, setUnit] = useState('');                          // birim ("bardak")
   const [showPicker, setShowPicker] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -85,6 +87,8 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
         setEveryDay(true);
         setWeekdays([]);
       }
+      setTargetText(habit.target_amount != null ? String(habit.target_amount) : '');
+      setUnit(habit.unit ?? '');
       setShowPicker(false);
       setConfirmDelete(false);
     }
@@ -106,7 +110,19 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
       everyDay || weekdays.length === 0
         ? null
         : { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) };
-    habitRepo.update(habit.id, { title: t, remind_at: remindAt, icon, color, schedule });
+    // Geçerli pozitif hedef varsa nicel; yoksa ikili (target/unit null).
+    const parsed = parseFloat(targetText.replace(',', '.'));
+    const target_amount = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    const unitVal = target_amount != null && unit.trim() ? unit.trim() : null;
+    habitRepo.update(habit.id, {
+      title: t,
+      remind_at: remindAt,
+      icon,
+      color,
+      schedule,
+      target_amount,
+      unit: unitVal,
+    });
     onChanged();
     onClose();
     // Veriyi yazdıktan sonra bildirimi güncelle (saat değiştiyse yeniden kurar,
@@ -257,6 +273,28 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
           </View>
         )}
 
+        {/* Günlük miktar hedefi (isteğe bağlı) — doldurulursa nicel takip */}
+        <Text style={styles.label}>Günlük hedef (isteğe bağlı)</Text>
+        <View style={styles.row}>
+          <TextInput
+            style={[styles.input, styles.targetInput]}
+            value={targetText}
+            onChangeText={setTargetText}
+            placeholder="örn. 8"
+            placeholderTextColor="#94a3b8"
+            keyboardType="numeric"
+          />
+          <TextInput
+            style={[styles.input, styles.targetInput]}
+            value={unit}
+            onChangeText={setUnit}
+            placeholder="birim (bardak)"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+          />
+        </View>
+        <Text style={styles.hint}>Boş bırakırsan basit "yaptım / yapmadım" olur.</Text>
+
         {/* Eylemler */}
         <View style={styles.actions}>
           <Pressable
@@ -364,6 +402,8 @@ const styles = StyleSheet.create({
   dayChipSel: { borderColor: '#4f46e5', backgroundColor: '#4f46e5' },
   dayChipText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
   dayChipTextSel: { color: '#fff' },
+  targetInput: { flex: 1, marginBottom: 0 },
+  hint: { fontSize: 12, color: '#94a3b8', marginTop: 4, marginBottom: 12 },
   dateBtn: {
     flex: 1,
     paddingVertical: 12,

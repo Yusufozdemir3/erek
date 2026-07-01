@@ -55,6 +55,8 @@ export interface Habit extends SyncFields {
   icon: string | null;           // emoji (görsel kimlik), null = yok
   color: string | null;          // hex renk "#rrggbb", null = varsayılan
   schedule: Recurrence | null;   // hangi günler geçerli; null = her gün
+  target_amount: number | null;  // günlük miktar hedefi (ör. 8); null = ikili (yaptım/yapmadım)
+  unit: string | null;           // "bardak", "sayfa"; target_amount ile anlamlı
 }
 
 // Her gün bir alışkanlığı işaretlediğinde bir kayıt oluşur.
@@ -63,6 +65,7 @@ export interface HabitLog {
   id: string;
   habit_id: string;
   log_date: string;     // "2026-06-28" formatında, sadece tarih
-  completed: 0 | 1;
+  completed: 0 | 1;     // nicel alışkanlıkta: amount >= target olunca 1
+  amount: number;       // o gün yapılan miktar (ikili alışkanlıkta kullanılmaz, 0)
   updated_at: string;
 }

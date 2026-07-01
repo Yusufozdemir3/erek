@@ -16,6 +16,8 @@ function rowToHabit(row: any): Habit {
     icon: row.icon,
     color: row.color,
     schedule: parseJson<Recurrence>(row.schedule),
+    target_amount: row.target_amount,
+    unit: row.unit,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -30,6 +32,8 @@ export interface CreateHabitInput {
   icon?: string | null;
   color?: string | null;
   schedule?: Recurrence | null;
+  target_amount?: number | null;
+  unit?: string | null;
 }
 
 export const habitRepo = {
@@ -39,8 +43,8 @@ export const habitRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO habits
-       (id, user_id, goal_id, title, remind_at, icon, color, schedule, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
+       (id, user_id, goal_id, title, remind_at, icon, color, schedule, target_amount, unit, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
       [
         id,
         input.user_id,
@@ -50,6 +54,8 @@ export const habitRepo = {
         input.icon ?? null,
         input.color ?? null,
         toJson(input.schedule ?? null),
+        input.target_amount ?? null,
+        input.unit ?? null,
         now,
       ]
     );
@@ -84,6 +90,8 @@ export const habitRepo = {
     if (fields.icon !== undefined) { sets.push('icon = ?'); vals.push(fields.icon); }
     if (fields.color !== undefined) { sets.push('color = ?'); vals.push(fields.color); }
     if (fields.schedule !== undefined) { sets.push('schedule = ?'); vals.push(toJson(fields.schedule)); }
+    if (fields.target_amount !== undefined) { sets.push('target_amount = ?'); vals.push(fields.target_amount); }
+    if (fields.unit !== undefined) { sets.push('unit = ?'); vals.push(fields.unit); }
     if (sets.length === 0) return;
     sets.push('updated_at = ?'); vals.push(nowIso());
     sets.push('synced = 0');
@@ -127,6 +135,43 @@ export const habitRepo = {
       [habitId, date]
     );
     return row?.completed === 1;
+  },
+
+  // Nicel alışkanlık: belirli gün yapılan miktar (kayıt yoksa 0).
+  getAmountOn(habitId: string, date: string): number {
+    const db = getDb();
+    const row = db.getFirstSync<any>(
+      `SELECT amount FROM habit_logs WHERE habit_id = ? AND log_date = ?`,
+      [habitId, date]
+    );
+    return row?.amount ?? 0;
+  },
+
+  // Nicel alışkanlık: o günün miktarını delta kadar değiştirir (0'ın altına inmez).
+  // completed, hedefe ulaşıldığında (amount >= target) 1 olur. target null/0 ise
+  // completed hep 0 kalır. UNIQUE(habit_id, log_date) ile tek kayıt tutulur.
+  incrementAmount(habitId: string, date: string, delta: number, target: number | null): void {
+    const db = getDb();
+    const now = nowIso();
+    const existing = db.getFirstSync<any>(
+      `SELECT id, amount FROM habit_logs WHERE habit_id = ? AND log_date = ?`,
+      [habitId, date]
+    );
+    const current = existing ? existing.amount ?? 0 : 0;
+    const next = Math.max(0, current + delta);
+    const completed = target != null && target > 0 && next >= target ? 1 : 0;
+    if (existing) {
+      db.runSync(
+        `UPDATE habit_logs SET amount = ?, completed = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+        [next, completed, now, existing.id]
+      );
+    } else {
+      db.runSync(
+        `INSERT INTO habit_logs (id, habit_id, log_date, completed, amount, updated_at, synced)
+         VALUES (?, ?, ?, ?, ?, ?, 0)`,
+        [newId(), habitId, date, completed, next, now]
+      );
+    }
   },
 
   // STREAK HESABI: bugünden geriye doğru, alışkanlığın PLANLI günlerini sayar.

@@ -24,20 +24,24 @@ create table if not exists public.habits (
   id         uuid primary key,
   user_id    uuid not null,
   goal_id    uuid,
-  title      text not null,
-  remind_at  text,
-  icon       text,
-  color      text,
-  schedule   text,
-  updated_at timestamptz not null,
-  deleted_at timestamptz
+  title         text not null,
+  remind_at     text,
+  icon          text,
+  color         text,
+  schedule      text,
+  target_amount double precision,
+  unit          text,
+  updated_at    timestamptz not null,
+  deleted_at    timestamptz
 );
 
 -- Mevcut projelere yeni kolonları ekle (create table if not exists mevcut tabloyu
 -- değiştirmez; bu dosyayı yeniden çalıştırınca eksik kolonlar böyle eklenir).
-alter table public.habits add column if not exists icon     text;
-alter table public.habits add column if not exists color    text;
-alter table public.habits add column if not exists schedule text;
+alter table public.habits add column if not exists icon          text;
+alter table public.habits add column if not exists color         text;
+alter table public.habits add column if not exists schedule      text;
+alter table public.habits add column if not exists target_amount double precision;
+alter table public.habits add column if not exists unit          text;
 
 create table if not exists public.tasks (
   id           uuid primary key,
@@ -56,8 +60,11 @@ create table if not exists public.habit_logs (
   habit_id   uuid not null,
   log_date   text not null,
   completed  integer not null default 0,
+  amount     double precision not null default 0,
   updated_at timestamptz not null
 );
+
+alter table public.habit_logs add column if not exists amount double precision not null default 0;
 
 -- Senkron pull'u updated_at'e göre filtreler; indeksle.
 create index if not exists idx_goals_updated  on public.goals(updated_at);

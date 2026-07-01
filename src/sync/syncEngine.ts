@@ -32,7 +32,7 @@ const TABLES: TableCfg[] = [
   },
   {
     table: 'habits',
-    cols: ['id', 'user_id', 'goal_id', 'title', 'remind_at', 'icon', 'color', 'schedule', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'goal_id', 'title', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'updated_at', 'deleted_at'],
     hasUserId: true,
   },
   {
@@ -42,7 +42,7 @@ const TABLES: TableCfg[] = [
   },
   {
     table: 'habit_logs',
-    cols: ['id', 'habit_id', 'log_date', 'completed', 'updated_at'],
+    cols: ['id', 'habit_id', 'log_date', 'completed', 'amount', 'updated_at'],
     hasUserId: false,
   },
 ];
