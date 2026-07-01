@@ -23,7 +23,10 @@ yarn-error.*
 # macOS
 .DS_Store
 
-# Yerel ortam değişkenleri
+# Yerel ortam değişkenleri (kimlik bilgileri). Şablon .env.example izlenir.
+.env
+.env.*
+!.env.example
 .env*.local
 
 # Claude Code yerel ayarları (makineye özel)

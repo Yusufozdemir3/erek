@@ -38,12 +38,21 @@ export const userRepo = {
     return this.getOrCreateLocal();
   },
 
-  // Anonim kullanıcıyı kayıtlı hesaba yükseltir (ileride bulut bağlanınca).
+  // Anonim kullanıcıyı kayıtlı hesaba yükseltir (Ayarlar'dan hesap bağlanınca).
   upgradeToAccount(id: string, email: string): void {
     const db = getDb();
     db.runSync(
       `UPDATE users SET email = ?, is_anonymous = 0, updated_at = ?, synced = 0 WHERE id = ?`,
       [email, nowIso(), id]
+    );
+  },
+
+  // Hesaptan çıkışta yerel kullanıcıyı yeniden anonim yapar (veri cihazda kalır).
+  downgradeToLocal(id: string): void {
+    const db = getDb();
+    db.runSync(
+      `UPDATE users SET email = NULL, is_anonymous = 1, updated_at = ?, synced = 0 WHERE id = ?`,
+      [nowIso(), id]
     );
   },
 };

@@ -89,12 +89,12 @@ export const habitRepo = {
     );
     if (existing) {
       db.runSync(
-        `UPDATE habit_logs SET completed = ?, updated_at = ? WHERE id = ?`,
+        `UPDATE habit_logs SET completed = ?, updated_at = ?, synced = 0 WHERE id = ?`,
         [completed ? 1 : 0, now, existing.id]
       );
     } else {
       db.runSync(
-        `INSERT INTO habit_logs (id, habit_id, log_date, completed, updated_at) VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO habit_logs (id, habit_id, log_date, completed, updated_at, synced) VALUES (?, ?, ?, ?, ?, 0)`,
         [newId(), habitId, date, completed ? 1 : 0, now]
       );
     }

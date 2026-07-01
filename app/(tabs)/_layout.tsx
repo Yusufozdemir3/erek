@@ -1,4 +1,4 @@
-// Alt sekme çubuğu düzeni. Dört sekme: Bugün, Görevler, Alışkanlıklar, Hedefler.
+// Alt sekme çubuğu düzeni: Bugün, Görevler, Alışkanlıklar, Hedefler, Ayarlar.
 // Her sekmenin kendi büyük başlığı olduğu için sekme başlığı (header) gizli.
 // İkonlar emoji ile çiziliyor (ekstra ikon paketi bağımlılığı yok); seçili
 // olmayan sekme soluk gösteriliyor.
@@ -47,6 +47,13 @@ export default function TabsLayout() {
         options={{
           title: 'Hedefler',
           tabBarIcon: ({ focused }) => <TabIcon emoji="🎯" focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Ayarlar',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" focused={focused} />,
         }}
       />
     </Tabs>

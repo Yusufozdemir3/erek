@@ -78,7 +78,16 @@ CREATE INDEX IF NOT EXISTS idx_logs_date      ON habit_logs(log_date);
 CREATE INDEX IF NOT EXISTS idx_goals_user     ON goals(user_id);
 `;
 
+// Migration 002: habit_logs'a senkron bayrağı.
+// habit_logs ilk şemada synced taşımıyordu; bulut senkronu için her log da
+// "gönderilmeyi bekliyor mu" bilgisini tutmalı. Mevcut loglar synced=0 başlar
+// ki ilk senkronda buluta gönderilsinler.
+export const migration002 = `
+ALTER TABLE habit_logs ADD COLUMN synced INTEGER NOT NULL DEFAULT 0;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
+  { version: 2, sql: migration002 },
 ];

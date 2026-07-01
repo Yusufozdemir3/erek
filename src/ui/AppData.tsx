@@ -3,14 +3,18 @@
 // (anonim ya da hesaplı) tüm ekranlara sunmak. Ekranlar user.id'yi buradan alır,
 // sonra doğrudan repository fonksiyonlarını çağırır - context içine SQL sızmaz.
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { habitRepo, initDataLayer } from '@/db';
+import { habitRepo, initDataLayer, userRepo } from '@/db';
 import type { User } from '@/db';
 import { rescheduleAllReminders } from '@/lib/notifications';
+import { runSync } from '@/sync';
 
 interface AppData {
   user: User;
+  // Yerel kullanıcıyı DB'den yeniden okur (ör. hesap bağlandıktan sonra e-posta
+  // güncellensin diye). Ekranlardaki user referansını tazeler.
+  refreshUser: () => void;
 }
 
 const AppDataContext = createContext<AppData | null>(null);
@@ -37,8 +41,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         // (cihaz reboot'u / uygulama güncellemesi onları temizlemiş olabilir).
         // İzin yoksa sessizce çıkar; hata uygulamayı bloklamasın.
         rescheduleAllReminders(habitRepo.listByUser(user.id)).catch(() => {});
+        // Açılışta arka planda bir kez senkronla (yapılandırılmamışsa sessiz geçer).
+        runSync(user.id).catch(() => {});
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  const refreshUser = useCallback(() => {
+    setUser(userRepo.getOrCreateLocal());
   }, []);
 
   if (error) {
@@ -58,7 +68,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <AppDataContext.Provider value={{ user }}>{children}</AppDataContext.Provider>;
+  return (
+    <AppDataContext.Provider value={{ user, refreshUser }}>{children}</AppDataContext.Provider>
+  );
 }
 
 const styles = StyleSheet.create({
