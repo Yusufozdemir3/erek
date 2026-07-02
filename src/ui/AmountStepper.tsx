@@ -11,6 +11,7 @@ interface Props {
   unit: string | null;
   onDec: () => void;
   onInc: () => void;
+  disabled?: boolean; // true: gelecek bir gün görüntüleniyor, düzenlenemez
 }
 
 // Tam sayıysa ondalık gösterme (5, 5.5).
@@ -18,18 +19,18 @@ function fmt(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
 
-export function AmountStepper({ amount, target, unit, onDec, onInc }: Props) {
+export function AmountStepper({ amount, target, unit, onDec, onInc, disabled }: Props) {
   const reached = amount >= target;
   return (
-    <View style={styles.row}>
-      <Pressable style={styles.btn} onPress={onDec} hitSlop={6}>
+    <View style={[styles.row, disabled && styles.rowDisabled]}>
+      <Pressable style={styles.btn} onPress={onDec} hitSlop={6} disabled={disabled}>
         <Text style={styles.btnText}>−</Text>
       </Pressable>
       <Text style={[styles.value, reached && styles.valueDone]}>
         {fmt(amount)}/{fmt(target)}
         {unit ? ` ${unit}` : ''}
       </Text>
-      <Pressable style={styles.btn} onPress={onInc} hitSlop={6}>
+      <Pressable style={styles.btn} onPress={onInc} hitSlop={6} disabled={disabled}>
         <Text style={styles.btnText}>＋</Text>
       </Pressable>
     </View>
@@ -38,6 +39,7 @@ export function AmountStepper({ amount, target, unit, onDec, onInc }: Props) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowDisabled: { opacity: 0.4 },
   btn: {
     width: 30,
     height: 30,

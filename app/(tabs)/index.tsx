@@ -97,6 +97,9 @@ export default function TodayScreen() {
   useFocusEffect(reload);
 
   const isToday = selectedDate === today;
+  // Gelecek bir gün görüntüleniyorsa alışkanlık işaretlenemez — henüz yaşanmamış
+  // bir günü "yapıldı" saymak streak'i ve geçmişi anlamsızlaştırır.
+  const isFuture = selectedDate > today;
 
   const toggleTask = (t: Task) => {
     taskRepo.setCompleted(t.id, t.completed_at === null);
@@ -104,22 +107,20 @@ export default function TodayScreen() {
   };
 
   const toggleHabit = (h: HabitView) => {
+    if (isFuture) return;
     habitRepo.toggleLog(h.id, selectedDate, !h.completed);
     reload();
   };
 
   const adjustHabit = (h: HabitView, delta: number) => {
+    if (isFuture) return;
     habitRepo.incrementAmount(h.id, selectedDate, delta, h.target);
     reload();
   };
 
   const onPickDate = (_e: unknown, picked?: Date) => {
     setShowPicker(Platform.OS === 'ios');
-    if (picked) {
-      // Güvenlik: gelecek bir tarih seçilse bile bugüne sabitle.
-      const p = toYmd(picked);
-      setSelectedDate(p > today ? today : p);
-    }
+    if (picked) setSelectedDate(toYmd(picked));
   };
 
   return (
@@ -185,8 +186,8 @@ export default function TodayScreen() {
 
               {habits.map((h) =>
                 h.target != null ? (
-                  // Nicel alışkanlık: sayaç ile miktar gir.
-                  <View key={h.id} style={shared.card}>
+                  // Nicel alışkanlık: sayaç ile miktar gir (gelecek günde devre dışı).
+                  <View key={h.id} style={[shared.card, isFuture && styles.futureCard]}>
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
@@ -197,11 +198,17 @@ export default function TodayScreen() {
                       unit={h.unit}
                       onDec={() => adjustHabit(h, -1)}
                       onInc={() => adjustHabit(h, 1)}
+                      disabled={isFuture}
                     />
                   </View>
                 ) : (
-                  // İkili alışkanlık: karta dokununca işaretle.
-                  <Pressable key={h.id} style={shared.card} onPress={() => toggleHabit(h)}>
+                  // İkili alışkanlık: karta dokununca işaretle (gelecek günde devre dışı).
+                  <Pressable
+                    key={h.id}
+                    style={[shared.card, isFuture && styles.futureCard]}
+                    onPress={() => toggleHabit(h)}
+                    disabled={isFuture}
+                  >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
@@ -223,6 +230,7 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   headRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   backToday: { fontSize: 14, fontWeight: '700', color: colors.primary, paddingBottom: 6 },
+  futureCard: { opacity: 0.5 },
   dateLink: { color: colors.primary, fontWeight: '600' },
   list: { marginTop: 24 },
 });
