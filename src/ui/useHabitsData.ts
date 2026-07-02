@@ -1,0 +1,76 @@
+// "Alışkanlıklar" ekranının veri yükleme mantığı: her alışkanlık için bugünkü
+// durum, seri ve son 7 günün geçmişi. Ekrandan ayrı tutulur ki habits.tsx
+// yalnızca render'dan sorumlu kalsın.
+
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { habitRepo } from '@/db';
+import { scheduleLabel, todayDate } from '@/lib/helpers';
+
+export interface HabitListItem {
+  id: string;
+  title: string;
+  remindAt: string | null; // "HH:MM" hatırlatma saati
+  icon: string | null;
+  color: string | null;
+  days: string | null;     // "Pzt·Çar·Cum" (belirli günlerse), her günse null
+  target: number | null;   // nicel hedef; null = ikili
+  unit: string | null;
+  amount: number;          // bugün yapılan miktar
+  completedToday: boolean;
+  streak: number;
+  week: boolean[]; // son 7 gün, en eskiden bugüne
+}
+
+// Bugün dahil son `count` günün "YYYY-MM-DD" listesi (en eskiden bugüne).
+function lastDays(count: number): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  for (let i = count - 1; i >= 0; i--) {
+    const day = new Date(d);
+    day.setDate(d.getDate() - i);
+    const y = day.getFullYear();
+    const m = String(day.getMonth() + 1).padStart(2, '0');
+    const dd = String(day.getDate()).padStart(2, '0');
+    out.push(`${y}-${m}-${dd}`);
+  }
+  return out;
+}
+
+export function useHabitsData(userId: string) {
+  const today = todayDate();
+  const [habits, setHabits] = useState<HabitListItem[]>([]);
+
+  const reload = useCallback(() => {
+    const week = lastDays(7);
+    setHabits(
+      habitRepo.listByUser(userId).map((h) => {
+        // Son 60 günün tamamlanan tarihlerini tek sorguda topla, haftayı ondan üret.
+        const completed = new Set(
+          habitRepo
+            .recentLogs(h.id, 60)
+            .filter((l) => l.completed === 1)
+            .map((l) => l.log_date)
+        );
+        return {
+          id: h.id,
+          title: h.title,
+          remindAt: h.remind_at,
+          icon: h.icon,
+          color: h.color,
+          days: h.schedule ? scheduleLabel(h.schedule) : null,
+          target: h.target_amount,
+          unit: h.unit,
+          amount: habitRepo.getAmountOn(h.id, today),
+          completedToday: completed.has(today),
+          streak: habitRepo.currentStreak(h.id),
+          week: week.map((d) => completed.has(d)),
+        };
+      })
+    );
+  }, [userId, today]);
+
+  useFocusEffect(reload);
+
+  return { today, habits, reload };
+}

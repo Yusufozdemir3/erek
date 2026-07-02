@@ -16,12 +16,9 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { taskRepo } from '@/db';
 import type { Priority, Task } from '@/db';
-
-const PRIORITIES: { value: Priority; label: string; color: string }[] = [
-  { value: 'low', label: 'Düşük', color: '#10b981' },
-  { value: 'medium', label: 'Orta', color: '#f59e0b' },
-  { value: 'high', label: 'Yüksek', color: '#ef4444' },
-];
+import { toYmd } from '@/lib/helpers';
+import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { longDateLabel, PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_ORDER } from '@/ui/theme';
 
 interface Props {
   task: Task | null; // null = panel kapalı
@@ -29,29 +26,11 @@ interface Props {
   onChanged: () => void; // kaydet/sil sonrası parent listeyi tazelesin
 }
 
-// "YYYY-MM-DD" -> "28 Haziran 2026" gibi okunaklı etiket.
-function dateLabel(ymd: string | null): string {
-  if (!ymd) return 'Tarihsiz';
-  return new Date(`${ymd}T00:00:00`).toLocaleDateString('tr-TR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [dueDate, setDueDate] = useState<string | null>(null); // "YYYY-MM-DD" | null
   const [showPicker, setShowPicker] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Panel her açıldığında formu seçilen görevin değerleriyle doldur.
   useEffect(() => {
@@ -60,7 +39,6 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       setPriority(task.priority);
       setDueDate(task.due_date ? task.due_date.slice(0, 10) : null);
       setShowPicker(false);
-      setConfirmDelete(false);
     }
   }, [task]);
 
@@ -108,19 +86,17 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
         {/* Öncelik */}
         <Text style={styles.label}>Öncelik</Text>
         <View style={styles.row}>
-          {PRIORITIES.map((p) => {
-            const selected = p.value === priority;
+          {PRIORITY_ORDER.map((p) => {
+            const selected = p === priority;
+            const color = PRIORITY_COLOR[p];
             return (
               <Pressable
-                key={p.value}
-                style={[
-                  styles.chip,
-                  selected && { backgroundColor: p.color, borderColor: p.color },
-                ]}
-                onPress={() => setPriority(p.value)}
+                key={p}
+                style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
+                onPress={() => setPriority(p)}
               >
                 <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                  {p.label}
+                  {PRIORITY_LABEL[p]}
                 </Text>
               </Pressable>
             );
@@ -131,7 +107,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
         <Text style={styles.label}>Son tarih</Text>
         <View style={styles.row}>
           <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
-            <Text style={styles.dateBtnText}>{dateLabel(dueDate)}</Text>
+            <Text style={styles.dateBtnText}>{longDateLabel(dueDate)}</Text>
           </Pressable>
           {dueDate && (
             <Pressable style={styles.clearBtn} onPress={() => setDueDate(null)}>
@@ -151,14 +127,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
         {/* Eylemler */}
         <View style={styles.actions}>
-          <Pressable
-            style={[styles.deleteBtn, confirmDelete && styles.deleteBtnConfirm]}
-            onPress={() => (confirmDelete ? remove() : setConfirmDelete(true))}
-          >
-            <Text style={[styles.deleteBtnText, confirmDelete && styles.deleteBtnTextConfirm]}>
-              {confirmDelete ? 'Silmek için tekrar bas' : 'Sil'}
-            </Text>
-          </Pressable>
+          <ConfirmDeleteButton onConfirm={remove} />
           <Pressable style={styles.saveBtn} onPress={save}>
             <Text style={styles.saveBtnText}>Kaydet</Text>
           </Pressable>
@@ -229,18 +198,6 @@ const styles = StyleSheet.create({
   clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
   clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  deleteBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  deleteBtnConfirm: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
-  deleteBtnText: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
-  deleteBtnTextConfirm: { color: '#fff' },
   saveBtn: {
     flex: 1,
     alignItems: 'center',

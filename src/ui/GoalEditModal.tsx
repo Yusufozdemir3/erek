@@ -18,19 +18,14 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal } from '@/db';
+import { toYmd } from '@/lib/helpers';
+import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { colors, shortDate } from '@/ui/theme';
 
 interface Props {
   goal: Goal | null; // null = panel kapalı
   onClose: () => void;
   onChanged: () => void; // kaydet/sil sonrası parent listeyi tazelesin
-}
-
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 export function GoalEditModal({ goal, onClose, onChanged }: Props) {
@@ -40,7 +35,6 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
   const [current, setCurrent] = useState(''); // sayısal mevcut değer (metin)
   const [deadline, setDeadline] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Panel her açıldığında formu seçilen hedefin değerleriyle doldur.
   useEffect(() => {
@@ -51,7 +45,6 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
       setCurrent(String(goal.current_value));
       setDeadline(goal.deadline ? goal.deadline.slice(0, 10) : null);
       setShowPicker(false);
-      setConfirmDelete(false);
     }
   }, [goal]);
 
@@ -174,14 +167,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
 
         {/* Eylemler */}
         <View style={styles.actions}>
-          <Pressable
-            style={[styles.deleteBtn, confirmDelete && styles.deleteBtnConfirm]}
-            onPress={() => (confirmDelete ? remove() : setConfirmDelete(true))}
-          >
-            <Text style={[styles.deleteBtnText, confirmDelete && styles.deleteBtnTextConfirm]}>
-              {confirmDelete ? 'Silmek için tekrar bas' : 'Sil'}
-            </Text>
-          </Pressable>
+          <ConfirmDeleteButton onConfirm={remove} />
           <Pressable style={styles.saveBtn} onPress={save}>
             <Text style={styles.saveBtnText}>Kaydet</Text>
           </Pressable>
@@ -255,18 +241,6 @@ const styles = StyleSheet.create({
   clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
   clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  deleteBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  deleteBtnConfirm: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
-  deleteBtnText: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
-  deleteBtnTextConfirm: { color: '#fff' },
   saveBtn: {
     flex: 1,
     alignItems: 'center',

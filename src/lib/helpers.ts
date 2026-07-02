@@ -13,14 +13,19 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-// Bugünün tarihi "YYYY-MM-DD" formatında (alışkanlık logları için).
-// Yerel saat dilimine göre - kullanıcının "bugün"ü neyse o.
-export function todayDate(): string {
-  const d = new Date();
+// Date -> "YYYY-MM-DD" (yerel saat dilimine göre). Takvim seçicilerin ortak
+// çıktı biçimi; ekranlarda ayrı ayrı tekrarlanmasın diye burada tek yerde.
+export function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+// Bugünün tarihi "YYYY-MM-DD" formatında (alışkanlık logları için).
+// Yerel saat dilimine göre - kullanıcının "bugün"ü neyse o.
+export function todayDate(): string {
+  return toYmd(new Date());
 }
 
 // JSON alanları güvenli parse/stringify (recurrence gibi).

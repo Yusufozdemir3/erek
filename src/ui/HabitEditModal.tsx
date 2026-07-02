@@ -20,6 +20,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo } from '@/db';
 import type { Habit, Recurrence } from '@/db';
 import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
+import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { HABIT_COLORS, HABIT_ICONS } from '@/ui/theme';
 
 // Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
@@ -70,7 +71,6 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const [targetText, setTargetText] = useState('');              // günlük hedef (metin)
   const [unit, setUnit] = useState('');                          // birim ("bardak")
   const [showPicker, setShowPicker] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Panel her açıldığında formu seçilen alışkanlığın değerleriyle doldur.
   useEffect(() => {
@@ -90,7 +90,6 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
       setTargetText(habit.target_amount != null ? String(habit.target_amount) : '');
       setUnit(habit.unit ?? '');
       setShowPicker(false);
-      setConfirmDelete(false);
     }
   }, [habit]);
 
@@ -297,14 +296,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 
         {/* Eylemler */}
         <View style={styles.actions}>
-          <Pressable
-            style={[styles.deleteBtn, confirmDelete && styles.deleteBtnConfirm]}
-            onPress={() => (confirmDelete ? remove() : setConfirmDelete(true))}
-          >
-            <Text style={[styles.deleteBtnText, confirmDelete && styles.deleteBtnTextConfirm]}>
-              {confirmDelete ? 'Silmek için tekrar bas' : 'Sil'}
-            </Text>
-          </Pressable>
+          <ConfirmDeleteButton onConfirm={remove} />
           <Pressable style={styles.saveBtn} onPress={save}>
             <Text style={styles.saveBtnText}>Kaydet</Text>
           </Pressable>
@@ -417,18 +409,6 @@ const styles = StyleSheet.create({
   clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
   clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  deleteBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  deleteBtnConfirm: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
-  deleteBtnText: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
-  deleteBtnTextConfirm: { color: '#fff' },
   saveBtn: {
     flex: 1,
     alignItems: 'center',

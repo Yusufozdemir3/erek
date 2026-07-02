@@ -24,6 +24,15 @@ export const PRIORITY_COLOR: Record<Priority, string> = {
   low: '#10b981',
 };
 
+export const PRIORITY_LABEL: Record<Priority, string> = {
+  low: 'Düşük',
+  medium: 'Orta',
+  high: 'Yüksek',
+};
+
+// Öncelik seçicideki sıralama (düşükten yükseğe).
+export const PRIORITY_ORDER: Priority[] = ['low', 'medium', 'high'];
+
 // Alışkanlık görsel kimliği için hazır emoji ve renk paletleri (seçici ızgaraları).
 export const HABIT_ICONS = [
   '💧', '🏃', '📚', '🧘', '💪', '🥗', '😴', '🚭', '💊',
@@ -45,6 +54,39 @@ export function shortDate(value: string | null): string {
     day: 'numeric',
     month: 'short',
   });
+}
+
+// "YYYY-MM-DD" (ya da ISO) -> "28 Haziran 2026" gibi uzun etiket.
+export function longDateLabel(value: string | null): string {
+  if (!value) return 'Tarihsiz';
+  const ymd = value.slice(0, 10);
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString('tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+// "YYYY-MM-DD" -> gün adlı tam etiket ("Pazartesi, 29 Haziran 2026" gibi).
+export function fullDateLabel(ymd: string): string {
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString('tr-TR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+// Tarihli bir hedef/görev için kalan gün etiketini üretir.
+export function deadlineLabel(ymd: string | null): string {
+  if (!ymd) return '';
+  const target = new Date(`${ymd}T00:00:00`);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const diff = Math.round((target.getTime() - now.getTime()) / 86_400_000);
+  if (diff > 0) return `${diff} gün kaldı`;
+  if (diff === 0) return 'Bugün son gün';
+  return `${-diff} gün geçti`;
 }
 
 export const shared = StyleSheet.create({

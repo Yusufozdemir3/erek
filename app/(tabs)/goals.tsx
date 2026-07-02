@@ -10,28 +10,10 @@ import { useFocusEffect } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal, GoalType } from '@/db';
+import { toYmd } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { GoalEditModal } from '@/ui/GoalEditModal';
-import { colors, shared, shortDate } from '@/ui/theme';
-
-function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-// Tarihli hedefte kalan gün etiketini üretir.
-function deadlineLabel(ymd: string | null): string {
-  if (!ymd) return '';
-  const target = new Date(`${ymd}T00:00:00`);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const diff = Math.round((target.getTime() - now.getTime()) / 86_400_000);
-  if (diff > 0) return `${diff} gün kaldı`;
-  if (diff === 0) return 'Bugün son gün';
-  return `${-diff} gün geçti`;
-}
+import { colors, deadlineLabel, shared, shortDate } from '@/ui/theme';
 
 export default function GoalsScreen() {
   const { user } = useAppData();
