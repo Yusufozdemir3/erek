@@ -35,6 +35,14 @@ export default function RootLayout() {
             presentation: 'modal',
           }}
         />
+        <Stack.Screen
+          name="profile"
+          options={{
+            headerShown: true,
+            title: 'Profil',
+            presentation: 'modal',
+          }}
+        />
         <Stack.Screen name="habit/[id]" />
       </Stack>
     </AppDataProvider>

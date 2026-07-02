@@ -15,6 +15,11 @@ interface AppData {
   // Yerel kullanıcıyı DB'den yeniden okur (ör. hesap bağlandıktan sonra e-posta
   // güncellensin diye). Ekranlardaki user referansını tazeler.
   refreshUser: () => void;
+  // Ekran-dışı bir yerden (ör. merkezi ＋ menüsü) veri eklendiğinde artar.
+  // Liste hook'ları bunu reload bağımlılığına koyar; böylece odak değişmese de
+  // (üstte modal kapanınca focus olayı gelmez) görünür liste tazelenir.
+  dataVersion: number;
+  notifyDataChanged: () => void;
 }
 
 const AppDataContext = createContext<AppData | null>(null);
@@ -31,6 +36,9 @@ export function useAppData(): AppData {
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dataVersion, setDataVersion] = useState(0);
+
+  const notifyDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
 
   useEffect(() => {
     // Şemayı kurar, anonim kullanıcıyı garantiler. Yalnızca ilk açılışta çalışır.
@@ -71,7 +79,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppDataContext.Provider value={{ user, refreshUser }}>{children}</AppDataContext.Provider>
+    <AppDataContext.Provider value={{ user, refreshUser, dataVersion, notifyDataChanged }}>
+      {children}
+    </AppDataContext.Provider>
   );
 }
 

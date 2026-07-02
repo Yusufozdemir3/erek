@@ -17,6 +17,7 @@ import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { AmountStepper } from '@/ui/AmountStepper';
+import { ProfileButton } from '@/ui/ProfileButton';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { colors, fullDateLabel, PRIORITY_COLOR, shared } from '@/ui/theme';
 
@@ -77,11 +78,14 @@ export default function TodayScreen() {
       <ScrollView contentContainerStyle={shared.content}>
         <View style={styles.headRow}>
           <Text style={shared.greeting}>{titleFor(selectedDate, today)}</Text>
-          {!isToday && (
-            <Pressable onPress={() => setSelectedDate(today)} hitSlop={8}>
-              <Text style={styles.backToday}>Bugüne dön</Text>
-            </Pressable>
-          )}
+          <View style={styles.headRight}>
+            {!isToday && (
+              <Pressable onPress={() => setSelectedDate(today)} hitSlop={8}>
+                <Text style={styles.backToday}>Bugüne dön</Text>
+              </Pressable>
+            )}
+            <ProfileButton />
+          </View>
         </View>
 
         {/* Tarihe dokun -> takvim açılır (ikon yok, sadece metin) */}
@@ -180,8 +184,9 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  headRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  backToday: { fontSize: 14, fontWeight: '700', color: colors.primary, paddingBottom: 6 },
+  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  backToday: { fontSize: 14, fontWeight: '700', color: colors.primary },
   futureCard: { opacity: 0.5 },
   dateLink: { color: colors.primary, fontWeight: '600' },
   list: { marginTop: 24 },

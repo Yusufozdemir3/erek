@@ -1,74 +1,34 @@
 // "Hedefler" sekmesi — iki tip hedef:
 //  - numeric: ilerleme çubuğu + artır/azalt (örn. 40/100 km)
 //  - deadline: bir tarihe kadar; kalan gün gösterilir
+// Ekleme burada yok: sekme çubuğundaki ＋ menüsünden yapılır (form AddSheet'te).
 // Mimari kural: SQL yok; yalnızca goalRepo çağrılır.
 
 import { useCallback, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
-import type { Goal, GoalType } from '@/db';
-import { toYmd } from '@/lib/helpers';
+import type { Goal } from '@/db';
 import { useAppData } from '@/ui/AppData';
 import { GoalEditModal } from '@/ui/GoalEditModal';
+import { ProfileButton } from '@/ui/ProfileButton';
 import { colors, deadlineLabel, shared, shortDate } from '@/ui/theme';
 
 export default function GoalsScreen() {
-  const { user } = useAppData();
+  const { user, dataVersion } = useAppData();
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Goal | null>(null); // null = panel kapalı
 
-  // Ekleme formu
-  const [title, setTitle] = useState('');
-  const [type, setType] = useState<GoalType>('numeric');
-  const [target, setTarget] = useState('');
-  const [unit, setUnit] = useState('');
-  const [deadline, setDeadline] = useState<string | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
-
   const reload = useCallback(() => {
     setGoals(goalRepo.listByUser(user.id));
     setConfirmId(null);
-  }, [user.id]);
+    // dataVersion: ＋ menüsünden hedef eklenince odak değişmeden tazelensin.
+  }, [user.id, dataVersion]);
 
   useFocusEffect(reload);
-
-  const resetForm = () => {
-    setTitle('');
-    setType('numeric');
-    setTarget('');
-    setUnit('');
-    setDeadline(null);
-    setShowPicker(false);
-  };
-
-  const addGoal = () => {
-    const t = title.trim();
-    if (!t) return;
-    if (type === 'numeric') {
-      const targetNum = parseFloat(target.replace(',', '.'));
-      goalRepo.create({
-        user_id: user.id,
-        title: t,
-        goal_type: 'numeric',
-        target_value: Number.isFinite(targetNum) ? targetNum : null,
-        unit: unit.trim() || null,
-      });
-    } else {
-      goalRepo.create({ user_id: user.id, title: t, goal_type: 'deadline', deadline });
-    }
-    resetForm();
-    reload();
-  };
-
-  const onPickDate = (_e: unknown, picked?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (picked) setDeadline(toYmd(picked));
-  };
 
   const step = (id: string, amount: number) => {
     goalRepo.addProgress(id, amount);
@@ -87,85 +47,23 @@ export default function GoalsScreen() {
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
-        <Text style={shared.greeting}>Hedefler</Text>
-        <Text style={shared.subtitle}>Büyük resmi takip et</Text>
-
-        {/* EKLEME FORMU */}
-        <View style={styles.form}>
-          <TextInput
-            style={shared.input}
-            placeholder="Hedef başlığı (örn. 100 km koş)"
-            placeholderTextColor="#94a3b8"
-            value={title}
-            onChangeText={setTitle}
-          />
-
-          <View style={styles.typeRow}>
-            {(['numeric', 'deadline'] as GoalType[]).map((g) => {
-              const selected = g === type;
-              return (
-                <Pressable
-                  key={g}
-                  style={[styles.typeChip, selected && styles.typeChipOn]}
-                  onPress={() => setType(g)}
-                >
-                  <Text style={[styles.typeChipText, selected && styles.typeChipTextOn]}>
-                    {g === 'numeric' ? 'Sayısal' : 'Tarihli'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {type === 'numeric' ? (
-            <View style={styles.inlineRow}>
-              <TextInput
-                style={[shared.input, { flex: 1 }]}
-                placeholder="Hedef (örn. 100)"
-                placeholderTextColor="#94a3b8"
-                keyboardType="numeric"
-                value={target}
-                onChangeText={setTarget}
-              />
-              <TextInput
-                style={[shared.input, { flex: 1 }]}
-                placeholder="Birim (km, kitap)"
-                placeholderTextColor="#94a3b8"
-                value={unit}
-                onChangeText={setUnit}
-              />
-            </View>
-          ) : (
-            <Pressable style={shared.input} onPress={() => setShowPicker(true)}>
-              <Text style={{ color: deadline ? colors.text : '#94a3b8', fontSize: 15 }}>
-                {deadline ? shortDate(deadline) : 'Son tarih seç'}
-              </Text>
-            </Pressable>
-          )}
-
-          {showPicker && (
-            <DateTimePicker
-              value={deadline ? new Date(`${deadline}T00:00:00`) : new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onChange={onPickDate}
-            />
-          )}
-
-          <Pressable style={styles.addGoalBtn} onPress={addGoal}>
-            <Text style={styles.addGoalBtnText}>Hedef ekle</Text>
-          </Pressable>
+        <View style={shared.headerRow}>
+          <Text style={shared.greeting}>Hedefler</Text>
+          <ProfileButton />
         </View>
+        <Text style={shared.subtitle}>Büyük resmi takip et</Text>
 
         {/* LİSTE */}
         {goals.length === 0 ? (
-          <Text style={shared.empty}>Henüz hedef yok. İlk hedefini ekle.</Text>
+          <Text style={[shared.empty, { marginTop: 20 }]}>
+            Henüz hedef yok. Alttaki ＋ ile ekleyebilirsin.
+          </Text>
         ) : (
-          goals.map((goal) => {
+          goals.map((goal, i) => {
             const ratio = goalRepo.progressRatio(goal);
             const armed = confirmId === goal.id;
             return (
-              <View key={goal.id} style={styles.goalCard}>
+              <View key={goal.id} style={[styles.goalCard, i === 0 && { marginTop: 20 }]}>
                 <View style={styles.goalHead}>
                   {/* Başlığa dokununca düzenleme paneli açılır */}
                   <Pressable style={styles.titleArea} onPress={() => setEditing(goal)}>
@@ -226,39 +124,6 @@ export default function GoalsScreen() {
 }
 
 const styles = StyleSheet.create({
-  form: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 10,
-    marginTop: 20,
-    marginBottom: 24,
-  },
-  typeRow: { flexDirection: 'row', gap: 8 },
-  typeChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
-  },
-  typeChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  typeChipText: { fontSize: 14, fontWeight: '600', color: colors.muted },
-  typeChipTextOn: { color: '#fff' },
-  inlineRow: { flexDirection: 'row', gap: 8 },
-  addGoalBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    alignItems: 'center',
-    paddingVertical: 13,
-    marginTop: 2,
-  },
-  addGoalBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-
   goalCard: {
     backgroundColor: colors.card,
     borderRadius: 14,

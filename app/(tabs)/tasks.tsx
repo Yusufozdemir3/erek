@@ -1,25 +1,26 @@
 // "Görevler" sekmesi — yalnızca bugün değil, TÜM aktif görevler.
 // "Bugün" ekranından farkı: tarihi ileride olan ya da tarihsiz görevler de burada
 // görünür. Tamamlananlar listenin altına iner. Göreve dokununca düzenleme paneli.
+// Ekleme burada yok: sekme çubuğundaki ＋ menüsünden yapılır.
 // Mimari kural: SQL yok; yalnızca taskRepo çağrılır.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { extractTime } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
+import { ProfileButton } from '@/ui/ProfileButton';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { PRIORITY_COLOR, shared, shortDate } from '@/ui/theme';
 
 export default function TasksScreen() {
-  const { user } = useAppData();
+  const { user, dataVersion } = useAppData();
 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [newTask, setNewTask] = useState('');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const reload = useCallback(() => {
@@ -27,20 +28,12 @@ export default function TasksScreen() {
     const all = taskRepo.listByUser(user.id);
     all.sort((a, b) => Number(a.completed_at !== null) - Number(b.completed_at !== null));
     setTasks(all);
-  }, [user.id]);
+    // dataVersion: ＋ menüsünden görev eklenince odak değişmeden tazelensin.
+  }, [user.id, dataVersion]);
 
   useFocusEffect(reload);
 
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
-
-  const addTask = () => {
-    const title = newTask.trim();
-    if (!title) return;
-    // Görevler sekmesinden eklenen görev tarihsizdir; tarih düzenleme panelinden verilir.
-    taskRepo.create({ user_id: user.id, title, priority: 'medium' });
-    setNewTask('');
-    reload();
-  };
 
   const toggleTask = (t: Task) => {
     taskRepo.setCompleted(t.id, t.completed_at === null);
@@ -50,32 +43,22 @@ export default function TasksScreen() {
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
-        <Text style={shared.greeting}>Görevler</Text>
+        <View style={shared.headerRow}>
+          <Text style={shared.greeting}>Görevler</Text>
+          <ProfileButton />
+        </View>
         <Text style={shared.subtitle}>{remaining} görev bekliyor</Text>
 
-        <View style={[shared.addRow, { marginTop: 20 }]}>
-          <TextInput
-            style={shared.input}
-            placeholder="Yeni görev ekle…"
-            placeholderTextColor="#94a3b8"
-            value={newTask}
-            onChangeText={setNewTask}
-            onSubmitEditing={addTask}
-            returnKeyType="done"
-          />
-          <Pressable style={shared.addBtn} onPress={addTask}>
-            <Text style={shared.addBtnText}>＋</Text>
-          </Pressable>
-        </View>
-
         {tasks.length === 0 ? (
-          <Text style={shared.empty}>Henüz görev yok. İlk görevini ekle.</Text>
+          <Text style={[shared.empty, { marginTop: 20 }]}>
+            Henüz görev yok. Alttaki ＋ ile ekleyebilirsin.
+          </Text>
         ) : (
-          tasks.map((t) => {
+          tasks.map((t, i) => {
             const done = t.completed_at !== null;
             const time = extractTime(t.due_date);
             return (
-              <View key={t.id} style={shared.card}>
+              <View key={t.id} style={[shared.card, i === 0 && { marginTop: 20 }]}>
                 {time && !done && <TimeBadge time={time} />}
                 <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
                   <View

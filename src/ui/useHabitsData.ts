@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
 import { lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
+import { useAppData } from '@/ui/AppData';
 
 export interface HabitListItem {
   id: string;
@@ -23,6 +24,8 @@ export interface HabitListItem {
 }
 
 export function useHabitsData(userId: string) {
+  // dataVersion: merkezi ＋ menüsünden ekleme yapılınca artar (bkz. useTodayData).
+  const { dataVersion } = useAppData();
   const today = todayDate();
   const [habits, setHabits] = useState<HabitListItem[]>([]);
 
@@ -53,7 +56,7 @@ export function useHabitsData(userId: string) {
         };
       })
     );
-  }, [userId, today]);
+  }, [userId, today, dataVersion]);
 
   useFocusEffect(reload);
 

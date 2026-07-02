@@ -1,9 +1,10 @@
 // "Alışkanlıklar" sekmesi — tüm alışkanlıklar, bugünkü işaret, seri ve son 7 günün
 // geçmişi. Kutuya dokununca bugünü işaretler/geri alır.
+// Ekleme burada yok: sekme çubuğundaki ＋ menüsünden yapılır.
 // Mimari kural: SQL yok; yalnızca habitRepo çağrılır.
 
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { habitRepo } from '@/db';
@@ -13,22 +14,14 @@ import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { AmountStepper } from '@/ui/AmountStepper';
+import { ProfileButton } from '@/ui/ProfileButton';
 import { colors, shared } from '@/ui/theme';
 
 export default function HabitsScreen() {
   const { user } = useAppData();
-  const [newHabit, setNewHabit] = useState('');
   const [editing, setEditing] = useState<Habit | null>(null); // null = panel kapalı
 
   const { today, habits, reload } = useHabitsData(user.id);
-
-  const addHabit = () => {
-    const title = newHabit.trim();
-    if (!title) return;
-    habitRepo.create({ user_id: user.id, title });
-    setNewHabit('');
-    reload();
-  };
 
   const toggleToday = (h: HabitListItem) => {
     habitRepo.toggleLog(h.id, today, !h.completedToday);
@@ -52,29 +45,19 @@ export default function HabitsScreen() {
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
-        <Text style={shared.greeting}>Alışkanlıklar</Text>
+        <View style={shared.headerRow}>
+          <Text style={shared.greeting}>Alışkanlıklar</Text>
+          <ProfileButton />
+        </View>
         <Text style={shared.subtitle}>Her gün küçük bir adım</Text>
 
-        <View style={[shared.addRow, { marginTop: 20 }]}>
-          <TextInput
-            style={shared.input}
-            placeholder="Yeni alışkanlık ekle…"
-            placeholderTextColor="#94a3b8"
-            value={newHabit}
-            onChangeText={setNewHabit}
-            onSubmitEditing={addHabit}
-            returnKeyType="done"
-          />
-          <Pressable style={shared.addBtn} onPress={addHabit}>
-            <Text style={shared.addBtnText}>＋</Text>
-          </Pressable>
-        </View>
-
         {habits.length === 0 ? (
-          <Text style={shared.empty}>Henüz alışkanlık yok. Küçük bir tane ekle.</Text>
+          <Text style={[shared.empty, { marginTop: 20 }]}>
+            Henüz alışkanlık yok. Alttaki ＋ ile küçük bir tane ekle.
+          </Text>
         ) : (
-          habits.map((h) => (
-            <View key={h.id} style={[shared.card, styles.habitCard]}>
+          habits.map((h, i) => (
+            <View key={h.id} style={[shared.card, styles.habitCard, i === 0 && { marginTop: 20 }]}>
               <View style={styles.habitTop}>
                 {/* Nicel alışkanlıkta daire yalnızca durum gösterir (dokunmaz);
                     ikili alışkanlıkta daireye dokununca bugünü işaretler. */}

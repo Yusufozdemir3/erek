@@ -7,6 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { isScheduledOn } from '@/lib/helpers';
+import { useAppData } from '@/ui/AppData';
 
 export interface HabitView {
   id: string;
@@ -21,6 +22,10 @@ export interface HabitView {
 }
 
 export function useTodayData(userId: string, selectedDate: string, today: string) {
+  // dataVersion: merkezi ＋ menüsünden ekleme yapılınca artar. reload'un
+  // bağımlılığına girer; useFocusEffect, callback değişince ekran odaktayken de
+  // effect'i yeniden çalıştırdığı için liste odak değişmeden tazelenir.
+  const { dataVersion } = useAppData();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<HabitView[]>([]);
 
@@ -50,7 +55,7 @@ export function useTodayData(userId: string, selectedDate: string, today: string
           streak: habitRepo.currentStreak(h.id),
         }))
     );
-  }, [userId, selectedDate, today]);
+  }, [userId, selectedDate, today, dataVersion]);
 
   useFocusEffect(reload);
 

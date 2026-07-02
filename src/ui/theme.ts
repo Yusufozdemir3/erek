@@ -95,6 +95,8 @@ export const shared = StyleSheet.create({
 
   greeting: { fontSize: 34, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 15, color: colors.muted, marginTop: 2 },
+  // Ekran başlığı + sağdaki profil ikonu satırı.
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 28, marginBottom: 12 },
   sectionTitle: { fontSize: 20, fontWeight: '700', color: colors.text },
@@ -111,27 +113,6 @@ export const shared = StyleSheet.create({
     paddingVertical: 1,
     overflow: 'hidden',
   },
-
-  addRow: { flexDirection: 'row', marginBottom: 12, gap: 8 },
-  input: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  addBtn: {
-    width: 46,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnText: { color: '#fff', fontSize: 24, lineHeight: 26, fontWeight: '600' },
 
   card: {
     flexDirection: 'row',
