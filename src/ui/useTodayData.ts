@@ -4,7 +4,7 @@
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { habitRepo, taskRepo } from '@/db';
+import { habitRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { isScheduledOn, isWithinHabitDates } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
@@ -28,16 +28,25 @@ export function useTodayData(userId: string, selectedDate: string, today: string
   const { dataVersion } = useAppData();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<HabitView[]>([]);
+  // Görev kartındaki "1/3 alt görev" rozeti; yalnızca alt görevi olanlar girer.
+  const [subtaskCounts, setSubtaskCounts] = useState<
+    Record<string, { done: number; total: number }>
+  >({});
 
   const reload = useCallback(() => {
     // Bugün için kümülatif "devreden görev" davranışı korunur; başka günlerde
     // sadece o güne vadeli görevler gösterilir.
     const isToday = selectedDate === today;
-    setTasks(
-      isToday
-        ? taskRepo.listForToday(userId, selectedDate)
-        : taskRepo.listByDueDate(userId, selectedDate)
-    );
+    const taskList = isToday
+      ? taskRepo.listForToday(userId, selectedDate)
+      : taskRepo.listByDueDate(userId, selectedDate);
+    setTasks(taskList);
+    const counts: Record<string, { done: number; total: number }> = {};
+    for (const t of taskList) {
+      const c = subtaskRepo.countForTask(t.id);
+      if (c.total > 0) counts[t.id] = c;
+    }
+    setSubtaskCounts(counts);
     setHabits(
       habitRepo
         .listByUser(userId)
@@ -64,5 +73,5 @@ export function useTodayData(userId: string, selectedDate: string, today: string
 
   useFocusEffect(reload);
 
-  return { tasks, habits, reload };
+  return { tasks, habits, subtaskCounts, reload };
 }

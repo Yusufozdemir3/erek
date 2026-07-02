@@ -68,6 +68,16 @@ create table if not exists public.habit_logs (
   updated_at timestamptz not null
 );
 
+create table if not exists public.subtasks (
+  id         uuid primary key,
+  task_id    uuid not null,
+  title      text not null,
+  completed  integer not null default 0,
+  position   integer not null default 0,
+  updated_at timestamptz not null,
+  deleted_at timestamptz
+);
+
 alter table public.habit_logs add column if not exists amount double precision not null default 0;
 
 -- Senkron pull'u updated_at'e göre filtreler; indeksle.
@@ -75,12 +85,14 @@ create index if not exists idx_goals_updated  on public.goals(updated_at);
 create index if not exists idx_habits_updated on public.habits(updated_at);
 create index if not exists idx_tasks_updated  on public.tasks(updated_at);
 create index if not exists idx_logs_updated   on public.habit_logs(updated_at);
+create index if not exists idx_subtasks_updated on public.subtasks(updated_at);
 
 -- ROW LEVEL SECURITY -------------------------------------------------------
 alter table public.goals      enable row level security;
 alter table public.habits     enable row level security;
 alter table public.tasks      enable row level security;
 alter table public.habit_logs enable row level security;
+alter table public.subtasks   enable row level security;
 
 -- Policy'ler idempotent: önce varsa düşür, sonra yeniden kur. Böylece bu dosya
 -- güvenle yeniden çalıştırılabilir ("already exists" hatası vermez, yarım kalmaz).
@@ -109,4 +121,17 @@ create policy "own habit_logs" on public.habit_logs
   with check (exists (
     select 1 from public.habits h
     where h.id = habit_logs.habit_id and h.user_id = auth.uid()
+  ));
+
+-- subtasks'ın da user_id'si yok; sahiplik bağlı olduğu görev üzerinden.
+drop policy if exists "own subtasks" on public.subtasks;
+create policy "own subtasks" on public.subtasks
+  for all
+  using (exists (
+    select 1 from public.tasks t
+    where t.id = subtasks.task_id and t.user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from public.tasks t
+    where t.id = subtasks.task_id and t.user_id = auth.uid()
   ));

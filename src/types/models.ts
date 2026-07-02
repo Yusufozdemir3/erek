@@ -61,6 +61,15 @@ export interface Habit extends SyncFields {
   end_date: string | null;       // "YYYY-MM-DD"; null = süresiz
 }
 
+// Bir görevin alt görevi (basit checklist maddesi).
+// Bilinçli olarak yalın: kendi tarihi/önceliği yok, yalnızca başlık + durum.
+export interface Subtask extends SyncFields {
+  task_id: string;
+  title: string;
+  completed: 0 | 1;
+  position: number; // oluşturma sırası; liste bu sırayla gösterilir
+}
+
 // Her gün bir alışkanlığı işaretlediğinde bir kayıt oluşur.
 // Streak ve istatistikler bu kayıtlardan hesaplanır.
 export interface HabitLog {

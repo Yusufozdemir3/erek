@@ -1,21 +1,25 @@
 // Görev düzenleme paneli (alttan açılan modal).
-// "Bugün" ekranında bir göreve dokununca açılır. Başlık, öncelik ve son tarih
-// düzenlenir; görev buradan silinebilir (soft delete).
-// Mimari kural: SQL yok - yalnızca taskRepo çağrılır.
+// "Bugün" ekranında bir göreve dokununca açılır. Başlık, öncelik, son tarih ve
+// alt görevler (checklist) düzenlenir; görev buradan silinebilir (soft delete).
+// Not: başlık/öncelik/tarih "Kaydet" ile yazılır; alt görevler ise ANINDA
+// yazılır (checklist davranışı) — her değişiklikte onChanged tetiklenir ki
+// arkadaki listedeki "1/3 alt görev" rozeti güncel kalsın.
+// Mimari kural: SQL yok - yalnızca taskRepo/subtaskRepo çağrılır.
 
 import { useEffect, useState } from 'react';
 import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { taskRepo } from '@/db';
-import type { Priority, Task } from '@/db';
+import { subtaskRepo, taskRepo } from '@/db';
+import type { Priority, Subtask, Task } from '@/db';
 import { extractTime, hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_ORDER } from '@/ui/theme';
@@ -38,6 +42,8 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const [dueTime, setDueTime] = useState<string | null>(null); // "HH:MM" | null
   const [showPicker, setShowPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [newSubtask, setNewSubtask] = useState('');
 
   // Panel her açıldığında formu seçilen görevin değerleriyle doldur.
   useEffect(() => {
@@ -48,10 +54,37 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       setDueTime(extractTime(task.due_date));
       setShowPicker(false);
       setShowTimePicker(false);
+      setSubtasks(subtaskRepo.listByTask(task.id));
+      setNewSubtask('');
     }
   }, [task]);
 
   if (!task) return null;
+
+  // Alt görev değişiklikleri anında yazılır; hem panel içi liste hem arkadaki
+  // ekran (rozet sayıları) tazelenir.
+  const refreshSubtasks = () => {
+    setSubtasks(subtaskRepo.listByTask(task.id));
+    onChanged();
+  };
+
+  const addSubtask = () => {
+    const t = newSubtask.trim();
+    if (!t) return;
+    subtaskRepo.create(task.id, t);
+    setNewSubtask('');
+    refreshSubtasks();
+  };
+
+  const toggleSubtask = (s: Subtask) => {
+    subtaskRepo.setCompleted(s.id, s.completed === 0);
+    refreshSubtasks();
+  };
+
+  const removeSubtask = (s: Subtask) => {
+    subtaskRepo.softDelete(s.id);
+    refreshSubtasks();
+  };
 
   const save = () => {
     const t = title.trim();
@@ -87,6 +120,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
       <View style={styles.sheet}>
         <View style={styles.handle} />
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Text style={styles.heading}>Görevi düzenle</Text>
 
         {/* Başlık */}
@@ -174,6 +208,42 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
           </>
         )}
 
+        {/* Alt görevler — anında kaydedilir (Kaydet beklemez) */}
+        <Text style={styles.label}>Alt görevler</Text>
+        {subtasks.map((s) => {
+          const done = s.completed === 1;
+          return (
+            <View key={s.id} style={styles.subtaskRow}>
+              <Pressable onPress={() => toggleSubtask(s)} hitSlop={8}>
+                <View style={[styles.subtaskBox, done && styles.subtaskBoxDone]}>
+                  {done && <Text style={styles.subtaskCheck}>✓</Text>}
+                </View>
+              </Pressable>
+              <Text style={[styles.subtaskTitle, done && styles.subtaskTitleDone]}>
+                {s.title}
+              </Text>
+              <Pressable onPress={() => removeSubtask(s)} hitSlop={10}>
+                <Text style={styles.subtaskDelete}>×</Text>
+              </Pressable>
+            </View>
+          );
+        })}
+        <View style={styles.row}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            value={newSubtask}
+            onChangeText={setNewSubtask}
+            placeholder="Alt görev ekle…"
+            placeholderTextColor="#94a3b8"
+            onSubmitEditing={addSubtask}
+            blurOnSubmit={false}
+            returnKeyType="done"
+          />
+          <Pressable style={styles.subtaskAddBtn} onPress={addSubtask}>
+            <Text style={styles.subtaskAddText}>＋</Text>
+          </Pressable>
+        </View>
+
         {/* Eylemler */}
         <View style={styles.actions}>
           <ConfirmDeleteButton onConfirm={remove} />
@@ -181,6 +251,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
             <Text style={styles.saveBtnText}>Kaydet</Text>
           </Pressable>
         </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -194,6 +265,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 32,
+    maxHeight: '88%',
   },
   handle: {
     alignSelf: 'center',
@@ -246,6 +318,34 @@ const styles = StyleSheet.create({
   dateBtnText: { fontSize: 15, color: '#0f172a' },
   clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
   clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
+  subtaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 10,
+  },
+  subtaskBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subtaskBoxDone: { backgroundColor: '#10b981', borderColor: '#10b981' },
+  subtaskCheck: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  subtaskTitle: { flex: 1, fontSize: 14, color: '#0f172a' },
+  subtaskTitleDone: { color: '#94a3b8', textDecorationLine: 'line-through' },
+  subtaskDelete: { fontSize: 20, color: '#94a3b8', paddingHorizontal: 4 },
+  subtaskAddBtn: {
+    width: 44,
+    borderRadius: 12,
+    backgroundColor: '#e0e7ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subtaskAddText: { fontSize: 20, color: '#4f46e5', fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
   saveBtn: {
     flex: 1,

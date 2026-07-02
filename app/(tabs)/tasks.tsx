@@ -8,7 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import { taskRepo } from '@/db';
+import { subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { extractTime } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
@@ -22,12 +22,22 @@ export default function TasksScreen() {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // Görev kartındaki "1/3 alt görev" rozeti; yalnızca alt görevi olanlar girer.
+  const [subtaskCounts, setSubtaskCounts] = useState<
+    Record<string, { done: number; total: number }>
+  >({});
 
   const reload = useCallback(() => {
     // Tamamlanmamışlar üstte, tamamlananlar altta.
     const all = taskRepo.listByUser(user.id);
     all.sort((a, b) => Number(a.completed_at !== null) - Number(b.completed_at !== null));
     setTasks(all);
+    const counts: Record<string, { done: number; total: number }> = {};
+    for (const t of all) {
+      const c = subtaskRepo.countForTask(t.id);
+      if (c.total > 0) counts[t.id] = c;
+    }
+    setSubtaskCounts(counts);
     // dataVersion: ＋ menüsünden görev eklenince odak değişmeden tazelensin.
   }, [user.id, dataVersion]);
 
@@ -72,8 +82,17 @@ export default function TasksScreen() {
                 </Pressable>
                 <Pressable style={shared.cardBody} onPress={() => setEditingTask(t)}>
                   <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                  {t.due_date && !done && (
-                    <Text style={styles.due}>{shortDate(t.due_date)}</Text>
+                  {((t.due_date && !done) || subtaskCounts[t.id]) && (
+                    <Text style={styles.due}>
+                      {[
+                        t.due_date && !done ? shortDate(t.due_date) : null,
+                        subtaskCounts[t.id]
+                          ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} alt görev`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join('  ·  ')}
+                    </Text>
                   )}
                 </Pressable>
                 {!done && (

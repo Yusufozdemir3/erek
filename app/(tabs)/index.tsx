@@ -36,7 +36,7 @@ export default function TodayScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const { tasks, habits, reload } = useTodayData(user.id, selectedDate, today);
+  const { tasks, habits, subtaskCounts, reload } = useTodayData(user.id, selectedDate, today);
 
   const isToday = selectedDate === today;
   // Gelecek bir gün görüntüleniyorsa alışkanlık işaretlenemez — henüz yaşanmamış
@@ -131,6 +131,11 @@ export default function TodayScreen() {
                     </Pressable>
                     <Pressable style={shared.cardBody} onPress={() => setEditingTask(t)}>
                       <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
+                      {subtaskCounts[t.id] && (
+                        <Text style={styles.subCount}>
+                          {subtaskCounts[t.id].done}/{subtaskCounts[t.id].total} alt görev
+                        </Text>
+                      )}
                     </Pressable>
                     {!done && (
                       <View style={[shared.priorityDot, { backgroundColor: PRIORITY_COLOR[t.priority] }]} />
@@ -190,4 +195,5 @@ const styles = StyleSheet.create({
   futureCard: { opacity: 0.5 },
   dateLink: { color: colors.primary, fontWeight: '600' },
   list: { marginTop: 24 },
+  subCount: { fontSize: 12, color: colors.muted, marginTop: 3 },
 });

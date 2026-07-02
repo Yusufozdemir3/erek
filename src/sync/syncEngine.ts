@@ -54,6 +54,11 @@ const TABLES: TableCfg[] = [
     hasUserId: false,
     naturalKey: ['habit_id', 'log_date'], // yerel: UNIQUE(habit_id, log_date)
   },
+  {
+    table: 'subtasks',
+    cols: ['id', 'task_id', 'title', 'completed', 'position', 'updated_at', 'deleted_at'],
+    hasUserId: false, // sahiplik ebeveyn görev üzerinden (RLS de öyle)
+  },
 ];
 
 const LAST_PULLED_KEY = 'sync:lastPulledAt';

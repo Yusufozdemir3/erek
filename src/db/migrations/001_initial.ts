@@ -115,6 +115,25 @@ ALTER TABLE habits ADD COLUMN start_date TEXT;
 ALTER TABLE habits ADD COLUMN end_date TEXT;
 `;
 
+// Migration 007: alt görevler (basit checklist). Kendi tarihi/önceliği yok —
+// yalnızca başlık + tamamlandı. position = oluşturma sırası (updated_at toggle
+// ile değiştiği için sıralamada kullanılamaz). Senkron alanları diğer
+// tablolarla aynı desen (updated_at LWW + soft delete + synced bayrağı).
+export const migration007 = `
+CREATE TABLE IF NOT EXISTS subtasks (
+  id         TEXT PRIMARY KEY NOT NULL,
+  task_id    TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  completed  INTEGER NOT NULL DEFAULT 0,
+  position   INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  synced     INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (task_id) REFERENCES tasks(id)
+);
+CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id);
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -123,4 +142,5 @@ export const migrations = [
   { version: 4, sql: migration004 },
   { version: 5, sql: migration005 },
   { version: 6, sql: migration006 },
+  { version: 7, sql: migration007 },
 ];
