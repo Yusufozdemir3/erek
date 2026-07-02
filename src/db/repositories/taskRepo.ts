@@ -6,6 +6,20 @@ import { getDb } from '../database';
 import { newId, nowIso, parseJson, toJson } from '../../lib/helpers';
 import type { Task, Priority, Recurrence } from '../../types/models';
 
+// Öncelik sıralama anahtarı: yüksek->düşük.
+const PRIORITY_RANK_SQL = `CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END`;
+
+// Saati olan görevler (due_date "YYYY-MM-DDTHH:MM:SS", length>10) tamamen
+// önce; kendi aralarında SAATE göre (kronolojik) sıralanır. Saatsiz/tüm-gün
+// görevler ("YYYY-MM-DD") tamamen sonra; kendi aralarında yalnızca ÖNCELİĞE
+// göre sıralanır (tarihleri farklı olsa bile). CASE ifadesi saatsiz satırlarda
+// NULL üretip hepsini eşitler ki tarih aradan sızıp önceliği ezmesin.
+const DUE_ORDER_SQL = `
+  (length(due_date) <= 10) ASC,
+  CASE WHEN length(due_date) > 10 THEN due_date END ASC,
+  ${PRIORITY_RANK_SQL}
+`;
+
 // DB'den gelen ham satırı uygulama tipine çevirir (recurrence JSON parse).
 function rowToTask(row: any): Task {
   return {
@@ -69,7 +83,7 @@ export const taskRepo = {
     const rows = db.getAllSync<any>(
       `SELECT * FROM tasks
        WHERE user_id = ? AND deleted_at IS NULL
-       ORDER BY (due_date IS NULL), due_date ASC`,
+       ORDER BY (due_date IS NULL), ${DUE_ORDER_SQL}`,
       [userId]
     );
     return rows.map(rowToTask);
@@ -83,7 +97,7 @@ export const taskRepo = {
        WHERE user_id = ? AND deleted_at IS NULL
          AND completed_at IS NULL
          AND due_date IS NOT NULL AND date(due_date) <= ?
-       ORDER BY due_date ASC`,
+       ORDER BY ${DUE_ORDER_SQL}`,
       [userId, today]
     );
     return rows.map(rowToTask);
@@ -103,7 +117,7 @@ export const taskRepo = {
            (completed_at IS NULL AND date(due_date) <= ?)
            OR (completed_at IS NOT NULL AND date(completed_at, 'localtime') = ?)
          )
-       ORDER BY (completed_at IS NOT NULL), due_date ASC`,
+       ORDER BY (completed_at IS NOT NULL), ${DUE_ORDER_SQL}`,
       [userId, today, today]
     );
     return rows.map(rowToTask);
@@ -119,7 +133,7 @@ export const taskRepo = {
       `SELECT * FROM tasks
        WHERE user_id = ? AND deleted_at IS NULL
          AND due_date IS NOT NULL AND date(due_date) = ?
-       ORDER BY (completed_at IS NOT NULL), due_date ASC`,
+       ORDER BY (completed_at IS NOT NULL), ${DUE_ORDER_SQL}`,
       [userId, date]
     );
     return rows.map(rowToTask);

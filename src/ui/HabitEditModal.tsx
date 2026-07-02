@@ -19,6 +19,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo } from '@/db';
 import type { Habit, Recurrence } from '@/db';
+import { hmToDate, toHm } from '@/lib/helpers';
 import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { HABIT_COLORS, HABIT_ICONS } from '@/ui/theme';
@@ -43,22 +44,6 @@ interface Props {
 // "08:30" -> okunaklı etiket; null ise "Hatırlatma yok".
 function timeLabel(hm: string | null): string {
   return hm ? hm : 'Hatırlatma yok';
-}
-
-function toHm(d: Date): string {
-  const h = String(d.getHours()).padStart(2, '0');
-  const m = String(d.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-// "08:30" -> bugünün o saatine ayarlı bir Date (picker başlangıç değeri için).
-function hmToDate(hm: string | null): Date {
-  const d = new Date();
-  if (hm) {
-    const [h, m] = hm.split(':').map(Number);
-    d.setHours(h, m, 0, 0);
-  }
-  return d;
 }
 
 export function HabitEditModal({ habit, onClose, onChanged }: Props) {

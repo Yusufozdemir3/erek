@@ -11,12 +11,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { toYmd, todayDate } from '@/lib/helpers';
+import { extractTime, toYmd, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { AmountStepper } from '@/ui/AmountStepper';
+import { TimeBadge } from '@/ui/TimeBadge';
 import { colors, fullDateLabel, PRIORITY_COLOR, shared } from '@/ui/theme';
 
 // Başlık: bugünse "Bugün", değilse o günün adı (örn. "Pazartesi").
@@ -58,6 +59,14 @@ export default function TodayScreen() {
     reload();
   };
 
+  // Klavyeden girilen mutlak değer — mevcut delta tabanlı incrementAmount'a
+  // fark hesaplanarak devredilir, ayrı bir repo fonksiyonu gerekmez.
+  const setHabitAmount = (h: HabitView, value: number) => {
+    if (isFuture) return;
+    habitRepo.incrementAmount(h.id, selectedDate, value - h.amount, h.target);
+    reload();
+  };
+
   const onPickDate = (_e: unknown, picked?: Date) => {
     setShowPicker(Platform.OS === 'ios');
     if (picked) setSelectedDate(toYmd(picked));
@@ -75,10 +84,10 @@ export default function TodayScreen() {
           )}
         </View>
 
-        {/* Tarihe dokun -> takvim açılır */}
+        {/* Tarihe dokun -> takvim açılır (ikon yok, sadece metin) */}
         <Pressable onPress={() => setShowPicker(true)} hitSlop={6}>
           <Text style={[shared.subtitle, styles.dateLink, { textTransform: 'capitalize' }]}>
-            📅 {fullDateLabel(selectedDate)}
+            {fullDateLabel(selectedDate)}
           </Text>
         </Pressable>
 
@@ -102,8 +111,10 @@ export default function TodayScreen() {
             <>
               {tasks.map((t) => {
                 const done = t.completed_at !== null;
+                const time = extractTime(t.due_date);
                 return (
                   <View key={t.id} style={shared.card}>
+                    {time && <TimeBadge time={time} />}
                     <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
                       <View
                         style={[
@@ -138,6 +149,7 @@ export default function TodayScreen() {
                       unit={h.unit}
                       onDec={() => adjustHabit(h, -1)}
                       onInc={() => adjustHabit(h, 1)}
+                      onSet={(v) => setHabitAmount(h, v)}
                       disabled={isFuture}
                     />
                   </View>

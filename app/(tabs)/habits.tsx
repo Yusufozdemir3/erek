@@ -40,6 +40,11 @@ export default function HabitsScreen() {
     reload();
   };
 
+  const setTodayAmount = (h: HabitListItem, value: number) => {
+    habitRepo.incrementAmount(h.id, today, value - h.amount, h.target);
+    reload();
+  };
+
   const openEdit = (h: HabitListItem) => {
     setEditing(habitRepo.getById(h.id));
   };
@@ -100,6 +105,7 @@ export default function HabitsScreen() {
                     unit={h.unit}
                     onDec={() => adjustToday(h, -1)}
                     onInc={() => adjustToday(h, 1)}
+                    onSet={(v) => setTodayAmount(h, v)}
                   />
                 ) : (
                   h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>

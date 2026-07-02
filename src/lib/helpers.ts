@@ -28,6 +28,32 @@ export function todayDate(): string {
   return toYmd(new Date());
 }
 
+// Date -> "08:30" (saat:dakika). Saat seçicilerin ortak çıktı biçimi.
+export function toHm(d: Date): string {
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+// "08:30" -> bugünün o saatine ayarlı bir Date (saat seçicinin başlangıç değeri).
+// null verilirse şimdiki saat.
+export function hmToDate(hm: string | null): Date {
+  const d = new Date();
+  if (hm) {
+    const [h, m] = hm.split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+  }
+  return d;
+}
+
+// Bir tarih-saat metninde ("YYYY-MM-DDTHH:MM..." gibi) saat bileşeni var mı?
+// Görev son tarihi saatsiz ("YYYY-MM-DD") ya da saatli olabilir; ekranlar bu
+// ayrımı bu fonksiyonla yapar.
+export function extractTime(value: string | null): string | null {
+  if (!value || value.length < 16 || value[10] !== 'T') return null;
+  return value.slice(11, 16);
+}
+
 // Bugün dahil son `count` günün "YYYY-MM-DD" listesi (en eskiden bugüne).
 // Haftalık geçmiş şeridi ve istatistik ısı haritası ortak kullanır.
 export function lastDays(count: number): string[] {

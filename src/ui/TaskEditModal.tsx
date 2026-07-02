@@ -16,7 +16,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { taskRepo } from '@/db';
 import type { Priority, Task } from '@/db';
-import { toYmd } from '@/lib/helpers';
+import { extractTime, hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_ORDER } from '@/ui/theme';
 
@@ -26,11 +26,18 @@ interface Props {
   onChanged: () => void; // kaydet/sil sonrası parent listeyi tazelesin
 }
 
+// "08:30" -> okunaklı etiket; null ise "Saat yok".
+function timeLabel(hm: string | null): string {
+  return hm ? hm : 'Saat yok';
+}
+
 export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [dueDate, setDueDate] = useState<string | null>(null); // "YYYY-MM-DD" | null
+  const [dueTime, setDueTime] = useState<string | null>(null); // "HH:MM" | null
   const [showPicker, setShowPicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Panel her açıldığında formu seçilen görevin değerleriyle doldur.
   useEffect(() => {
@@ -38,7 +45,9 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       setTitle(task.title);
       setPriority(task.priority);
       setDueDate(task.due_date ? task.due_date.slice(0, 10) : null);
+      setDueTime(extractTime(task.due_date));
       setShowPicker(false);
+      setShowTimePicker(false);
     }
   }, [task]);
 
@@ -47,7 +56,9 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const save = () => {
     const t = title.trim();
     if (!t) return;
-    taskRepo.update(task.id, { title: t, priority, due_date: dueDate });
+    // Saat yalnızca bir tarih seçiliyken anlamlıdır.
+    const due_date = dueDate ? (dueTime ? `${dueDate}T${dueTime}:00` : dueDate) : null;
+    taskRepo.update(task.id, { title: t, priority, due_date });
     onChanged();
     onClose();
   };
@@ -62,6 +73,11 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const onPickDate = (_event: unknown, picked?: Date) => {
     setShowPicker(Platform.OS === 'ios');
     if (picked) setDueDate(toYmd(picked));
+  };
+
+  const onPickTime = (_event: unknown, picked?: Date) => {
+    setShowTimePicker(Platform.OS === 'ios');
+    if (picked) setDueTime(toHm(picked));
   };
 
   return (
@@ -110,7 +126,13 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
             <Text style={styles.dateBtnText}>{longDateLabel(dueDate)}</Text>
           </Pressable>
           {dueDate && (
-            <Pressable style={styles.clearBtn} onPress={() => setDueDate(null)}>
+            <Pressable
+              style={styles.clearBtn}
+              onPress={() => {
+                setDueDate(null);
+                setDueTime(null);
+              }}
+            >
               <Text style={styles.clearBtnText}>Temizle</Text>
             </Pressable>
           )}
@@ -123,6 +145,33 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
             display={Platform.OS === 'ios' ? 'inline' : 'default'}
             onChange={onPickDate}
           />
+        )}
+
+        {/* Saat — yalnızca bir tarih seçiliyken anlamlı */}
+        {dueDate && (
+          <>
+            <Text style={styles.label}>Saat (isteğe bağlı)</Text>
+            <View style={styles.row}>
+              <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
+                <Text style={styles.dateBtnText}>{timeLabel(dueTime)}</Text>
+              </Pressable>
+              {dueTime && (
+                <Pressable style={styles.clearBtn} onPress={() => setDueTime(null)}>
+                  <Text style={styles.clearBtnText}>Temizle</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {showTimePicker && (
+              <DateTimePicker
+                value={hmToDate(dueTime)}
+                mode="time"
+                is24Hour
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onPickTime}
+              />
+            )}
+          </>
         )}
 
         {/* Eylemler */}

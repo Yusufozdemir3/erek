@@ -1,7 +1,16 @@
 // helpers.ts testleri — isScheduledOn streak'in ve "Bugün" filtresinin temelidir.
 // Sabit tarihler kullanılır: 2026-06-29 Pazartesi, 2026-07-01 Çarşamba.
 
-import { isScheduledOn, lastDays, parseJson, scheduleLabel, toJson } from '../helpers';
+import {
+  extractTime,
+  hmToDate,
+  isScheduledOn,
+  lastDays,
+  parseJson,
+  scheduleLabel,
+  toHm,
+  toJson,
+} from '../helpers';
 import type { Recurrence } from '../../types/models';
 
 describe('parseJson', () => {
@@ -93,5 +102,34 @@ describe('lastDays', () => {
 
   it('1 istenirse yalnızca bugünü döner', () => {
     expect(lastDays(1)).toEqual(['2026-07-01']);
+  });
+});
+
+describe('toHm / hmToDate', () => {
+  it('toHm saat:dakika döner (iki haneli)', () => {
+    const d = new Date();
+    d.setHours(8, 5, 0, 0);
+    expect(toHm(d)).toBe('08:05');
+  });
+
+  it('hmToDate verilen saati bugüne uygular', () => {
+    const d = hmToDate('14:30');
+    expect(d.getHours()).toBe(14);
+    expect(d.getMinutes()).toBe(30);
+  });
+
+  it('hmToDate null verilirse şimdiki saati döner (hata vermez)', () => {
+    expect(() => hmToDate(null)).not.toThrow();
+  });
+});
+
+describe('extractTime', () => {
+  it('yalnızca tarih varsa null döner', () => {
+    expect(extractTime('2026-07-05')).toBeNull();
+    expect(extractTime(null)).toBeNull();
+  });
+
+  it('tarih+saat varsa "HH:MM" döner', () => {
+    expect(extractTime('2026-07-05T14:30:00')).toBe('14:30');
   });
 });

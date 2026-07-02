@@ -9,8 +9,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { taskRepo } from '@/db';
 import type { Task } from '@/db';
+import { extractTime } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
+import { TimeBadge } from '@/ui/TimeBadge';
 import { PRIORITY_COLOR, shared, shortDate } from '@/ui/theme';
 
 export default function TasksScreen() {
@@ -71,8 +73,10 @@ export default function TasksScreen() {
         ) : (
           tasks.map((t) => {
             const done = t.completed_at !== null;
+            const time = extractTime(t.due_date);
             return (
               <View key={t.id} style={shared.card}>
+                {time && !done && <TimeBadge time={time} />}
                 <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
                   <View
                     style={[
