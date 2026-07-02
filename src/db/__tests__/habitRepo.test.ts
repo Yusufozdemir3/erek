@@ -220,6 +220,26 @@ describe('currentStreak — haftalık plan (Pzt/Çar/Cum)', () => {
   });
 });
 
+describe('currentStreak — yaşam aralığı (start_date/end_date)', () => {
+  // Bugün = 2026-07-01. Aralık dışı günler "planlı değil" sayılır:
+  // ne seriyi besler ne bozar.
+  it('bitişten sonraki günler seriyi bozmaz (biten alışkanlığın serisi donar)', () => {
+    const habit = createHabit({ end_date: '2026-06-28' });
+    habitRepo.toggleLog(habit.id, '2026-06-27', true);
+    habitRepo.toggleLog(habit.id, '2026-06-28', true);
+    // 29-30 Haziran ve bugün aralık dışı — kaçırılmış sayılmamalı.
+    expect(habitRepo.currentStreak(habit.id)).toBe(2);
+  });
+
+  it('başlangıçtan önceki günler sayılmaz', () => {
+    const habit = createHabit({ start_date: '2026-06-30' });
+    habitRepo.toggleLog(habit.id, '2026-06-29', true); // aralık dışı — sayılmaz
+    habitRepo.toggleLog(habit.id, '2026-06-30', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(habitRepo.currentStreak(habit.id)).toBe(2);
+  });
+});
+
 describe('longestStreak', () => {
   it('hiç log yoksa 0', () => {
     const habit = createHabit();

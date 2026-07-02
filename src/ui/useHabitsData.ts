@@ -7,6 +7,13 @@ import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
 import { lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
+import { shortDate } from '@/ui/theme';
+
+// "5 Tem → 20 Tem" / "5 Tem →" / "→ 20 Tem"; ikisi de boşsa null.
+function periodLabel(start: string | null, end: string | null): string | null {
+  if (!start && !end) return null;
+  return `${start ? shortDate(start) : ''} → ${end ? shortDate(end) : ''}`.trim();
+}
 
 export interface HabitListItem {
   id: string;
@@ -15,6 +22,7 @@ export interface HabitListItem {
   icon: string | null;
   color: string | null;
   days: string | null;     // "Pzt·Çar·Cum" (belirli günlerse), her günse null
+  period: string | null;   // "5 Tem → 20 Tem" (başlangıç/bitiş varsa), yoksa null
   target: number | null;   // nicel hedef; null = ikili
   unit: string | null;
   amount: number;          // bugün yapılan miktar
@@ -47,6 +55,7 @@ export function useHabitsData(userId: string) {
           icon: h.icon,
           color: h.color,
           days: h.schedule ? scheduleLabel(h.schedule) : null,
+          period: periodLabel(h.start_date, h.end_date),
           target: h.target_amount,
           unit: h.unit,
           amount: habitRepo.getAmountOn(h.id, today),

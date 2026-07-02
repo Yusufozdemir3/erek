@@ -73,9 +73,9 @@ export default function HabitsScreen() {
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
                     {h.title}
                   </Text>
-                  {(h.days || h.remindAt) && (
+                  {(h.days || h.remindAt || h.period) && (
                     <Text style={styles.remind}>
-                      {[h.days, h.remindAt ? `🔔 ${h.remindAt}` : null]
+                      {[h.days, h.period, h.remindAt ? `🔔 ${h.remindAt}` : null]
                         .filter(Boolean)
                         .join('  ·  ')}
                     </Text>

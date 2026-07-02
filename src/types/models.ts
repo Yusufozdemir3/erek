@@ -57,6 +57,8 @@ export interface Habit extends SyncFields {
   schedule: Recurrence | null;   // hangi günler geçerli; null = her gün
   target_amount: number | null;  // günlük miktar hedefi (ör. 8); null = ikili (yaptım/yapmadım)
   unit: string | null;           // "bardak", "sayfa"; target_amount ile anlamlı
+  start_date: string | null;     // "YYYY-MM-DD"; null = baştan beri
+  end_date: string | null;       // "YYYY-MM-DD"; null = süresiz
 }
 
 // Her gün bir alışkanlığı işaretlediğinde bir kayıt oluşur.

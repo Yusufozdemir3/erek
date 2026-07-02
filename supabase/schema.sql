@@ -31,6 +31,8 @@ create table if not exists public.habits (
   schedule      text,
   target_amount double precision,
   unit          text,
+  start_date    text,
+  end_date      text,
   updated_at    timestamptz not null,
   deleted_at    timestamptz
 );
@@ -42,6 +44,8 @@ alter table public.habits add column if not exists color         text;
 alter table public.habits add column if not exists schedule      text;
 alter table public.habits add column if not exists target_amount double precision;
 alter table public.habits add column if not exists unit          text;
+alter table public.habits add column if not exists start_date    text;
+alter table public.habits add column if not exists end_date      text;
 
 create table if not exists public.tasks (
   id           uuid primary key,

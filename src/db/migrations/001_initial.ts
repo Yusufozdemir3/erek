@@ -107,6 +107,14 @@ ALTER TABLE habits ADD COLUMN unit TEXT;
 ALTER TABLE habit_logs ADD COLUMN amount REAL NOT NULL DEFAULT 0;
 `;
 
+// Migration 006: alışkanlığa yaşam aralığı. start_date'ten önce ve end_date'ten
+// sonra alışkanlık "planlı" sayılmaz (görünmez, streak'i etkilemez). İkisi de
+// NULL olabilir: NULL start = baştan beri, NULL end = süresiz (mevcut davranış).
+export const migration006 = `
+ALTER TABLE habits ADD COLUMN start_date TEXT;
+ALTER TABLE habits ADD COLUMN end_date TEXT;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -114,4 +122,5 @@ export const migrations = [
   { version: 3, sql: migration003 },
   { version: 4, sql: migration004 },
   { version: 5, sql: migration005 },
+  { version: 6, sql: migration006 },
 ];

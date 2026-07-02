@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { isScheduledOn } from '@/lib/helpers';
+import { isScheduledOn, isWithinHabitDates } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 
 export interface HabitView {
@@ -41,8 +41,13 @@ export function useTodayData(userId: string, selectedDate: string, today: string
     setHabits(
       habitRepo
         .listByUser(userId)
-        // Yalnızca seçilen günde planlı (vadeli) alışkanlıklar görünsün.
-        .filter((h) => isScheduledOn(h.schedule, selectedDate))
+        // Yalnızca seçilen günde planlı (vadeli) ve yaşam aralığı (başlangıç/
+        // bitiş tarihi) içindeki alışkanlıklar görünsün.
+        .filter(
+          (h) =>
+            isScheduledOn(h.schedule, selectedDate) &&
+            isWithinHabitDates(h.start_date, h.end_date, selectedDate)
+        )
         .map((h) => ({
           id: h.id,
           title: h.title,

@@ -5,6 +5,7 @@ import {
   extractTime,
   hmToDate,
   isScheduledOn,
+  isWithinHabitDates,
   lastDays,
   parseJson,
   scheduleLabel,
@@ -66,6 +67,28 @@ describe('isScheduledOn', () => {
     const s: Recurrence = { freq: 'monthly', monthDay: 15 };
     expect(isScheduledOn(s, '2026-07-15')).toBe(true);
     expect(isScheduledOn(s, '2026-07-14')).toBe(false);
+  });
+});
+
+describe('isWithinHabitDates', () => {
+  it('ikisi de null ise her gün aralıktadır', () => {
+    expect(isWithinHabitDates(null, null, '2026-07-01')).toBe(true);
+  });
+
+  it('başlangıçtan önceki gün aralık dışıdır, başlangıç günü dahildir', () => {
+    expect(isWithinHabitDates('2026-07-01', null, '2026-06-30')).toBe(false);
+    expect(isWithinHabitDates('2026-07-01', null, '2026-07-01')).toBe(true);
+  });
+
+  it('bitişten sonraki gün aralık dışıdır, bitiş günü dahildir', () => {
+    expect(isWithinHabitDates(null, '2026-07-10', '2026-07-11')).toBe(false);
+    expect(isWithinHabitDates(null, '2026-07-10', '2026-07-10')).toBe(true);
+  });
+
+  it('iki uç da veriliyse yalnızca aradaki günler geçerlidir', () => {
+    expect(isWithinHabitDates('2026-07-01', '2026-07-10', '2026-07-05')).toBe(true);
+    expect(isWithinHabitDates('2026-07-01', '2026-07-10', '2026-06-30')).toBe(false);
+    expect(isWithinHabitDates('2026-07-01', '2026-07-10', '2026-07-11')).toBe(false);
   });
 });
 

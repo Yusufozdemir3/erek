@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
-import { isScheduledOn, lastDays } from '@/lib/helpers';
+import { isScheduledOn, isWithinHabitDates, lastDays } from '@/lib/helpers';
 
 const WINDOW_DAYS = 90;
 
@@ -55,7 +55,11 @@ export function useHabitStats(habitId: string): HabitStats {
     let scheduledCount = 0;
     let completedCount = 0;
     const days: DayCell[] = dates.map((date) => {
-      const scheduled = isScheduledOn(habit.schedule, date);
+      // Aralık dışı (başlangıçtan önce / bitişten sonra) günler planlı sayılmaz:
+      // ısı haritasında gri görünür, "kaçırıldı" (kırmızı) olmaz, orana girmez.
+      const scheduled =
+        isScheduledOn(habit.schedule, date) &&
+        isWithinHabitDates(habit.start_date, habit.end_date, date);
       const completed = completedDates.has(date);
       if (scheduled) {
         scheduledCount++;

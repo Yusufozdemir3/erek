@@ -19,10 +19,10 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo } from '@/db';
 import type { Habit, Recurrence } from '@/db';
-import { hmToDate, toHm } from '@/lib/helpers';
+import { hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
-import { HABIT_COLORS, HABIT_ICONS } from '@/ui/theme';
+import { HABIT_COLORS, HABIT_ICONS, shortDate } from '@/ui/theme';
 
 // Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
 const WEEKDAY_OPTIONS = [
@@ -55,7 +55,11 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const [weekdays, setWeekdays] = useState<number[]>([]);        // belirli günler (JS getDay)
   const [targetText, setTargetText] = useState('');              // günlük hedef (metin)
   const [unit, setUnit] = useState('');                          // birim ("bardak")
+  const [startDate, setStartDate] = useState<string | null>(null); // "YYYY-MM-DD" | null
+  const [endDate, setEndDate] = useState<string | null>(null);     // "YYYY-MM-DD" | null
   const [showPicker, setShowPicker] = useState(false);
+  // Hangi tarih seçici açık: başlangıç mı bitiş mi (null = kapalı).
+  const [datePicker, setDatePicker] = useState<'start' | 'end' | null>(null);
 
   // Panel her açıldığında formu seçilen alışkanlığın değerleriyle doldur.
   useEffect(() => {
@@ -74,7 +78,10 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
       }
       setTargetText(habit.target_amount != null ? String(habit.target_amount) : '');
       setUnit(habit.unit ?? '');
+      setStartDate(habit.start_date);
+      setEndDate(habit.end_date);
       setShowPicker(false);
+      setDatePicker(null);
     }
   }, [habit]);
 
@@ -98,6 +105,8 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
     const parsed = parseFloat(targetText.replace(',', '.'));
     const target_amount = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     const unitVal = target_amount != null && unit.trim() ? unit.trim() : null;
+    // Bitiş başlangıçtan önce olamaz; olduysa başlangıca çekilir (tek günlük aralık).
+    const end_date = endDate && startDate && endDate < startDate ? startDate : endDate;
     habitRepo.update(habit.id, {
       title: t,
       remind_at: remindAt,
@@ -106,6 +115,8 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
       schedule,
       target_amount,
       unit: unitVal,
+      start_date: startDate,
+      end_date,
     });
     onChanged();
     onClose();
@@ -135,6 +146,16 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const onPickTime = (_event: unknown, picked?: Date) => {
     setShowPicker(Platform.OS === 'ios');
     if (picked) setRemindAt(toHm(picked));
+  };
+
+  const onPickDate = (_event: unknown, picked?: Date) => {
+    const which = datePicker;
+    setDatePicker(Platform.OS === 'ios' ? which : null);
+    if (picked && which) {
+      const ymd = toYmd(picked);
+      if (which === 'start') setStartDate(ymd);
+      else setEndDate(ymd);
+    }
   };
 
   return (
@@ -255,6 +276,53 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
               );
             })}
           </View>
+        )}
+
+        {/* Tarih aralığı: başlangıçtan önce / bitişten sonra alışkanlık görünmez,
+            streak'i etkilemez. Boş = sınırsız. */}
+        <Text style={styles.label}>Başlangıç tarihi</Text>
+        <View style={styles.row}>
+          <Pressable style={styles.dateBtn} onPress={() => setDatePicker('start')}>
+            <Text style={styles.dateBtnText}>
+              {startDate ? shortDate(startDate) : 'Baştan beri'}
+            </Text>
+          </Pressable>
+          {startDate && (
+            <Pressable style={styles.clearBtn} onPress={() => setStartDate(null)}>
+              <Text style={styles.clearBtnText}>Temizle</Text>
+            </Pressable>
+          )}
+        </View>
+
+        <Text style={styles.label}>Bitiş tarihi (isteğe bağlı)</Text>
+        <View style={styles.row}>
+          <Pressable style={styles.dateBtn} onPress={() => setDatePicker('end')}>
+            <Text style={styles.dateBtnText}>
+              {endDate ? shortDate(endDate) : 'Süresiz'}
+            </Text>
+          </Pressable>
+          {endDate && (
+            <Pressable style={styles.clearBtn} onPress={() => setEndDate(null)}>
+              <Text style={styles.clearBtnText}>Temizle</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {datePicker && (
+          <DateTimePicker
+            value={
+              (datePicker === 'start' ? startDate : endDate)
+                ? new Date(`${datePicker === 'start' ? startDate : endDate}T00:00:00`)
+                : new Date()
+            }
+            mode="date"
+            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            // Bitiş, başlangıçtan önce seçilemesin (save'de ayrıca güvence var).
+            minimumDate={
+              datePicker === 'end' && startDate ? new Date(`${startDate}T00:00:00`) : undefined
+            }
+            onChange={onPickDate}
+          />
         )}
 
         {/* Günlük miktar hedefi (isteğe bağlı) — doldurulursa nicel takip */}

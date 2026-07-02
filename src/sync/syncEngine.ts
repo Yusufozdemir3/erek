@@ -40,7 +40,7 @@ const TABLES: TableCfg[] = [
   },
   {
     table: 'habits',
-    cols: ['id', 'user_id', 'goal_id', 'title', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'goal_id', 'title', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'start_date', 'end_date', 'updated_at', 'deleted_at'],
     hasUserId: true,
   },
   {

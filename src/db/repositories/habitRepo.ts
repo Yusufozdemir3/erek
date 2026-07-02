@@ -3,7 +3,7 @@
 // Sebebi: türetilmiş veriyi saklamak senkronda tutarsızlık yaratır. Tek doğru kaynak loglar.
 
 import { getDb } from '../database';
-import { isScheduledOn, newId, nowIso, parseJson, todayDate, toJson } from '../../lib/helpers';
+import { isScheduledOn, isWithinHabitDates, newId, nowIso, parseJson, todayDate, toJson } from '../../lib/helpers';
 import type { Habit, HabitLog, Recurrence } from '../../types/models';
 
 function rowToHabit(row: any): Habit {
@@ -18,6 +18,8 @@ function rowToHabit(row: any): Habit {
     schedule: parseJson<Recurrence>(row.schedule),
     target_amount: row.target_amount,
     unit: row.unit,
+    start_date: row.start_date,
+    end_date: row.end_date,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -34,6 +36,8 @@ export interface CreateHabitInput {
   schedule?: Recurrence | null;
   target_amount?: number | null;
   unit?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
 }
 
 export const habitRepo = {
@@ -43,8 +47,8 @@ export const habitRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO habits
-       (id, user_id, goal_id, title, remind_at, icon, color, schedule, target_amount, unit, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
+       (id, user_id, goal_id, title, remind_at, icon, color, schedule, target_amount, unit, start_date, end_date, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
       [
         id,
         input.user_id,
@@ -56,6 +60,8 @@ export const habitRepo = {
         toJson(input.schedule ?? null),
         input.target_amount ?? null,
         input.unit ?? null,
+        input.start_date ?? null,
+        input.end_date ?? null,
         now,
       ]
     );
@@ -92,6 +98,8 @@ export const habitRepo = {
     if (fields.schedule !== undefined) { sets.push('schedule = ?'); vals.push(toJson(fields.schedule)); }
     if (fields.target_amount !== undefined) { sets.push('target_amount = ?'); vals.push(fields.target_amount); }
     if (fields.unit !== undefined) { sets.push('unit = ?'); vals.push(fields.unit); }
+    if (fields.start_date !== undefined) { sets.push('start_date = ?'); vals.push(fields.start_date); }
+    if (fields.end_date !== undefined) { sets.push('end_date = ?'); vals.push(fields.end_date); }
     if (sets.length === 0) return;
     sets.push('updated_at = ?'); vals.push(nowIso());
     sets.push('synced = 0');
@@ -175,13 +183,17 @@ export const habitRepo = {
   },
 
   // STREAK HESABI: bugünden geriye doğru, alışkanlığın PLANLI günlerini sayar.
-  // Yalnızca schedule'a göre vadeli günler dikkate alınır — plansız günlerdeki
-  // boşluk seriyi bozmaz (ör. Pzt/Çar/Cum alışkanlığında Salı önemsiz).
+  // Yalnızca schedule'a göre vadeli VE yaşam aralığı (start/end) içindeki günler
+  // dikkate alınır — plansız/aralık dışı günlerdeki boşluk seriyi bozmaz
+  // (ör. Pzt/Çar/Cum alışkanlığında Salı önemsiz; bitişten sonraki günler de).
   // Bugün planlıysa ve henüz işaretlenmemişse seriyi bozmaz (bir önceki planlı
   // günden devam eder). İlk kaçırılan planlı günde durur.
   currentStreak(habitId: string): number {
     const db = getDb();
-    const schedule = this.getById(habitId)?.schedule ?? null;
+    const habit = this.getById(habitId);
+    const isDue = (d: string) =>
+      isScheduledOn(habit?.schedule ?? null, d) &&
+      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);
     const rows = db.getAllSync<any>(
       `SELECT log_date FROM habit_logs
        WHERE habit_id = ? AND completed = 1
@@ -203,7 +215,7 @@ export const habitRepo = {
       const d = String(cursor.getDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${d}`;
 
-      if (isScheduledOn(schedule, dateStr)) {
+      if (isDue(dateStr)) {
         if (completed.has(dateStr)) {
           streak++;
         } else if (dateStr === today) {
@@ -246,10 +258,13 @@ export const habitRepo = {
   // EN UZUN SERİ: currentStreak'in "bugünden geriye" mantığının aksine, ilk
   // tamamlanan günden bugüne kadar tüm geçmişi baştan sona tarayıp gördüğü en
   // uzun ardışık planlı-gün serisini döner. Aynı planlı-gün kuralını kullanır
-  // (plansız gün boşluğu seriyi bozmaz).
+  // (plansız/aralık dışı gün boşluğu seriyi bozmaz).
   longestStreak(habitId: string): number {
     const db = getDb();
-    const schedule = this.getById(habitId)?.schedule ?? null;
+    const habit = this.getById(habitId);
+    const isDue = (d: string) =>
+      isScheduledOn(habit?.schedule ?? null, d) &&
+      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);
     const rows = db.getAllSync<any>(
       `SELECT log_date FROM habit_logs
        WHERE habit_id = ? AND completed = 1
@@ -271,7 +286,7 @@ export const habitRepo = {
       const d = String(cursor.getDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${d}`;
 
-      if (isScheduledOn(schedule, dateStr)) {
+      if (isDue(dateStr)) {
         if (completed.has(dateStr)) {
           run++;
           if (run > best) best = run;

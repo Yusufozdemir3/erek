@@ -87,6 +87,20 @@ const WEEKDAY_NAMES = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
 // Görüntüleme sırası: Pazartesi'den Pazar'a.
 const WEEKDAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+// Verilen gün alışkanlığın yaşam aralığında mı? null start = baştan beri,
+// null end = süresiz. Aralık dışı günler "planlı değil" muamelesi görür:
+// görünmez, streak'i ne besler ne bozar. "YYYY-MM-DD" metin karşılaştırması
+// kronolojik sıralamayla birebir aynı olduğundan Date'e çevirmeye gerek yok.
+export function isWithinHabitDates(
+  start: string | null,
+  end: string | null,
+  dateYmd: string
+): boolean {
+  if (start && dateYmd < start) return false;
+  if (end && dateYmd > end) return false;
+  return true;
+}
+
 // Bir tekrar kuralı verilen günde ("YYYY-MM-DD") geçerli mi? null = her gün.
 // Alışkanlığın o gün "vadeli/planlı" olup olmadığını belirler (streak + Bugün filtresi).
 export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boolean {
