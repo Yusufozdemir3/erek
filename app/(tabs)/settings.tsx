@@ -136,6 +136,11 @@ export default function SettingsScreen() {
               {result?.status === 'error' && (
                 <Text style={styles.errText}>Hata: {result.message}</Text>
               )}
+              {result?.status === 'disabled' && (
+                <Text style={[styles.muted, { marginTop: 12 }]}>
+                  Senkron şu an kapalı: oturum yok. Hesap bağlayınca kaldığı yerden sürer.
+                </Text>
+              )}
 
               <Pressable
                 style={[styles.syncBtn, syncing && styles.syncBtnDisabled]}

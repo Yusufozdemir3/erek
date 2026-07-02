@@ -3,7 +3,15 @@
 //  - HESAP: kullanıcı Ayarlar'dan e-posta+parola ile giriş/kayıt yapabilir.
 // Dönen uid, buluttaki satırların user_id'si olur (RLS: auth.uid() = user_id).
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+
+// Kullanıcı Ayarlar'dan bilerek çıkış yaptığında set edilir; başarılı bir
+// giriş/kayıt bayrağı temizler. Bayrak varken ensureSignedIn YENİ anonim oturum
+// AÇMAZ (senkron devre dışı kalır). Sebep: çıkıştan sonra otomatik açılan yeni
+// anonim uid, buluttaki satırların (eski hesabın uid'sinde duran) sahibi olmaz;
+// sonraki her push RLS'e takılır ve senkron kalıcı hata durumuna girerdi.
+const SIGNED_OUT_KEY = 'sync:signedOut';
 
 // Oturumdaki kullanıcı özeti (UI'da hesap durumunu göstermek için).
 export interface AuthUser {
@@ -13,16 +21,40 @@ export interface AuthUser {
 }
 
 // Mevcut oturumun uid'sini döner; oturum yoksa anonim giriş yapar.
-// Supabase istemcisi yoksa (yapılandırma eksik) null döner.
+// Supabase istemcisi yoksa (yapılandırma eksik) ya da kullanıcı bilerek çıkış
+// yapmışsa (yeniden giriş yapana dek) null döner — senkron devre dışı kalır.
 export async function ensureSignedIn(): Promise<string | null> {
   if (!supabase) return null;
 
   const { data: sessionData } = await supabase.auth.getSession();
-  if (sessionData.session?.user) return sessionData.session.user.id;
+  const u = sessionData.session?.user;
 
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
-  return data.user?.id ?? null;
+  if (!(await AsyncStorage.getItem(SIGNED_OUT_KEY))) {
+    if (u) return u.id;
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error) throw error;
+    return data.user?.id ?? null;
+  }
+
+  // Bilerek çıkış yapılmış durumdayız:
+  // - Gerçek HESAP oturumu varsa bayrak bayattır (ör. çıkış yarıda kalmış ya da
+  //   giriş bayrağı temizleyememiş) — bayrağı temizle, oturumu kullan.
+  // - ANONİM oturum varsa kalıntıdır (eski sürümün otomatik açtığı oturum ya da
+  //   çıkış anındaki yarış) — buluttaki satırların sahibi olmadığı için her push
+  //   RLS'e takılırdı; oturumu kapat ve senkronu devre dışı bırak.
+  if (u && !(u.is_anonymous ?? false)) {
+    await AsyncStorage.removeItem(SIGNED_OUT_KEY);
+    return u.id;
+  }
+  if (u) {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      // Kapatılamazsa (ör. ağ yok) sonraki senkronda yeniden denenir.
+      console.warn('[Senkron] Kalıntı anonim oturum kapatılamadı:', e);
+    }
+  }
+  return null;
 }
 
 // Oturum açık mı? (UI'da durum göstermek için)
@@ -53,6 +85,9 @@ export async function signUpWithEmail(
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) throw error;
+  // Bayrak yalnızca gerçekten oturum açıldıysa temizlenir. Onay bekleyen kayıtta
+  // temizlemek, araya otomatik anonim oturum sokup öksüz veri üretirdi.
+  if (data.session) await AsyncStorage.removeItem(SIGNED_OUT_KEY);
   return { needsConfirmation: !data.session };
 }
 
@@ -66,6 +101,7 @@ export async function linkEmailToAnonymous(email: string, password: string): Pro
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { error } = await supabase.auth.updateUser({ email, password });
   if (error) throw error;
+  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
 // E-posta + parola ile mevcut hesaba giriş yapar.
@@ -73,12 +109,18 @@ export async function signInWithEmail(email: string, password: string): Promise<
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
-// Hesaptan çıkış yapar. Yerel veri cihazda kalır; sonraki senkron yeniden anonim
-// oturum açar.
+// Hesaptan çıkış yapar. Yerel veri cihazda kalır; senkron, kullanıcı yeniden
+// giriş yapana dek devre dışı kalır (SIGNED_OUT_KEY — dosya başındaki nota bak).
 export async function signOutAccount(): Promise<void> {
   if (!supabase) return;
+  // Bayrak, oturum kapanmadan ÖNCE yazılır: tam bu anda başlayan bir senkron
+  // oturumsuz yakalarsa yeni anonim oturum açmasın (yarış penceresi). Çıkış
+  // başarısız olur da hesap oturumu sürerse ensureSignedIn bayrağı bayat sayıp
+  // kendisi temizler — kalıcı zarar yok.
+  await AsyncStorage.setItem(SIGNED_OUT_KEY, '1');
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
