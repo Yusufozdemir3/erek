@@ -1,7 +1,7 @@
 // helpers.ts testleri — isScheduledOn streak'in ve "Bugün" filtresinin temelidir.
 // Sabit tarihler kullanılır: 2026-06-29 Pazartesi, 2026-07-01 Çarşamba.
 
-import { isScheduledOn, parseJson, scheduleLabel, toJson } from '../helpers';
+import { isScheduledOn, lastDays, parseJson, scheduleLabel, toJson } from '../helpers';
 import type { Recurrence } from '../../types/models';
 
 describe('parseJson', () => {
@@ -75,5 +75,23 @@ describe('scheduleLabel', () => {
   it('weekly boş ya da 7 gün seçiliyse "Her gün"', () => {
     expect(scheduleLabel({ freq: 'weekly', weekdays: [] })).toBe('Her gün');
     expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1, 2, 3, 4, 5, 6] })).toBe('Her gün');
+  });
+});
+
+describe('lastDays', () => {
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-07-01T12:00:00') });
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  it('bugün dahil son N günü en eskiden bugüne sırayla döner', () => {
+    expect(lastDays(3)).toEqual(['2026-06-29', '2026-06-30', '2026-07-01']);
+  });
+
+  it('1 istenirse yalnızca bugünü döner', () => {
+    expect(lastDays(1)).toEqual(['2026-07-01']);
   });
 });

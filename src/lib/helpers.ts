@@ -28,6 +28,19 @@ export function todayDate(): string {
   return toYmd(new Date());
 }
 
+// Bugün dahil son `count` günün "YYYY-MM-DD" listesi (en eskiden bugüne).
+// Haftalık geçmiş şeridi ve istatistik ısı haritası ortak kullanır.
+export function lastDays(count: number): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  for (let i = count - 1; i >= 0; i--) {
+    const day = new Date(d);
+    day.setDate(d.getDate() - i);
+    out.push(toYmd(day));
+  }
+  return out;
+}
+
 // JSON alanları güvenli parse/stringify (recurrence gibi).
 export function parseJson<T>(value: string | null): T | null {
   if (value == null) return null;

@@ -219,3 +219,52 @@ describe('currentStreak — haftalık plan (Pzt/Çar/Cum)', () => {
     expect(habitRepo.currentStreak(habit.id)).toBe(1);
   });
 });
+
+describe('longestStreak', () => {
+  it('hiç log yoksa 0', () => {
+    const habit = createHabit();
+    expect(habitRepo.longestStreak(habit.id)).toBe(0);
+  });
+
+  it('geçmişteki en uzun seriyi bulur, güncel olmasa bile', () => {
+    const habit = createHabit();
+    // Eski 3'lük seri: 24-25-26 Haziran
+    habitRepo.toggleLog(habit.id, '2026-06-24', true);
+    habitRepo.toggleLog(habit.id, '2026-06-25', true);
+    habitRepo.toggleLog(habit.id, '2026-06-26', true);
+    // Kaçırılan gün: 27
+    // Güncel 2'lik seri: 30 Haziran - bugün
+    habitRepo.toggleLog(habit.id, '2026-06-30', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+
+    expect(habitRepo.currentStreak(habit.id)).toBe(2);
+    expect(habitRepo.longestStreak(habit.id)).toBe(3);
+  });
+
+  it('haftalık planda yalnızca planlı günleri sayar', () => {
+    const schedule = { freq: 'weekly' as const, weekdays: [1, 3, 5] }; // Pzt/Çar/Cum
+    const habit = createHabit({ schedule });
+    habitRepo.toggleLog(habit.id, '2026-06-24', true); // Çar
+    habitRepo.toggleLog(habit.id, '2026-06-26', true); // Cum
+    habitRepo.toggleLog(habit.id, '2026-06-29', true); // Pzt
+    // Bugün (Çar) kaçırıldı
+    expect(habitRepo.longestStreak(habit.id)).toBe(3);
+  });
+});
+
+describe('logsInRange', () => {
+  it('yalnızca verilen tarihten (dahil) itibaren logları döner', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    habitRepo.toggleLog(habit.id, '2026-06-30', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+
+    const logs = habitRepo.logsInRange(habit.id, '2026-06-30');
+    expect(logs.map((l) => l.log_date)).toEqual(['2026-06-30', TODAY]);
+  });
+
+  it('log yoksa boş dizi döner', () => {
+    const habit = createHabit();
+    expect(habitRepo.logsInRange(habit.id, '2026-06-01')).toEqual([]);
+  });
+});

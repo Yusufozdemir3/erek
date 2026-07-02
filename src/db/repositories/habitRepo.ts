@@ -229,4 +229,58 @@ export const habitRepo = {
     );
     return rows as HabitLog[];
   },
+
+  // Belirli bir tarihten (dahil) bugüne kadar TÜM loglar (istatistik ekranı için:
+  // ısı haritası, tamamlanma oranı, toplam miktar hepsi bu tek sorgudan türetilir).
+  // recentLogs'tan farkı: satır sayısına değil tarih aralığına göre filtreler —
+  // boş günler (hiç log yoksa) çağıran tarafta günlerin tam listesiyle tamamlanmalı.
+  logsInRange(habitId: string, sinceYmd: string): HabitLog[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM habit_logs WHERE habit_id = ? AND log_date >= ? ORDER BY log_date ASC`,
+      [habitId, sinceYmd]
+    );
+    return rows as HabitLog[];
+  },
+
+  // EN UZUN SERİ: currentStreak'in "bugünden geriye" mantığının aksine, ilk
+  // tamamlanan günden bugüne kadar tüm geçmişi baştan sona tarayıp gördüğü en
+  // uzun ardışık planlı-gün serisini döner. Aynı planlı-gün kuralını kullanır
+  // (plansız gün boşluğu seriyi bozmaz).
+  longestStreak(habitId: string): number {
+    const db = getDb();
+    const schedule = this.getById(habitId)?.schedule ?? null;
+    const rows = db.getAllSync<any>(
+      `SELECT log_date FROM habit_logs
+       WHERE habit_id = ? AND completed = 1
+       ORDER BY log_date ASC`,
+      [habitId]
+    );
+    if (rows.length === 0) return 0;
+
+    const completed = new Set<string>(rows.map((r) => r.log_date));
+    const today = todayDate();
+    let run = 0;
+    let best = 0;
+    const cursor = new Date(`${rows[0].log_date}T00:00:00`);
+    const end = new Date(`${today}T00:00:00`);
+
+    while (cursor <= end) {
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, '0');
+      const d = String(cursor.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+
+      if (isScheduledOn(schedule, dateStr)) {
+        if (completed.has(dateStr)) {
+          run++;
+          if (run > best) best = run;
+        } else {
+          run = 0;
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return best;
+  },
 };

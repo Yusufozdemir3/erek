@@ -5,7 +5,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
-import { scheduleLabel, todayDate } from '@/lib/helpers';
+import { lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
 
 export interface HabitListItem {
   id: string;
@@ -20,21 +20,6 @@ export interface HabitListItem {
   completedToday: boolean;
   streak: number;
   week: boolean[]; // son 7 gün, en eskiden bugüne
-}
-
-// Bugün dahil son `count` günün "YYYY-MM-DD" listesi (en eskiden bugüne).
-function lastDays(count: number): string[] {
-  const out: string[] = [];
-  const d = new Date();
-  for (let i = count - 1; i >= 0; i--) {
-    const day = new Date(d);
-    day.setDate(d.getDate() - i);
-    const y = day.getFullYear();
-    const m = String(day.getMonth() + 1).padStart(2, '0');
-    const dd = String(day.getDate()).padStart(2, '0');
-    out.push(`${y}-${m}-${dd}`);
-  }
-  return out;
 }
 
 export function useHabitsData(userId: string) {

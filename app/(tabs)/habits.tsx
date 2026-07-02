@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
 import { useAppData } from '@/ui/AppData';
@@ -104,12 +105,16 @@ export default function HabitsScreen() {
                   h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>
                 )}
               </View>
-              {/* Son 7 gün */}
-              <View style={styles.week}>
+              {/* Son 7 gün — dokununca istatistik ekranı açılır */}
+              <Pressable
+                style={styles.week}
+                onPress={() => router.push({ pathname: '/habit/[id]', params: { id: h.id } })}
+                hitSlop={6}
+              >
                 {h.week.map((on, i) => (
                   <View key={i} style={[styles.dayDot, on && styles.dayDotOn]} />
                 ))}
-              </View>
+              </Pressable>
             </View>
           ))
         )}
