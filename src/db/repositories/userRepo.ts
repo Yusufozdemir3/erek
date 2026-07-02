@@ -35,7 +35,8 @@ export const userRepo = {
        VALUES (?, NULL, 1, ?, NULL, 0)`,
       [id, now]
     );
-    return this.getOrCreateLocal();
+    // Yeni ekleneni tekrar sorgulamaya gerek yok — alanlar zaten elimizde.
+    return { id, email: null, is_anonymous: 1, updated_at: now, deleted_at: null, synced: 0 };
   },
 
   // Anonim kullanıcıyı kayıtlı hesaba yükseltir (Ayarlar'dan hesap bağlanınca).

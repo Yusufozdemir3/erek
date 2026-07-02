@@ -115,7 +115,11 @@ export default function TodayScreen() {
 
   const onPickDate = (_e: unknown, picked?: Date) => {
     setShowPicker(Platform.OS === 'ios');
-    if (picked) setSelectedDate(toYmd(picked));
+    if (picked) {
+      // Güvenlik: gelecek bir tarih seçilse bile bugüne sabitle.
+      const p = toYmd(picked);
+      setSelectedDate(p > today ? today : p);
+    }
   };
 
   return (

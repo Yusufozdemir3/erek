@@ -49,6 +49,9 @@ const TABLES: TableCfg[] = [
 
 const LAST_PULLED_KEY = 'sync:lastPulledAt';
 
+// Supabase tek yanıtta en fazla 1000 satır döndürür; fazlası sayfalanarak çekilir.
+const PULL_PAGE_SIZE = 1000;
+
 let inFlight = false; // aynı anda iki senkron çalışmasın
 
 export interface SyncResult {
@@ -116,31 +119,45 @@ function upsertLocal(cfg: TableCfg, obj: any): void {
 
 // Son senkrondan beri değişen uzak satırları çekip son-yazan-kazanır uygular.
 // Gördüğü en büyük updated_at'i döner (yeni filigran).
+//
+// Sayfalama şart: yanıt 1000 satırda kırpılırsa ve filigran yine de ilerlerse,
+// kırpılan satırlar bir daha HİÇ çekilmez (sessiz veri kaybı). Bu yüzden tüm
+// sayfalar bitene kadar döngü sürer.
 async function pullTable(cfg: TableCfg, localUserId: string, since: string): Promise<{ count: number; maxUpdated: string }> {
   const db = getDb();
-  const { data, error } = await supabase!
-    .from(cfg.table)
-    .select(cfg.cols.join(','))
-    .gt('updated_at', since)
-    .order('updated_at', { ascending: true });
-  if (error) throw new Error(`${cfg.table} pull: ${error.message}`);
-
   let maxUpdated = since;
   let count = 0;
-  for (const remote of data ?? []) {
-    const r = remote as any;
-    const local = db.getFirstSync<any>(
-      `SELECT updated_at FROM ${cfg.table} WHERE id = ?`,
-      [r.id]
-    );
-    // Yereldeki yoksa ya da daha eskiyse uzaktakini uygula.
-    if (!local || ts(local.updated_at) < ts(r.updated_at)) {
-      const mapped = cfg.hasUserId ? { ...r, user_id: localUserId } : r;
-      upsertLocal(cfg, mapped);
-      count++;
+
+  for (let from = 0; ; from += PULL_PAGE_SIZE) {
+    // updated_at eşit satırlarda sayfa sınırı kararlı olsun diye id ikincil anahtar.
+    const { data, error } = await supabase!
+      .from(cfg.table)
+      .select(cfg.cols.join(','))
+      .gt('updated_at', since)
+      .order('updated_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + PULL_PAGE_SIZE - 1);
+    if (error) throw new Error(`${cfg.table} pull: ${error.message}`);
+
+    for (const remote of data ?? []) {
+      const r = remote as any;
+      const local = db.getFirstSync<any>(
+        `SELECT updated_at FROM ${cfg.table} WHERE id = ?`,
+        [r.id]
+      );
+      // Yereldeki yoksa ya da daha eskiyse uzaktakini uygula.
+      if (!local || ts(local.updated_at) < ts(r.updated_at)) {
+        const mapped = cfg.hasUserId ? { ...r, user_id: localUserId } : r;
+        upsertLocal(cfg, mapped);
+        count++;
+      }
+      if (ts(r.updated_at) > ts(maxUpdated)) maxUpdated = r.updated_at;
     }
-    if (ts(r.updated_at) > ts(maxUpdated)) maxUpdated = r.updated_at;
+
+    // Dolu olmayan sayfa = son sayfa.
+    if (!data || data.length < PULL_PAGE_SIZE) break;
   }
+
   return { count, maxUpdated };
 }
 

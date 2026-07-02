@@ -40,9 +40,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         // Açılışta mevcut hatırlatmaları DB'yi baz alarak yeniden programla
         // (cihaz reboot'u / uygulama güncellemesi onları temizlemiş olabilir).
         // İzin yoksa sessizce çıkar; hata uygulamayı bloklamasın.
-        rescheduleAllReminders(habitRepo.listByUser(user.id)).catch(() => {});
+        rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
+          console.warn('[Bildirim] Açılışta hatırlatmalar programlanamadı:', e)
+        );
         // Açılışta arka planda bir kez senkronla (yapılandırılmamışsa sessiz geçer).
-        runSync(user.id).catch(() => {});
+        runSync(user.id).catch((e) => console.warn('[Senkron] Açılış senkronu başarısız:', e));
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);

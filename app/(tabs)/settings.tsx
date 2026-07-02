@@ -45,8 +45,9 @@ export default function SettingsScreen() {
       setAuthUser(null);
       setSignedIn(false);
       setResult(null);
-    } catch {
+    } catch (e) {
       // Çıkış hatası kritik değil; durum bir sonraki odaklanmada tazelenir.
+      console.warn('[Hesap] Çıkış sırasında hata:', e);
     } finally {
       setSigningOut(false);
     }

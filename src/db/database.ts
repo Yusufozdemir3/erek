@@ -27,8 +27,23 @@ export async function runMigrations(): Promise<void> {
 
   for (const migration of migrations) {
     if (migration.version > currentVersion) {
-      db.execSync(migration.sql);
-      db.execSync(`PRAGMA user_version = ${migration.version};`);
+      // Migration + sürüm damgası tek transaction'da: çok deyimli bir migration
+      // yarıda kalırsa tamamı geri alınır ve sonraki açılışta baştan denenir.
+      // (Aksi halde yarım şema + tekrar denemede "duplicate column" hatasıyla
+      // açılış kalıcı olarak kilitlenebilirdi.)
+      db.execSync('BEGIN;');
+      try {
+        db.execSync(migration.sql);
+        db.execSync(`PRAGMA user_version = ${migration.version};`);
+        db.execSync('COMMIT;');
+      } catch (e) {
+        // Kimi hatalar transaction'ı kendiliğinden kapatır; ROLLBACK'in kendi
+        // hatası asıl migration hatasını gölgelemesin diye yutulur.
+        try {
+          db.execSync('ROLLBACK;');
+        } catch {}
+        throw e;
+      }
     }
   }
 }
