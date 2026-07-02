@@ -243,6 +243,57 @@ describe('runSync — sayfalama (1000+ kayıt)', () => {
   });
 });
 
+describe('runSync — habit_logs doğal anahtar birleştirme', () => {
+  // İki cihaz aynı alışkanlığı aynı gün ayrı id'lerle loglayabilir. Eski davranış
+  // bu durumda UNIQUE(habit_id, log_date) ihlaliyle senkronu kalıcı kilitliyordu;
+  // artık kayıtlar son-yazan-kazanır ile tek kayda birleşmeli.
+  it('farklı id\'li ama aynı gün+alışkanlık uzak log yeniyse yereldekinin yerine geçer', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
+    habitRepo.toggleLog(habit.id, '2026-07-01', false); // yerel: completed=0
+
+    remoteData['habit_logs'] = [{
+      id: 'uzak-log-1',
+      habit_id: habit.id,
+      log_date: '2026-07-01',
+      completed: 1,
+      amount: 0,
+      updated_at: isoShift(3600_000), // yereldekinden yeni
+    }];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    expect(result.pulled).toBe(1);
+    // Tek kayıt kaldı: uzak olan kazandı, yerel rakip silindi.
+    const rows = getDb().getAllSync<any>(`SELECT id, completed, synced FROM habit_logs`);
+    expect(rows).toEqual([{ id: 'uzak-log-1', completed: 1, synced: 1 }]);
+  });
+
+  it('uzak log eskiyse yerel kalır ve UNIQUE ihlali oluşmaz', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
+    habitRepo.toggleLog(habit.id, '2026-07-01', true); // yerel: completed=1 (şimdi)
+    const localId = getDb().getFirstSync<any>(`SELECT id FROM habit_logs`)!.id;
+
+    remoteData['habit_logs'] = [{
+      id: 'uzak-log-2',
+      habit_id: habit.id,
+      log_date: '2026-07-01',
+      completed: 0,
+      amount: 0,
+      updated_at: isoShift(-3600_000), // yereldekinden eski
+    }];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    expect(result.pulled).toBe(0);
+    const rows = getDb().getAllSync<any>(`SELECT id, completed FROM habit_logs`);
+    expect(rows).toEqual([{ id: localId, completed: 1 }]);
+  });
+});
+
 describe('prepareFullResync', () => {
   it('tüm satırları yeniden bekletir ve filigranı sıfırlar', async () => {
     const user = userRepo.getOrCreateLocal();

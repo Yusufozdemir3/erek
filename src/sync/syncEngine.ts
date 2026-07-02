@@ -4,7 +4,9 @@
 //   1) ensureSignedIn -> anonim uid
 //   2) PUSH: her tabloda synced=0 satırları Supabase'e upsert et, synced=1 yap
 //   3) PULL: son senkrondan beri değişen uzak satırları çek, updated_at'e göre
-//      yereldekinden yeniyse uygula (silme dahil), synced=1 olarak yaz
+//      yereldekinden yeniyse uygula (silme dahil), synced=1 olarak yaz.
+//      habit_logs'ta id farklı olsa bile (habit_id, log_date) çakışan kayıtlar
+//      son-yazan-kazanır ile TEK kayda birleştirilir (naturalKey).
 //
 // Kimlik eşleme: yerel cihaz user_id'si korunur; push'ta user_id -> uid,
 // pull'da user_id -> yerel id çevrilir. Böylece yerel veriyi yeniden yazmadan
@@ -21,6 +23,12 @@ interface TableCfg {
   table: string;       // yerel = uzak tablo adı
   cols: string[];      // senkronlanan kolonlar (yerel-only 'synced' hariç)
   hasUserId: boolean;  // user_id sınırda çevrilecek mi
+  // Yerel UNIQUE kısıtı taşıyan "doğal anahtar" kolonları. İki cihaz aynı
+  // mantıksal kaydı ayrı id'lerle üretebilir (ör. aynı alışkanlık aynı gün iki
+  // cihazda işaretlenirse). Pull bu kolonlara göre çakışan kaydı bulup
+  // son-yazan-kazanır ile birleştirir; yoksa INSERT yerel UNIQUE kısıtına
+  // çarpar ve senkron o satırda kalıcı olarak kilitlenirdi.
+  naturalKey?: string[];
 }
 
 // FK bağımlılığına göre sıralı (ebeveyn önce).
@@ -44,6 +52,7 @@ const TABLES: TableCfg[] = [
     table: 'habit_logs',
     cols: ['id', 'habit_id', 'log_date', 'completed', 'amount', 'updated_at'],
     hasUserId: false,
+    naturalKey: ['habit_id', 'log_date'], // yerel: UNIQUE(habit_id, log_date)
   },
 ];
 
@@ -117,6 +126,42 @@ function upsertLocal(cfg: TableCfg, obj: any): void {
   );
 }
 
+// Tek bir uzak satırı son-yazan-kazanır kuralıyla yerele uygular.
+// Uygulandıysa true, yerel daha yeni olduğu için atlandıysa false döner.
+function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
+  const db = getDb();
+  const mapped = cfg.hasUserId ? { ...r, user_id: localUserId } : r;
+
+  // 1) Aynı id yerelde varsa: klasik son-yazan-kazanır (eşitlikte yerel kalır).
+  const byId = db.getFirstSync<any>(
+    `SELECT updated_at FROM ${cfg.table} WHERE id = ?`,
+    [r.id]
+  );
+  if (byId) {
+    if (ts(byId.updated_at) >= ts(r.updated_at)) return false;
+    upsertLocal(cfg, mapped);
+    return true;
+  }
+
+  // 2) id yerelde yok ama doğal anahtar çakışıyorsa: iki cihaz aynı mantıksal
+  // kaydı ayrı id'lerle üretmiş demektir. Kazanan updated_at ile seçilir;
+  // uzak kazanırsa yereldeki rakip satır silinip uzak olan yazılır.
+  if (cfg.naturalKey) {
+    const where = cfg.naturalKey.map((k) => `${k} = ?`).join(' AND ');
+    const rival = db.getFirstSync<any>(
+      `SELECT id, updated_at FROM ${cfg.table} WHERE ${where}`,
+      cfg.naturalKey.map((k) => r[k])
+    );
+    if (rival) {
+      if (ts(rival.updated_at) >= ts(r.updated_at)) return false;
+      db.runSync(`DELETE FROM ${cfg.table} WHERE id = ?`, [rival.id]);
+    }
+  }
+
+  upsertLocal(cfg, mapped);
+  return true;
+}
+
 // Son senkrondan beri değişen uzak satırları çekip son-yazan-kazanır uygular.
 // Gördüğü en büyük updated_at'i döner (yeni filigran).
 //
@@ -124,7 +169,6 @@ function upsertLocal(cfg: TableCfg, obj: any): void {
 // kırpılan satırlar bir daha HİÇ çekilmez (sessiz veri kaybı). Bu yüzden tüm
 // sayfalar bitene kadar döngü sürer.
 async function pullTable(cfg: TableCfg, localUserId: string, since: string): Promise<{ count: number; maxUpdated: string }> {
-  const db = getDb();
   let maxUpdated = since;
   let count = 0;
 
@@ -141,16 +185,7 @@ async function pullTable(cfg: TableCfg, localUserId: string, since: string): Pro
 
     for (const remote of data ?? []) {
       const r = remote as any;
-      const local = db.getFirstSync<any>(
-        `SELECT updated_at FROM ${cfg.table} WHERE id = ?`,
-        [r.id]
-      );
-      // Yereldeki yoksa ya da daha eskiyse uzaktakini uygula.
-      if (!local || ts(local.updated_at) < ts(r.updated_at)) {
-        const mapped = cfg.hasUserId ? { ...r, user_id: localUserId } : r;
-        upsertLocal(cfg, mapped);
-        count++;
-      }
+      if (applyRemoteRow(cfg, r, localUserId)) count++;
       if (ts(r.updated_at) > ts(maxUpdated)) maxUpdated = r.updated_at;
     }
 
