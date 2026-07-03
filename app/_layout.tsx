@@ -6,6 +6,7 @@ import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { AppDataProvider } from '@/ui/AppData';
 import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notifications';
+import { Sentry } from '@/lib/sentry';
 
 // Expo Go'da expo-notifications, push (remote) bildirimlerinin desteklenmediğine
 // dair uyarı basıyor. Bizim kullanımımız yalnızca YEREL hatırlatma; bunlar Expo
@@ -16,7 +17,7 @@ LogBox.ignoreLogs([
   '`expo-notifications` functionality is not fully supported in Expo Go',
 ]);
 
-export default function RootLayout() {
+function RootLayout() {
   // Bildirim handler'ı ve Android kanalı bir kez kurulur (izin istemez).
   useEffect(() => {
     setNotificationHandler();
@@ -48,3 +49,7 @@ export default function RootLayout() {
     </AppDataProvider>
   );
 }
+
+// Sentry yapılandırılmadıysa (DSN yok) bu sarmalayıcı zararsız bir geçiş
+// katmanı olarak kalır — hiçbir şey raporlamaz.
+export default Sentry.wrap(RootLayout);
