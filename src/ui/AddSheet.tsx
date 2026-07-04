@@ -8,10 +8,12 @@
 
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,7 +24,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo, habitRepo, taskRepo } from '@/db';
 import type { GoalType } from '@/db';
 import { toYmd } from '@/lib/helpers';
+import { scheduleHabitReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
+import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { colors, shortDate } from '@/ui/theme';
 
 type Step = 'menu' | 'task' | 'habit' | 'goal';
@@ -77,10 +81,22 @@ export function AddSheet({ visible, onClose }: Props) {
     finish('/(tabs)/tasks');
   };
 
-  const addHabit = () => {
-    const t = title.trim();
-    if (!t) return;
-    habitRepo.create({ user_id: user.id, title: t });
+  // Alışkanlık, düzenleme paneliyle aynı HabitForm'la oluşturulur — tüm ayarlar
+  // (ikon, renk, sıklık, tarih aralığı, nicel hedef, hatırlatma, hedefe bağla)
+  // oluşturma anında ayarlanabilir.
+  const addHabit = (values: HabitFormValues) => {
+    const created = habitRepo.create({ user_id: user.id, ...values });
+    // Hatırlatma saati seçildiyse bildirimi programla (izin yoksa uyar).
+    if (created.remind_at) {
+      scheduleHabitReminder(created).then((ok) => {
+        if (!ok) {
+          Alert.alert(
+            'Bildirim izni yok',
+            'Hatırlatma kaydedildi ama bildirim gönderebilmek için izin gerekiyor. Telefon ayarlarından bu uygulamaya bildirim izni verebilirsin.'
+          );
+        }
+      });
+    }
     finish('/(tabs)/habits');
   };
 
@@ -132,7 +148,9 @@ export function AddSheet({ visible, onClose }: Props) {
               ))}
             </>
           ) : (
-            <>
+            // Tek ScrollView tüm form içeriğini sarar (formHead dahil) — uzun
+            // alışkanlık formu güvenle kaydırılır, "Ekle" düğmesi kırpılmaz.
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.formHead}>
                 <Pressable onPress={() => setStep('menu')} hitSlop={8}>
                   <Text style={styles.backText}>‹ Geri</Text>
@@ -144,94 +162,99 @@ export function AddSheet({ visible, onClose }: Props) {
                 <View style={styles.headSpacer} />
               </View>
 
-              <TextInput
-                style={styles.input}
-                placeholder={
-                  step === 'task'
-                    ? 'Görev başlığı'
-                    : step === 'habit'
-                      ? 'Alışkanlık başlığı'
-                      : 'Hedef başlığı (örn. 100 km koş)'
-                }
-                placeholderTextColor={colors.faint}
-                value={title}
-                onChangeText={setTitle}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={step === 'task' ? addTask : step === 'habit' ? addHabit : undefined}
-              />
-
-              {step === 'goal' && (
+              {step === 'habit' ? (
+                // Alışkanlık: düzenleme paneliyle aynı tam form (kendi başlık
+                // alanı + Ekle düğmesi içinde).
+                <HabitForm
+                  userId={user.id}
+                  submitLabel="Ekle"
+                  autoFocusTitle
+                  onSubmit={addHabit}
+                />
+              ) : (
                 <>
-                  <View style={styles.typeRow}>
-                    {(['numeric', 'deadline'] as GoalType[]).map((g) => {
-                      const selected = g === goalType;
-                      return (
-                        <Pressable
-                          key={g}
-                          style={[styles.typeChip, selected && styles.typeChipOn]}
-                          onPress={() => setGoalType(g)}
-                        >
-                          <Text style={[styles.typeChipText, selected && styles.typeChipTextOn]}>
-                            {g === 'numeric' ? 'Sayısal' : 'Tarihli'}
+                  <TextInput
+                    style={styles.input}
+                    placeholder={
+                      step === 'task' ? 'Görev başlığı' : 'Hedef başlığı (örn. 100 km koş)'
+                    }
+                    placeholderTextColor={colors.faint}
+                    value={title}
+                    onChangeText={setTitle}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={step === 'task' ? addTask : undefined}
+                  />
+
+                  {step === 'goal' && (
+                    <>
+                      <View style={styles.typeRow}>
+                        {(['numeric', 'deadline'] as GoalType[]).map((g) => {
+                          const selected = g === goalType;
+                          return (
+                            <Pressable
+                              key={g}
+                              style={[styles.typeChip, selected && styles.typeChipOn]}
+                              onPress={() => setGoalType(g)}
+                            >
+                              <Text style={[styles.typeChipText, selected && styles.typeChipTextOn]}>
+                                {g === 'numeric' ? 'Sayısal' : 'Tarihli'}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      {goalType === 'numeric' ? (
+                        <View style={styles.inlineRow}>
+                          <TextInput
+                            style={[styles.input, { flex: 1 }]}
+                            placeholder="Hedef (örn. 100)"
+                            placeholderTextColor={colors.faint}
+                            keyboardType="numeric"
+                            value={target}
+                            onChangeText={setTarget}
+                          />
+                          <TextInput
+                            style={[styles.input, { flex: 1 }]}
+                            placeholder="Birim (km, kitap)"
+                            placeholderTextColor={colors.faint}
+                            value={unit}
+                            onChangeText={setUnit}
+                          />
+                        </View>
+                      ) : (
+                        <Pressable style={styles.input} onPress={() => setShowPicker(true)}>
+                          <Text style={{ color: deadline ? colors.text : colors.faint, fontSize: 15 }}>
+                            {deadline ? shortDate(deadline) : 'Son tarih seç'}
                           </Text>
                         </Pressable>
-                      );
-                    })}
-                  </View>
+                      )}
 
-                  {goalType === 'numeric' ? (
-                    <View style={styles.inlineRow}>
-                      <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        placeholder="Hedef (örn. 100)"
-                        placeholderTextColor={colors.faint}
-                        keyboardType="numeric"
-                        value={target}
-                        onChangeText={setTarget}
-                      />
-                      <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        placeholder="Birim (km, kitap)"
-                        placeholderTextColor={colors.faint}
-                        value={unit}
-                        onChangeText={setUnit}
-                      />
-                    </View>
-                  ) : (
-                    <Pressable style={styles.input} onPress={() => setShowPicker(true)}>
-                      <Text style={{ color: deadline ? colors.text : colors.faint, fontSize: 15 }}>
-                        {deadline ? shortDate(deadline) : 'Son tarih seç'}
-                      </Text>
-                    </Pressable>
+                      {showPicker && (
+                        <DateTimePicker
+                          value={deadline ? new Date(`${deadline}T00:00:00`) : new Date()}
+                          mode="date"
+                          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                          onChange={onPickDate}
+                        />
+                      )}
+                    </>
                   )}
 
-                  {showPicker && (
-                    <DateTimePicker
-                      value={deadline ? new Date(`${deadline}T00:00:00`) : new Date()}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                      onChange={onPickDate}
-                    />
+                  <Pressable style={styles.addBtn} onPress={step === 'task' ? addTask : addGoal}>
+                    <Text style={styles.addBtnText}>Ekle</Text>
+                  </Pressable>
+
+                  {step === 'task' && (
+                    <Text style={styles.hint}>
+                      Tarih, saat ve önceliği eklendikten sonra görevine dokunarak
+                      ayarlayabilirsin.
+                    </Text>
                   )}
                 </>
               )}
-
-              <Pressable
-                style={styles.addBtn}
-                onPress={step === 'task' ? addTask : step === 'habit' ? addHabit : addGoal}
-              >
-                <Text style={styles.addBtnText}>Ekle</Text>
-              </Pressable>
-
-              {step !== 'goal' && (
-                <Text style={styles.hint}>
-                  {step === 'task'
-                    ? 'Tarih, saat ve önceliği eklendikten sonra görevine dokunarak ayarlayabilirsin.'
-                    : 'İkon, renk, sıklık ve hedefi eklendikten sonra alışkanlığına dokunarak ayarlayabilirsin.'}
-                </Text>
-              )}
-            </>
+            </ScrollView>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -247,6 +270,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 32,
+    // Alışkanlık tam formu uzun olabilir; taşınca içerik kaydırılsın.
+    maxHeight: '88%',
   },
   handle: {
     alignSelf: 'center',
