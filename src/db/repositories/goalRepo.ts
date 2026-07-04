@@ -100,10 +100,13 @@ export const goalRepo = {
   },
 
   // Sayısal hedefte ilerlemeyi artırır (örn. +5 km). Hedefi aşmaz.
+  // Yalnızca 'numeric' hedeflerde anlamlı: deadline hedefte current_value
+  // kullanılmadığından sessizce yok sayılır (bağlı alışkanlık geçişi de buraya
+  // düşer; deadline hedefe bağlansa bile sayaç bozulmaz).
   addProgress(id: string, amount: number): void {
     const db = getDb();
     const goal = this.getById(id);
-    if (!goal) return;
+    if (!goal || goal.goal_type !== 'numeric') return;
     let next = goal.current_value + amount;
     if (goal.target_value != null && next > goal.target_value) {
       next = goal.target_value;

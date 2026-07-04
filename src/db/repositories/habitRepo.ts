@@ -5,6 +5,7 @@
 import { getDb } from '../database';
 import { isScheduledOn, isWithinHabitDates, newId, nowIso, parseJson, todayDate, toJson } from '../../lib/helpers';
 import type { Habit, HabitLog, Recurrence } from '../../types/models';
+import { goalRepo } from './goalRepo';
 
 function rowToHabit(row: any): Habit {
   return {
@@ -119,9 +120,10 @@ export const habitRepo = {
     const db = getDb();
     const now = nowIso();
     const existing = db.getFirstSync<any>(
-      `SELECT id FROM habit_logs WHERE habit_id = ? AND log_date = ?`,
+      `SELECT id, completed FROM habit_logs WHERE habit_id = ? AND log_date = ?`,
       [habitId, date]
     );
+    const wasCompleted = existing?.completed === 1;
     if (existing) {
       db.runSync(
         `UPDATE habit_logs SET completed = ?, updated_at = ?, synced = 0 WHERE id = ?`,
@@ -133,6 +135,22 @@ export const habitRepo = {
         [newId(), habitId, date, completed ? 1 : 0, now]
       );
     }
+    this.bumpGoalIfLinked(habitId, wasCompleted, completed);
+  },
+
+  // Alışkanlık bir hedefe bağlıysa, TAMAMLANMA GEÇİŞİNDE bağlı hedefin
+  // ilerlemesini günceller: tamamlandı → +1, geri alındı → −1. Yalnızca durum
+  // gerçekten değiştiğinde çalışır; aynı durumu tekrar yazmak (ör. zaten
+  // tamamlanmış günü tekrar işaretlemek) hedefi etkilemez → çift sayım olmaz.
+  // Bir günü geçmişe dönük işaretlemek de geçerli bir geçiştir. goalRepo.addProgress
+  // 0..target aralığına sıkıştırır ve numeric olmayan hedefi zaten yok sayar.
+  // NOT: Çok-cihaz senkronunda goal.current_value LWW ile taşınır; bu, manuel
+  // +1/+5 ilerlemesindeki mevcut sınırla aynıdır (eşzamanlı katkılar birleşmez).
+  bumpGoalIfLinked(habitId: string, wasCompleted: boolean, isCompleted: boolean): void {
+    if (wasCompleted === isCompleted) return;
+    const habit = this.getById(habitId);
+    if (!habit?.goal_id) return;
+    goalRepo.addProgress(habit.goal_id, isCompleted ? 1 : -1);
   },
 
   // Bir alışkanlığın belirli gün tamamlanıp tamamlanmadığı.
@@ -162,9 +180,10 @@ export const habitRepo = {
     const db = getDb();
     const now = nowIso();
     const existing = db.getFirstSync<any>(
-      `SELECT id, amount FROM habit_logs WHERE habit_id = ? AND log_date = ?`,
+      `SELECT id, amount, completed FROM habit_logs WHERE habit_id = ? AND log_date = ?`,
       [habitId, date]
     );
+    const wasCompleted = existing?.completed === 1;
     const current = existing ? existing.amount ?? 0 : 0;
     const next = Math.max(0, current + delta);
     const completed = target != null && target > 0 && next >= target ? 1 : 0;
@@ -180,6 +199,9 @@ export const habitRepo = {
         [newId(), habitId, date, completed, next, now]
       );
     }
+    // Nicel alışkanlıkta da hedefe katkı "tamamlanan gün" başına +1'dir (o gün
+    // yapılan miktar kadar DEĞİL): hedefe ulaşınca (0→1) +1, altına düşünce (1→0) −1.
+    this.bumpGoalIfLinked(habitId, wasCompleted, completed === 1);
   },
 
   // STREAK HESABI: bugünden geriye doğru, alışkanlığın PLANLI günlerini sayar.

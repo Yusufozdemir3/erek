@@ -7,6 +7,7 @@
 
 import { getDb } from '../database';
 import { habitRepo } from '../repositories/habitRepo';
+import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
 
@@ -286,5 +287,96 @@ describe('logsInRange', () => {
   it('log yoksa boş dizi döner', () => {
     const habit = createHabit();
     expect(habitRepo.logsInRange(habit.id, '2026-06-01')).toEqual([]);
+  });
+});
+
+describe('hedefe bağlı ilerleme (goal_id)', () => {
+  // Bağlı alışkanlık her TAMAMLANDIĞI gün hedefe +1, geri alınınca −1 katar.
+  // Katkı "yapılan miktar" değil, "tamamlanan gün" başınadır.
+  function createNumericGoal(target: number | null = 100) {
+    return goalRepo.create({
+      user_id: userId,
+      title: 'Koşu hedefi',
+      goal_type: 'numeric',
+      target_value: target,
+      unit: 'koşu',
+    });
+  }
+  const currentValue = (goalId: string) => goalRepo.getById(goalId)!.current_value;
+
+  it('ikili alışkanlık tamamlanınca hedefe +1, geri alınınca −1', () => {
+    const goal = createNumericGoal();
+    const habit = createHabit({ goal_id: goal.id });
+
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(currentValue(goal.id)).toBe(1);
+
+    habitRepo.toggleLog(habit.id, TODAY, false);
+    expect(currentValue(goal.id)).toBe(0);
+  });
+
+  it('aynı durumu tekrar yazmak hedefi ETKİLEMEZ (çift sayım yok)', () => {
+    const goal = createNumericGoal();
+    const habit = createHabit({ goal_id: goal.id });
+
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    habitRepo.toggleLog(habit.id, TODAY, true); // geçiş yok
+    expect(currentValue(goal.id)).toBe(1);
+  });
+
+  it('farklı günler ayrı ayrı +1 sayılır', () => {
+    const goal = createNumericGoal();
+    const habit = createHabit({ goal_id: goal.id });
+
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    habitRepo.toggleLog(habit.id, '2026-06-30', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(currentValue(goal.id)).toBe(3);
+  });
+
+  it('bağlı olmayan alışkanlık hedefe dokunmaz', () => {
+    const goal = createNumericGoal();
+    const habit = createHabit(); // goal_id yok
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(currentValue(goal.id)).toBe(0);
+  });
+
+  it('nicel alışkanlık: hedefe ULAŞINCA +1, altına düşünce −1, arada değişmez', () => {
+    const goal = createNumericGoal();
+    const habit = createHabit({ goal_id: goal.id, target_amount: 8, unit: 'bardak' });
+
+    habitRepo.incrementAmount(habit.id, TODAY, 3, 8); // 3/8 — henüz tamam değil
+    expect(currentValue(goal.id)).toBe(0);
+
+    habitRepo.incrementAmount(habit.id, TODAY, 5, 8); // 8/8 — tamam (0→1)
+    expect(currentValue(goal.id)).toBe(1);
+
+    habitRepo.incrementAmount(habit.id, TODAY, 2, 8); // 10/8 — hâlâ tamam, geçiş yok
+    expect(currentValue(goal.id)).toBe(1);
+
+    habitRepo.incrementAmount(habit.id, TODAY, -5, 8); // 5/8 — tamam değil (1→0)
+    expect(currentValue(goal.id)).toBe(0);
+  });
+
+  it('hedef sınırını aşmaz (addProgress kırpması korunur)', () => {
+    const goal = createNumericGoal(1); // hedef değeri 1
+    const h1 = createHabit({ goal_id: goal.id });
+    const h2 = createHabit({ goal_id: goal.id });
+
+    habitRepo.toggleLog(h1.id, TODAY, true); // 1
+    habitRepo.toggleLog(h2.id, TODAY, true); // sınırda kalır
+    expect(currentValue(goal.id)).toBe(1);
+  });
+
+  it('deadline hedefe bağlı olsa bile sayaç bozulmaz (numeric guard)', () => {
+    const goal = goalRepo.create({
+      user_id: userId,
+      title: 'Sınav',
+      goal_type: 'deadline',
+      deadline: '2026-08-01',
+    });
+    const habit = createHabit({ goal_id: goal.id });
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(currentValue(goal.id)).toBe(0);
   });
 });
