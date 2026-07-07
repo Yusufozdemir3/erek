@@ -1,10 +1,11 @@
-// Merkezi ＋ butonunun açtığı ekleme menüsü (alttan açılan modal).
-// İki adım: (1) tür seçimi — Görev / Alışkanlık / Hedef, (2) seçilen türün
-// mini ekleme formu. Görev ve alışkanlık yalnızca başlıkla eklenir (ayrıntılar
-// düzenleme panelinden); hedef, tipi sonradan değiştirilemediği için tam
-// formuyla eklenir (goals.tsx'teki eski ekleme formunun taşınmış hali).
-// Ekleme sonrası notifyDataChanged ile açık ekranların listeleri tazelenir ve
-// ilgili sekmeye gidilir. Mimari kural: SQL yok — yalnızca repo çağrıları.
+// Merkezi ＋ butonunun açtığı ekleme formu (sayfayı ortalayan modal — alttan
+// değil). Genelde ＋ menüsü türü seçtiği için doğrudan ilgili formda açılır
+// (initialStep); "‹ Geri" ile tür seçim menüsüne dönülebilir.
+// Tüm türler oluşturma anında TAM ayarlarıyla eklenir: görev (TaskForm) ve
+// alışkanlık (HabitForm) düzenleme paneliyle aynı formu paylaşır; hedef kendi
+// tam formuyla (goals.tsx'ten taşınmış). Ekleme sonrası notifyDataChanged ile
+// açık ekranların listeleri tazelenir ve ilgili sekmeye gidilir.
+// Mimari kural: SQL yok — yalnızca repo çağrıları.
 
 import { useEffect, useState } from 'react';
 import {
@@ -27,13 +28,17 @@ import { toYmd } from '@/lib/helpers';
 import { scheduleHabitReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
+import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 import { colors, shortDate } from '@/ui/theme';
 
-type Step = 'menu' | 'task' | 'habit' | 'goal';
+export type Step = 'menu' | 'task' | 'habit' | 'goal';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
+  // Açılırken doğrudan gidilecek adım. Merkezi ＋ menüsü türü kendi seçtiği
+  // için genelde bir form adımı verilir; verilmezse tür seçim menüsü açılır.
+  initialStep?: Step;
 }
 
 const MENU_OPTIONS: { step: Step; emoji: string; title: string; desc: string }[] = [
@@ -42,9 +47,9 @@ const MENU_OPTIONS: { step: Step; emoji: string; title: string; desc: string }[]
   { step: 'goal', emoji: '🎯', title: 'Hedef', desc: 'Sayısal ya da tarihli büyük hedef' },
 ];
 
-export function AddSheet({ visible, onClose }: Props) {
+export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { user, notifyDataChanged } = useAppData();
-  const [step, setStep] = useState<Step>('menu');
+  const [step, setStep] = useState<Step>(initialStep);
   const [title, setTitle] = useState('');
 
   // Hedef formu alanları (goals.tsx'ten taşındı).
@@ -54,10 +59,10 @@ export function AddSheet({ visible, onClose }: Props) {
   const [deadline, setDeadline] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
 
-  // Her açılışta menü adımına ve boş forma dön.
+  // Her açılışta istenen adıma (varsayılan menü) ve boş forma dön.
   useEffect(() => {
     if (visible) {
-      setStep('menu');
+      setStep(initialStep);
       setTitle('');
       setGoalType('numeric');
       setTarget('');
@@ -65,7 +70,7 @@ export function AddSheet({ visible, onClose }: Props) {
       setDeadline(null);
       setShowPicker(false);
     }
-  }, [visible]);
+  }, [visible, initialStep]);
 
   // Ekleme sonrası: menüyü kapat, listeleri tazele, ilgili sekmeye git.
   const finish = (tab: '/(tabs)/tasks' | '/(tabs)/habits' | '/(tabs)/goals') => {
@@ -74,10 +79,15 @@ export function AddSheet({ visible, onClose }: Props) {
     router.navigate(tab);
   };
 
-  const addTask = () => {
-    const t = title.trim();
-    if (!t) return;
-    taskRepo.create({ user_id: user.id, title: t, priority: 'medium' });
+  // Görev, düzenleme paneliyle aynı TaskForm'la oluşturulur — öncelik, son tarih
+  // ve saat oluşturma anında ayarlanabilir (alt görevler yalnız sonradan).
+  const addTask = (values: TaskFormValues) => {
+    taskRepo.create({
+      user_id: user.id,
+      title: values.title,
+      priority: values.priority,
+      due_date: values.due_date,
+    });
     finish('/(tabs)/tasks');
   };
 
@@ -126,12 +136,16 @@ export function AddSheet({ visible, onClose }: Props) {
   if (!visible) return null;
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      {/* Sayfayı ortalayan modal (alttan değil). Arka fona dokununca kapanır. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.kav}
+      >
+        <View style={styles.overlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+          <View style={styles.card}>
 
           {step === 'menu' ? (
             <>
@@ -171,19 +185,19 @@ export function AddSheet({ visible, onClose }: Props) {
                   autoFocusTitle
                   onSubmit={addHabit}
                 />
+              ) : step === 'task' ? (
+                // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat).
+                <TaskForm submitLabel="Ekle" autoFocusTitle onSubmit={addTask} />
               ) : (
                 <>
                   <TextInput
                     style={styles.input}
-                    placeholder={
-                      step === 'task' ? 'Görev başlığı' : 'Hedef başlığı (örn. 100 km koş)'
-                    }
+                    placeholder="Hedef başlığı (örn. 100 km koş)"
                     placeholderTextColor={colors.faint}
                     value={title}
                     onChangeText={setTitle}
                     autoFocus
                     returnKeyType="done"
-                    onSubmitEditing={step === 'task' ? addTask : undefined}
                   />
 
                   {step === 'goal' && (
@@ -242,20 +256,14 @@ export function AddSheet({ visible, onClose }: Props) {
                     </>
                   )}
 
-                  <Pressable style={styles.addBtn} onPress={step === 'task' ? addTask : addGoal}>
+                  <Pressable style={styles.addBtn} onPress={addGoal}>
                     <Text style={styles.addBtnText}>Ekle</Text>
                   </Pressable>
-
-                  {step === 'task' && (
-                    <Text style={styles.hint}>
-                      Tarih, saat ve önceliği eklendikten sonra görevine dokunarak
-                      ayarlayabilirsin.
-                    </Text>
-                  )}
                 </>
               )}
             </ScrollView>
           )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -263,23 +271,23 @@ export function AddSheet({ visible, onClose }: Props) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  // Ekranı ortalayan modal: karartılmış zemin + ortadaki kart.
+  kav: { flex: 1 },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 20,
-    paddingBottom: 32,
-    // Alışkanlık tam formu uzun olabilir; taşınca içerik kaydırılsın.
-    maxHeight: '88%',
   },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#cbd5e1',
-    marginBottom: 16,
+  card: {
+    width: '100%',
+    maxWidth: 460,
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
+    // Alışkanlık tam formu uzun olabilir; taşınca içerik kaydırılsın.
+    maxHeight: '100%',
   },
   heading: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16, textAlign: 'center' },
 
@@ -337,5 +345,4 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  hint: { fontSize: 12, color: colors.faint, lineHeight: 17, marginTop: 12, textAlign: 'center' },
 });
