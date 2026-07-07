@@ -25,6 +25,7 @@ create table if not exists public.habits (
   user_id    uuid not null,
   goal_id    uuid,
   title         text not null,
+  kind          text not null default 'binary',
   remind_at     text,
   icon          text,
   color         text,
@@ -46,6 +47,8 @@ alter table public.habits add column if not exists target_amount double precisio
 alter table public.habits add column if not exists unit          text;
 alter table public.habits add column if not exists start_date    text;
 alter table public.habits add column if not exists end_date      text;
+alter table public.habits add column if not exists kind          text not null default 'binary';
+update public.habits set kind = 'numeric' where kind = 'binary' and target_amount is not null and target_amount > 0;
 
 create table if not exists public.tasks (
   id           uuid primary key,

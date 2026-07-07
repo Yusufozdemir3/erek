@@ -1,4 +1,4 @@
-// Görev düzenleme paneli (alttan açılan modal).
+// Görev düzenleme paneli (sayfayı ortalayan modal).
 // "Bugün"/"Görevler" ekranında bir göreve dokununca açılır. Başlık, öncelik, son
 // tarih ve saat alanları ortak TaskForm bileşeninde; burası yalnızca modal kabuğu
 // + kalıcılık (update/delete) ve alt görev (checklist) bölümü.
@@ -9,9 +9,10 @@
 // Mimari kural: SQL yok - yalnızca taskRepo/subtaskRepo çağrılır.
 
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
+import { ModalCard } from '@/ui/ModalCard';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 
 interface Props {
@@ -76,22 +77,16 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      {/* Arka plan - dokununca kapanır */}
-      <Pressable style={styles.backdrop} onPress={onClose} />
-
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Text style={styles.heading}>Görevi düzenle</Text>
-          {/* key: farklı göreve geçince form taze başlangıç değerleriyle kurulur */}
-          <TaskForm
-            key={task.id}
-            initial={{ title: task.title, priority: task.priority, due_date: task.due_date }}
-            submitLabel="Kaydet"
-            onSubmit={handleSave}
-            onDelete={handleDelete}
-          >
+    <ModalCard visible onClose={onClose}>
+      <Text style={styles.heading}>Görevi düzenle</Text>
+      {/* key: farklı göreve geçince form taze başlangıç değerleriyle kurulur */}
+      <TaskForm
+        key={task.id}
+        initial={{ title: task.title, priority: task.priority, due_date: task.due_date }}
+        submitLabel="Kaydet"
+        onSubmit={handleSave}
+        onDelete={handleDelete}
+      >
             {/* Alt görevler — anında kaydedilir (Kaydet beklemez) */}
             <Text style={styles.label}>Alt görevler</Text>
             {subtasks.map((s) => {
@@ -128,31 +123,12 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
               </Pressable>
             </View>
           </TaskForm>
-        </ScrollView>
-      </View>
-    </Modal>
+    </ModalCard>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 32,
-    maxHeight: '88%',
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#cbd5e1',
-    marginBottom: 16,
-  },
-  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 16 },
+  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 16, textAlign: 'center' },
   label: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 8, marginTop: 4 },
   subtaskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
   subtaskBox: {

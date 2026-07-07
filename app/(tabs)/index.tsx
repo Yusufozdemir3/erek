@@ -16,6 +16,7 @@ import { useAppData } from '@/ui/AppData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
+import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TimeBadge } from '@/ui/TimeBadge';
@@ -145,7 +146,16 @@ export default function TodayScreen() {
               })}
 
               {habits.map((h) =>
-                h.target != null ? (
+                h.kind === 'timer' ? (
+                  // Zamanlayıcı alışkanlık: salt-okunur ilerleme (Aşama B'de kontrol).
+                  <View key={h.id} style={[shared.card, isFuture && styles.futureCard]}>
+                    <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
+                    <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
+                      {h.title}
+                    </Text>
+                    <HabitTimer amount={h.amount} target={h.target ?? 0} />
+                  </View>
+                ) : h.target != null ? (
                   // Nicel alışkanlık: sayaç ile miktar gir (gelecek günde devre dışı).
                   <View key={h.id} style={[shared.card, isFuture && styles.futureCard]}>
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />

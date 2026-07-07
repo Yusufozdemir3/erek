@@ -10,7 +10,7 @@ import { habitRepo } from './repositories/habitRepo';
 import { goalRepo } from './repositories/goalRepo';
 
 export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo };
-export type { User, Task, Subtask, Habit, Goal, HabitLog, Recurrence, Priority, GoalType } from '../types/models';
+export type { User, Task, Subtask, Habit, Goal, HabitLog, Recurrence, Priority, GoalType, HabitKind } from '../types/models';
 
 // Uygulama açılışında bir kez çağrılır. Şemayı kurar, anonim kullanıcıyı garantiler.
 export async function initDataLayer() {

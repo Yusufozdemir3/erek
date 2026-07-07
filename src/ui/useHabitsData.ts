@@ -5,6 +5,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { goalRepo, habitRepo } from '@/db';
+import type { HabitKind } from '@/db';
 import { lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { shortDate } from '@/ui/theme';
@@ -18,6 +19,7 @@ function periodLabel(start: string | null, end: string | null): string | null {
 export interface HabitListItem {
   id: string;
   title: string;
+  kind: HabitKind;
   remindAt: string | null; // "HH:MM" hatırlatma saati
   icon: string | null;
   color: string | null;
@@ -54,6 +56,7 @@ export function useHabitsData(userId: string) {
         return {
           id: h.id,
           title: h.title,
+          kind: h.kind,
           remindAt: h.remind_at,
           icon: h.icon,
           color: h.color,

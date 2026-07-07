@@ -13,6 +13,7 @@ import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
+import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { colors, shared } from '@/ui/theme';
@@ -86,7 +87,9 @@ export default function HabitsScreen() {
                     </Text>
                   )}
                 </Pressable>
-                {h.target != null ? (
+                {h.kind === 'timer' ? (
+                  <HabitTimer amount={h.amount} target={h.target ?? 0} />
+                ) : h.target != null ? (
                   <AmountStepper
                     amount={h.amount}
                     target={h.target}

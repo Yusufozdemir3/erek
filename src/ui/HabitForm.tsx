@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
-import type { Goal, Recurrence } from '@/db';
+import type { Goal, HabitKind, Recurrence } from '@/db';
 import { hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { HABIT_COLORS, HABIT_ICONS, shortDate } from '@/ui/theme';
@@ -28,11 +28,12 @@ const WEEKDAY_OPTIONS = [
 // habitRepo.create/update'in beklediği alanlarla birebir örtüşür.
 export interface HabitFormValues {
   title: string;
+  kind: HabitKind;
   remind_at: string | null;
   icon: string | null;
   color: string | null;
   schedule: Recurrence | null;
-  target_amount: number | null;
+  target_amount: number | null; // numeric: miktar · timer: hedef SANİYE · binary: null
   unit: string | null;
   start_date: string | null;
   end_date: string | null;
@@ -41,6 +42,7 @@ export interface HabitFormValues {
 
 interface Props {
   userId: string;                       // hedef bağlama listesi bu kullanıcıdan
+  kind: HabitKind;                      // takip tipi (oluşturmada sihirbaz seçer; düzenlemede sabit)
   initial?: Partial<HabitFormValues>;   // düzenleme: mevcut değerler; oluşturma: yok (varsayılan)
   submitLabel: string;                  // "Kaydet" | "Ekle"
   onSubmit: (values: HabitFormValues) => void;
@@ -53,7 +55,7 @@ function timeLabel(hm: string | null): string {
   return hm ? hm : 'Hatırlatma yok';
 }
 
-export function HabitForm({ userId, initial, submitLabel, onSubmit, onDelete, autoFocusTitle }: Props) {
+export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDelete, autoFocusTitle }: Props) {
   const initSchedule = initial?.schedule ?? null;
   const initWeekly =
     !!initSchedule && initSchedule.freq === 'weekly' && (initSchedule.weekdays?.length ?? 0) > 0;
@@ -64,8 +66,13 @@ export function HabitForm({ userId, initial, submitLabel, onSubmit, onDelete, au
   const [color, setColor] = useState<string | null>(initial?.color ?? null);
   const [everyDay, setEveryDay] = useState(!initWeekly);
   const [weekdays, setWeekdays] = useState<number[]>(initWeekly ? initSchedule!.weekdays! : []);
+  // Nicel: miktar (ör. 8). Zamanlayıcı: hedef DAKİKA (saniyeye çevrilir). Metin olarak tutulur.
   const [targetText, setTargetText] = useState(
-    initial?.target_amount != null ? String(initial.target_amount) : ''
+    initial?.target_amount == null
+      ? ''
+      : kind === 'timer'
+        ? String(initial.target_amount / 60)
+        : String(initial.target_amount)
   );
   const [unit, setUnit] = useState(initial?.unit ?? '');
   const [startDate, setStartDate] = useState<string | null>(initial?.start_date ?? null);
@@ -93,14 +100,23 @@ export function HabitForm({ userId, initial, submitLabel, onSubmit, onDelete, au
       everyDay || weekdays.length === 0
         ? null
         : { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) };
-    // Geçerli pozitif hedef varsa nicel; yoksa ikili (target/unit null).
+    // Hedef/birim tipe göre: numeric = miktar+birim, timer = dakika→saniye,
+    // binary = ikisi de null.
     const parsed = parseFloat(targetText.replace(',', '.'));
-    const target_amount = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-    const unitVal = target_amount != null && unit.trim() ? unit.trim() : null;
+    let target_amount: number | null = null;
+    let unitVal: string | null = null;
+    if (kind === 'numeric') {
+      target_amount = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      unitVal = target_amount != null && unit.trim() ? unit.trim() : null;
+    } else if (kind === 'timer') {
+      // Dakika girilir, saniye saklanır (habit_logs.amount de saniye birikir).
+      target_amount = Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 60) : null;
+    }
     // Bitiş başlangıçtan önce olamaz; olduysa başlangıca çekilir (tek günlük aralık).
     const end_date = endDate && startDate && endDate < startDate ? startDate : endDate;
     onSubmit({
       title: t,
+      kind,
       remind_at: remindAt,
       icon,
       color,
@@ -284,27 +300,47 @@ export function HabitForm({ userId, initial, submitLabel, onSubmit, onDelete, au
         />
       )}
 
-      {/* Günlük miktar hedefi (isteğe bağlı) — doldurulursa nicel takip */}
-      <Text style={styles.label}>Günlük hedef (isteğe bağlı)</Text>
-      <View style={styles.row}>
-        <TextInput
-          style={[styles.input, styles.targetInput]}
-          value={targetText}
-          onChangeText={setTargetText}
-          placeholder="örn. 8"
-          placeholderTextColor="#94a3b8"
-          keyboardType="numeric"
-        />
-        <TextInput
-          style={[styles.input, styles.targetInput]}
-          value={unit}
-          onChangeText={setUnit}
-          placeholder="birim (bardak)"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-        />
-      </View>
-      <Text style={styles.hint}>Boş bırakırsan basit "yaptım / yapmadım" olur.</Text>
+      {/* Tipe göre hedef alanı: numeric = günlük miktar + birim, timer = süre
+          (dakika). binary'de hedef alanı yok (yaptım/yapmadım). */}
+      {kind === 'numeric' && (
+        <>
+          <Text style={styles.label}>Günlük hedef</Text>
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, styles.targetInput]}
+              value={targetText}
+              onChangeText={setTargetText}
+              placeholder="örn. 8"
+              placeholderTextColor="#94a3b8"
+              keyboardType="numeric"
+            />
+            <TextInput
+              style={[styles.input, styles.targetInput]}
+              value={unit}
+              onChangeText={setUnit}
+              placeholder="birim (bardak)"
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="none"
+            />
+          </View>
+          <Text style={styles.hint}>Her gün ulaşmak istediğin miktar (ör. 8 bardak).</Text>
+        </>
+      )}
+
+      {kind === 'timer' && (
+        <>
+          <Text style={styles.label}>Süre hedefi (dakika)</Text>
+          <TextInput
+            style={styles.input}
+            value={targetText}
+            onChangeText={setTargetText}
+            placeholder="örn. 20"
+            placeholderTextColor="#94a3b8"
+            keyboardType="numeric"
+          />
+          <Text style={styles.hint}>Zamanlayıcıyla geri sayılacak günlük süre (ör. 20 dk).</Text>
+        </>
+      )}
 
       {/* Hedefe bağla — bu alışkanlığı her tamamladığın gün seçili hedefin
           ilerlemesi +1 artar (geri alınca −1). Yalnızca sayısal hedefler. */}

@@ -4,7 +4,7 @@
 
 import { getDb } from '../database';
 import { isScheduledOn, isWithinHabitDates, newId, nowIso, parseJson, todayDate, toJson } from '../../lib/helpers';
-import type { Habit, HabitLog, Recurrence } from '../../types/models';
+import type { Habit, HabitKind, HabitLog, Recurrence } from '../../types/models';
 import { goalRepo } from './goalRepo';
 
 function rowToHabit(row: any): Habit {
@@ -13,6 +13,7 @@ function rowToHabit(row: any): Habit {
     user_id: row.user_id,
     goal_id: row.goal_id,
     title: row.title,
+    kind: (row.kind ?? 'binary') as HabitKind,
     remind_at: row.remind_at,
     icon: row.icon,
     color: row.color,
@@ -30,6 +31,7 @@ function rowToHabit(row: any): Habit {
 export interface CreateHabitInput {
   user_id: string;
   title: string;
+  kind?: HabitKind; // varsayılan 'binary'
   remind_at?: string | null;
   goal_id?: string | null;
   icon?: string | null;
@@ -48,13 +50,14 @@ export const habitRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO habits
-       (id, user_id, goal_id, title, remind_at, icon, color, schedule, target_amount, unit, start_date, end_date, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
+       (id, user_id, goal_id, title, kind, remind_at, icon, color, schedule, target_amount, unit, start_date, end_date, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
       [
         id,
         input.user_id,
         input.goal_id ?? null,
         input.title,
+        input.kind ?? 'binary',
         input.remind_at ?? null,
         input.icon ?? null,
         input.color ?? null,
@@ -92,6 +95,7 @@ export const habitRepo = {
     const sets: string[] = [];
     const vals: any[] = [];
     if (fields.title !== undefined) { sets.push('title = ?'); vals.push(fields.title); }
+    if (fields.kind !== undefined) { sets.push('kind = ?'); vals.push(fields.kind); }
     if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
     if (fields.goal_id !== undefined) { sets.push('goal_id = ?'); vals.push(fields.goal_id); }
     if (fields.icon !== undefined) { sets.push('icon = ?'); vals.push(fields.icon); }

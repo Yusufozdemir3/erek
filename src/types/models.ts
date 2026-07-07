@@ -4,6 +4,9 @@
 
 export type Priority = 'low' | 'medium' | 'high';
 export type GoalType = 'numeric' | 'deadline';
+// Alışkanlık takip tipi. 'binary' = yaptım/yapmadım; 'numeric' = miktar hedefi;
+// 'timer' = geri sayım (target_amount hedef saniye, amount biriken saniye).
+export type HabitKind = 'binary' | 'numeric' | 'timer';
 
 // Tekrar kuralı. Hem görevler hem (ileride) alışkanlıklar kullanır.
 // Basit tutuldu: günlük / haftanın belli günleri / aylık belli gün.
@@ -51,12 +54,13 @@ export interface Habit extends SyncFields {
   user_id: string;
   goal_id: string | null;        // ileride bir hedefe bağlanabilir
   title: string;
+  kind: HabitKind;               // 'binary' | 'numeric' | 'timer'
   remind_at: string | null;      // "08:30" gibi, günlük hatırlatma saati
   icon: string | null;           // emoji (görsel kimlik), null = yok
   color: string | null;          // hex renk "#rrggbb", null = varsayılan
   schedule: Recurrence | null;   // hangi günler geçerli; null = her gün
-  target_amount: number | null;  // günlük miktar hedefi (ör. 8); null = ikili (yaptım/yapmadım)
-  unit: string | null;           // "bardak", "sayfa"; target_amount ile anlamlı
+  target_amount: number | null;  // numeric: günlük miktar (ör. 8) · timer: hedef saniye · binary: null
+  unit: string | null;           // "bardak", "sayfa"; numeric hedefte anlamlı (timer/binary: null)
   start_date: string | null;     // "YYYY-MM-DD"; null = baştan beri
   end_date: string | null;       // "YYYY-MM-DD"; null = süresiz
 }

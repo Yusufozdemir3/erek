@@ -1,4 +1,4 @@
-// Hedef düzenleme paneli (alttan açılan modal).
+// Hedef düzenleme paneli (sayfayı ortalayan modal).
 // "Hedefler" ekranında bir hedefin başlığına dokununca açılır.
 // Sayısal hedefte: başlık, hedef değeri, birim ve mevcut değer düzenlenir.
 // Tarihli hedefte: başlık ve son tarih düzenlenir.
@@ -6,20 +6,13 @@
 // Görev/alışkanlık modallarıyla simetrik. Mimari kural: SQL yok - yalnızca goalRepo.
 
 import { useEffect, useState } from 'react';
-import {
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal } from '@/db';
 import { toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { ModalCard } from '@/ui/ModalCard';
 import { colors, shortDate } from '@/ui/theme';
 
 interface Props {
@@ -82,11 +75,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
   };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+    <ModalCard visible onClose={onClose}>
         <Text style={styles.heading}>Hedefi düzenle</Text>
 
         {/* Tip (salt gösterim) */}
@@ -172,29 +161,12 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
             <Text style={styles.saveBtnText}>Kaydet</Text>
           </Pressable>
         </View>
-      </View>
-    </Modal>
+    </ModalCard>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 32,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#cbd5e1',
-    marginBottom: 16,
-  },
-  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 8 },
+  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 8, textAlign: 'center' },
   typeTag: {
     alignSelf: 'flex-start',
     fontSize: 12,

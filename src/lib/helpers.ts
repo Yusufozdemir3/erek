@@ -54,6 +54,17 @@ export function extractTime(value: string | null): string | null {
   return value.slice(11, 16);
 }
 
+// Saniye -> "M:SS" ya da saatliyse "H:MM:SS" saat/kronometre etiketi.
+// Zamanlayıcı alışkanlıkta hem hedef hem ilerleme bu biçimde gösterilir.
+export function fmtClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
+}
+
 // Bugün dahil son `count` günün "YYYY-MM-DD" listesi (en eskiden bugüne).
 // Haftalık geçmiş şeridi ve istatistik ısı haritası ortak kullanır.
 export function lastDays(count: number): string[] {

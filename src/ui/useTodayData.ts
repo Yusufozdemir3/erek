@@ -5,16 +5,17 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo, subtaskRepo, taskRepo } from '@/db';
-import type { Task } from '@/db';
+import type { HabitKind, Task } from '@/db';
 import { isScheduledOn, isWithinHabitDates } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 
 export interface HabitView {
   id: string;
   title: string;
+  kind: HabitKind;
   icon: string | null;
   color: string | null;
-  target: number | null; // nicel hedef; null = ikili
+  target: number | null; // numeric: miktar · timer: hedef saniye · binary: null
   unit: string | null;
   amount: number;        // seçilen günde yapılan miktar
   completed: boolean;    // seçilen günde tamamlandı mı
@@ -60,6 +61,7 @@ export function useTodayData(userId: string, selectedDate: string, today: string
         .map((h) => ({
           id: h.id,
           title: h.title,
+          kind: h.kind,
           icon: h.icon,
           color: h.color,
           target: h.target_amount,

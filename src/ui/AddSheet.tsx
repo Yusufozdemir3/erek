@@ -8,26 +8,16 @@
 // Mimari kural: SQL yok — yalnızca repo çağrıları.
 
 import { useEffect, useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo, habitRepo, taskRepo } from '@/db';
-import type { GoalType } from '@/db';
+import type { GoalType, HabitKind } from '@/db';
 import { toYmd } from '@/lib/helpers';
 import { scheduleHabitReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
+import { ModalCard } from '@/ui/ModalCard';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 import { colors, shortDate } from '@/ui/theme';
 
@@ -47,10 +37,19 @@ const MENU_OPTIONS: { step: Step; emoji: string; title: string; desc: string }[]
   { step: 'goal', emoji: '🎯', title: 'Hedef', desc: 'Sayısal ya da tarihli büyük hedef' },
 ];
 
+// Alışkanlık oluşturmada ilk adım: takip tipi seçimi (aşamalı sihirbaz).
+const KIND_OPTIONS: { kind: HabitKind; emoji: string; title: string; desc: string }[] = [
+  { kind: 'binary', emoji: '✓', title: 'Basit (tik)', desc: 'Yaptım / yapmadım' },
+  { kind: 'numeric', emoji: '🔢', title: 'Sayısal değer', desc: 'Miktar hedefi — ör. 8 bardak su' },
+  { kind: 'timer', emoji: '⏱️', title: 'Zamanlayıcı', desc: 'Geri sayım — ör. 20 dk meditasyon' },
+];
+
 export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { user, notifyDataChanged } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
   const [title, setTitle] = useState('');
+  // Alışkanlık sihirbazı: önce tip seçilir (null = tip seçim adımı).
+  const [habitKind, setHabitKind] = useState<HabitKind | null>(null);
 
   // Hedef formu alanları (goals.tsx'ten taşındı).
   const [goalType, setGoalType] = useState<GoalType>('numeric');
@@ -64,6 +63,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     if (visible) {
       setStep(initialStep);
       setTitle('');
+      setHabitKind(null);
       setGoalType('numeric');
       setTarget('');
       setUnit('');
@@ -133,20 +133,8 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     if (picked) setDeadline(toYmd(picked));
   };
 
-  if (!visible) return null;
-
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      {/* Sayfayı ortalayan modal (alttan değil). Arka fona dokununca kapanır. */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.kav}
-      >
-        <View style={styles.overlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-
-          <View style={styles.card}>
-
+    <ModalCard visible={visible} onClose={onClose}>
           {step === 'menu' ? (
             <>
               <Text style={styles.heading}>Ne eklemek istersin?</Text>
@@ -162,11 +150,18 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
               ))}
             </>
           ) : (
-            // Tek ScrollView tüm form içeriğini sarar (formHead dahil) — uzun
-            // alışkanlık formu güvenle kaydırılır, "Ekle" düğmesi kırpılmaz.
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            // ModalCard içeriği zaten ScrollView'da sarar (uzun alışkanlık formu
+            // güvenle kaydırılır, "Ekle" düğmesi kırpılmaz).
+            <>
               <View style={styles.formHead}>
-                <Pressable onPress={() => setStep('menu')} hitSlop={8}>
+                <Pressable
+                  onPress={() => {
+                    // Alışkanlık formundan geri → tip seçimine; başka her yerden → menü.
+                    if (step === 'habit' && habitKind) setHabitKind(null);
+                    else setStep('menu');
+                  }}
+                  hitSlop={8}
+                >
                   <Text style={styles.backText}>‹ Geri</Text>
                 </Pressable>
                 <Text style={styles.heading}>
@@ -177,14 +172,34 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
               </View>
 
               {step === 'habit' ? (
-                // Alışkanlık: düzenleme paneliyle aynı tam form (kendi başlık
-                // alanı + Ekle düğmesi içinde).
-                <HabitForm
-                  userId={user.id}
-                  submitLabel="Ekle"
-                  autoFocusTitle
-                  onSubmit={addHabit}
-                />
+                habitKind === null ? (
+                  // 1. adım: takip tipini seç (tik / sayısal / zamanlayıcı).
+                  <>
+                    {KIND_OPTIONS.map((opt) => (
+                      <Pressable
+                        key={opt.kind}
+                        style={styles.option}
+                        onPress={() => setHabitKind(opt.kind)}
+                      >
+                        <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                        <View style={styles.optionBody}>
+                          <Text style={styles.optionTitle}>{opt.title}</Text>
+                          <Text style={styles.optionDesc}>{opt.desc}</Text>
+                        </View>
+                        <Text style={styles.optionChevron}>›</Text>
+                      </Pressable>
+                    ))}
+                  </>
+                ) : (
+                  // 2. adım: düzenleme paneliyle aynı tam form (seçilen tiple).
+                  <HabitForm
+                    userId={user.id}
+                    kind={habitKind}
+                    submitLabel="Ekle"
+                    autoFocusTitle
+                    onSubmit={addHabit}
+                  />
+                )
               ) : step === 'task' ? (
                 // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat).
                 <TaskForm submitLabel="Ekle" autoFocusTitle onSubmit={addTask} />
@@ -261,34 +276,13 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   </Pressable>
                 </>
               )}
-            </ScrollView>
+            </>
           )}
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </ModalCard>
   );
 }
 
 const styles = StyleSheet.create({
-  // Ekranı ortalayan modal: karartılmış zemin + ortadaki kart.
-  kav: { flex: 1 },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 460,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    // Alışkanlık tam formu uzun olabilir; taşınca içerik kaydırılsın.
-    maxHeight: '100%',
-  },
   heading: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16, textAlign: 'center' },
 
   option: {

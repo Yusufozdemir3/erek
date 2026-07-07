@@ -134,6 +134,16 @@ CREATE TABLE IF NOT EXISTS subtasks (
 CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id);
 `;
 
+// Migration 008: alışkanlık tipi (kind). 'binary' (yaptım/yapmadım) |
+// 'numeric' (miktar hedefi) | 'timer' (geri sayım: target_amount = hedef SANİYE,
+// habit_logs.amount = o gün biriken saniye; amount >= target olunca tamamlandı).
+// Mevcut alışkanlıklar geriye dönük damgalanır: target_amount>0 ise 'numeric',
+// değilse 'binary' (varsayılan). Böylece eski davranış birebir korunur.
+export const migration008 = `
+ALTER TABLE habits ADD COLUMN kind TEXT NOT NULL DEFAULT 'binary';
+UPDATE habits SET kind = 'numeric' WHERE target_amount IS NOT NULL AND target_amount > 0;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -143,4 +153,5 @@ export const migrations = [
   { version: 5, sql: migration005 },
   { version: 6, sql: migration006 },
   { version: 7, sql: migration007 },
+  { version: 8, sql: migration008 },
 ];
