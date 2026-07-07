@@ -153,7 +153,12 @@ export default function TodayScreen() {
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
                     </Text>
-                    <HabitTimer amount={h.amount} target={h.target ?? 0} />
+                    <HabitTimer
+                      habitId={h.id}
+                      amount={h.amount}
+                      target={h.target ?? 0}
+                      editable={isToday}
+                    />
                   </View>
                 ) : h.target != null ? (
                   // Nicel alışkanlık: sayaç ile miktar gir (gelecek günde devre dışı).

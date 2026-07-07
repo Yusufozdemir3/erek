@@ -88,7 +88,7 @@ export default function HabitsScreen() {
                   )}
                 </Pressable>
                 {h.kind === 'timer' ? (
-                  <HabitTimer amount={h.amount} target={h.target ?? 0} />
+                  <HabitTimer habitId={h.id} amount={h.amount} target={h.target ?? 0} editable />
                 ) : h.target != null ? (
                   <AmountStepper
                     amount={h.amount}

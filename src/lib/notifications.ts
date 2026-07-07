@@ -117,6 +117,33 @@ export async function cancelHabitReminder(habitId: string): Promise<void> {
   }
 }
 
+// ZAMANLAYICI alışkanlığı: hedef süreye ulaşınca haber veren tek seferlik yerel
+// bildirim. identifier = `timer:${habitId}` (günlük hatırlatma id'leriyle
+// çakışmaz). Süre başlarken kurulur; duraklat/bitir/sıfırla'da iptal edilir.
+// İzin yoksa sessizce geçer (zamanlayıcı yine çalışır, sadece bildirim olmaz).
+export async function scheduleTimerDone(habit: Habit, secondsFromNow: number): Promise<void> {
+  await cancelTimerDone(habit.id);
+  if (secondsFromNow <= 0) return;
+  const granted = await ensurePermission();
+  if (!granted) return;
+  await Notifications.scheduleNotificationAsync({
+    identifier: `timer:${habit.id}`,
+    content: { title: 'Süre doldu ⏱️', body: `${habit.title} — hedefe ulaştın!` },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.max(1, Math.ceil(secondsFromNow)),
+    },
+  });
+}
+
+export async function cancelTimerDone(habitId: string): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`timer:${habitId}`);
+  } catch {
+    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+  }
+}
+
 // Açılışta tüm aktif hatırlatmaları yeniden programlar.
 // Cihaz yeniden başlatma / uygulama güncellemesi programlanmış bildirimleri
 // temizleyebildiği için tek doğru kaynak (DB) baz alınarak yeniden kurulur.

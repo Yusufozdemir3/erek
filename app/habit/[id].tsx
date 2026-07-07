@@ -5,6 +5,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { fmtClock } from '@/lib/helpers';
 import { useHabitStats, type DayCell } from '@/ui/useHabitStats';
 import { colors, DEFAULT_HABIT_COLOR, shared } from '@/ui/theme';
 
@@ -70,8 +71,9 @@ export default function HabitStatsScreen() {
               <View style={[styles.card, { marginTop: 12 }]}>
                 <Text style={styles.cardLabel}>Son 90 günde toplam</Text>
                 <Text style={styles.cardValue}>
-                  {fmtAmount(stats.totalAmount)}
-                  {stats.habit.unit ? ` ${stats.habit.unit}` : ''}
+                  {stats.habit.kind === 'timer'
+                    ? fmtClock(stats.totalAmount)
+                    : `${fmtAmount(stats.totalAmount)}${stats.habit.unit ? ` ${stats.habit.unit}` : ''}`}
                 </Text>
               </View>
             )}

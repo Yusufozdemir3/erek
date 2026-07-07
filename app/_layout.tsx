@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { AppDataProvider } from '@/ui/AppData';
+import { TimerProvider } from '@/ui/TimerProvider';
 import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notifications';
 import { Sentry } from '@/lib/sentry';
 
@@ -26,26 +27,28 @@ function RootLayout() {
 
   return (
     <AppDataProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="account"
-          options={{
-            headerShown: true,
-            title: 'Hesap',
-            presentation: 'modal',
-          }}
-        />
-        <Stack.Screen
-          name="profile"
-          options={{
-            headerShown: true,
-            title: 'Profil',
-            presentation: 'modal',
-          }}
-        />
-        <Stack.Screen name="habit/[id]" />
-      </Stack>
+      <TimerProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen
+            name="account"
+            options={{
+              headerShown: true,
+              title: 'Hesap',
+              presentation: 'modal',
+            }}
+          />
+          <Stack.Screen
+            name="profile"
+            options={{
+              headerShown: true,
+              title: 'Profil',
+              presentation: 'modal',
+            }}
+          />
+          <Stack.Screen name="habit/[id]" />
+        </Stack>
+      </TimerProvider>
     </AppDataProvider>
   );
 }
