@@ -14,6 +14,7 @@ import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { extractTime, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
+import { highestMilestone } from '@/lib/milestones';
 import { useAppData } from '@/ui/AppData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
@@ -231,7 +232,11 @@ export default function TodayScreen() {
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
                     </Text>
-                    {h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>}
+                    {h.streak > 0 && (
+                      <Text style={shared.streak}>
+                        {highestMilestone(h.streak)?.emoji ?? '🔥'} {h.streak}
+                      </Text>
+                    )}
                   </AnimatedPressable>
                 )
               )}

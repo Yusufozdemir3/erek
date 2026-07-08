@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fmtClock } from '@/lib/helpers';
+import { STREAK_MILESTONES } from '@/lib/milestones';
 import { useHabitStats, type DayCell } from '@/ui/useHabitStats';
 import { useTheme } from '@/ui/ThemeProvider';
 import { DEFAULT_HABIT_COLOR, type Colors } from '@/ui/theme';
@@ -87,6 +88,29 @@ export default function HabitStatsScreen() {
               </View>
             )}
 
+            {/* Rozetler — en uzun seri eşiği geçtiyse kazanılmış sayılır (seri
+                düşse bile madalya kalır). Kilitliler soluk. */}
+            <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>Rozetler</Text>
+            <View style={styles.badgeRow}>
+              {STREAK_MILESTONES.map((m) => {
+                const earned = stats.longestStreak >= m.days;
+                return (
+                  <View
+                    key={m.days}
+                    style={[styles.badge, earned ? styles.badgeEarned : styles.badgeLocked]}
+                  >
+                    <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>
+                      {m.emoji}
+                    </Text>
+                    <Text style={[styles.badgeDays, earned && styles.badgeDaysEarned]}>
+                      {m.days} gün
+                    </Text>
+                    <Text style={styles.badgeLabel}>{m.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
             <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>
               Son 90 gün · {stats.completedCount}/{stats.scheduledCount} planlı gün tamamlandı
             </Text>
@@ -142,6 +166,25 @@ const makeStyles = (c: Colors) =>
     },
     cardLabel: { fontSize: 13, color: c.muted, fontWeight: '600' },
     cardValue: { fontSize: 20, fontWeight: '800', color: c.text, marginTop: 4 },
+
+    // — Streak rozetleri —
+    badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    badge: {
+      flexGrow: 1,
+      flexBasis: 70,
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderRadius: 14,
+      borderWidth: 1,
+    },
+    badgeEarned: { backgroundColor: c.primarySoft, borderColor: c.primary },
+    badgeLocked: { backgroundColor: c.card, borderColor: c.border },
+    badgeEmoji: { fontSize: 26 },
+    badgeEmojiLocked: { opacity: 0.3 },
+    badgeDays: { fontSize: 13, fontWeight: '800', color: c.faint, marginTop: 4 },
+    badgeDaysEarned: { color: c.text },
+    badgeLabel: { fontSize: 11, color: c.muted, marginTop: 1 },
 
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
     cell: {

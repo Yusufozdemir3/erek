@@ -10,6 +10,7 @@ import { router } from 'expo-router';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
+import { highestMilestone } from '@/lib/milestones';
 import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
 import { EmptyState } from '@/ui/EmptyState';
@@ -109,7 +110,11 @@ export default function HabitsScreen() {
                     onSet={(v) => setTodayAmount(h, v)}
                   />
                 ) : (
-                  h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>
+                  h.streak > 0 && (
+                    <Text style={shared.streak}>
+                      {highestMilestone(h.streak)?.emoji ?? '🔥'} {h.streak}
+                    </Text>
+                  )
                 )}
               </View>
               {/* Son 7 gün — dokununca istatistik ekranı açılır */}
