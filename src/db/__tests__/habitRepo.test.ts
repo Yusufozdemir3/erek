@@ -219,6 +219,23 @@ describe('currentStreak — haftalık plan (Pzt/Çar/Cum)', () => {
     habitRepo.toggleLog(habit.id, '2026-06-30', true); // Salı (plansız!)
     expect(habitRepo.currentStreak(habit.id)).toBe(1);
   });
+
+  it('bugün (planlı) işaretsizken bir önceki planlı gün kaçırıldıysa seri 0 (tolerans kırığı gizlemez)', () => {
+    const habit = createHabit({ schedule });
+    // Bugün Çar 07-01 planlı ama işaretsiz (tolerans). Bir önceki planlı gün
+    // Pzt 06-29 KAÇIRILDI → seri kırık; eski Cum 06-26 completed olsa da sayılmaz.
+    habitRepo.toggleLog(habit.id, '2026-06-26', true); // Cum (planlı, tamamlandı)
+    // 06-29 Pzt işaretlenmedi
+    expect(habitRepo.currentStreak(habit.id)).toBe(0);
+  });
+
+  it('bugün işaretliyken bir önceki planlı gün kaçırıldıysa seri yalnız bugün (=1)', () => {
+    const habit = createHabit({ schedule });
+    habitRepo.toggleLog(habit.id, '2026-06-26', true); // Cum (tamamlandı, eski)
+    // 06-29 Pzt kaçırıldı
+    habitRepo.toggleLog(habit.id, TODAY, true);        // Çar bugün (tamamlandı)
+    expect(habitRepo.currentStreak(habit.id)).toBe(1);
+  });
 });
 
 describe('currentStreak — yaşam aralığı (start_date/end_date)', () => {
