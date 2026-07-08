@@ -6,6 +6,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDb } from '../../db/database';
 import { habitRepo } from '../../db/repositories/habitRepo';
+import { goalRepo } from '../../db/repositories/goalRepo';
+import { taskRepo } from '../../db/repositories/taskRepo';
+import { subtaskRepo } from '../../db/repositories/subtaskRepo';
 import { userRepo } from '../../db/repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
 
@@ -20,7 +23,7 @@ jest.mock('../auth', () => ({
 }));
 
 // jest.mock'lardan SONRA import edilmeli ki taklitler devreye girsin.
-import { prepareFullResync, runSync } from '../syncEngine';
+import { clearLocalData, prepareFullResync, runSync } from '../syncEngine';
 
 const LAST_PULLED_KEY = 'sync:lastPulledAt';
 const UID = 'remote-uid';
@@ -311,6 +314,39 @@ describe('prepareFullResync', () => {
 
     expect(await AsyncStorage.getItem(LAST_PULLED_KEY)).toBeNull();
     expect(syncedFlags('habits')).toEqual([0, 0]);
+  });
+});
+
+describe('clearLocalData', () => {
+  it('tüm kullanıcı verisi tablolarını siler, users\'ı korur, filigranı sıfırlar', async () => {
+    const user = userRepo.getOrCreateLocal();
+    // Her tabloda (FK zinciriyle) veri üret.
+    const goal = goalRepo.create({ user_id: user.id, title: 'H', goal_type: 'numeric', target_value: 10 });
+    const habit = habitRepo.create({ user_id: user.id, title: 'Su iç', goal_id: goal.id });
+    habitRepo.toggleLog(habit.id, '2026-07-01', true);
+    const task = taskRepo.create({ user_id: user.id, title: 'Görev' });
+    subtaskRepo.create(task.id, 'Alt');
+    await AsyncStorage.setItem(LAST_PULLED_KEY, '2026-07-01T00:00:00.000Z');
+
+    const count = (t: string) =>
+      getDb().getFirstSync<{ n: number }>(`SELECT COUNT(*) n FROM ${t}`)!.n;
+    for (const t of ['goals', 'habits', 'habit_logs', 'tasks', 'subtasks']) {
+      expect(count(t)).toBeGreaterThan(0);
+    }
+
+    await clearLocalData();
+
+    for (const t of ['goals', 'habits', 'habit_logs', 'tasks', 'subtasks']) {
+      expect(count(t)).toBe(0);
+    }
+    // Yerel kimlik (users) korunur; filigran sıfırlanır.
+    expect(count('users')).toBe(1);
+    expect(await AsyncStorage.getItem(LAST_PULLED_KEY)).toBeNull();
+  });
+
+  it('boş veritabanında hata vermez', async () => {
+    userRepo.getOrCreateLocal();
+    await expect(clearLocalData()).resolves.toBeUndefined();
   });
 });
 

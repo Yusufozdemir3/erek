@@ -91,6 +91,27 @@ export async function prepareFullResync(): Promise<void> {
   await AsyncStorage.removeItem(LAST_PULLED_KEY);
 }
 
+// Yerel kullanıcı VERİSİNİ tamamen siler (users/yerel kimlik korunur) ve pull
+// filigranını sıfırlar. "Hesap DEĞİŞTİRME" semantiği içindir: farklı bir hesaba
+// geçerken yereli temizleyip o hesabın bulut verisini baştan indirmek için —
+// prepareFullResync'in (BİRLEŞTİRME: yereli de yukarı iter) aksine yereli yok eder.
+// Yalnız "değiştir" akışında çağrılmalı; yanlış kullanımda veri kaybı olur.
+// FK güvenliği: çocuk tablolar önce silinsin diye TABLES ters sırada gezilir.
+export async function clearLocalData(): Promise<void> {
+  const db = getDb();
+  db.execSync('BEGIN;');
+  try {
+    for (const cfg of [...TABLES].reverse()) db.runSync(`DELETE FROM ${cfg.table}`);
+    db.execSync('COMMIT;');
+  } catch (e) {
+    try {
+      db.execSync('ROLLBACK;');
+    } catch {}
+    throw e;
+  }
+  await AsyncStorage.removeItem(LAST_PULLED_KEY);
+}
+
 // Bir tablonun bekleyen (synced=0) satırlarını buluta gönderir.
 async function pushTable(cfg: TableCfg, uid: string): Promise<number> {
   const db = getDb();

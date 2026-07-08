@@ -12,4 +12,4 @@ export {
   signOutAccount,
   type AuthUser,
 } from './auth';
-export { runSync, prepareFullResync, type SyncResult } from './syncEngine';
+export { runSync, prepareFullResync, clearLocalData, type SyncResult } from './syncEngine';
