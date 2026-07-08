@@ -6,12 +6,15 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { extractTime } from '@/lib/helpers';
+import { notifySuccess, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
+import { EmptyState } from '@/ui/EmptyState';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
@@ -46,7 +49,11 @@ export default function TasksScreen() {
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
 
   const toggleTask = (t: Task) => {
-    taskRepo.setCompleted(t.id, t.completed_at === null);
+    const completing = t.completed_at === null;
+    taskRepo.setCompleted(t.id, completing);
+    completing ? notifySuccess() : tapLight();
+    // Yeniden sırala (tamamlanan alta iner); her kart Animated.View + LinearTransition
+    // olduğu için konum değişimi yumuşakça animasyonlanır (Fabric'te de çalışır).
     reload();
   };
 
@@ -60,15 +67,21 @@ export default function TasksScreen() {
         <Text style={shared.subtitle}>{remaining} görev bekliyor</Text>
 
         {tasks.length === 0 ? (
-          <Text style={[shared.empty, { marginTop: 20 }]}>
-            Henüz görev yok. Alttaki ＋ ile ekleyebilirsin.
-          </Text>
+          <EmptyState
+            emoji="📝"
+            title="Henüz görev yok"
+            subtitle="Alttaki ＋ ile ilk görevini ekle."
+          />
         ) : (
           tasks.map((t, i) => {
             const done = t.completed_at !== null;
             const time = extractTime(t.due_date);
             return (
-              <View key={t.id} style={[shared.card, i === 0 && { marginTop: 20 }]}>
+              <Animated.View
+                key={t.id}
+                layout={LinearTransition.duration(260)}
+                style={[shared.card, i === 0 && { marginTop: 20 }]}
+              >
                 {time && !done && <TimeBadge time={time} />}
                 <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
                   <View
@@ -98,7 +111,7 @@ export default function TasksScreen() {
                 {!done && (
                   <View style={[shared.priorityDot, { backgroundColor: PRIORITY_COLOR[t.priority] }]} />
                 )}
-              </View>
+              </Animated.View>
             );
           })
         )}

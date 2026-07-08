@@ -7,20 +7,29 @@
 
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { extractTime, toYmd, todayDate } from '@/lib/helpers';
+import { notifySuccess, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
+import { DailySummary } from '@/ui/DailySummary';
+import { EmptyState } from '@/ui/EmptyState';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { colors, fullDateLabel, PRIORITY_COLOR, shared } from '@/ui/theme';
+
+// Liste kartları tamamlanınca yeniden sıralanır (tamamlanan alta iner); her kart
+// bu layout geçişiyle sarıldığından konum değişimi yumuşakça animasyonlanır.
+const LIST_LAYOUT = LinearTransition.duration(260);
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Başlık: bugünse "Bugün", değilse o günün adı (örn. "Pazartesi").
 function titleFor(ymd: string, today: string): string {
@@ -44,20 +53,29 @@ export default function TodayScreen() {
   // bir günü "yapıldı" saymak streak'i ve geçmişi anlamsızlaştırır.
   const isFuture = selectedDate > today;
 
+  // Bugünün üst özeti için tamamlanma sayıları.
+  const habitsDone = habits.filter((h) => h.completed).length;
+  const tasksDone = tasks.filter((t) => t.completed_at !== null).length;
+
   const toggleTask = (t: Task) => {
-    taskRepo.setCompleted(t.id, t.completed_at === null);
+    const completing = t.completed_at === null;
+    taskRepo.setCompleted(t.id, completing);
+    completing ? notifySuccess() : tapLight();
     reload();
   };
 
   const toggleHabit = (h: HabitView) => {
     if (isFuture) return;
-    habitRepo.toggleLog(h.id, selectedDate, !h.completed);
+    const completing = !h.completed;
+    habitRepo.toggleLog(h.id, selectedDate, completing);
+    completing ? notifySuccess() : tapLight();
     reload();
   };
 
   const adjustHabit = (h: HabitView, delta: number) => {
     if (isFuture) return;
     habitRepo.incrementAmount(h.id, selectedDate, delta, h.target);
+    tapLight();
     reload();
   };
 
@@ -105,20 +123,32 @@ export default function TodayScreen() {
           />
         )}
 
+        {/* Günün ilerleme özeti — yalnızca bugün için anlamlı. */}
+        {isToday && (
+          <DailySummary
+            habitsDone={habitsDone}
+            habitsTotal={habits.length}
+            tasksDone={tasksDone}
+            tasksTotal={tasks.length}
+          />
+        )}
+
         {/* Görevler ve alışkanlıklar tek liste halinde, ayrı başlık olmadan.
             Görevde öncelik noktası, alışkanlıkta 🔥 seri ayırt edici işaret. */}
         <View style={styles.list}>
           {tasks.length === 0 && habits.length === 0 ? (
-            <Text style={shared.empty}>
-              {isToday ? 'Bugün için bir şey yok. Harika! 🎉' : 'Bu gün için bir şey yok.'}
-            </Text>
+            <EmptyState
+              emoji={isToday ? '🎉' : '🌙'}
+              title={isToday ? 'Bugün için her şey tamam' : 'Bu gün boş'}
+              subtitle={isToday ? 'Planında bir şey yok — keyfini çıkar.' : undefined}
+            />
           ) : (
             <>
               {tasks.map((t) => {
                 const done = t.completed_at !== null;
                 const time = extractTime(t.due_date);
                 return (
-                  <View key={t.id} style={shared.card}>
+                  <Animated.View key={t.id} layout={LIST_LAYOUT} style={shared.card}>
                     {time && <TimeBadge time={time} />}
                     <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
                       <View
@@ -141,14 +171,18 @@ export default function TodayScreen() {
                     {!done && (
                       <View style={[shared.priorityDot, { backgroundColor: PRIORITY_COLOR[t.priority] }]} />
                     )}
-                  </View>
+                  </Animated.View>
                 );
               })}
 
               {habits.map((h) =>
                 h.kind === 'timer' ? (
                   // Zamanlayıcı alışkanlık: salt-okunur ilerleme (Aşama B'de kontrol).
-                  <View key={h.id} style={[shared.card, isFuture && styles.futureCard]}>
+                  <Animated.View
+                    key={h.id}
+                    layout={LIST_LAYOUT}
+                    style={[shared.card, isFuture && styles.futureCard]}
+                  >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
@@ -159,10 +193,14 @@ export default function TodayScreen() {
                       target={h.target ?? 0}
                       editable={isToday}
                     />
-                  </View>
+                  </Animated.View>
                 ) : h.target != null ? (
                   // Nicel alışkanlık: sayaç ile miktar gir (gelecek günde devre dışı).
-                  <View key={h.id} style={[shared.card, isFuture && styles.futureCard]}>
+                  <Animated.View
+                    key={h.id}
+                    layout={LIST_LAYOUT}
+                    style={[shared.card, isFuture && styles.futureCard]}
+                  >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
@@ -176,11 +214,12 @@ export default function TodayScreen() {
                       onSet={(v) => setHabitAmount(h, v)}
                       disabled={isFuture}
                     />
-                  </View>
+                  </Animated.View>
                 ) : (
                   // İkili alışkanlık: karta dokununca işaretle (gelecek günde devre dışı).
-                  <Pressable
+                  <AnimatedPressable
                     key={h.id}
+                    layout={LIST_LAYOUT}
                     style={[shared.card, isFuture && styles.futureCard]}
                     onPress={() => toggleHabit(h)}
                     disabled={isFuture}
@@ -190,7 +229,7 @@ export default function TodayScreen() {
                       {h.title}
                     </Text>
                     {h.streak > 0 && <Text style={shared.streak}>🔥 {h.streak}</Text>}
-                  </Pressable>
+                  </AnimatedPressable>
                 )
               )}
             </>

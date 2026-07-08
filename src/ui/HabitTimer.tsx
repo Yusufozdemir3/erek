@@ -5,6 +5,7 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fmtClock } from '@/lib/helpers';
+import { tapLight, tapMedium } from '@/lib/haptics';
 import { useTimer } from '@/ui/TimerProvider';
 import { colors } from './theme';
 
@@ -34,7 +35,15 @@ export function HabitTimer({ habitId, amount, target, editable }: Props) {
         editable && (
           <Pressable
             style={[styles.btn, running && styles.btnOn]}
-            onPress={() => (running ? timer.pause() : timer.start(habitId))}
+            onPress={() => {
+              if (running) {
+                tapLight();
+                timer.pause();
+              } else {
+                tapMedium();
+                timer.start(habitId);
+              }
+            }}
             hitSlop={6}
           >
             <Text style={[styles.btnText, running && styles.btnTextOn]}>
@@ -45,7 +54,13 @@ export function HabitTimer({ habitId, amount, target, editable }: Props) {
       )}
 
       {editable && !running && live > 0 && (
-        <Pressable onPress={() => timer.reset(habitId)} hitSlop={6}>
+        <Pressable
+          onPress={() => {
+            tapLight();
+            timer.reset(habitId);
+          }}
+          hitSlop={6}
+        >
           <Text style={styles.reset}>↺</Text>
         </Pressable>
       )}

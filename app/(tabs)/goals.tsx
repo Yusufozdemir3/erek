@@ -10,7 +10,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { goalRepo } from '@/db';
 import type { Goal } from '@/db';
+import { notifySuccess, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
+import { EmptyState } from '@/ui/EmptyState';
 import { GoalEditModal } from '@/ui/GoalEditModal';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { colors, deadlineLabel, shared, shortDate } from '@/ui/theme';
@@ -32,6 +34,9 @@ export default function GoalsScreen() {
 
   const step = (id: string, amount: number) => {
     goalRepo.addProgress(id, amount);
+    // Hedefe ulaşıldıysa başarı titreşimi; yoksa hafif dokunuş.
+    const g = goalRepo.getById(id);
+    g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
     reload();
   };
 
@@ -55,9 +60,11 @@ export default function GoalsScreen() {
 
         {/* LİSTE */}
         {goals.length === 0 ? (
-          <Text style={[shared.empty, { marginTop: 20 }]}>
-            Henüz hedef yok. Alttaki ＋ ile ekleyebilirsin.
-          </Text>
+          <EmptyState
+            emoji="🎯"
+            title="Henüz hedef yok"
+            subtitle="Alttaki ＋ ile büyük bir hedef koy — sayısal ya da tarihli."
+          />
         ) : (
           goals.map((goal, i) => {
             const ratio = goalRepo.progressRatio(goal);

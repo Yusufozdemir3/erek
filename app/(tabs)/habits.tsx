@@ -9,8 +9,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
+import { notifySuccess, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
+import { EmptyState } from '@/ui/EmptyState';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
@@ -25,12 +27,15 @@ export default function HabitsScreen() {
   const { today, habits, reload } = useHabitsData(user.id);
 
   const toggleToday = (h: HabitListItem) => {
-    habitRepo.toggleLog(h.id, today, !h.completedToday);
+    const completing = !h.completedToday;
+    habitRepo.toggleLog(h.id, today, completing);
+    completing ? notifySuccess() : tapLight();
     reload();
   };
 
   const adjustToday = (h: HabitListItem, delta: number) => {
     habitRepo.incrementAmount(h.id, today, delta, h.target);
+    tapLight();
     reload();
   };
 
@@ -53,9 +58,11 @@ export default function HabitsScreen() {
         <Text style={shared.subtitle}>Her gün küçük bir adım</Text>
 
         {habits.length === 0 ? (
-          <Text style={[shared.empty, { marginTop: 20 }]}>
-            Henüz alışkanlık yok. Alttaki ＋ ile küçük bir tane ekle.
-          </Text>
+          <EmptyState
+            emoji="🌱"
+            title="Henüz alışkanlık yok"
+            subtitle="Alttaki ＋ ile küçük bir tane ekle — her gün bir adım."
+          />
         ) : (
           habits.map((h, i) => (
             <View key={h.id} style={[shared.card, styles.habitCard, i === 0 && { marginTop: 20 }]}>

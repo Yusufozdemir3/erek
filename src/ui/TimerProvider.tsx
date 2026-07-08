@@ -12,6 +12,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { habitRepo } from '@/db';
 import { todayDate } from '@/lib/helpers';
+import { notifySuccess } from '@/lib/haptics';
 import { cancelTimerDone, scheduleTimerDone } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 
@@ -70,9 +71,11 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const stopActive = useCallback(() => {
     const a = activeRef.current;
     if (!a) return;
+    const reachedTarget = elapsedOf(a) >= a.targetSeconds;
     commit(a);
     setActive(null);
     persist(null);
+    if (reachedTarget) notifySuccess(); // hedefe ulaşınca başarı titreşimi
     notifyDataChanged();
   }, [commit, notifyDataChanged]);
 
