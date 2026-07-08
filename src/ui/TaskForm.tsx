@@ -12,7 +12,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import type { Priority } from '@/db';
 import { extractTime, hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
-import { longDateLabel, PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_ORDER } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { longDateLabel, PRIORITY_COLOR, PRIORITY_LABEL, PRIORITY_ORDER, type Colors } from '@/ui/theme';
 
 // taskRepo.create/update'in beklediği alanlarla örtüşür (due_date saat gömülü).
 export interface TaskFormValues {
@@ -36,6 +37,8 @@ function timeLabel(hm: string | null): string {
 }
 
 export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'medium');
   const [dueDate, setDueDate] = useState<string | null>(
@@ -73,7 +76,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         value={title}
         onChangeText={setTitle}
         placeholder="Görev başlığı"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.faint}
         autoFocus={autoFocusTitle}
       />
 
@@ -166,50 +169,51 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   );
 }
 
-const styles = StyleSheet.create({
-  label: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 8, marginTop: 4 },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 12,
-  },
-  row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-  chip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  chipText: { fontSize: 14, fontWeight: '600', color: '#475569' },
-  chipTextSelected: { color: '#fff' },
-  dateBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  dateBtnText: { fontSize: 15, color: '#0f172a' },
-  clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
-  clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  saveBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#4f46e5',
-  },
-  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },
+    input: {
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 12,
+    },
+    row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+    chip: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    chipText: { fontSize: 14, fontWeight: '600', color: c.muted },
+    chipTextSelected: { color: c.onAccent },
+    dateBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    dateBtnText: { fontSize: 15, color: c.text },
+    clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
+    clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
+    actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+    saveBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+    },
+    saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
+  });

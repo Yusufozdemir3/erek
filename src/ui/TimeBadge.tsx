@@ -2,9 +2,12 @@
 // Hem "Bugün" hem "Görevler" ekranında, saati olan görevlerde kullanılır.
 
 import { StyleSheet, Text, View } from 'react-native';
-import { colors } from './theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { Colors } from './theme';
 
 export function TimeBadge({ time }: { time: string }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   return (
     <View style={styles.badge}>
       <Text style={styles.text}>{time}</Text>
@@ -12,15 +15,16 @@ export function TimeBadge({ time }: { time: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  badge: {
-    minWidth: 44,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  text: { fontSize: 12, fontWeight: '700', color: colors.primary },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    badge: {
+      minWidth: 44,
+      paddingVertical: 4,
+      paddingHorizontal: 6,
+      borderRadius: 8,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      marginRight: 10,
+    },
+    text: { fontSize: 12, fontWeight: '700', color: c.primary },
+  });

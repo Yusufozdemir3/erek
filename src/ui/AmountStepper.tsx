@@ -6,7 +6,8 @@
 
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors } from './theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { Colors } from './theme';
 
 interface Props {
   amount: number;
@@ -24,6 +25,8 @@ function fmt(n: number): string {
 }
 
 export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disabled }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
   const reached = amount >= target;
@@ -81,28 +84,29 @@ export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disab
   );
 }
 
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowDisabled: { opacity: 0.4 },
-  btn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnText: { fontSize: 18, lineHeight: 20, fontWeight: '700', color: colors.primary },
-  value: { fontSize: 13, fontWeight: '700', color: colors.muted, textAlign: 'center' },
-  valueDone: { color: colors.done },
-  valueInput: {
-    minWidth: 40,
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
-    paddingVertical: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.primary,
-  },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    rowDisabled: { opacity: 0.4 },
+    btn: {
+      width: 30,
+      height: 30,
+      borderRadius: 8,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    btnText: { fontSize: 18, lineHeight: 20, fontWeight: '700', color: c.primary },
+    value: { fontSize: 13, fontWeight: '700', color: c.muted, textAlign: 'center' },
+    valueDone: { color: c.done },
+    valueInput: {
+      minWidth: 40,
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.text,
+      textAlign: 'center',
+      paddingVertical: 2,
+      borderBottomWidth: 1,
+      borderBottomColor: c.primary,
+    },
+  });

@@ -19,7 +19,8 @@ import { useAppData } from '@/ui/AppData';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
-import { colors, shortDate } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { shortDate, type Colors } from '@/ui/theme';
 
 export type Step = 'menu' | 'task' | 'habit' | 'goal';
 
@@ -45,6 +46,8 @@ const KIND_OPTIONS: { kind: HabitKind; emoji: string; title: string; desc: strin
 ];
 
 export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const { user, notifyDataChanged } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
   const [title, setTitle] = useState('');
@@ -282,61 +285,62 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  heading: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16, textAlign: 'center' },
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    heading: { fontSize: 18, fontWeight: '700', color: c.text, marginBottom: 16, textAlign: 'center' },
 
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
-  },
-  optionEmoji: { fontSize: 24, marginRight: 12 },
-  optionBody: { flex: 1 },
-  optionTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  optionDesc: { fontSize: 13, color: colors.muted, marginTop: 2 },
-  optionChevron: { fontSize: 22, color: colors.faint, fontWeight: '600' },
+    option: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.inputBg,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 14,
+      marginBottom: 10,
+    },
+    optionEmoji: { fontSize: 24, marginRight: 12 },
+    optionBody: { flex: 1 },
+    optionTitle: { fontSize: 16, fontWeight: '700', color: c.text },
+    optionDesc: { fontSize: 13, color: c.muted, marginTop: 2 },
+    optionChevron: { fontSize: 22, color: c.faint, fontWeight: '600' },
 
-  formHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backText: { fontSize: 15, fontWeight: '700', color: colors.primary, marginBottom: 16 },
-  headSpacer: { width: 44 },
+    formHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    backText: { fontSize: 15, fontWeight: '700', color: c.primary, marginBottom: 16 },
+    headSpacer: { width: 44 },
 
-  input: {
-    backgroundColor: colors.bg,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 12,
-  },
-  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  typeChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
-  },
-  typeChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  typeChipText: { fontSize: 14, fontWeight: '600', color: colors.muted },
-  typeChipTextOn: { color: '#fff' },
-  inlineRow: { flexDirection: 'row', gap: 8 },
+    input: {
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 12,
+    },
+    typeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+    typeChip: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    typeChipOn: { backgroundColor: c.primary, borderColor: c.primary },
+    typeChipText: { fontSize: 14, fontWeight: '600', color: c.muted },
+    typeChipTextOn: { color: c.onAccent },
+    inlineRow: { flexDirection: 'row', gap: 8 },
 
-  addBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    alignItems: 'center',
-    paddingVertical: 14,
-    marginTop: 4,
-  },
-  addBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-});
+    addBtn: {
+      backgroundColor: c.primary,
+      borderRadius: 12,
+      alignItems: 'center',
+      paddingVertical: 14,
+      marginTop: 4,
+    },
+    addBtnText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
+  });

@@ -12,18 +12,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Step } from '@/ui/AddSheet';
-import { colors } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { Colors } from '@/ui/theme';
 
 type AddStep = Exclude<Step, 'menu'>;
 
+// Seçenek daireleri sabit vurgu renkleri (iki modda da okunur).
 const OPTIONS: { step: AddStep; emoji: string; label: string; color: string }[] = [
   { step: 'goal', emoji: '🎯', label: 'Hedef', color: '#f59e0b' },
-  { step: 'habit', emoji: '🔥', label: 'Alışkanlık', color: colors.streak },
-  { step: 'task', emoji: '✅', label: 'Görev', color: colors.primary },
+  { step: 'habit', emoji: '🔥', label: 'Alışkanlık', color: '#f97316' },
+  { step: 'task', emoji: '✅', label: 'Görev', color: '#6366f1' },
 ];
 
 // Sekme çubuğundaki kare ＋ butonu. `open` iken ＋ 45° dönerek × olur.
 export function AddFabButton({ open, onPress }: { open: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -61,6 +65,8 @@ export function AddFab({
   onClose: () => void;
   onPick: (step: AddStep) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   // Her seçenek için ayrı animasyon değeri (stagger'lı yay girişi) + arka fon.
   const anims = useRef(OPTIONS.map(() => new Animated.Value(0))).current;
   const backdrop = useRef(new Animated.Value(0)).current;
@@ -131,78 +137,79 @@ export function AddFab({
   );
 }
 
-const styles = StyleSheet.create({
-  // — Sekme çubuğundaki kare buton —
-  buttonWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  square: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Sekme çubuğunun üst çizgisini ortalayacak kadar yukarı taşar.
-    marginTop: -26,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-  },
-  // ＋ işaretini iki çubukla çiziyoruz; kutu 16×16, çubuklar tam ortada.
-  plusBox: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
-  plusBarH: { position: 'absolute', width: 16, height: 2.5, borderRadius: 2, backgroundColor: '#fff' },
-  plusBarV: { position: 'absolute', width: 2.5, height: 16, borderRadius: 2, backgroundColor: '#fff' },
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    // — Sekme çubuğundaki kare buton —
+    buttonWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    square: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // Sekme çubuğunun üst çizgisini ortalayacak kadar yukarı taşar.
+      marginTop: -26,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 6,
+    },
+    // ＋ işaretini iki çubukla çiziyoruz; kutu 16×16, çubuklar tam ortada.
+    plusBox: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+    plusBarH: { position: 'absolute', width: 16, height: 2.5, borderRadius: 2, backgroundColor: c.onAccent },
+    plusBarV: { position: 'absolute', width: 2.5, height: 16, borderRadius: 2, backgroundColor: c.onAccent },
 
-  // — Açılan overlay —
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.35)' },
-  fan: {
-    // Seçenekler sekme çubuğunun hemen üstünde, ortalanmış olarak dizilir.
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 96,
-    alignItems: 'center',
-  },
-  optionRow: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-  // Daire tam ortada; etiket, dairenin soluna mutlak konumla yerleşir.
-  optionCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 5,
-  },
-  optionEmoji: { fontSize: 24 },
-  labelBtn: {
-    position: 'absolute',
-    right: '50%',
-    marginRight: 38, // dairenin yarısı (26) + boşluk (12)
-    justifyContent: 'center',
-  },
-  optionLabel: {
-    backgroundColor: '#fff',
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 3,
-  },
-});
+    // — Açılan overlay —
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.35)' },
+    fan: {
+      // Seçenekler sekme çubuğunun hemen üstünde, ortalanmış olarak dizilir.
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 96,
+      alignItems: 'center',
+    },
+    optionRow: {
+      width: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 18,
+    },
+    // Daire tam ortada; etiket, dairenin soluna mutlak konumla yerleşir.
+    optionCircle: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOpacity: 0.18,
+      shadowRadius: 5,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 5,
+    },
+    optionEmoji: { fontSize: 24 },
+    labelBtn: {
+      position: 'absolute',
+      right: '50%',
+      marginRight: 38, // dairenin yarısı (26) + boşluk (12)
+      justifyContent: 'center',
+    },
+    optionLabel: {
+      backgroundColor: c.card,
+      color: c.text,
+      fontSize: 14,
+      fontWeight: '700',
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 10,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 1 },
+      elevation: 3,
+    },
+  });

@@ -18,9 +18,12 @@ import { EmptyState } from '@/ui/EmptyState';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
-import { PRIORITY_COLOR, shared, shortDate } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { PRIORITY_COLOR, shortDate, type Colors } from '@/ui/theme';
 
 export default function TasksScreen() {
+  const { colors, shared } = useTheme();
+  const styles = makeStyles(colors);
   const { user, dataVersion } = useAppData();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -122,6 +125,7 @@ export default function TasksScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  due: { fontSize: 12, color: '#64748b', marginTop: 3 },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    due: { fontSize: 12, color: c.muted, marginTop: 3 },
+  });

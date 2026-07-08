@@ -4,9 +4,12 @@
 
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';
-import { colors } from './theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { Colors } from './theme';
 
 export function ProfileButton() {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   return (
     <Pressable style={styles.btn} onPress={() => router.push('/profile')} hitSlop={8}>
       <Text style={styles.icon}>👤</Text>
@@ -14,14 +17,15 @@ export function ProfileButton() {
   );
 }
 
-const styles = StyleSheet.create({
-  btn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  icon: { fontSize: 18 },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    btn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    icon: { fontSize: 18 },
+  });

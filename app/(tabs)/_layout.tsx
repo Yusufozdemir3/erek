@@ -11,13 +11,14 @@ import { Tabs } from 'expo-router';
 import { Text } from 'react-native';
 import { AddFab, AddFabButton } from '@/ui/AddFab';
 import { AddSheet, type Step } from '@/ui/AddSheet';
-import { colors } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.45 }}>{emoji}</Text>;
 }
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
   // Kare ＋ butonunun "swing" menüsü (fan) ve seçilince açılan ekleme formu.
   const [fanOpen, setFanOpen] = useState(false);
   const [sheetStep, setSheetStep] = useState<Step | null>(null);
@@ -29,7 +30,7 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.faint,
-          tabBarStyle: { borderTopColor: colors.border },
+          tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
           tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         }}
       >

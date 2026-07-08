@@ -24,7 +24,8 @@ import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TimeBadge } from '@/ui/TimeBadge';
-import { colors, fullDateLabel, PRIORITY_COLOR, shared } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { fullDateLabel, PRIORITY_COLOR, type Colors } from '@/ui/theme';
 
 // Liste kartları tamamlanınca yeniden sıralanır (tamamlanan alta iner); her kart
 // bu layout geçişiyle sarıldığından konum değişimi yumuşakça animasyonlanır.
@@ -39,6 +40,8 @@ function titleFor(ymd: string, today: string): string {
 }
 
 export default function TodayScreen() {
+  const { colors, shared } = useTheme();
+  const styles = makeStyles(colors);
   const { user } = useAppData();
   const today = todayDate();
 
@@ -242,12 +245,13 @@ export default function TodayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backToday: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  futureCard: { opacity: 0.5 },
-  dateLink: { color: colors.primary, fontWeight: '600' },
-  list: { marginTop: 24 },
-  subCount: { fontSize: 12, color: colors.muted, marginTop: 3 },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    backToday: { fontSize: 14, fontWeight: '700', color: c.primary },
+    futureCard: { opacity: 0.5 },
+    dateLink: { color: c.primary, fontWeight: '600' },
+    list: { marginTop: 24 },
+    subCount: { fontSize: 12, color: c.muted, marginTop: 3 },
+  });

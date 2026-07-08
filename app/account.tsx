@@ -35,7 +35,8 @@ import {
   type SyncResult,
 } from '@/sync';
 import { useAppData } from '@/ui/AppData';
-import { colors } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { type Colors } from '@/ui/theme';
 
 type Mode = 'signin' | 'signup';
 
@@ -56,6 +57,8 @@ function translateAuthError(e: unknown): string {
 }
 
 export default function AccountScreen() {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const { user, refreshUser } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -199,7 +202,7 @@ export default function AccountScreen() {
               disabled={busy}
             >
               {busy ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.onAccent} />
               ) : (
                 <Text style={styles.primaryBtnText}>
                   {mode === 'signin' ? 'Giriş yap' : 'Kayıt ol'}
@@ -234,48 +237,49 @@ export default function AccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 48 },
-  title: { fontSize: 26, fontWeight: '800', color: colors.text, marginTop: 8 },
-  subtitle: { fontSize: 14, color: colors.muted, lineHeight: 20, marginTop: 6, marginBottom: 20 },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  label: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 6 },
-  input: {
-    backgroundColor: colors.bg,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  primaryBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    marginTop: 18,
-    minHeight: 50,
-  },
-  btnDisabled: { opacity: 0.6 },
-  primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  switchBtn: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
-  switchText: { color: colors.primary, fontSize: 14, fontWeight: '600' },
-  errText: { fontSize: 13, color: '#dc2626', fontWeight: '600', marginTop: 14 },
-  infoText: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 14 },
-  successTitle: { fontSize: 18, fontWeight: '800', color: colors.done, marginBottom: 8 },
-  syncLine: { fontSize: 14, color: colors.text, fontWeight: '600', marginBottom: 8 },
-  muted: { fontSize: 14, color: colors.muted },
-  footnote: { fontSize: 12, color: colors.faint, lineHeight: 18, marginTop: 20 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: colors.bg },
-  centerTitle: { fontSize: 17, fontWeight: '700', color: colors.text, marginBottom: 8, textAlign: 'center' },
-  centerBody: { fontSize: 14, color: colors.muted, lineHeight: 20, textAlign: 'center' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    content: { padding: 20, paddingBottom: 48 },
+    title: { fontSize: 26, fontWeight: '800', color: c.text, marginTop: 8 },
+    subtitle: { fontSize: 14, color: c.muted, lineHeight: 20, marginTop: 6, marginBottom: 20 },
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 16,
+    },
+    label: { fontSize: 13, fontWeight: '700', color: c.text, marginBottom: 6 },
+    input: {
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    primaryBtn: {
+      backgroundColor: c.primary,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      marginTop: 18,
+      minHeight: 50,
+    },
+    btnDisabled: { opacity: 0.6 },
+    primaryBtnText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
+    switchBtn: { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
+    switchText: { color: c.primary, fontSize: 14, fontWeight: '600' },
+    errText: { fontSize: 13, color: c.danger, fontWeight: '600', marginTop: 14 },
+    infoText: { fontSize: 13, color: c.primary, fontWeight: '600', marginTop: 14 },
+    successTitle: { fontSize: 18, fontWeight: '800', color: c.done, marginBottom: 8 },
+    syncLine: { fontSize: 14, color: c.text, fontWeight: '600', marginBottom: 8 },
+    muted: { fontSize: 14, color: c.muted },
+    footnote: { fontSize: 12, color: c.faint, lineHeight: 18, marginTop: 20 },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: c.bg },
+    centerTitle: { fontSize: 17, fontWeight: '700', color: c.text, marginBottom: 8, textAlign: 'center' },
+    centerBody: { fontSize: 14, color: c.muted, lineHeight: 20, textAlign: 'center' },
+  });

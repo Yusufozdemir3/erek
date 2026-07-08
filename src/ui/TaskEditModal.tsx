@@ -13,6 +13,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
 import { ModalCard } from '@/ui/ModalCard';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { Colors } from '@/ui/theme';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 
 interface Props {
@@ -22,6 +24,8 @@ interface Props {
 }
 
 export function TaskEditModal({ task, onClose, onChanged }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
 
@@ -113,7 +117,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
                 value={newSubtask}
                 onChangeText={setNewSubtask}
                 placeholder="Alt görev ekle…"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={colors.faint}
                 onSubmitEditing={addSubtask}
                 blurOnSubmit={false}
                 returnKeyType="done"
@@ -127,43 +131,44 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 16, textAlign: 'center' },
-  label: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 8, marginTop: 4 },
-  subtaskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
-  subtaskBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subtaskBoxDone: { backgroundColor: '#10b981', borderColor: '#10b981' },
-  subtaskCheck: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  subtaskTitle: { flex: 1, fontSize: 14, color: '#0f172a' },
-  subtaskTitleDone: { color: '#94a3b8', textDecorationLine: 'line-through' },
-  subtaskDelete: { fontSize: 20, color: '#94a3b8', paddingHorizontal: 4 },
-  subtaskAddRow: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-  subtaskInput: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  subtaskAddBtn: {
-    width: 44,
-    alignSelf: 'stretch',
-    borderRadius: 12,
-    backgroundColor: '#e0e7ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subtaskAddText: { fontSize: 20, color: '#4f46e5', fontWeight: '600' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    heading: { fontSize: 18, fontWeight: '700', color: c.text, marginBottom: 16, textAlign: 'center' },
+    label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },
+    subtaskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
+    subtaskBox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: c.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    subtaskBoxDone: { backgroundColor: c.done, borderColor: c.done },
+    subtaskCheck: { color: c.onAccent, fontSize: 12, fontWeight: '800' },
+    subtaskTitle: { flex: 1, fontSize: 14, color: c.text },
+    subtaskTitleDone: { color: c.faint, textDecorationLine: 'line-through' },
+    subtaskDelete: { fontSize: 20, color: c.faint, paddingHorizontal: 4 },
+    subtaskAddRow: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+    subtaskInput: {
+      flex: 1,
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    subtaskAddBtn: {
+      width: 44,
+      alignSelf: 'stretch',
+      borderRadius: 12,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    subtaskAddText: { fontSize: 20, color: c.primary, fontWeight: '600' },
+  });

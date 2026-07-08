@@ -7,14 +7,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fmtClock } from '@/lib/helpers';
 import { useHabitStats, type DayCell } from '@/ui/useHabitStats';
-import { colors, DEFAULT_HABIT_COLOR, shared } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { DEFAULT_HABIT_COLOR, type Colors } from '@/ui/theme';
+
+type Styles = ReturnType<typeof makeStyles>;
 
 // Tam sayıysa ondalık gösterme (5, 5.5) — AmountStepper'daki fmt ile aynı kural.
 function fmtAmount(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
 
-function Heatmap({ days, color }: { days: DayCell[]; color: string }) {
+function Heatmap({ days, color, styles }: { days: DayCell[]; color: string; styles: Styles }) {
   return (
     <View style={styles.grid}>
       {days.map((d) => (
@@ -32,7 +35,7 @@ function Heatmap({ days, color }: { days: DayCell[]; color: string }) {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, styles }: { label: string; value: string; styles: Styles }) {
   return (
     <View style={styles.statCard}>
       <Text style={styles.statValue}>{value}</Text>
@@ -42,6 +45,8 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 export default function HabitStatsScreen() {
+  const { colors, shared } = useTheme();
+  const styles = makeStyles(colors);
   const { id } = useLocalSearchParams<{ id: string }>();
   const stats = useHabitStats(id);
 
@@ -62,9 +67,13 @@ export default function HabitStatsScreen() {
             </View>
 
             <View style={styles.statsRow}>
-              <StatCard label="Güncel seri" value={`🔥 ${stats.currentStreak}`} />
-              <StatCard label="En uzun seri" value={String(stats.longestStreak)} />
-              <StatCard label="Tamamlanma" value={`%${Math.round(stats.completionRate * 100)}`} />
+              <StatCard label="Güncel seri" value={`🔥 ${stats.currentStreak}`} styles={styles} />
+              <StatCard label="En uzun seri" value={String(stats.longestStreak)} styles={styles} />
+              <StatCard
+                label="Tamamlanma"
+                value={`%${Math.round(stats.completionRate * 100)}`}
+                styles={styles}
+              />
             </View>
 
             {stats.totalAmount != null && (
@@ -81,7 +90,7 @@ export default function HabitStatsScreen() {
             <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>
               Son 90 gün · {stats.completedCount}/{stats.scheduledCount} planlı gün tamamlandı
             </Text>
-            <Heatmap days={stats.days} color={stats.habit.color ?? DEFAULT_HABIT_COLOR} />
+            <Heatmap days={stats.days} color={stats.habit.color ?? DEFAULT_HABIT_COLOR} styles={styles} />
 
             <View style={styles.legend}>
               <View style={styles.legendItem}>
@@ -104,47 +113,50 @@ export default function HabitStatsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  backRow: { marginBottom: 12 },
-  backText: { fontSize: 15, fontWeight: '700', color: colors.primary },
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  icon: { fontSize: 28 },
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    backRow: { marginBottom: 12 },
+    backText: { fontSize: 15, fontWeight: '700', color: c.primary },
+    headRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    icon: { fontSize: 28 },
 
-  statsRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  statValue: { fontSize: 18, fontWeight: '800', color: colors.text },
-  statLabel: { fontSize: 12, color: colors.muted, marginTop: 4, textAlign: 'center' },
+    statsRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
+    statCard: {
+      flex: 1,
+      backgroundColor: c.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    statValue: { fontSize: 18, fontWeight: '800', color: c.text },
+    statLabel: { fontSize: 12, color: c.muted, marginTop: 4, textAlign: 'center' },
 
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  cardLabel: { fontSize: 13, color: colors.muted, fontWeight: '600' },
-  cardValue: { fontSize: 20, fontWeight: '800', color: colors.text, marginTop: 4 },
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 16,
+    },
+    cardLabel: { fontSize: 13, color: c.muted, fontWeight: '600' },
+    cardValue: { fontSize: 20, fontWeight: '800', color: c.text, marginTop: 4 },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  cell: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    backgroundColor: '#eef2f7',
-  },
-  cellMissed: { backgroundColor: '#fecaca' },
-  cellUnscheduled: { backgroundColor: '#f1f5f9' },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+    cell: {
+      width: 20,
+      height: 20,
+      borderRadius: 5,
+      backgroundColor: c.track,
+    },
+    // Kaçırılan gün: iki temada da okunur bir kırmızı. Planlı değil: zeminden
+    // ayrılan soluk gri (bg değil — bg zeminle aynı olup görünmez kalıyordu).
+    cellMissed: { backgroundColor: '#f87171' },
+    cellUnscheduled: { backgroundColor: c.border },
 
-  legend: { flexDirection: 'row', gap: 16, marginTop: 16, flexWrap: 'wrap' },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 12, height: 12, borderRadius: 4, backgroundColor: '#eef2f7' },
-  legendText: { fontSize: 12, color: colors.muted },
-});
+    legend: { flexDirection: 'row', gap: 16, marginTop: 16, flexWrap: 'wrap' },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    legendDot: { width: 12, height: 12, borderRadius: 4, backgroundColor: c.track },
+    legendText: { fontSize: 12, color: c.muted },
+  });

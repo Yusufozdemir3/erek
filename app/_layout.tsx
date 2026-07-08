@@ -4,8 +4,10 @@
 import { useEffect } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { AppDataProvider } from '@/ui/AppData';
 import { TimerProvider } from '@/ui/TimerProvider';
+import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
 import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notifications';
 import { Sentry } from '@/lib/sentry';
 
@@ -18,6 +20,30 @@ LogBox.ignoreLogs([
   '`expo-notifications` functionality is not fully supported in Expo Go',
 ]);
 
+// Tema'ya bağlı kabuk: durum çubuğu + Stack zemini/başlık renkleri aktif palete
+// göre. useTheme kullandığından ThemeProvider İÇİNDE render edilir.
+function ThemedStack() {
+  const { colors, scheme } = useTheme();
+  return (
+    <>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.bg },
+          headerStyle: { backgroundColor: colors.card },
+          headerTintColor: colors.text,
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="account" options={{ headerShown: true, title: 'Hesap', presentation: 'modal' }} />
+        <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil', presentation: 'modal' }} />
+        <Stack.Screen name="habit/[id]" />
+      </Stack>
+    </>
+  );
+}
+
 function RootLayout() {
   // Bildirim handler'ı ve Android kanalı bir kez kurulur (izin istemez).
   useEffect(() => {
@@ -26,30 +52,13 @@ function RootLayout() {
   }, []);
 
   return (
-    <AppDataProvider>
-      <TimerProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen
-            name="account"
-            options={{
-              headerShown: true,
-              title: 'Hesap',
-              presentation: 'modal',
-            }}
-          />
-          <Stack.Screen
-            name="profile"
-            options={{
-              headerShown: true,
-              title: 'Profil',
-              presentation: 'modal',
-            }}
-          />
-          <Stack.Screen name="habit/[id]" />
-        </Stack>
-      </TimerProvider>
-    </AppDataProvider>
+    <ThemeProvider>
+      <AppDataProvider>
+        <TimerProvider>
+          <ThemedStack />
+        </TimerProvider>
+      </AppDataProvider>
+    </ThemeProvider>
   );
 }
 

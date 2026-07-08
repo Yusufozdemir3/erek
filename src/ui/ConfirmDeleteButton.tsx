@@ -5,12 +5,16 @@
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
+import { useTheme } from '@/ui/ThemeProvider';
+import type { Colors } from './theme';
 
 interface Props {
   onConfirm: () => void;
 }
 
 export function ConfirmDeleteButton({ onConfirm }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [armed, setArmed] = useState(false);
 
   return (
@@ -25,17 +29,18 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  btn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  btnArmed: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
-  text: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
-  textArmed: { color: '#fff' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    btn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.danger,
+      backgroundColor: c.card,
+    },
+    btnArmed: { backgroundColor: c.danger, borderColor: c.danger },
+    text: { fontSize: 15, fontWeight: '700', color: c.danger },
+    textArmed: { color: c.onAccent },
+  });

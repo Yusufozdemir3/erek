@@ -18,9 +18,12 @@ import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { ProfileButton } from '@/ui/ProfileButton';
-import { colors, shared } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { type Colors } from '@/ui/theme';
 
 export default function HabitsScreen() {
+  const { colors, shared } = useTheme();
+  const styles = makeStyles(colors);
   const { user } = useAppData();
   const [editing, setEditing] = useState<Habit | null>(null); // null = panel kapalı
 
@@ -133,19 +136,20 @@ export default function HabitsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  habitCard: { flexDirection: 'column', alignItems: 'stretch' },
-  habitTop: { flexDirection: 'row', alignItems: 'center' },
-  titleArea: { flex: 1 },
-  remind: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  week: { flexDirection: 'row', gap: 6, marginTop: 12, marginLeft: 42 },
-  dayDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    backgroundColor: '#eef2f7',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dayDotOn: { backgroundColor: colors.done, borderColor: colors.done },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    habitCard: { flexDirection: 'column', alignItems: 'stretch' },
+    habitTop: { flexDirection: 'row', alignItems: 'center' },
+    titleArea: { flex: 1 },
+    remind: { fontSize: 12, color: c.muted, marginTop: 2 },
+    week: { flexDirection: 'row', gap: 6, marginTop: 12, marginLeft: 42 },
+    dayDot: {
+      width: 16,
+      height: 16,
+      borderRadius: 4,
+      backgroundColor: c.track,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    dayDotOn: { backgroundColor: c.done, borderColor: c.done },
+  });

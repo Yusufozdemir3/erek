@@ -4,6 +4,7 @@
 // Salt görsel; dokunma davranışı çağıran ekranda (Pressable) tanımlanır.
 
 import { StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '@/ui/ThemeProvider';
 import { DEFAULT_HABIT_COLOR } from './theme';
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function HabitToggle({ icon, color, completed }: Props) {
+  const { colors } = useTheme();
   const c = color ?? DEFAULT_HABIT_COLOR;
   return (
     <View
@@ -22,7 +24,7 @@ export function HabitToggle({ icon, color, completed }: Props) {
       ]}
     >
       {completed ? (
-        <Text style={styles.check}>✓</Text>
+        <Text style={[styles.check, { color: colors.onAccent }]}>✓</Text>
       ) : icon ? (
         <Text style={styles.emoji}>{icon}</Text>
       ) : null}
@@ -40,6 +42,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  check: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  check: { fontSize: 15, fontWeight: '800' },
   emoji: { fontSize: 15 },
 });

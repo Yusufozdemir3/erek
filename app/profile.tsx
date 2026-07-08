@@ -1,4 +1,4 @@
-// Profil ekranı (modal) — hesap bağlama + bulut senkron durumu ve manuel senkron.
+// Profil ekranı (modal) — görünüm (tema) + hesap bağlama + bulut senkron durumu.
 // Eski "Ayarlar" sekmesinin içeriği; sekme kaldırılınca ekran başlıklarındaki
 // 👤 ikonundan açılan modal'a taşındı. Başlığı kök layout'taki native header verir.
 // Senkron yapılandırılmamışsa (.env boş) nasıl kurulacağını anlatır.
@@ -17,9 +17,18 @@ import {
   type SyncResult,
 } from '@/sync';
 import { useAppData } from '@/ui/AppData';
-import { colors } from '@/ui/theme';
+import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
+import { type Colors } from '@/ui/theme';
+
+const THEME_OPTIONS: { mode: ThemeMode; label: string }[] = [
+  { mode: 'light', label: 'Açık' },
+  { mode: 'dark', label: 'Koyu' },
+  { mode: 'system', label: 'Sistem' },
+];
 
 export default function ProfileScreen() {
+  const { colors, mode, setMode } = useTheme();
+  const styles = makeStyles(colors);
   const { user, refreshUser } = useAppData();
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
@@ -65,7 +74,27 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {/* Görünüm (tema) */}
       <View style={styles.card}>
+        <Text style={styles.cardTitle}>Görünüm</Text>
+        <View style={styles.segRow}>
+          {THEME_OPTIONS.map((opt) => {
+            const on = mode === opt.mode;
+            return (
+              <Pressable
+                key={opt.mode}
+                style={[styles.segBtn, on && styles.segBtnOn]}
+                onPress={() => setMode(opt.mode)}
+              >
+                <Text style={[styles.segText, on && styles.segTextOn]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.hint}>"Sistem" telefonun açık/koyu ayarını izler.</Text>
+      </View>
+
+      <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>Hesap</Text>
 
         {!isSyncConfigured ? (
@@ -145,7 +174,7 @@ export default function ProfileScreen() {
               disabled={syncing}
             >
               {syncing ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.onAccent} />
               ) : (
                 <Text style={styles.syncBtnText}>Şimdi senkronla</Text>
               )}
@@ -162,44 +191,60 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 20, paddingBottom: 48 },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  muted: { fontSize: 14, color: colors.muted, lineHeight: 20 },
-  code: { fontWeight: '700', color: colors.text },
-  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statusValue: { fontSize: 14, fontWeight: '700', color: colors.text },
-  okText: { fontSize: 13, color: colors.done, fontWeight: '600', marginTop: 12 },
-  errText: { fontSize: 13, color: '#dc2626', fontWeight: '600', marginTop: 12 },
-  syncBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    marginTop: 16,
-    minHeight: 50,
-  },
-  syncBtnDisabled: { opacity: 0.6 },
-  syncBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  outlineBtn: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    marginTop: 16,
-    minHeight: 50,
-  },
-  outlineBtnText: { color: colors.primary, fontSize: 15, fontWeight: '700' },
-  footnote: { fontSize: 12, color: colors.faint, lineHeight: 18, marginTop: 20 },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bg },
+    content: { padding: 20, paddingBottom: 48 },
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 16,
+    },
+    cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12 },
+    muted: { fontSize: 14, color: c.muted, lineHeight: 20 },
+    hint: { fontSize: 12, color: c.faint, marginTop: 10 },
+    code: { fontWeight: '700', color: c.text },
+    statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    statusValue: { fontSize: 14, fontWeight: '700', color: c.text },
+    okText: { fontSize: 13, color: c.done, fontWeight: '600', marginTop: 12 },
+    errText: { fontSize: 13, color: c.danger, fontWeight: '600', marginTop: 12 },
+    // Tema seçici segmenti.
+    segRow: { flexDirection: 'row', gap: 8 },
+    segBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    segBtnOn: { backgroundColor: c.primary, borderColor: c.primary },
+    segText: { fontSize: 14, fontWeight: '700', color: c.muted },
+    segTextOn: { color: c.onAccent },
+    syncBtn: {
+      backgroundColor: c.primary,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      marginTop: 16,
+      minHeight: 50,
+    },
+    syncBtnDisabled: { opacity: 0.6 },
+    syncBtnText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
+    outlineBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      marginTop: 16,
+      minHeight: 50,
+    },
+    outlineBtnText: { color: c.primary, fontSize: 15, fontWeight: '700' },
+    footnote: { fontSize: 12, color: c.faint, lineHeight: 18, marginTop: 20 },
+  });

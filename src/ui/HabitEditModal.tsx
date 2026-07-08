@@ -10,6 +10,7 @@ import type { Habit } from '@/db';
 import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
+import { useTheme } from '@/ui/ThemeProvider';
 
 interface Props {
   habit: Habit | null; // null = panel kapalı
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function HabitEditModal({ habit, onClose, onChanged }: Props) {
+  const { colors } = useTheme();
   if (!habit) return null;
 
   const handleSubmit = (values: HabitFormValues) => {
@@ -48,7 +50,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 
   return (
     <ModalCard visible onClose={onClose}>
-      <Text style={styles.heading}>Alışkanlığı düzenle</Text>
+      <Text style={[styles.heading, { color: colors.text }]}>Alışkanlığı düzenle</Text>
       {/* key: farklı alışkanlığa geçince form taze başlangıç değerleriyle kurulur */}
       <HabitForm
         key={habit.id}
@@ -64,5 +66,5 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 16, textAlign: 'center' },
+  heading: { fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
 });

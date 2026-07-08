@@ -13,7 +13,8 @@ import type { Goal } from '@/db';
 import { toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { ModalCard } from '@/ui/ModalCard';
-import { colors, shortDate } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { shortDate, type Colors } from '@/ui/theme';
 
 interface Props {
   goal: Goal | null; // null = panel kapalı
@@ -22,6 +23,8 @@ interface Props {
 }
 
 export function GoalEditModal({ goal, onClose, onChanged }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const [title, setTitle] = useState('');
   const [target, setTarget] = useState(''); // sayısal hedef değeri (metin)
   const [unit, setUnit] = useState('');
@@ -88,7 +91,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
           value={title}
           onChangeText={setTitle}
           placeholder="Hedef başlığı"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.faint}
         />
 
         {numeric ? (
@@ -102,7 +105,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
                   onChangeText={setTarget}
                   keyboardType="numeric"
                   placeholder="örn. 100"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.faint}
                 />
               </View>
               <View style={styles.col}>
@@ -112,7 +115,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
                   value={unit}
                   onChangeText={setUnit}
                   placeholder="km, kitap"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.faint}
                 />
               </View>
             </View>
@@ -124,7 +127,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
               onChangeText={setCurrent}
               keyboardType="numeric"
               placeholder="örn. 40"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.faint}
             />
           </>
         ) : (
@@ -165,60 +168,61 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  heading: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 8, textAlign: 'center' },
-  typeTag: {
-    alignSelf: 'flex-start',
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-    backgroundColor: colors.primarySoft,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 8,
-    overflow: 'hidden',
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 12,
-  },
-  row: { flexDirection: 'row', gap: 12 },
-  col: { flex: 1 },
-  dateRow: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-  dateBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  dateBtnText: { fontSize: 15, color: '#0f172a' },
-  clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
-  clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  saveBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#4f46e5',
-  },
-  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    heading: { fontSize: 18, fontWeight: '700', color: c.text, marginBottom: 8, textAlign: 'center' },
+    typeTag: {
+      alignSelf: 'flex-start',
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.primary,
+      backgroundColor: c.primarySoft,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      marginBottom: 8,
+      overflow: 'hidden',
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.muted,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    input: {
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 12,
+    },
+    row: { flexDirection: 'row', gap: 12 },
+    col: { flex: 1 },
+    dateRow: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+    dateBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    dateBtnText: { fontSize: 15, color: c.text },
+    clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
+    clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
+    actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+    saveBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+    },
+    saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
+  });

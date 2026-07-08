@@ -13,6 +13,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useTheme } from '@/ui/ThemeProvider';
 
 interface Props {
   visible: boolean;
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function ModalCard({ visible, onClose, children, scroll = true }: Props) {
+  const { colors } = useTheme();
   if (!visible) return null;
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
@@ -32,7 +34,7 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
       >
         <View style={styles.overlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
             {scroll ? (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {children}
@@ -59,7 +61,6 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 460,
-    backgroundColor: '#fff',
     borderRadius: 24,
     padding: 20,
     // Uzun form taşınca içerik kaydırılsın.

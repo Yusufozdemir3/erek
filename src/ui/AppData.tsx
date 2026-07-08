@@ -9,6 +9,7 @@ import { habitRepo, initDataLayer, userRepo } from '@/db';
 import type { User } from '@/db';
 import { rescheduleAllReminders } from '@/lib/notifications';
 import { runSync } from '@/sync';
+import { useTheme } from '@/ui/ThemeProvider';
 
 interface AppData {
   user: User;
@@ -34,6 +35,7 @@ export function useAppData(): AppData {
 }
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
@@ -63,17 +65,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   if (error) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorTitle}>Veri katmanı başlatılamadı</Text>
-        <Text style={styles.errorBody}>{error}</Text>
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <Text style={[styles.errorTitle, { color: colors.danger }]}>Veri katmanı başlatılamadı</Text>
+        <Text style={[styles.errorBody, { color: colors.muted }]}>{error}</Text>
       </View>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4f46e5" />
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -86,22 +88,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  // Renkler render'da temaya göre inline verilir (backgroundColor/color).
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f8fafc',
     padding: 24,
   },
   errorTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#b91c1c',
     marginBottom: 8,
   },
   errorBody: {
     fontSize: 13,
-    color: '#64748b',
     textAlign: 'center',
   },
 });

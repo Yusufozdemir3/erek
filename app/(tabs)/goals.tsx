@@ -15,9 +15,12 @@ import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { GoalEditModal } from '@/ui/GoalEditModal';
 import { ProfileButton } from '@/ui/ProfileButton';
-import { colors, deadlineLabel, shared, shortDate } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { deadlineLabel, shortDate, type Colors } from '@/ui/theme';
 
 export default function GoalsScreen() {
+  const { colors, shared } = useTheme();
+  const styles = makeStyles(colors);
   const { user, dataVersion } = useAppData();
 
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -130,43 +133,44 @@ export default function GoalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  goalCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 10,
-  },
-  goalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  titleArea: { flex: 1 },
-  goalTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  del: { fontSize: 13, fontWeight: '600', color: colors.faint, paddingLeft: 12 },
-  delArmed: { color: '#dc2626' },
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    goalCard: {
+      backgroundColor: c.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 16,
+      marginBottom: 10,
+    },
+    goalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    titleArea: { flex: 1 },
+    goalTitle: { fontSize: 16, fontWeight: '700', color: c.text },
+    del: { fontSize: 13, fontWeight: '600', color: c.faint, paddingLeft: 12 },
+    delArmed: { color: c.danger },
 
-  progressTrack: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#eef2f7',
-    marginTop: 14,
-    overflow: 'hidden',
-  },
-  progressFill: { height: '100%', borderRadius: 5, backgroundColor: colors.primary },
-  goalFoot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  goalMeta: { fontSize: 14, color: colors.muted, fontWeight: '600' },
-  steppers: { flexDirection: 'row', gap: 6 },
-  stepBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.primarySoft,
-  },
-  stepText: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  deadlineLeft: { fontSize: 14, fontWeight: '700', color: colors.streak },
-});
+    progressTrack: {
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: c.track,
+      marginTop: 14,
+      overflow: 'hidden',
+    },
+    progressFill: { height: '100%', borderRadius: 5, backgroundColor: c.primary },
+    goalFoot: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 12,
+    },
+    goalMeta: { fontSize: 14, color: c.muted, fontWeight: '600' },
+    steppers: { flexDirection: 'row', gap: 6 },
+    stepBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 8,
+      backgroundColor: c.primarySoft,
+    },
+    stepText: { fontSize: 14, fontWeight: '700', color: c.primary },
+    deadlineLeft: { fontSize: 14, fontWeight: '700', color: c.streak },
+  });

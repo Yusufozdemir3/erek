@@ -12,7 +12,8 @@ import { goalRepo } from '@/db';
 import type { Goal, HabitKind, Recurrence } from '@/db';
 import { hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
-import { HABIT_COLORS, HABIT_ICONS, shortDate } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
+import { HABIT_COLORS, HABIT_ICONS, shortDate, type Colors } from '@/ui/theme';
 
 // Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
 const WEEKDAY_OPTIONS = [
@@ -56,6 +57,8 @@ function timeLabel(hm: string | null): string {
 }
 
 export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDelete, autoFocusTitle }: Props) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
   const initSchedule = initial?.schedule ?? null;
   const initWeekly =
     !!initSchedule && initSchedule.freq === 'weekly' && (initSchedule.weekdays?.length ?? 0) > 0;
@@ -154,7 +157,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
         value={title}
         onChangeText={setTitle}
         placeholder="Alışkanlık başlığı"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.faint}
         autoFocus={autoFocusTitle}
       />
 
@@ -311,7 +314,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
               value={targetText}
               onChangeText={setTargetText}
               placeholder="örn. 8"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.faint}
               keyboardType="numeric"
             />
             <TextInput
@@ -319,7 +322,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
               value={unit}
               onChangeText={setUnit}
               placeholder="birim (bardak)"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.faint}
               autoCapitalize="none"
             />
           </View>
@@ -335,7 +338,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
             value={targetText}
             onChangeText={setTargetText}
             placeholder="örn. 20"
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.faint}
             keyboardType="numeric"
           />
           <Text style={styles.hint}>Zamanlayıcıyla geri sayılacak günlük süre (ör. 20 dk).</Text>
@@ -386,108 +389,109 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
   );
 }
 
-const styles = StyleSheet.create({
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#0f172a',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 12,
-  },
-  row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  iconCell: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  iconCellSel: { borderColor: '#4f46e5', backgroundColor: '#e0e7ff', borderWidth: 2 },
-  iconText: { fontSize: 20 },
-  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
-  swatch: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  swatchSel: { borderWidth: 3, borderColor: '#0f172a' },
-  swatchCheck: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  freqRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  freqBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  freqBtnSel: { borderColor: '#4f46e5', backgroundColor: '#e0e7ff', borderWidth: 2 },
-  freqBtnText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
-  freqBtnTextSel: { color: '#4f46e5' },
-  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  dayChip: {
-    width: 42,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  dayChipSel: { borderColor: '#4f46e5', backgroundColor: '#4f46e5' },
-  dayChipText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
-  dayChipTextSel: { color: '#fff' },
-  targetInput: { flex: 1, marginBottom: 0 },
-  hint: { fontSize: 12, color: '#94a3b8', marginTop: 4, marginBottom: 12 },
-  goalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  goalChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  goalChipSel: { borderColor: '#4f46e5', backgroundColor: '#4f46e5' },
-  goalChipText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  goalChipTextSel: { color: '#fff' },
-  dateBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  dateBtnText: { fontSize: 15, color: '#0f172a' },
-  clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
-  clearBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  saveBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#4f46e5',
-  },
-  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
-});
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    label: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.muted,
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    input: {
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 12,
+    },
+    row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+    iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+    iconCell: {
+      width: 42,
+      height: 42,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.inputBg,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    iconCellSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
+    iconText: { fontSize: 20 },
+    colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+    swatch: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    swatchSel: { borderWidth: 3, borderColor: c.text },
+    swatchCheck: { color: c.onAccent, fontSize: 14, fontWeight: '800' },
+    freqRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+    freqBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    freqBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
+    freqBtnText: { fontSize: 14, fontWeight: '600', color: c.muted },
+    freqBtnTextSel: { color: c.primary },
+    dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+    dayChip: {
+      width: 42,
+      paddingVertical: 8,
+      borderRadius: 10,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    dayChipSel: { borderColor: c.primary, backgroundColor: c.primary },
+    dayChipText: { fontSize: 13, fontWeight: '700', color: c.muted },
+    dayChipTextSel: { color: c.onAccent },
+    targetInput: { flex: 1, marginBottom: 0 },
+    hint: { fontSize: 12, color: c.faint, marginTop: 4, marginBottom: 12 },
+    goalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+    goalChip: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    goalChipSel: { borderColor: c.primary, backgroundColor: c.primary },
+    goalChipText: { fontSize: 13, fontWeight: '600', color: c.muted },
+    goalChipTextSel: { color: c.onAccent },
+    dateBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    dateBtnText: { fontSize: 15, color: c.text },
+    clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
+    clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
+    actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+    saveBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: c.primary,
+    },
+    saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
+  });
