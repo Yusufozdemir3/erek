@@ -9,6 +9,7 @@ import { habitRepo, initDataLayer, userRepo } from '@/db';
 import type { User } from '@/db';
 import { rescheduleAllReminders } from '@/lib/notifications';
 import { runSync } from '@/sync';
+import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
 
 interface AppData {
@@ -54,7 +55,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           console.warn('[Bildirim] Açılışta hatırlatmalar programlanamadı:', e)
         );
         // Açılışta arka planda bir kez senkronla (yapılandırılmamışsa sessiz geçer).
-        runSync(user.id).catch((e) => console.warn('[Senkron] Açılış senkronu başarısız:', e));
+        // Hesap özelliği kapalıyken (MVP) senkron hiç başlamaz — hiçbir veri
+        // cihazdan çıkmaz (anonim oturum bile açılmaz). Bkz. src/config.ts.
+        if (ACCOUNTS_ENABLED) {
+          runSync(user.id).catch((e) => console.warn('[Senkron] Açılış senkronu başarısız:', e));
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);

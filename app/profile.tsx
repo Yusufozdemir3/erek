@@ -4,12 +4,13 @@
 // Senkron yapılandırılmamışsa (.env boş) nasıl kurulacağını anlatır.
 
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { userRepo } from '@/db';
 import {
   currentAuthUser,
   currentUid,
+  deleteAccountAndData,
   isSyncConfigured,
   runSync,
   signOutAccount,
@@ -19,6 +20,7 @@ import {
 import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { type Colors } from '@/ui/theme';
+import { ACCOUNTS_ENABLED } from '@/config';
 
 const THEME_OPTIONS: { mode: ThemeMode; label: string }[] = [
   { mode: 'light', label: 'Açık' },
@@ -35,6 +37,7 @@ export default function ProfileScreen() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // E-posta hesabıyla bağlı mı? (anonim oturum "bağlı" sayılmaz)
   const linked = authUser != null && !authUser.isAnonymous && authUser.email != null;
@@ -60,6 +63,37 @@ export default function ProfileScreen() {
       console.warn('[Hesap] Çıkış sırasında hata:', e);
     } finally {
       setSigningOut(false);
+    }
+  };
+
+  // Hesap silme: geri alınamaz — native onay diyaloğu ile iki adımlı.
+  // Bulut hesabı + buluttaki tüm veri silinir; CİHAZDAKİ veri kalır ve
+  // kullanıcı anonim/yerel moda döner (çıkışla aynı yerel son durum).
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      'Hesabı sil',
+      'Bulut hesabın ve buluttaki TÜM verilerin kalıcı olarak silinir; bu işlem geri alınamaz.\n\nCihazındaki veriler silinmez — uygulamayı hesapsız kullanmaya devam edersin.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        { text: 'Kalıcı olarak sil', style: 'destructive', onPress: doDeleteAccount },
+      ]
+    );
+  };
+
+  const doDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccountAndData();
+      userRepo.downgradeToLocal(user.id);
+      refreshUser();
+      setAuthUser(null);
+      setSignedIn(false);
+      setResult(null);
+      Alert.alert('Hesap silindi', 'Bulut hesabın ve buluttaki verilerin silindi. Cihazındaki veriler duruyor.');
+    } catch (e) {
+      Alert.alert('Silme başarısız', e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -94,6 +128,10 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>"Sistem" telefonun açık/koyu ayarını izler.</Text>
       </View>
 
+      {/* Hesap + Bulut senkron — kapalı test (MVP) sürümünde gizli.
+          Parola sıfırlama eklenince ACCOUNTS_ENABLED true yapılacak. */}
+      {ACCOUNTS_ENABLED && (
+        <>
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>Hesap</Text>
 
@@ -110,7 +148,7 @@ export default function ProfileScreen() {
             <Pressable
               style={[styles.outlineBtn, signingOut && styles.syncBtnDisabled]}
               onPress={doSignOut}
-              disabled={signingOut}
+              disabled={signingOut || deleting}
             >
               {signingOut ? (
                 <ActivityIndicator color={colors.primary} />
@@ -118,6 +156,20 @@ export default function ProfileScreen() {
                 <Text style={styles.outlineBtnText}>Çıkış yap</Text>
               )}
             </Pressable>
+            <Pressable
+              style={[styles.dangerBtn, deleting && styles.syncBtnDisabled]}
+              onPress={confirmDeleteAccount}
+              disabled={deleting || signingOut}
+            >
+              {deleting ? (
+                <ActivityIndicator color={colors.danger} />
+              ) : (
+                <Text style={styles.dangerBtnText}>Hesabı sil</Text>
+              )}
+            </Pressable>
+            <Text style={styles.hint}>
+              Hesabı silmek buluttaki tüm verini kalıcı olarak kaldırır; cihazındaki veriler kalır.
+            </Text>
           </>
         ) : (
           <>
@@ -182,10 +234,13 @@ export default function ProfileScreen() {
           </>
         )}
       </View>
+        </>
+      )}
 
       <Text style={styles.footnote}>
-        Veriler önce cihazda saklanır; senkron yalnızca buluta yedekler ve
-        değişiklikleri birleştirir (son yazan kazanır).
+        {ACCOUNTS_ENABLED
+          ? 'Veriler önce cihazda saklanır; senkron yalnızca buluta yedekler ve değişiklikleri birleştirir (son yazan kazanır).'
+          : 'Verilerin yalnızca bu cihazda saklanır.'}
       </Text>
     </ScrollView>
   );
@@ -246,5 +301,16 @@ const makeStyles = (c: Colors) =>
       minHeight: 50,
     },
     outlineBtnText: { color: c.primary, fontSize: 15, fontWeight: '700' },
+    dangerBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.danger,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      marginTop: 10,
+      minHeight: 50,
+    },
+    dangerBtnText: { color: c.danger, fontSize: 15, fontWeight: '700' },
     footnote: { fontSize: 12, color: c.faint, lineHeight: 18, marginTop: 20 },
   });
