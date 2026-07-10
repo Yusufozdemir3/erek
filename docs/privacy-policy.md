@@ -7,67 +7,42 @@ Yürürlük tarihi / Effective date: **10 Temmuz 2026 / July 10, 2026**
 
 ## Türkçe
 
-### 1. Özet
+**Kısaca:** Erek verilerinizi yalnızca cihazınızda saklar. Hesap gerektirmez,
+internet gerektirmez, reklam ve takip içermez. **Hiçbir veriniz toplanmaz,
+sunucuya gönderilmez veya üçüncü taraflarla paylaşılmaz.**
 
-- Uygulama **hesap açmadan** tamamen çevrimdışı kullanılabilir; bu durumda verileriniz **yalnızca cihazınızda** saklanır ve hiçbir sunucuya gönderilmez.
-- **İsteğe bağlı** olarak e-posta ile hesap oluşturursanız, verileriniz yedekleme ve cihazlar arası eşitleme için bulut sunucumuza aktarılır.
-- Uygulamada **reklam yoktur**, **analitik/izleme yoktur** ve verileriniz **hiçbir üçüncü tarafa satılmaz veya pazarlama amacıyla paylaşılmaz**.
+### 1. Toplanan veriler
 
-### 2. Toplanan veriler
+Erek **hiçbir kişisel veri toplamaz.** Oluşturduğunuz alışkanlık, görev ve
+hedef kayıtları (başlıklar, tarihler, tamamlama işaretleri, süre/miktar
+kayıtları) ve uygulama tercihleriniz (ör. tema) yalnızca **cihazınızdaki yerel
+veritabanında** tutulur. Bu veriler cihazınızdan dışarı çıkmaz; ne bize ne de
+herhangi bir üçüncü tarafa iletilir.
 
-**a) Hesapsız (varsayılan) kullanımda:**
-Alışkanlık, görev ve hedef kayıtlarınız (başlıklar, tarihler, tamamlama işaretleri, süre/miktar kayıtları) ve uygulama tercihleri (ör. tema) yalnızca cihazınızdaki yerel veritabanında tutulur. Bu veriler cihazınızdan dışarı çıkmaz.
+Uygulama; analitik, reklam kimliği, konum verisi veya çökme raporu **toplamaz.**
 
-**b) Hesap oluşturursanız (isteğe bağlı):**
-- **E-posta adresi** ve **parola** (parolanız düz metin olarak saklanmaz; kimlik doğrulama sağlayıcımız tarafından endüstri standardı yöntemlerle korunur).
-- **Uygulama içeriğiniz**: alışkanlık/görev/hedef başlıkları, planlar, tamamlama kayıtları ve tarihleri. Bu içerik, yedekleme ve eşitleme amacıyla bulut veritabanına aktarılır.
+### 2. Bildirimler
 
-**c) Otomatik toplanan veriler:**
-Uygulama analitik, reklam kimliği veya konum verisi **toplamaz**.
+Kurduğunuz hatırlatmalar **cihazınızda yerel olarak** planlanır; içerikleri
+hiçbir sunucuya gönderilmez. Bildirim izni istendiğinde reddedebilir veya sistem
+ayarlarından dilediğiniz zaman kapatabilirsiniz.
 
-### 3. Verilerin kullanım amacı
+### 3. Verilerin silinmesi
 
-Verileriniz yalnızca şu amaçlarla kullanılır:
-1. Uygulamanın temel işlevlerini sunmak (kayıt tutma, hatırlatma, istatistik).
-2. Hesap açtıysanız: kimlik doğrulama, yedekleme ve cihazlar arası eşitleme.
+Tüm veriniz cihazınızda olduğundan, **uygulamayı kaldırdığınızda** verileriniz de
+silinir. Ayrıca uygulama içinden istediğiniz kaydı tek tek silebilirsiniz.
 
-### 4. Saklama yeri ve güvenlik
+### 4. Çocuklar
 
-- Bulut verileri **Supabase** altyapısında (**[SUPABASE BÖLGESİ]** bölgesindeki sunucular) saklanır.
-- Aktarım **TLS/HTTPS** ile şifrelenir.
-- Veritabanı erişimi satır düzeyi güvenlik (Row Level Security) ile sınırlıdır: her kullanıcı yalnızca kendi kayıtlarına erişebilir.
+Uygulama 13 yaş altı çocuklara yönelik değildir ve bilerek onlardan veri
+toplamaz. (Zaten hiç kimseden veri toplamaz.)
 
-### 5. Üçüncü taraf hizmet sağlayıcılar
+### 5. Değişiklikler
 
-| Hizmet | Amaç | Paylaşılan veri |
-|---|---|---|
-| Supabase | Kimlik doğrulama + bulut veritabanı | E-posta, parola (korumalı), uygulama içeriği |
+Bu politika güncellenirse yeni sürüm bu sayfada yayınlanır ve yürürlük tarihi
+güncellenir.
 
-Bu sağlayıcı verilerinizi yalnızca bize hizmet sunmak için işler. Verileriniz satılmaz, reklam ağlarıyla paylaşılmaz.
-
-### 6. Saklama süresi ve silme
-
-- **Yerel veriler**: uygulamayı cihazınızdan sildiğinizde silinir.
-- **Bulut verileri**: hesabınız aktif olduğu sürece saklanır.
-- **Hesap ve veri silme**: Hesabınızı ve buluttaki tüm verilerinizi uygulama içinden **Profil → Hesabı sil** adımıyla anında ve kalıcı olarak silebilirsiniz. Dilerseniz **yusuf3ozdemir@gmail.com** adresine e-posta göndererek de silme talep edebilirsiniz; e-posta talepleri en geç 30 gün içinde yerine getirilir. Hesap silindiğinde cihazınızdaki yerel veriler etkilenmez.
-
-### 7. Haklarınız
-
-6698 sayılı KVKK ve (AB'de bulunuyorsanız) GDPR kapsamında; verilerinize erişme, düzeltme, silme, işlemeye itiraz etme ve taşınabilirlik haklarına sahipsiniz. Bu hakları kullanmak için **yusuf3ozdemir@gmail.com** adresine yazabilirsiniz.
-
-### 8. Bildirimler
-
-Hatırlatma bildirimleri **cihazınızda yerel olarak** planlanır; bildirim içerikleri sunucuya gönderilmez. Bildirim izni istendiğinde reddedebilir veya sistem ayarlarından dilediğiniz zaman kapatabilirsiniz.
-
-### 9. Çocuklar
-
-Uygulama 13 yaş altı çocuklara yönelik değildir ve bilerek onlardan veri toplamaz.
-
-### 10. Değişiklikler
-
-Bu politika güncellenirse yeni sürüm bu sayfada yayınlanır ve yürürlük tarihi güncellenir.
-
-### 11. İletişim
+### 6. İletişim
 
 Sorularınız için: **yusuf3ozdemir@gmail.com**
 
@@ -75,65 +50,41 @@ Sorularınız için: **yusuf3ozdemir@gmail.com**
 
 ## English
 
-### 1. Summary
+**In short:** Erek stores your data only on your device. It requires no account,
+no internet, and contains no ads or tracking. **We do not collect, transmit, or
+share any of your data.**
 
-- The App is fully usable **without an account**; in that case your data is stored **only on your device** and never sent to any server.
-- If you **optionally** create an account with your email, your data is transferred to our cloud backend for backup and cross-device sync.
-- The App contains **no ads**, **no analytics/tracking**, and your data is **never sold or shared for marketing**.
+### 1. Data we collect
 
-### 2. Data we collect
+Erek collects **no personal data.** The habits, tasks and goals you create
+(titles, dates, completion marks, duration/amount logs) and your app preferences
+(e.g. theme) are stored only in a **local database on your device.** This data
+never leaves your device and is not sent to us or any third party.
 
-**a) Without an account (default):**
-Your habits, tasks and goals (titles, dates, completion marks, duration/amount logs) and app preferences (e.g. theme) are stored only in a local database on your device and never leave it.
+The app collects **no** analytics, advertising identifiers, location data, or
+crash reports.
 
-**b) If you create an account (optional):**
-- **Email address** and **password** (never stored in plain text; protected by our authentication provider using industry-standard methods).
-- **Your app content**: habit/task/goal titles, schedules, completion records and dates — transferred to the cloud database for backup and sync.
+### 2. Notifications
 
-**c) Automatically collected data:**
-The App does **not** collect analytics, advertising identifiers or location data.
+Reminders you set are scheduled **locally on your device**; their content is not
+sent to any server. You may decline the notification permission or disable it in
+system settings at any time.
 
-### 3. How we use data
+### 3. Deleting your data
 
-1. To provide the App's core features (tracking, reminders, statistics).
-2. If you have an account: authentication, backup and cross-device sync.
+Because all your data lives on your device, uninstalling the app **deletes your
+data.** You can also delete individual records from within the app.
 
-### 4. Storage and security
+### 4. Children
 
-- Cloud data is hosted on **Supabase** (servers in **[SUPABASE REGION]**).
-- All transfers are encrypted via **TLS/HTTPS**.
-- Database access is restricted with Row Level Security: each user can only access their own records.
+The app is not directed at children under 13 and does not knowingly collect data
+from them (it collects no data from anyone).
 
-### 5. Third-party processors
+### 5. Changes
 
-| Service | Purpose | Data shared |
-|---|---|---|
-| Supabase | Authentication + cloud database | Email, password (protected), app content |
+Updates to this policy will be published on this page with a revised effective
+date.
 
-These providers process data solely to provide services to us. Your data is never sold or shared with ad networks.
-
-### 6. Retention and deletion
-
-- **Local data** is deleted when you uninstall the App.
-- **Cloud data** is retained while your account is active.
-- **Account & data deletion**: you can permanently delete your account and all cloud data instantly from within the App via **Profile → Delete account**. Alternatively, email **yusuf3ozdemir@gmail.com**; email requests are fulfilled within 30 days. Deleting your account does not affect the local data on your device.
-
-### 7. Your rights
-
-Under GDPR (if you are in the EU) and Turkey's KVKK, you have the right to access, rectify, delete, object to processing of, and port your data. Contact **yusuf3ozdemir@gmail.com** to exercise these rights.
-
-### 8. Notifications
-
-Reminders are scheduled **locally on your device**; their content is not sent to any server. You may decline the notification permission or disable it in system settings at any time.
-
-### 9. Children
-
-The App is not directed at children under 13 and does not knowingly collect data from them.
-
-### 10. Changes
-
-Updates to this policy will be published on this page with a revised effective date.
-
-### 11. Contact
+### 6. Contact
 
 Questions: **yusuf3ozdemir@gmail.com**
