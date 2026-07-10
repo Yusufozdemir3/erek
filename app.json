@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Habit App",
+    "name": "Erek",
     "slug": "habit-app",
     "owner": "yusufozdemir",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "habitapp",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
