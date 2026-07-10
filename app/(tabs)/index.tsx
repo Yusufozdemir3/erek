@@ -23,6 +23,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
+import { PriorityMark } from '@/ui/PriorityMark';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -154,7 +155,13 @@ export default function TodayScreen() {
                 return (
                   <Animated.View key={t.id} layout={LIST_LAYOUT} style={shared.card}>
                     {time && <TimeBadge time={time} />}
-                    <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
+                    <Pressable
+                      onPress={() => toggleTask(t)}
+                      hitSlop={8}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: done }}
+                      accessibilityLabel={t.title}
+                    >
                       <View
                         style={[
                           shared.checkbox,
@@ -164,7 +171,12 @@ export default function TodayScreen() {
                         {done && <Text style={shared.checkmark}>✓</Text>}
                       </View>
                     </Pressable>
-                    <Pressable style={shared.cardBody} onPress={() => setEditingTask(t)}>
+                    <Pressable
+                      style={shared.cardBody}
+                      onPress={() => setEditingTask(t)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t.title}, düzenle`}
+                    >
                       <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
                       {subtaskCounts[t.id] && (
                         <Text style={styles.subCount}>
@@ -172,9 +184,7 @@ export default function TodayScreen() {
                         </Text>
                       )}
                     </Pressable>
-                    {!done && (
-                      <View style={[shared.priorityDot, { backgroundColor: PRIORITY_COLOR[t.priority] }]} />
-                    )}
+                    {!done && <PriorityMark priority={t.priority} />}
                   </Animated.View>
                 );
               })}
@@ -227,6 +237,9 @@ export default function TodayScreen() {
                     style={[shared.card, isFuture && styles.futureCard]}
                     onPress={() => toggleHabit(h)}
                     disabled={isFuture}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: h.completed, disabled: isFuture }}
+                    accessibilityLabel={`${h.title} alışkanlığı`}
                   >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>

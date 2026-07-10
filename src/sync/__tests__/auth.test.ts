@@ -11,6 +11,7 @@ const mockSignOut = jest.fn();
 const mockSignInWithPassword = jest.fn();
 const mockSignUp = jest.fn();
 const mockUpdateUser = jest.fn();
+const mockRpc = jest.fn();
 
 jest.mock('../supabase', () => ({
   supabase: {
@@ -22,11 +23,13 @@ jest.mock('../supabase', () => ({
       signUp: (args: unknown) => mockSignUp(args),
       updateUser: (args: unknown) => mockUpdateUser(args),
     },
+    rpc: (fn: string) => mockRpc(fn),
   },
 }));
 
 // jest.mock'tan SONRA import edilmeli ki taklit devreye girsin.
 import {
+  deleteAccountAndData,
   ensureSignedIn,
   linkEmailToAnonymous,
   signInWithEmail,
@@ -49,6 +52,7 @@ beforeEach(async () => {
   mockSignInWithPassword.mockResolvedValue({ error: null });
   mockSignUp.mockResolvedValue({ data: { session: null }, error: null });
   mockUpdateUser.mockResolvedValue({ error: null });
+  mockRpc.mockResolvedValue({ error: null });
 });
 
 describe('ensureSignedIn', () => {
@@ -122,6 +126,34 @@ describe('çıkış bayrağının yaşam döngüsü', () => {
     const { needsConfirmation } = await signUpWithEmail('a@b.c', 'parola1');
     expect(needsConfirmation).toBe(false);
     expect(await AsyncStorage.getItem(SIGNED_OUT_KEY)).toBeNull();
+  });
+
+  it('deleteAccountAndData: RPC başarılıysa bayrağı set eder ve oturumu kapatır', async () => {
+    await deleteAccountAndData();
+
+    expect(mockRpc).toHaveBeenCalledWith('delete_account');
+    expect(await AsyncStorage.getItem(SIGNED_OUT_KEY)).toBe('1');
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    // Silme sonrası otomatik anonim oturum AÇILMAMALI (öksüz veri üretirdi).
+    expect(await ensureSignedIn()).toBeNull();
+    expect(mockSignInAnonymously).not.toHaveBeenCalled();
+  });
+
+  it('deleteAccountAndData: RPC hata verirse fırlatır, bayrak set edilmez (hesap duruyor)', async () => {
+    mockRpc.mockResolvedValue({ error: new Error('function not found') });
+
+    await expect(deleteAccountAndData()).rejects.toThrow('function not found');
+
+    expect(await AsyncStorage.getItem(SIGNED_OUT_KEY)).toBeNull();
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('deleteAccountAndData: silme başarılı ama yerel signOut fırlatırsa YUTULUR (bayrak kalır)', async () => {
+    // Sunucuda kullanıcı silindiği için yerel çıkış geçersiz-token hatası verebilir.
+    mockSignOut.mockRejectedValue(new Error('token geçersiz'));
+
+    await expect(deleteAccountAndData()).resolves.toBeUndefined();
+    expect(await AsyncStorage.getItem(SIGNED_OUT_KEY)).toBe('1');
   });
 
   it('bayrak çıkış denemesinden ÖNCE yazılır (yarış penceresi kapalı); çıkış hata verse de kalır', async () => {

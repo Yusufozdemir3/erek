@@ -191,7 +191,6 @@ export function makeShared(c: Colors) {
     cardBody: { flex: 1, paddingVertical: 4 },
     cardTitle: { flex: 1, fontSize: 15, color: c.text },
     cardTitleDone: { color: c.faint, textDecorationLine: 'line-through' },
-    priorityDot: { width: 8, height: 8, borderRadius: 4 },
     streak: { fontSize: 14, fontWeight: '700', color: c.streak },
 
     empty: { fontSize: 14, color: c.faint, paddingVertical: 8 },

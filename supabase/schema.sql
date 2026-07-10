@@ -138,3 +138,36 @@ create policy "own subtasks" on public.subtasks
     select 1 from public.tasks t
     where t.id = subtasks.task_id and t.user_id = auth.uid()
   ));
+
+-- HESAP SİLME ---------------------------------------------------------------
+-- Uygulama içi "Hesabı sil" (Google Play hesap-silme zorunluluğu). İstemci
+-- kendi auth kullanıcısını doğrudan silemez (admin API service_role ister ve
+-- istemciye konamaz). Bu SECURITY DEFINER fonksiyon, ÇAĞIRAN kullanıcının tüm
+-- verisini ve auth kaydını sunucu tarafında tek işlemde siler. SQL editöründe
+-- çalıştırıldığında sahibi postgres olur; auth.users'a erişim yetkisi oradan
+-- gelir. auth.uid() kullanıldığı için bir kullanıcı yalnızca KENDİNİ silebilir.
+create or replace function public.delete_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'delete_account: oturum yok';
+  end if;
+  -- Çocuk tablolar önce (bulut şemasında FK kısıtı yok ama sıra temiz olsun).
+  delete from public.habit_logs where habit_id in (select id from public.habits where user_id = uid);
+  delete from public.subtasks   where task_id  in (select id from public.tasks  where user_id = uid);
+  delete from public.tasks  where user_id = uid;
+  delete from public.habits where user_id = uid;
+  delete from public.goals  where user_id = uid;
+  delete from auth.users where id = uid;
+end;
+$$;
+
+-- Yalnızca oturumlu kullanıcılar çağırabilsin.
+revoke all on function public.delete_account() from public, anon;
+grant execute on function public.delete_account() to authenticated;

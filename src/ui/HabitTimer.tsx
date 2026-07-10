@@ -48,6 +48,8 @@ export function HabitTimer({ habitId, amount, target, editable }: Props) {
               }
             }}
             hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={running ? 'Zamanlayıcıyı duraklat' : 'Zamanlayıcıyı başlat'}
           >
             <Text style={[styles.btnText, running && styles.btnTextOn]}>
               {running ? '❚❚' : '▶'}
@@ -62,7 +64,9 @@ export function HabitTimer({ habitId, amount, target, editable }: Props) {
             tapLight();
             timer.reset(habitId);
           }}
-          hitSlop={6}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Bugünkü süreyi sıfırla"
         >
           <Text style={styles.reset}>↺</Text>
         </Pressable>

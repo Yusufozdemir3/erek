@@ -14,17 +14,11 @@ import { habitRepo } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { notifySuccess } from '@/lib/haptics';
 import { cancelTimerDone, scheduleTimerDone } from '@/lib/notifications';
+// Saf zaman matematiği ayrı modülde (test edilebilir); gece yarısı kararı da orada.
+import { commitDelta, elapsedOf, isFinished, type ActiveTimer } from '@/lib/timerLogic';
 import { useAppData } from '@/ui/AppData';
 
 const ACTIVE_KEY = 'timer:active';
-
-interface ActiveTimer {
-  habitId: string;
-  date: string;          // "YYYY-MM-DD" (başladığı gün)
-  startedAt: number;     // epoch ms
-  baseSeconds: number;   // başlarken o gün birikmiş saniye
-  targetSeconds: number; // hedef saniye
-}
 
 interface TimerApi {
   isRunning: (habitId: string) => boolean;
@@ -43,11 +37,6 @@ export function useTimer(): TimerApi {
   return v;
 }
 
-// Bir aktif zamanlayıcının şu ana kadar geçen (hedefte sınırlı) toplam saniyesi.
-function elapsedOf(a: ActiveTimer): number {
-  return Math.min(a.targetSeconds, a.baseSeconds + (Date.now() - a.startedAt) / 1000);
-}
-
 export function TimerProvider({ children }: { children: React.ReactNode }) {
   const { notifyDataChanged } = useAppData();
   const [active, setActive] = useState<ActiveTimer | null>(null);
@@ -63,7 +52,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   // Aktif süreyi kalıcılaştır: geçen saniyeyi DB'ye ekle, bildirimi iptal et.
   const commit = useCallback((a: ActiveTimer) => {
-    const delta = Math.round(elapsedOf(a) - a.baseSeconds);
+    const delta = commitDelta(a);
     if (delta > 0) habitRepo.incrementAmount(a.habitId, a.date, delta, a.targetSeconds);
     cancelTimerDone(a.habitId);
   }, []);
@@ -71,7 +60,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const stopActive = useCallback(() => {
     const a = activeRef.current;
     if (!a) return;
-    const reachedTarget = elapsedOf(a) >= a.targetSeconds;
+    const reachedTarget = isFinished(a);
     commit(a);
     setActive(null);
     persist(null);
@@ -86,7 +75,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       if (!raw) return;
       try {
         const a = JSON.parse(raw) as ActiveTimer;
-        if (elapsedOf(a) >= a.targetSeconds) {
+        if (isFinished(a)) {
           commit(a);
           persist(null);
           notifyDataChanged();
@@ -106,7 +95,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (!active) return;
     const id = setInterval(() => {
       const a = activeRef.current;
-      if (a && elapsedOf(a) >= a.targetSeconds) stopActive();
+      if (a && isFinished(a)) stopActive();
       else setNow(Date.now());
     }, 1000);
     return () => clearInterval(id);

@@ -6,6 +6,7 @@ import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AppDataProvider } from '@/ui/AppData';
+import { OnboardingGate } from '@/ui/Onboarding';
 import { TimerProvider } from '@/ui/TimerProvider';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
 import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notifications';
@@ -40,6 +41,8 @@ function ThemedStack() {
         <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil', presentation: 'modal' }} />
         <Stack.Screen name="habit/[id]" />
       </Stack>
+      {/* İlk açılışta bir kez gösterilen tanıtım (kendi bayrağını yönetir). */}
+      <OnboardingGate />
     </>
   );
 }

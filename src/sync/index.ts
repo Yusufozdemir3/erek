@@ -10,6 +10,7 @@ export {
   linkEmailToAnonymous,
   signInWithEmail,
   signOutAccount,
+  deleteAccountAndData,
   type AuthUser,
 } from './auth';
 export { runSync, prepareFullResync, clearLocalData, type SyncResult } from './syncEngine';

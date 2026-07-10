@@ -55,7 +55,14 @@ export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disab
 
   return (
     <View style={[styles.row, disabled && styles.rowDisabled]}>
-      <Pressable style={styles.btn} onPress={onDec} hitSlop={6} disabled={disabled}>
+      <Pressable
+        style={styles.btn}
+        onPress={onDec}
+        hitSlop={6}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel="Miktarı azalt"
+      >
         <Text style={styles.btnText}>−</Text>
       </Pressable>
       {editing ? (
@@ -77,7 +84,14 @@ export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disab
           </Text>
         </Pressable>
       )}
-      <Pressable style={styles.btn} onPress={onInc} hitSlop={6} disabled={disabled}>
+      <Pressable
+        style={styles.btn}
+        onPress={onInc}
+        hitSlop={6}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel="Miktarı artır"
+      >
         <Text style={styles.btnText}>＋</Text>
       </Pressable>
     </View>

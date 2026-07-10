@@ -11,7 +11,13 @@ export function ProfileButton() {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   return (
-    <Pressable style={styles.btn} onPress={() => router.push('/profile')} hitSlop={8}>
+    <Pressable
+      style={styles.btn}
+      onPress={() => router.push('/profile')}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Profil"
+    >
       <Text style={styles.icon}>👤</Text>
     </Pressable>
   );

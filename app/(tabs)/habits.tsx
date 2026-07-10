@@ -76,12 +76,23 @@ export default function HabitsScreen() {
                 {h.target != null ? (
                   <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                 ) : (
-                  <Pressable onPress={() => toggleToday(h)} hitSlop={8}>
+                  <Pressable
+                    onPress={() => toggleToday(h)}
+                    hitSlop={8}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: h.completedToday }}
+                    accessibilityLabel={`${h.title}, bugün`}
+                  >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                   </Pressable>
                 )}
                 {/* Başlığa dokununca düzenleme paneli açılır */}
-                <Pressable style={styles.titleArea} onPress={() => openEdit(h)}>
+                <Pressable
+                  style={styles.titleArea}
+                  onPress={() => openEdit(h)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${h.title}, düzenle`}
+                >
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
                     {h.title}
                   </Text>
@@ -122,6 +133,8 @@ export default function HabitsScreen() {
                 style={styles.week}
                 onPress={() => router.push({ pathname: '/habit/[id]', params: { id: h.id } })}
                 hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`${h.title} istatistiklerini aç`}
               >
                 {h.week.map((on, i) => (
                   <View key={i} style={[styles.dayDot, on && styles.dayDotOn]} />

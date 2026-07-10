@@ -42,7 +42,14 @@ export function AddFabButton({ open, onPress }: { open: boolean; onPress: () => 
   const rotate = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
 
   return (
-    <Pressable style={styles.buttonWrap} onPress={onPress} hitSlop={8}>
+    <Pressable
+      style={styles.buttonWrap}
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={open ? 'Ekleme menüsünü kapat' : 'Ekle'}
+      accessibilityState={{ expanded: open }}
+    >
       {/* Kare çerçevenin tamamı döner; içindeki ＋ de onunla dönüp × olur.
           ＋ iki çubukla çizilir → font metriğinden bağımsız, tam ortalı. */}
       <Animated.View style={[styles.square, { transform: [{ rotate }] }]}>

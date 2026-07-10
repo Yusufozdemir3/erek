@@ -15,6 +15,7 @@ import { extractTime } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
+import { PriorityMark } from '@/ui/PriorityMark';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
@@ -86,7 +87,13 @@ export default function TasksScreen() {
                 style={[shared.card, i === 0 && { marginTop: 20 }]}
               >
                 {time && !done && <TimeBadge time={time} />}
-                <Pressable onPress={() => toggleTask(t)} hitSlop={8}>
+                <Pressable
+                  onPress={() => toggleTask(t)}
+                  hitSlop={8}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: done }}
+                  accessibilityLabel={t.title}
+                >
                   <View
                     style={[
                       shared.checkbox,
@@ -96,7 +103,12 @@ export default function TasksScreen() {
                     {done && <Text style={shared.checkmark}>✓</Text>}
                   </View>
                 </Pressable>
-                <Pressable style={shared.cardBody} onPress={() => setEditingTask(t)}>
+                <Pressable
+                  style={shared.cardBody}
+                  onPress={() => setEditingTask(t)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t.title}, düzenle`}
+                >
                   <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
                   {((t.due_date && !done) || subtaskCounts[t.id]) && (
                     <Text style={styles.due}>
@@ -111,9 +123,7 @@ export default function TasksScreen() {
                     </Text>
                   )}
                 </Pressable>
-                {!done && (
-                  <View style={[shared.priorityDot, { backgroundColor: PRIORITY_COLOR[t.priority] }]} />
-                )}
+                {!done && <PriorityMark priority={t.priority} />}
               </Animated.View>
             );
           })

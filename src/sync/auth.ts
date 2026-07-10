@@ -112,6 +112,26 @@ export async function signInWithEmail(email: string, password: string): Promise<
   await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
+// Hesabı ve buluttaki TÜM veriyi KALICI olarak siler (Google Play hesap-silme
+// zorunluluğu). Sunucudaki SECURITY DEFINER delete_account() RPC'si çağrılır
+// (bkz. supabase/schema.sql): kullanıcının satırlarını ve auth kaydını tek
+// işlemde siler. Yerel veri cihazda KALIR; kullanıcıyı anonime düşürmek
+// çağıranın işidir. Silme başarılıysa bilerek-çıkış bayrağı set edilir ki
+// otomatik yeni anonim oturum açılmasın (signOutAccount ile aynı desen).
+export async function deleteAccountAndData(): Promise<void> {
+  if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
+  const { error } = await supabase.rpc('delete_account');
+  if (error) throw error;
+  await AsyncStorage.setItem(SIGNED_OUT_KEY, '1');
+  // Sunucuda kullanıcı zaten silindi; yerel oturum kapatma hata verse de
+  // (geçersiz token vb.) önemsiz — bayrak kalıntıyı ensureSignedIn'e temizletir.
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // yut — yukarıdaki nota bak
+  }
+}
+
 // Hesaptan çıkış yapar. Yerel veri cihazda kalır; senkron, kullanıcı yeniden
 // giriş yapana dek devre dışı kalır (SIGNED_OUT_KEY — dosya başındaki nota bak).
 export async function signOutAccount(): Promise<void> {
