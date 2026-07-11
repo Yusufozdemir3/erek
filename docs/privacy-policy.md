@@ -44,7 +44,7 @@ güncellenir.
 
 ### 6. İletişim
 
-Sorularınız için: **yusuf3ozdemir@gmail.com**
+Sorularınız için: **yazgandev@gmail.com**
 
 ---
 
@@ -87,4 +87,4 @@ date.
 
 ### 6. Contact
 
-Questions: **yusuf3ozdemir@gmail.com**
+Questions: **yazgandev@gmail.com**
