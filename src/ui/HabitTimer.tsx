@@ -2,8 +2,11 @@
 // Canlı sayaç "m:ss / m:ss" + Başlat/Duraklat düğmesi + (ilerleme varken) Sıfırla.
 // Çalışan durum ve tik TimerProvider'dan gelir; hedefe ulaşınca otomatik tamamlanır
 // ve ✓ görünür. `editable` yalnızca bugün için true (geçmiş gün salt-okunur).
+// Değer metnine dokununca (timer çalışmıyorken) dakika olarak el ile girilebilir —
+// AmountStepper'daki "klavyeden gir" desenin aynısı, saniyeye çevrilip onSet'e geçilir.
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { fmtClock } from '@/lib/helpers';
 import { tapLight, tapMedium } from '@/lib/haptics';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -16,9 +19,16 @@ interface Props {
   amount: number;      // o gün DB'de biriken saniye (anlık görüntü)
   target: number;      // hedef saniye
   editable?: boolean;  // bugün mü — kontroller yalnız o zaman görünür
+  onSet?: (totalSeconds: number) => void; // klavyeden girilen mutlak süre (saniye)
 }
 
-export function HabitTimer({ habitId, amount, target, editable }: Props) {
+// Saniyeyi dakikaya çevirip tam sayıysa ondalıksız gösterir (AmountStepper.fmt ile aynı desen).
+function fmtMinutes(totalSeconds: number): string {
+  const mins = totalSeconds / 60;
+  return mins % 1 === 0 ? String(mins) : mins.toFixed(1);
+}
+
+export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
@@ -28,11 +38,47 @@ export function HabitTimer({ habitId, amount, target, editable }: Props) {
   const live = running ? timer.liveSeconds(habitId) ?? amount : amount;
   const reached = target > 0 && live >= target;
 
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  // AmountStepper'daki gibi: onBlur + onSubmitEditing aynı oturumda iki kez
+  // commit etmesin diye tek seferlik bayrak.
+  const committedRef = useRef(false);
+
+  const startEdit = () => {
+    if (!editable || running || !onSet) return;
+    committedRef.current = false;
+    setText(fmtMinutes(amount));
+    setEditing(true);
+  };
+
+  const commit = () => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    setEditing(false);
+    const parsed = parseFloat(text.replace(',', '.'));
+    if (Number.isFinite(parsed) && onSet) onSet(Math.max(0, Math.round(parsed * 60)));
+  };
+
   return (
     <View style={styles.row}>
-      <Text style={[styles.value, reached && styles.done]}>
-        {fmtClock(Math.floor(live))} / {fmtClock(target)}
-      </Text>
+      {editing ? (
+        <TextInput
+          style={styles.valueInput}
+          value={text}
+          onChangeText={setText}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          keyboardType="numeric"
+          autoFocus
+          selectTextOnFocus
+        />
+      ) : (
+        <Pressable onPress={startEdit} disabled={!editable || running || !onSet} hitSlop={6}>
+          <Text style={[styles.value, reached && styles.done]}>
+            {fmtClock(Math.floor(live))} / {fmtClock(target)}
+          </Text>
+        </Pressable>
+      )}
 
       {reached ? (
         <Text style={styles.doneCheck}>✓</Text>
@@ -95,4 +141,14 @@ const makeStyles = (c: Colors) =>
     btnText: { fontSize: 12, fontWeight: '800', color: c.primary },
     btnTextOn: { color: c.onAccent },
     reset: { fontSize: 16, color: c.faint },
+    valueInput: {
+      minWidth: 50,
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.text,
+      textAlign: 'right',
+      paddingVertical: 2,
+      borderBottomWidth: 1,
+      borderBottomColor: c.primary,
+    },
   });

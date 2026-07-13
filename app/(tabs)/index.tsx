@@ -212,6 +212,7 @@ export default function TodayScreen() {
                       amount={h.amount}
                       target={h.target ?? 0}
                       editable={isToday}
+                      onSet={(v) => setHabitAmount(h, v)}
                     />
                   </Animated.View>
                 ) : h.target != null ? (
