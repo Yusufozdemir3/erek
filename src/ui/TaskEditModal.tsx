@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
+import { notifySuccess, tapLight } from '@/lib/haptics';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -41,9 +42,29 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
   if (!task) return null;
 
+  // Tüm alt görevler tamamlanınca ana görevi otomatik tamamlar; biri geri
+  // açılırsa (ya da yeni tamamlanmamış alt görev eklenirse) ana görevi de geri
+  // açar. Alt görevi olmayan bir görevde bu kural hiç devreye girmez.
+  const syncParentCompletion = () => {
+    const { done, total } = subtaskRepo.countForTask(task.id);
+    if (total === 0) return;
+    const current = taskRepo.getById(task.id);
+    if (!current) return;
+    const shouldBeCompleted = done === total;
+    const isCompleted = current.completed_at !== null;
+    if (shouldBeCompleted && !isCompleted) {
+      taskRepo.setCompleted(task.id, true);
+      notifySuccess();
+    } else if (!shouldBeCompleted && isCompleted) {
+      taskRepo.setCompleted(task.id, false);
+      tapLight();
+    }
+  };
+
   // Alt görev değişiklikleri anında yazılır; hem panel içi liste hem arkadaki
   // ekran (rozet sayıları) tazelenir.
   const refreshSubtasks = () => {
+    syncParentCompletion();
     setSubtasks(subtaskRepo.listByTask(task.id));
     onChanged();
   };
