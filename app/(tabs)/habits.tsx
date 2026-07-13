@@ -20,10 +20,12 @@ import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { type Colors } from '@/ui/theme';
 
 export default function HabitsScreen() {
   const { colors, shared } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const { user } = useAppData();
   const [editing, setEditing] = useState<Habit | null>(null); // null = panel kapalı
@@ -56,16 +58,16 @@ export default function HabitsScreen() {
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
         <View style={shared.headerRow}>
-          <Text style={shared.greeting}>Alışkanlıklar</Text>
+          <Text style={shared.greeting}>{t('tabs.habits')}</Text>
           <ProfileButton />
         </View>
-        <Text style={shared.subtitle}>Her gün küçük bir adım</Text>
+        <Text style={shared.subtitle}>{t('screen.habitsSubtitle')}</Text>
 
         {habits.length === 0 ? (
           <EmptyState
             emoji="🌱"
-            title="Henüz alışkanlık yok"
-            subtitle="Alttaki ＋ ile küçük bir tane ekle — her gün bir adım."
+            title={t('empty.habitsTitle')}
+            subtitle={t('empty.habitsBody')}
           />
         ) : (
           habits.map((h, i) => (
@@ -81,7 +83,7 @@ export default function HabitsScreen() {
                     hitSlop={8}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: h.completedToday }}
-                    accessibilityLabel={`${h.title}, bugün`}
+                    accessibilityLabel={t('habit.todayA11y', { title: h.title })}
                   >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                   </Pressable>
@@ -91,7 +93,7 @@ export default function HabitsScreen() {
                   style={styles.titleArea}
                   onPress={() => openEdit(h)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${h.title}, düzenle`}
+                  accessibilityLabel={t('common.editA11y', { title: h.title })}
                 >
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
                     {h.title}
@@ -134,7 +136,7 @@ export default function HabitsScreen() {
                 onPress={() => router.push({ pathname: '/habit/[id]', params: { id: h.id } })}
                 hitSlop={6}
                 accessibilityRole="button"
-                accessibilityLabel={`${h.title} istatistiklerini aç`}
+                accessibilityLabel={t('habit.statsA11y', { title: h.title })}
               >
                 {h.week.map((on, i) => (
                   <View key={i} style={[styles.dayDot, on && styles.dayDotOn]} />

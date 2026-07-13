@@ -12,6 +12,8 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { Habit } from '@/db';
 import { todayDate } from '@/lib/helpers';
+import { getStoredLang } from '@/i18n/I18nProvider';
+import { translate } from '@/i18n/translations';
 
 // Uygulama ön plandayken de bildirimin görünmesini sağlar. Bir kez kurulur.
 export function setNotificationHandler(): void {
@@ -27,8 +29,9 @@ export function setNotificationHandler(): void {
 // Android'de bildirimlerin gösterilebilmesi için bir kanal şarttır. Açılışta kurulur.
 export async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
+  const lang = await getStoredLang();
   await Notifications.setNotificationChannelAsync('habit-reminders', {
-    name: 'Alışkanlık hatırlatmaları',
+    name: translate(lang, 'notif.channelName'),
     importance: Notifications.AndroidImportance.DEFAULT,
   });
 }
@@ -71,7 +74,8 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   const granted = await ensurePermission();
   if (!granted) return false;
 
-  const content = { title: 'Alışkanlık zamanı', body: habit.title };
+  const lang = await getStoredLang();
+  const content = { title: translate(lang, 'notif.reminderTitle'), body: habit.title };
   const sched = habit.schedule;
   const weekdays = sched && sched.freq === 'weekly' ? sched.weekdays ?? [] : [];
 
@@ -126,9 +130,13 @@ export async function scheduleTimerDone(habit: Habit, secondsFromNow: number): P
   if (secondsFromNow <= 0) return;
   const granted = await ensurePermission();
   if (!granted) return;
+  const lang = await getStoredLang();
   await Notifications.scheduleNotificationAsync({
     identifier: `timer:${habit.id}`,
-    content: { title: 'Süre doldu ⏱️', body: `${habit.title} — hedefe ulaştın!` },
+    content: {
+      title: translate(lang, 'notif.timerDoneTitle'),
+      body: translate(lang, 'notif.timerDoneBody', { title: habit.title }),
+    },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: Math.max(1, Math.ceil(secondsFromNow)),

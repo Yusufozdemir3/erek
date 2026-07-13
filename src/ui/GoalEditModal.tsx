@@ -14,6 +14,7 @@ import { toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { shortDate, type Colors } from '@/ui/theme';
 
 interface Props {
@@ -24,6 +25,7 @@ interface Props {
 
 export function GoalEditModal({ goal, onClose, onChanged }: Props) {
   const { colors } = useTheme();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   const [title, setTitle] = useState('');
   const [target, setTarget] = useState(''); // sayısal hedef değeri (metin)
@@ -79,18 +81,18 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
 
   return (
     <ModalCard visible onClose={onClose}>
-        <Text style={styles.heading}>Hedefi düzenle</Text>
+        <Text style={styles.heading}>{t('goal.edit')}</Text>
 
         {/* Tip (salt gösterim) */}
-        <Text style={styles.typeTag}>{numeric ? 'Sayısal hedef' : 'Tarihli hedef'}</Text>
+        <Text style={styles.typeTag}>{numeric ? t('goal.typeNumeric') : t('goal.typeDeadline')}</Text>
 
         {/* Başlık */}
-        <Text style={styles.label}>Başlık</Text>
+        <Text style={styles.label}>{t('task.title')}</Text>
         <TextInput
           style={styles.input}
           value={title}
           onChangeText={setTitle}
-          placeholder="Hedef başlığı"
+          placeholder={t('goal.titleShort')}
           placeholderTextColor={colors.faint}
         />
 
@@ -98,50 +100,50 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
           <>
             <View style={styles.row}>
               <View style={styles.col}>
-                <Text style={styles.label}>Hedef değer</Text>
+                <Text style={styles.label}>{t('goal.targetValue')}</Text>
                 <TextInput
                   style={styles.input}
                   value={target}
                   onChangeText={setTarget}
                   keyboardType="numeric"
-                  placeholder="örn. 100"
+                  placeholder={t('goal.targetExample')}
                   placeholderTextColor={colors.faint}
                 />
               </View>
               <View style={styles.col}>
-                <Text style={styles.label}>Birim</Text>
+                <Text style={styles.label}>{t('goal.unit')}</Text>
                 <TextInput
                   style={styles.input}
                   value={unit}
                   onChangeText={setUnit}
-                  placeholder="km, kitap"
+                  placeholder={t('goal.unitExample')}
                   placeholderTextColor={colors.faint}
                 />
               </View>
             </View>
 
-            <Text style={styles.label}>Mevcut değer</Text>
+            <Text style={styles.label}>{t('goal.currentValue')}</Text>
             <TextInput
               style={styles.input}
               value={current}
               onChangeText={setCurrent}
               keyboardType="numeric"
-              placeholder="örn. 40"
+              placeholder={t('goal.currentExample')}
               placeholderTextColor={colors.faint}
             />
           </>
         ) : (
           <>
-            <Text style={styles.label}>Son tarih</Text>
+            <Text style={styles.label}>{t('goal.deadlineLabel')}</Text>
             <View style={styles.dateRow}>
               <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
                 <Text style={styles.dateBtnText}>
-                  {deadline ? shortDate(deadline) : 'Tarih seç'}
+                  {deadline ? shortDate(deadline, lang) : t('goal.pickDate')}
                 </Text>
               </Pressable>
               {deadline && (
                 <Pressable style={styles.clearBtn} onPress={() => setDeadline(null)}>
-                  <Text style={styles.clearBtnText}>Temizle</Text>
+                  <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
                 </Pressable>
               )}
             </View>
@@ -161,7 +163,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
         <View style={styles.actions}>
           <ConfirmDeleteButton onConfirm={remove} />
           <Pressable style={styles.saveBtn} onPress={save}>
-            <Text style={styles.saveBtnText}>Kaydet</Text>
+            <Text style={styles.saveBtnText}>{t('common.save')}</Text>
           </Pressable>
         </View>
     </ModalCard>
@@ -220,9 +222,14 @@ const makeStyles = (c: Colors) =>
     saveBtn: {
       flex: 1,
       alignItems: 'center',
-      paddingVertical: 14,
-      borderRadius: 12,
+      paddingVertical: 15,
+      borderRadius: 14,
       backgroundColor: c.primary,
+      shadowColor: c.primary,
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
     },
     saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
   });

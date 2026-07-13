@@ -7,14 +7,14 @@
 export interface Milestone {
   days: number;
   emoji: string;
-  label: string;
+  labelKey: string; // i18n anahtarı — çağıran t(labelKey) ile çevirir
 }
 
 export const STREAK_MILESTONES: Milestone[] = [
-  { days: 7, emoji: '🥉', label: '1 hafta' },
-  { days: 30, emoji: '🥈', label: '1 ay' },
-  { days: 100, emoji: '🥇', label: '100 gün' },
-  { days: 365, emoji: '💎', label: '1 yıl' },
+  { days: 7, emoji: '🥉', labelKey: 'milestone.week' },
+  { days: 30, emoji: '🥈', labelKey: 'milestone.month' },
+  { days: 100, emoji: '🥇', labelKey: 'milestone.hundredDays' },
+  { days: 365, emoji: '💎', labelKey: 'milestone.year' },
 ];
 
 // Verilen seriyle ulaşılmış EN YÜKSEK kilometre taşı; hiçbiri değilse null.

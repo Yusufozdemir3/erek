@@ -16,30 +16,21 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
 
 const SEEN_KEY = 'onboarding:done';
 
-const PAGES: { emoji: string; title: string; body: string }[] = [
-  {
-    emoji: '📅',
-    title: 'Hepsi bir arada',
-    body: 'Alışkanlıklar, görevler ve hedefler tek uygulamada. "Bugün" ekranı günün tamamını tek bakışta gösterir; alttaki ＋ ile her şeyi oradan eklersin.',
-  },
-  {
-    emoji: '⏱️',
-    title: 'Üç tip alışkanlık',
-    body: 'Basit tik ("yaptım"), sayısal hedef (8 bardak su) ya da zamanlayıcı (20 dk meditasyon). Bir alışkanlığı hedefe bağla — tamamladığın her gün hedefe +1 yazılır.',
-  },
-  {
-    emoji: '🔒',
-    title: 'Verilerin sende',
-    body: 'Her şey önce cihazında saklanır, internetsiz çalışır. İstersen Profil\'den hesap bağlayıp buluta yedekleyebilir, başka cihazlarla eşitleyebilirsin.',
-  },
+// Metinler i18n anahtarı; render'da t() ile çevrilir.
+const PAGES: { emoji: string; titleKey: string; bodyKey: string }[] = [
+  { emoji: '📅', titleKey: 'onboarding.page1Title', bodyKey: 'onboarding.page1Body' },
+  { emoji: '⏱️', titleKey: 'onboarding.page2Title', bodyKey: 'onboarding.page2Body' },
+  { emoji: '🔒', titleKey: 'onboarding.page3Title', bodyKey: 'onboarding.page3Body' },
 ];
 
 function Onboarding({ onDone }: { onDone: () => void }) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const { width } = useWindowDimensions();
   const [page, setPage] = useState(0);
@@ -59,9 +50,9 @@ function Onboarding({ onDone }: { onDone: () => void }) {
           onPress={onDone}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Tanıtımı atla"
+          accessibilityLabel={t('onboarding.skipA11y')}
         >
-          <Text style={styles.skipText}>Atla</Text>
+          <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
         </Pressable>
 
         <ScrollView
@@ -74,10 +65,10 @@ function Onboarding({ onDone }: { onDone: () => void }) {
           }
         >
           {PAGES.map((p) => (
-            <View key={p.title} style={[styles.page, { width }]}>
+            <View key={p.titleKey} style={[styles.page, { width }]}>
               <Text style={styles.emoji}>{p.emoji}</Text>
-              <Text style={styles.title}>{p.title}</Text>
-              <Text style={styles.body}>{p.body}</Text>
+              <Text style={styles.title}>{t(p.titleKey)}</Text>
+              <Text style={styles.body}>{t(p.bodyKey)}</Text>
             </View>
           ))}
         </ScrollView>
@@ -92,9 +83,9 @@ function Onboarding({ onDone }: { onDone: () => void }) {
             style={styles.nextBtn}
             onPress={next}
             accessibilityRole="button"
-            accessibilityLabel={last ? 'Başla' : 'İleri'}
+            accessibilityLabel={last ? t('onboarding.start') : t('onboarding.next')}
           >
-            <Text style={styles.nextText}>{last ? 'Başla' : 'İleri'}</Text>
+            <Text style={styles.nextText}>{last ? t('onboarding.start') : t('onboarding.next')}</Text>
           </Pressable>
         </View>
       </View>

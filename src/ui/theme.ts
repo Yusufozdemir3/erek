@@ -7,6 +7,10 @@
 
 import { StyleSheet } from 'react-native';
 import type { Priority } from '@/db';
+import type { Lang } from '@/i18n/translations';
+
+// Aktif dile karşılık gelen Intl/Date yerel ayarı (ay/gün adları için).
+export const DATE_LOCALE: Record<Lang, string> = { tr: 'tr-TR', en: 'en-US', de: 'de-DE' };
 
 // Tek bir temanın tüm renk jetonları.
 export interface Colors {
@@ -73,12 +77,6 @@ export const PRIORITY_COLOR: Record<Priority, string> = {
   low: '#10b981',
 };
 
-export const PRIORITY_LABEL: Record<Priority, string> = {
-  low: 'Düşük',
-  medium: 'Orta',
-  high: 'Yüksek',
-};
-
 // Öncelik seçicideki sıralama (düşükten yükseğe).
 export const PRIORITY_ORDER: Priority[] = ['low', 'medium', 'high'];
 
@@ -95,21 +93,23 @@ export const HABIT_COLORS = [
 // Alışkanlığın rengi yoksa kullanılacak varsayılan.
 export const DEFAULT_HABIT_COLOR = '#6366f1';
 
-// "YYYY-MM-DD" (ya da ISO) -> "28 Haz" gibi kısa etiket.
-export function shortDate(value: string | null): string {
-  if (!value) return 'Tarihsiz';
+// "YYYY-MM-DD" (ya da ISO) -> "28 Haz" gibi kısa etiket. lang belirler hangi
+// yerel ayarla (ay adı vb.) biçimlensin; noDateLabel değer yoksa gösterilecek
+// çevrilmiş metin (çağıran t('date.noDate') verir).
+export function shortDate(value: string | null, lang: Lang = 'tr', noDateLabel = 'Tarihsiz'): string {
+  if (!value) return noDateLabel;
   const ymd = value.slice(0, 10);
-  return new Date(`${ymd}T00:00:00`).toLocaleDateString('tr-TR', {
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], {
     day: 'numeric',
     month: 'short',
   });
 }
 
 // "YYYY-MM-DD" (ya da ISO) -> "28 Haziran 2026" gibi uzun etiket.
-export function longDateLabel(value: string | null): string {
-  if (!value) return 'Tarihsiz';
+export function longDateLabel(value: string | null, lang: Lang = 'tr', noDateLabel = 'Tarihsiz'): string {
+  if (!value) return noDateLabel;
   const ymd = value.slice(0, 10);
-  return new Date(`${ymd}T00:00:00`).toLocaleDateString('tr-TR', {
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -117,8 +117,8 @@ export function longDateLabel(value: string | null): string {
 }
 
 // "YYYY-MM-DD" -> gün adlı tam etiket ("Pazartesi, 29 Haziran 2026" gibi).
-export function fullDateLabel(ymd: string): string {
-  return new Date(`${ymd}T00:00:00`).toLocaleDateString('tr-TR', {
+export function fullDateLabel(ymd: string, lang: Lang = 'tr'): string {
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -126,16 +126,20 @@ export function fullDateLabel(ymd: string): string {
   });
 }
 
-// Tarihli bir hedef/görev için kalan gün etiketini üretir.
-export function deadlineLabel(ymd: string | null): string {
+// Tarihli bir hedef/görev için kalan gün etiketini üretir. Çevrilmiş parçalar
+// (kaç gün kaldı/geçti, "bugün son gün") çağırandan (t()) alınır.
+export function deadlineLabel(
+  ymd: string | null,
+  labels: { daysLeft: (n: number) => string; dueToday: string; daysAgo: (n: number) => string }
+): string {
   if (!ymd) return '';
   const target = new Date(`${ymd}T00:00:00`);
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   const diff = Math.round((target.getTime() - now.getTime()) / 86_400_000);
-  if (diff > 0) return `${diff} gün kaldı`;
-  if (diff === 0) return 'Bugün son gün';
-  return `${-diff} gün geçti`;
+  if (diff > 0) return labels.daysLeft(diff);
+  if (diff === 0) return labels.dueToday;
+  return labels.daysAgo(-diff);
 }
 
 // Ortak stilleri aktif palete göre üretir. Bileşenler: const { shared } = useTheme().

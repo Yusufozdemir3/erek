@@ -93,10 +93,8 @@ export function toJson(value: unknown): string | null {
   return JSON.stringify(value);
 }
 
-// Gün adları, JS getDay() sırasıyla (0=Pazar ... 6=Cumartesi).
-const WEEKDAY_NAMES = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
-// Görüntüleme sırası: Pazartesi'den Pazar'a.
-const WEEKDAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+// Görüntüleme sırası: Pazartesi'den Pazar'a (JS getDay() değerleri; dile bağlı değil).
+export const WEEKDAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 // Verilen gün alışkanlığın yaşam aralığında mı? null start = baştan beri,
 // null end = süresiz. Aralık dışı günler "planlı değil" muamelesi görür:
@@ -127,14 +125,20 @@ export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boo
 }
 
 // Sıklık kuralının okunabilir kısa etiketi ("Her gün" / "Pzt·Çar·Cum").
-export function scheduleLabel(schedule: Recurrence | null): string {
-  if (!schedule || schedule.freq === 'daily') return 'Her gün';
+// everyDayLabel ve dayLabels (JS getDay() sırasıyla, 0=Pazar...6=Cumartesi)
+// çağırandan (t()) gelir — bu fonksiyon dile bağımlı metin barındırmaz.
+export function scheduleLabel(
+  schedule: Recurrence | null,
+  everyDayLabel: string,
+  dayLabels: string[]
+): string {
+  if (!schedule || schedule.freq === 'daily') return everyDayLabel;
   if (schedule.freq === 'weekly') {
     const wds = schedule.weekdays ?? [];
-    if (wds.length === 0 || wds.length === 7) return 'Her gün';
+    if (wds.length === 0 || wds.length === 7) return everyDayLabel;
     return WEEKDAY_DISPLAY_ORDER.filter((w) => wds.includes(w))
-      .map((w) => WEEKDAY_NAMES[w])
+      .map((w) => dayLabels[w])
       .join('·');
   }
-  return 'Her gün';
+  return everyDayLabel;
 }

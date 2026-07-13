@@ -45,7 +45,7 @@ const TABLES: TableCfg[] = [
   },
   {
     table: 'tasks',
-    cols: ['id', 'user_id', 'title', 'due_date', 'priority', 'recurrence', 'completed_at', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'completed_at', 'updated_at', 'deleted_at'],
     hasUserId: true,
   },
   {

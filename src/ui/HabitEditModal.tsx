@@ -11,6 +11,7 @@ import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications'
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface Props {
   habit: Habit | null; // null = panel kapalı
@@ -20,6 +21,7 @@ interface Props {
 
 export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   if (!habit) return null;
 
   const handleSubmit = (values: HabitFormValues) => {
@@ -32,10 +34,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
     if (updated) {
       scheduleHabitReminder(updated).then((ok) => {
         if (!ok) {
-          Alert.alert(
-            'Bildirim izni yok',
-            'Hatırlatma kaydedildi ama bildirim gönderebilmek için izin gerekiyor. Telefon ayarlarından bu uygulamaya bildirim izni verebilirsin.'
-          );
+          Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
         }
       });
     }
@@ -50,14 +49,14 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 
   return (
     <ModalCard visible onClose={onClose}>
-      <Text style={[styles.heading, { color: colors.text }]}>Alışkanlığı düzenle</Text>
+      <Text style={[styles.heading, { color: colors.text }]}>{t('habit.edit')}</Text>
       {/* key: farklı alışkanlığa geçince form taze başlangıç değerleriyle kurulur */}
       <HabitForm
         key={habit.id}
         userId={habit.user_id}
         kind={habit.kind}
         initial={habit}
-        submitLabel="Kaydet"
+        submitLabel={t('common.save')}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
       />

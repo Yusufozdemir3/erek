@@ -307,6 +307,116 @@ describe('logsInRange', () => {
   });
 });
 
+describe('allLogs / logsBetween', () => {
+  it('allLogs tüm logları tarihe göre artan sırada döner', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    habitRepo.toggleLog(habit.id, '2026-06-24', true);
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    expect(habitRepo.allLogs(habit.id).map((l) => l.log_date)).toEqual([
+      '2026-06-24',
+      '2026-06-29',
+      TODAY,
+    ]);
+  });
+
+  it('logsBetween yalnızca kapalı aralıktaki logları döner', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, '2026-06-24', true);
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(habitRepo.logsBetween(habit.id, '2026-06-25', '2026-06-30').map((l) => l.log_date)).toEqual([
+      '2026-06-29',
+    ]);
+    // Uç değerler dahil.
+    expect(habitRepo.logsBetween(habit.id, '2026-06-24', TODAY).map((l) => l.log_date)).toEqual([
+      '2026-06-24',
+      '2026-06-29',
+      TODAY,
+    ]);
+  });
+});
+
+describe('allStreaks', () => {
+  it('hiç log yoksa boş dizi', () => {
+    const habit = createHabit();
+    expect(habitRepo.allStreaks(habit.id)).toEqual([]);
+  });
+
+  it('geçmişteki tüm serileri büyükten küçüğe listeler', () => {
+    const habit = createHabit();
+    // Eski 3'lük: 24-25-26 Haziran
+    habitRepo.toggleLog(habit.id, '2026-06-24', true);
+    habitRepo.toggleLog(habit.id, '2026-06-25', true);
+    habitRepo.toggleLog(habit.id, '2026-06-26', true);
+    // Kaçırılan: 27
+    // Güncel 2'lik: 30 Haziran - bugün
+    habitRepo.toggleLog(habit.id, '2026-06-30', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+
+    const streaks = habitRepo.allStreaks(habit.id);
+    expect(streaks).toEqual([
+      { length: 3, start: '2026-06-24', end: '2026-06-26' },
+      { length: 2, start: '2026-06-30', end: TODAY },
+    ]);
+  });
+
+  it('haftalık planda yalnızca planlı günleri seriye katar', () => {
+    const schedule = { freq: 'weekly' as const, weekdays: [1, 3, 5] }; // Pzt/Çar/Cum
+    const habit = createHabit({ schedule });
+    habitRepo.toggleLog(habit.id, '2026-06-24', true); // Çar
+    habitRepo.toggleLog(habit.id, '2026-06-26', true); // Cum
+    habitRepo.toggleLog(habit.id, '2026-06-29', true); // Pzt
+    expect(habitRepo.allStreaks(habit.id)).toEqual([
+      { length: 3, start: '2026-06-24', end: '2026-06-29' },
+    ]);
+  });
+});
+
+describe('scoreHistory', () => {
+  it('hiç log yoksa boş dizi', () => {
+    const habit = createHabit();
+    expect(habitRepo.scoreHistory(habit.id, 90)).toEqual([]);
+  });
+
+  it('her tamamlanan günde skor artar, kaçırılan günde düşer', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, '2026-06-28', true);
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    // 30 Haziran kaçırıldı
+    habitRepo.toggleLog(habit.id, TODAY, true);
+
+    const history = habitRepo.scoreHistory(habit.id, 90);
+    const byDate = new Map(history.map((h) => [h.date, h.score]));
+    expect(byDate.get('2026-06-28')!).toBeGreaterThan(0);
+    expect(byDate.get('2026-06-29')!).toBeGreaterThan(byDate.get('2026-06-28')!);
+    // Kaçırılan gün skoru düşürür.
+    expect(byDate.get('2026-06-30')!).toBeLessThan(byDate.get('2026-06-29')!);
+    // Skor her zaman 0..1 aralığında.
+    for (const h of history) {
+      expect(h.score).toBeGreaterThanOrEqual(0);
+      expect(h.score).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('yalnızca istenen son N günü döner', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, '2026-06-24', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(habitRepo.scoreHistory(habit.id, 3)).toHaveLength(3);
+  });
+
+  it('plansız günde skor değişmez (bir önceki değerle taşınır)', () => {
+    const schedule = { freq: 'weekly' as const, weekdays: [1, 3, 5] }; // Pzt/Çar/Cum
+    const habit = createHabit({ schedule });
+    habitRepo.toggleLog(habit.id, '2026-06-24', true); // Çar (planlı)
+    const history = habitRepo.scoreHistory(habit.id, 90);
+    const byDate = new Map(history.map((h) => [h.date, h.score]));
+    // 25 Haziran (Perşembe) plansız — skor 24 Haziran'la aynı kalmalı.
+    expect(byDate.get('2026-06-25')).toBe(byDate.get('2026-06-24'));
+  });
+});
+
 describe('hedefe bağlı ilerleme (goal_id)', () => {
   // Bağlı alışkanlık her TAMAMLANDIĞI gün hedefe +1, geri alınınca −1 katar.
   // Katkı "yapılan miktar" değil, "tamamlanan gün" başınadır.

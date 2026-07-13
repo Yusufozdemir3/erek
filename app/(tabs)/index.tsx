@@ -27,22 +27,27 @@ import { PriorityMark } from '@/ui/PriorityMark';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
-import { fullDateLabel, PRIORITY_COLOR, type Colors } from '@/ui/theme';
+import { useI18n } from '@/i18n/I18nProvider';
+import type { Lang } from '@/i18n/translations';
+import { DATE_LOCALE, fullDateLabel, PRIORITY_COLOR, type Colors } from '@/ui/theme';
 
 // Liste kartları tamamlanınca yeniden sıralanır (tamamlanan alta iner); her kart
 // bu layout geçişiyle sarıldığından konum değişimi yumuşakça animasyonlanır.
 const LIST_LAYOUT = LinearTransition.duration(260);
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-// Başlık: bugünse "Bugün", değilse o günün adı (örn. "Pazartesi").
-function titleFor(ymd: string, today: string): string {
-  if (ymd === today) return 'Bugün';
-  const w = new Date(`${ymd}T00:00:00`).toLocaleDateString('tr-TR', { weekday: 'long' });
-  return w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1);
+// Başlık: bugünse "Bugün" (çevrili), değilse o günün adı (örn. "Pazartesi").
+function titleFor(ymd: string, today: string, lang: Lang, todayLabel: string): string {
+  if (ymd === today) return todayLabel;
+  const locale = DATE_LOCALE[lang];
+  const w = new Date(`${ymd}T00:00:00`).toLocaleDateString(locale, { weekday: 'long' });
+  return w.charAt(0).toLocaleUpperCase(locale) + w.slice(1);
 }
 
 export default function TodayScreen() {
   const { colors, shared } = useTheme();
+  // Not: map değişkeni `t` (görev) ile çakışmasın diye i18n `tr` alınır.
+  const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user } = useAppData();
   const today = todayDate();
@@ -101,11 +106,11 @@ export default function TodayScreen() {
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content}>
         <View style={styles.headRow}>
-          <Text style={shared.greeting}>{titleFor(selectedDate, today)}</Text>
+          <Text style={shared.greeting}>{titleFor(selectedDate, today, lang, tr('tabs.today'))}</Text>
           <View style={styles.headRight}>
             {!isToday && (
               <Pressable onPress={() => setSelectedDate(today)} hitSlop={8}>
-                <Text style={styles.backToday}>Bugüne dön</Text>
+                <Text style={styles.backToday}>{tr('today.backToday')}</Text>
               </Pressable>
             )}
             <ProfileButton />
@@ -115,7 +120,7 @@ export default function TodayScreen() {
         {/* Tarihe dokun -> takvim açılır (ikon yok, sadece metin) */}
         <Pressable onPress={() => setShowPicker(true)} hitSlop={6}>
           <Text style={[shared.subtitle, styles.dateLink, { textTransform: 'capitalize' }]}>
-            {fullDateLabel(selectedDate)}
+            {fullDateLabel(selectedDate, lang)}
           </Text>
         </Pressable>
 
@@ -144,8 +149,8 @@ export default function TodayScreen() {
           {tasks.length === 0 && habits.length === 0 ? (
             <EmptyState
               emoji={isToday ? '🎉' : '🌙'}
-              title={isToday ? 'Bugün için her şey tamam' : 'Bu gün boş'}
-              subtitle={isToday ? 'Planında bir şey yok — keyfini çıkar.' : undefined}
+              title={isToday ? tr('empty.todayTitle') : tr('empty.otherDayTitle')}
+              subtitle={isToday ? tr('empty.todayBody') : undefined}
             />
           ) : (
             <>
@@ -154,7 +159,7 @@ export default function TodayScreen() {
                 const time = extractTime(t.due_date);
                 return (
                   <Animated.View key={t.id} layout={LIST_LAYOUT} style={shared.card}>
-                    {time && <TimeBadge time={time} />}
+                    {time && <TimeBadge time={time} endTime={t.end_time} />}
                     <Pressable
                       onPress={() => toggleTask(t)}
                       hitSlop={8}
@@ -175,12 +180,12 @@ export default function TodayScreen() {
                       style={shared.cardBody}
                       onPress={() => setEditingTask(t)}
                       accessibilityRole="button"
-                      accessibilityLabel={`${t.title}, düzenle`}
+                      accessibilityLabel={tr('common.editA11y', { title: t.title })}
                     >
                       <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
                       {subtaskCounts[t.id] && (
                         <Text style={styles.subCount}>
-                          {subtaskCounts[t.id].done}/{subtaskCounts[t.id].total} alt görev
+                          {subtaskCounts[t.id].done}/{subtaskCounts[t.id].total} {tr('task.subtaskCountSuffix')}
                         </Text>
                       )}
                     </Pressable>
@@ -239,7 +244,7 @@ export default function TodayScreen() {
                     disabled={isFuture}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: h.completed, disabled: isFuture }}
-                    accessibilityLabel={`${h.title} alışkanlığı`}
+                    accessibilityLabel={tr('habit.checkboxA11y', { title: h.title })}
                   >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>

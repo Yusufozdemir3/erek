@@ -93,20 +93,24 @@ describe('isWithinHabitDates', () => {
 });
 
 describe('scheduleLabel', () => {
+  // Fonksiyon artık dile bağımlı metin barındırmıyor; çağıran (t()) verir.
+  const EVERY_DAY = 'Her gün';
+  const DAY_LABELS = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt']; // 0=Pazar...6=Cumartesi
+
   it('null ve daily için "Her gün"', () => {
-    expect(scheduleLabel(null)).toBe('Her gün');
-    expect(scheduleLabel({ freq: 'daily' })).toBe('Her gün');
+    expect(scheduleLabel(null, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
+    expect(scheduleLabel({ freq: 'daily' }, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
   });
 
   it('weekly seçili günleri Pazartesi başlangıçlı sırayla listeler', () => {
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [1, 3, 5] })).toBe('Pzt·Çar·Cum');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [1, 3, 5] }, EVERY_DAY, DAY_LABELS)).toBe('Pzt·Çar·Cum');
     // Görüntü sırası Pzt..Paz olduğundan Pazar (0) en sona düşer.
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1] })).toBe('Pzt·Paz');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1] }, EVERY_DAY, DAY_LABELS)).toBe('Pzt·Paz');
   });
 
   it('weekly boş ya da 7 gün seçiliyse "Her gün"', () => {
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [] })).toBe('Her gün');
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1, 2, 3, 4, 5, 6] })).toBe('Her gün');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [] }, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1, 2, 3, 4, 5, 6] }, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
   });
 });
 

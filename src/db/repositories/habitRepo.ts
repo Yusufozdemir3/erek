@@ -281,6 +281,28 @@ export const habitRepo = {
     return rows as HabitLog[];
   },
 
+  // Bir alışkanlığın TÜM geçmiş logları (tarihe göre artan). İstatistik
+  // ekranının skor/seri/haftanın-günü hesapları tek bu sorgudan türetilir.
+  allLogs(habitId: string): HabitLog[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM habit_logs WHERE habit_id = ? ORDER BY log_date ASC`,
+      [habitId]
+    );
+    return rows as HabitLog[];
+  },
+
+  // İki tarih arasındaki (dahil) loglar — takvim ay görünümü için. logsInRange'den
+  // farkı: açık uçlu "bugüne kadar" değil, KAPALI bir aralık (geçmiş ayları gezerken).
+  logsBetween(habitId: string, startYmd: string, endYmd: string): HabitLog[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM habit_logs WHERE habit_id = ? AND log_date >= ? AND log_date <= ? ORDER BY log_date ASC`,
+      [habitId, startYmd, endYmd]
+    );
+    return rows as HabitLog[];
+  },
+
   // EN UZUN SERİ: currentStreak'in "bugünden geriye" mantığının aksine, ilk
   // tamamlanan günden bugüne kadar tüm geçmişi baştan sona tarayıp gördüğü en
   // uzun ardışık planlı-gün serisini döner. Aynı planlı-gün kuralını kullanır
@@ -323,5 +345,105 @@ export const habitRepo = {
       cursor.setDate(cursor.getDate() + 1);
     }
     return best;
+  },
+
+  // TÜM SERİLER: longestStreak'le AYNI yürüyüş ve AYNI planlı-gün kuralı, ama
+  // tek bir "en iyi" yerine geçmişteki HER ardışık seriyi (uzunluk + başlangıç/
+  // bitiş tarihi) toplar — istatistik ekranındaki "seri geçmişi" listesi için.
+  // Bilinçli tutarlılık: longestStreak'in bugünü-tolerans göstermeyen kuralıyla
+  // birebir aynı sonucu üretir (ayrı bir "current" özel durumu YOK).
+  allStreaks(habitId: string): { length: number; start: string; end: string }[] {
+    const db = getDb();
+    const habit = this.getById(habitId);
+    const isDue = (d: string) =>
+      isScheduledOn(habit?.schedule ?? null, d) &&
+      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);
+    const rows = db.getAllSync<any>(
+      `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1 ORDER BY log_date ASC`,
+      [habitId]
+    );
+    if (rows.length === 0) return [];
+
+    const completed = new Set<string>(rows.map((r) => r.log_date));
+    const today = todayDate();
+    const cursor = new Date(`${rows[0].log_date}T00:00:00`);
+    const end = new Date(`${today}T00:00:00`);
+
+    const streaks: { length: number; start: string; end: string }[] = [];
+    let run = 0;
+    let runStart: string | null = null;
+    let runEnd: string | null = null;
+    const flush = () => {
+      if (run > 0 && runStart && runEnd) streaks.push({ length: run, start: runStart, end: runEnd });
+      run = 0;
+      runStart = null;
+      runEnd = null;
+    };
+
+    while (cursor <= end) {
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, '0');
+      const d = String(cursor.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+
+      if (isDue(dateStr)) {
+        if (completed.has(dateStr)) {
+          if (run === 0) runStart = dateStr;
+          run++;
+          runEnd = dateStr;
+        } else {
+          flush();
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    flush(); // döngü biterken açık kalan seriyi de ekle
+
+    return streaks.sort((a, b) => b.length - a.length);
+  },
+
+  // SKOR GEÇMİŞİ (Loop Habit Tracker'daki "güç puanı" fikrinden esinlenir):
+  // her PLANLI günde üstel hareketli ortalama (EMA) güncellenir — yarı ömür ~7
+  // planlı tekrar (takvim günü değil; haftada birkaç kez planlı alışkanlıkta da
+  // "yakın geçmiş" anlamlı bir pencere olsun diye). Plansız günlerde skor
+  // DEĞİŞMEZ (bir önceki değeriyle taşınır) ki grafik günlük takvimle hizalı,
+  // kesiksiz bir çizgi olsun. Yakınsama için hesap ilk logdan başlar; yalnızca
+  // istenen son `days` gün döndürülür.
+  scoreHistory(habitId: string, days: number): { date: string; score: number }[] {
+    const db = getDb();
+    const habit = this.getById(habitId);
+    if (!habit) return [];
+    const rows = db.getAllSync<any>(
+      `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1 ORDER BY log_date ASC`,
+      [habitId]
+    );
+    if (rows.length === 0) return [];
+
+    const completed = new Set<string>(rows.map((r) => r.log_date));
+    const isDue = (d: string) =>
+      isScheduledOn(habit.schedule, d) && isWithinHabitDates(habit.start_date, habit.end_date, d);
+
+    const firstLogDate = rows[0].log_date as string;
+    const firstDate = habit.start_date && habit.start_date < firstLogDate ? habit.start_date : firstLogDate;
+    const today = todayDate();
+    const cursor = new Date(`${firstDate}T00:00:00`);
+    const end = new Date(`${today}T00:00:00`);
+    const DECAY = Math.pow(0.5, 1 / 7);
+
+    let score = 0;
+    const all: { date: string; score: number }[] = [];
+    while (cursor <= end) {
+      const y = cursor.getFullYear();
+      const m = String(cursor.getMonth() + 1).padStart(2, '0');
+      const d = String(cursor.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+      if (isDue(dateStr)) {
+        const hit = completed.has(dateStr) ? 1 : 0;
+        score = score * DECAY + hit * (1 - DECAY);
+      }
+      all.push({ date: dateStr, score });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return all.slice(-days);
   },
 };

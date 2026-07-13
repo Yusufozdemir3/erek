@@ -11,6 +11,7 @@ import { rescheduleAllReminders } from '@/lib/notifications';
 import { runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface AppData {
   user: User;
@@ -37,6 +38,7 @@ export function useAppData(): AppData {
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
@@ -71,7 +73,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   if (error) {
     return (
       <View style={[styles.center, { backgroundColor: colors.bg }]}>
-        <Text style={[styles.errorTitle, { color: colors.danger }]}>Veri katmanı başlatılamadı</Text>
+        <Text style={[styles.errorTitle, { color: colors.danger }]}>{t('app.dataLayerError')}</Text>
         <Text style={[styles.errorBody, { color: colors.muted }]}>{error}</Text>
       </View>
     );

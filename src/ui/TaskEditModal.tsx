@@ -14,6 +14,7 @@ import { subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 
@@ -25,6 +26,7 @@ interface Props {
 
 export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const { colors } = useTheme();
+  const { t: tr } = useI18n();
   const styles = makeStyles(colors);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
@@ -69,6 +71,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       title: values.title,
       priority: values.priority,
       due_date: values.due_date,
+      end_time: values.end_time,
     });
     onChanged();
     onClose();
@@ -82,17 +85,17 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
   return (
     <ModalCard visible onClose={onClose}>
-      <Text style={styles.heading}>Görevi düzenle</Text>
+      <Text style={styles.heading}>{tr('task.edit')}</Text>
       {/* key: farklı göreve geçince form taze başlangıç değerleriyle kurulur */}
       <TaskForm
         key={task.id}
-        initial={{ title: task.title, priority: task.priority, due_date: task.due_date }}
-        submitLabel="Kaydet"
+        initial={{ title: task.title, priority: task.priority, due_date: task.due_date, end_time: task.end_time }}
+        submitLabel={tr('common.save')}
         onSubmit={handleSave}
         onDelete={handleDelete}
       >
             {/* Alt görevler — anında kaydedilir (Kaydet beklemez) */}
-            <Text style={styles.label}>Alt görevler</Text>
+            <Text style={styles.label}>{tr('task.subtasks')}</Text>
             {subtasks.map((s) => {
               const done = s.completed === 1;
               return (
@@ -116,7 +119,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
                 style={styles.subtaskInput}
                 value={newSubtask}
                 onChangeText={setNewSubtask}
-                placeholder="Alt görev ekle…"
+                placeholder={tr('task.addSubtask')}
                 placeholderTextColor={colors.faint}
                 onSubmitEditing={addSubtask}
                 blurOnSubmit={false}

@@ -36,28 +36,29 @@ import {
 } from '@/sync';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { type Colors } from '@/ui/theme';
 
 type Mode = 'signin' | 'signup';
 
-// Supabase'in İngilizce hata mesajlarını kullanıcıya Türkçe göster.
-function translateAuthError(e: unknown): string {
+// Supabase'in İngilizce hata mesajlarını kullanıcının diline çevirir.
+function translateAuthError(e: unknown, t: (key: string) => string): string {
   const msg = e instanceof Error ? e.message : String(e);
   const m = msg.toLowerCase();
-  if (m.includes('invalid login credentials')) return 'E-posta veya parola hatalı.';
+  if (m.includes('invalid login credentials')) return t('account.errInvalidCreds');
   if (m.includes('already registered') || m.includes('already been registered'))
-    return 'Bu e-posta zaten kayıtlı. Giriş yapmayı dene.';
-  if (m.includes('email not confirmed'))
-    return 'E-posta henüz onaylanmadı. Gelen kutundaki bağlantıya tıkla.';
-  if (m.includes('password should be at least')) return 'Parola en az 6 karakter olmalı.';
+    return t('account.errAlreadyRegistered');
+  if (m.includes('email not confirmed')) return t('account.errEmailNotConfirmed');
+  if (m.includes('password should be at least')) return t('account.errPasswordShort');
   if (m.includes('unable to validate email') || m.includes('invalid email'))
-    return 'Geçerli bir e-posta gir.';
-  if (m.includes('network')) return 'Ağ hatası. İnternet bağlantını kontrol et.';
+    return t('account.errInvalidEmail');
+  if (m.includes('network')) return t('account.errNetwork');
   return msg;
 }
 
 export default function AccountScreen() {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const { user, refreshUser } = useAppData();
   const [mode, setMode] = useState<Mode>('signin');
@@ -85,11 +86,11 @@ export default function AccountScreen() {
     setResult(null);
     const em = email.trim();
     if (!em || !password) {
-      setError('E-posta ve parola gerekli.');
+      setError(t('account.errRequired'));
       return;
     }
     if (password.length < 6) {
-      setError('Parola en az 6 karakter olmalı.');
+      setError(t('account.errPasswordShort'));
       return;
     }
     setBusy(true);
@@ -104,7 +105,7 @@ export default function AccountScreen() {
         } else {
           const { needsConfirmation } = await signUpWithEmail(em, password);
           if (needsConfirmation) {
-            setInfo('Hesap oluşturuldu. E-postana gelen onay bağlantısına tıkla, sonra giriş yap.');
+            setInfo(t('account.confirmationSent'));
             setMode('signin');
             return;
           }
@@ -115,13 +116,13 @@ export default function AccountScreen() {
       // Buraya geldiysek aktif bir oturum var.
       const r = await linkAndSync();
       if (r.status === 'error') {
-        setError(`Giriş başarılı ama senkron başarısız: ${r.message}`);
+        setError(t('account.syncFailedAfterLogin', { message: r.message ?? '' }));
       } else {
-        setInfo('Hesap bağlandı ve veriler senkronlandı.');
+        setInfo(t('account.linkedAndSynced'));
         setDone(true);
       }
     } catch (e) {
-      setError(translateAuthError(e));
+      setError(translateAuthError(e, t));
     } finally {
       setBusy(false);
     }
@@ -130,11 +131,8 @@ export default function AccountScreen() {
   if (!isSyncConfigured) {
     return (
       <View style={styles.center}>
-        <Text style={styles.centerTitle}>Bulut senkron yapılandırılmadı</Text>
-        <Text style={styles.centerBody}>
-          Hesap bağlamak için önce .env dosyasına Supabase bilgilerini girip Expo'yu
-          yeniden başlatman gerekir.
-        </Text>
+        <Text style={styles.centerTitle}>{t('account.notConfigTitle')}</Text>
+        <Text style={styles.centerBody}>{t('account.notConfigBody')}</Text>
       </View>
     );
   }
@@ -146,34 +144,31 @@ export default function AccountScreen() {
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>
-          {mode === 'signin' ? 'Hesabına giriş yap' : 'Yeni hesap oluştur'}
+          {mode === 'signin' ? t('account.titleSignin') : t('account.titleSignup')}
         </Text>
-        <Text style={styles.subtitle}>
-          Verilerini buluta yedekle ve başka cihazlarla senkronla. Bu cihazdaki
-          mevcut verilerin hesabına aktarılır.
-        </Text>
+        <Text style={styles.subtitle}>{t('account.subtitle')}</Text>
 
         {done ? (
           <View style={styles.card}>
-            <Text style={styles.successTitle}>✓ Hesap bağlandı</Text>
+            <Text style={styles.successTitle}>{t('account.linkedTitle')}</Text>
             {result?.status === 'ok' && (
               <Text style={styles.syncLine}>
-                ↑ {result.pushed} gönderildi · ↓ {result.pulled} alındı
+                {t('account.syncLine', { pushed: result.pushed ?? 0, pulled: result.pulled ?? 0 })}
               </Text>
             )}
-            <Text style={styles.muted}>{email.trim()} olarak bağlısın.</Text>
+            <Text style={styles.muted}>{t('account.linkedAs', { email: email.trim() })}</Text>
             <Pressable style={styles.primaryBtn} onPress={() => router.back()}>
-              <Text style={styles.primaryBtnText}>Bitti</Text>
+              <Text style={styles.primaryBtnText}>{t('account.done')}</Text>
             </Pressable>
           </View>
         ) : (
           <View style={styles.card}>
-            <Text style={styles.label}>E-posta</Text>
+            <Text style={styles.label}>{t('account.email')}</Text>
             <TextInput
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="ornek@eposta.com"
+              placeholder={t('account.emailPlaceholder')}
               placeholderTextColor={colors.faint}
               autoCapitalize="none"
               autoCorrect={false}
@@ -181,12 +176,12 @@ export default function AccountScreen() {
               editable={!busy}
             />
 
-            <Text style={[styles.label, { marginTop: 14 }]}>Parola</Text>
+            <Text style={[styles.label, { marginTop: 14 }]}>{t('account.password')}</Text>
             <TextInput
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="En az 6 karakter"
+              placeholder={t('account.passwordPlaceholder')}
               placeholderTextColor={colors.faint}
               secureTextEntry
               autoCapitalize="none"
@@ -205,7 +200,7 @@ export default function AccountScreen() {
                 <ActivityIndicator color={colors.onAccent} />
               ) : (
                 <Text style={styles.primaryBtnText}>
-                  {mode === 'signin' ? 'Giriş yap' : 'Kayıt ol'}
+                  {mode === 'signin' ? t('account.signIn') : t('account.signUp')}
                 </Text>
               )}
             </Pressable>
@@ -220,18 +215,13 @@ export default function AccountScreen() {
               disabled={busy}
             >
               <Text style={styles.switchText}>
-                {mode === 'signin'
-                  ? 'Hesabın yok mu? Kayıt ol'
-                  : 'Zaten hesabın var mı? Giriş yap'}
+                {mode === 'signin' ? t('account.switchToSignup') : t('account.switchToSignin')}
               </Text>
             </Pressable>
           </View>
         )}
 
-        <Text style={styles.footnote}>
-          Verilerin önce cihazda saklanır; hesap yalnızca buluta yedekler ve
-          değişiklikleri birleştirir (son yazan kazanır).
-        </Text>
+        <Text style={styles.footnote}>{t('account.footnote')}</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );

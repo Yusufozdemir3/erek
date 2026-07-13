@@ -8,12 +8,14 @@ import { goalRepo, habitRepo } from '@/db';
 import type { HabitKind } from '@/db';
 import { lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
+import { useI18n } from '@/i18n/I18nProvider';
+import type { Lang } from '@/i18n/translations';
 import { shortDate } from '@/ui/theme';
 
 // "5 Tem → 20 Tem" / "5 Tem →" / "→ 20 Tem"; ikisi de boşsa null.
-function periodLabel(start: string | null, end: string | null): string | null {
+function periodLabel(start: string | null, end: string | null, lang: Lang): string | null {
   if (!start && !end) return null;
-  return `${start ? shortDate(start) : ''} → ${end ? shortDate(end) : ''}`.trim();
+  return `${start ? shortDate(start, lang) : ''} → ${end ? shortDate(end, lang) : ''}`.trim();
 }
 
 export interface HabitListItem {
@@ -37,11 +39,18 @@ export interface HabitListItem {
 export function useHabitsData(userId: string) {
   // dataVersion: merkezi ＋ menüsünden ekleme yapılınca artar (bkz. useTodayData).
   const { dataVersion } = useAppData();
+  const { t, lang } = useI18n();
   const today = todayDate();
   const [habits, setHabits] = useState<HabitListItem[]>([]);
 
   const reload = useCallback(() => {
     const week = lastDays(7);
+    // JS getDay() sırasıyla (0=Pazar...6=Cumartesi) çevrilmiş gün etiketleri.
+    const dayLabels = [
+      t('weekday.sun'), t('weekday.mon'), t('weekday.tue'), t('weekday.wed'),
+      t('weekday.thu'), t('weekday.fri'), t('weekday.sat'),
+    ];
+    const everyDayLabel = t('habit.everyDay');
     // Bağlı hedef başlıklarını tek sorguda map'le (alışkanlık başına ayrı sorgu yok).
     const goalTitles = new Map(goalRepo.listByUser(userId).map((g) => [g.id, g.title]));
     setHabits(
@@ -60,8 +69,8 @@ export function useHabitsData(userId: string) {
           remindAt: h.remind_at,
           icon: h.icon,
           color: h.color,
-          days: h.schedule ? scheduleLabel(h.schedule) : null,
-          period: periodLabel(h.start_date, h.end_date),
+          days: h.schedule ? scheduleLabel(h.schedule, everyDayLabel, dayLabels) : null,
+          period: periodLabel(h.start_date, h.end_date, lang),
           target: h.target_amount,
           unit: h.unit,
           goalTitle: h.goal_id ? goalTitles.get(h.goal_id) ?? null : null,
@@ -72,7 +81,7 @@ export function useHabitsData(userId: string) {
         };
       })
     );
-  }, [userId, today, dataVersion]);
+  }, [userId, today, dataVersion, lang]);
 
   useFocusEffect(reload);
 

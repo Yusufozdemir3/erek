@@ -34,7 +34,8 @@ export interface User extends SyncFields {
 export interface Task extends SyncFields {
   user_id: string;
   title: string;
-  due_date: string | null;       // ISO 8601
+  due_date: string | null;       // ISO 8601; saat gömülüyse başlangıç/vade saati
+  end_time: string | null;       // "HH:MM"; aynı günün bitiş saati, null = yok
   priority: Priority;
   recurrence: Recurrence | null; // null = tek seferlik
   completed_at: string | null;   // null = tamamlanmadı

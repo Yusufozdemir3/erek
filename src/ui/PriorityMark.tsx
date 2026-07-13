@@ -5,12 +5,14 @@
 
 import { StyleSheet, View } from 'react-native';
 import type { Priority } from '@/db';
-import { PRIORITY_COLOR, PRIORITY_LABEL } from '@/ui/theme';
+import { useI18n } from '@/i18n/I18nProvider';
+import { PRIORITY_COLOR } from '@/ui/theme';
 
 export function PriorityMark({ priority }: { priority: Priority }) {
+  const { t } = useI18n();
   return (
     <View
-      accessibilityLabel={`Öncelik: ${PRIORITY_LABEL[priority]}`}
+      accessibilityLabel={t('priority.a11y', { label: t(`priority.${priority}`) })}
       style={[
         styles.base,
         { backgroundColor: PRIORITY_COLOR[priority] },

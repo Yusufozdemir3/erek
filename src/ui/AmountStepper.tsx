@@ -7,6 +7,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from './theme';
 
 interface Props {
@@ -26,6 +27,7 @@ function fmt(n: number): string {
 
 export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disabled }: Props) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
@@ -61,7 +63,7 @@ export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disab
         hitSlop={6}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel="Miktarı azalt"
+        accessibilityLabel={t('habit.decreaseA11y')}
       >
         <Text style={styles.btnText}>−</Text>
       </Pressable>
@@ -90,7 +92,7 @@ export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disab
         hitSlop={6}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel="Miktarı artır"
+        accessibilityLabel={t('habit.increaseA11y')}
       >
         <Text style={styles.btnText}>＋</Text>
       </Pressable>

@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fmtClock } from '@/lib/helpers';
 import { tapLight, tapMedium } from '@/lib/haptics';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { useTimer } from '@/ui/TimerProvider';
 import type { Colors } from './theme';
 
@@ -19,6 +20,7 @@ interface Props {
 
 export function HabitTimer({ habitId, amount, target, editable }: Props) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const timer = useTimer();
   const running = timer.isRunning(habitId);
@@ -49,7 +51,7 @@ export function HabitTimer({ habitId, amount, target, editable }: Props) {
             }}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel={running ? 'Zamanlayıcıyı duraklat' : 'Zamanlayıcıyı başlat'}
+            accessibilityLabel={running ? t('habit.timerPauseA11y') : t('habit.timerStartA11y')}
           >
             <Text style={[styles.btnText, running && styles.btnTextOn]}>
               {running ? '❚❚' : '▶'}
@@ -66,7 +68,7 @@ export function HabitTimer({ habitId, amount, target, editable }: Props) {
           }}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Bugünkü süreyi sıfırla"
+          accessibilityLabel={t('habit.timerResetA11y')}
         >
           <Text style={styles.reset}>↺</Text>
         </Pressable>

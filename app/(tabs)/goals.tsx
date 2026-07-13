@@ -16,10 +16,12 @@ import { EmptyState } from '@/ui/EmptyState';
 import { GoalEditModal } from '@/ui/GoalEditModal';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { deadlineLabel, shortDate, type Colors } from '@/ui/theme';
 
 export default function GoalsScreen() {
   const { colors, shared } = useTheme();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user, dataVersion } = useAppData();
 
@@ -56,17 +58,17 @@ export default function GoalsScreen() {
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
         <View style={shared.headerRow}>
-          <Text style={shared.greeting}>Hedefler</Text>
+          <Text style={shared.greeting}>{t('tabs.goals')}</Text>
           <ProfileButton />
         </View>
-        <Text style={shared.subtitle}>Büyük resmi takip et</Text>
+        <Text style={shared.subtitle}>{t('screen.goalsSubtitle')}</Text>
 
         {/* LİSTE */}
         {goals.length === 0 ? (
           <EmptyState
             emoji="🎯"
-            title="Henüz hedef yok"
-            subtitle="Alttaki ＋ ile büyük bir hedef koy — sayısal ya da tarihli."
+            title={t('empty.goalsTitle')}
+            subtitle={t('empty.goalsBody')}
           />
         ) : (
           goals.map((goal, i) => {
@@ -81,7 +83,7 @@ export default function GoalsScreen() {
                   </Pressable>
                   <Pressable onPress={() => remove(goal.id)} hitSlop={8}>
                     <Text style={[styles.del, armed && styles.delArmed]}>
-                      {armed ? 'Emin?' : 'Sil'}
+                      {armed ? t('common.confirmQuestion') : t('common.delete')}
                     </Text>
                   </Pressable>
                 </View>
@@ -113,9 +115,15 @@ export default function GoalsScreen() {
                 ) : (
                   <View style={styles.goalFoot}>
                     <Text style={styles.goalMeta}>
-                      {goal.deadline ? shortDate(goal.deadline) : 'Tarih yok'}
+                      {goal.deadline ? shortDate(goal.deadline, lang) : t('date.noDate')}
                     </Text>
-                    <Text style={styles.deadlineLeft}>{deadlineLabel(goal.deadline)}</Text>
+                    <Text style={styles.deadlineLeft}>
+                      {deadlineLabel(goal.deadline, {
+                        daysLeft: (n) => t('date.daysLeft', { n }),
+                        dueToday: t('date.dueToday'),
+                        daysAgo: (n) => t('date.daysAgo', { n }),
+                      })}
+                    </Text>
                   </View>
                 )}
               </View>

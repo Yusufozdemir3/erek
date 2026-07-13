@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from './theme';
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 
 export function ConfirmDeleteButton({ onConfirm }: Props) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const [armed, setArmed] = useState(false);
 
@@ -23,7 +25,7 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
       onPress={() => (armed ? onConfirm() : setArmed(true))}
     >
       <Text style={[styles.text, armed && styles.textArmed]}>
-        {armed ? 'Silmek için tekrar bas' : 'Sil'}
+        {armed ? t('common.deleteConfirm') : t('common.delete')}
       </Text>
     </Pressable>
   );

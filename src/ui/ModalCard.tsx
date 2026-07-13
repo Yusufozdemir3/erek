@@ -34,7 +34,9 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
       >
         <View style={styles.overlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {/* Narin tutamaç çizgisi — premium his için üstte ortalanmış */}
+            <View style={[styles.handle, { backgroundColor: colors.border }]} />
             {scroll ? (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {children}
@@ -53,7 +55,7 @@ const styles = StyleSheet.create({
   kav: { flex: 1 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.4)',
+    backgroundColor: 'rgba(15,23,42,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -61,9 +63,26 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 460,
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 14,
+    paddingBottom: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    // Yükseltilmiş kart hissi: yumuşak gölge + Android elevation.
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 16,
     // Uzun form taşınca içerik kaydırılsın.
     maxHeight: '100%',
+  },
+  handle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginBottom: 14,
+    opacity: 0.7,
   },
 });

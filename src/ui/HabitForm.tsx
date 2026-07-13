@@ -13,17 +13,19 @@ import type { Goal, HabitKind, Recurrence } from '@/db';
 import { hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { HABIT_COLORS, HABIT_ICONS, shortDate, type Colors } from '@/ui/theme';
 
 // Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
+// Etiketler i18n anahtarı; render'da t() ile çevrilir.
 const WEEKDAY_OPTIONS = [
-  { label: 'Pzt', wd: 1 },
-  { label: 'Sal', wd: 2 },
-  { label: 'Çar', wd: 3 },
-  { label: 'Per', wd: 4 },
-  { label: 'Cum', wd: 5 },
-  { label: 'Cmt', wd: 6 },
-  { label: 'Paz', wd: 0 },
+  { labelKey: 'weekday.mon', wd: 1 },
+  { labelKey: 'weekday.tue', wd: 2 },
+  { labelKey: 'weekday.wed', wd: 3 },
+  { labelKey: 'weekday.thu', wd: 4 },
+  { labelKey: 'weekday.fri', wd: 5 },
+  { labelKey: 'weekday.sat', wd: 6 },
+  { labelKey: 'weekday.sun', wd: 0 },
 ];
 
 // habitRepo.create/update'in beklediği alanlarla birebir örtüşür.
@@ -51,14 +53,12 @@ interface Props {
   autoFocusTitle?: boolean;             // oluşturmada klavye hemen açılsın
 }
 
-// "08:30" -> okunaklı etiket; null ise "Hatırlatma yok".
-function timeLabel(hm: string | null): string {
-  return hm ? hm : 'Hatırlatma yok';
-}
-
 export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDelete, autoFocusTitle }: Props) {
   const { colors } = useTheme();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
+  // "08:30" -> okunaklı etiket; null ise "Hatırlatma yok".
+  const timeLabel = (hm: string | null) => (hm ? hm : t('habit.noReminder'));
   const initSchedule = initial?.schedule ?? null;
   const initWeekly =
     !!initSchedule && initSchedule.freq === 'weekly' && (initSchedule.weekdays?.length ?? 0) > 0;
@@ -151,25 +151,25 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
   return (
     <>
       {/* Başlık */}
-      <Text style={styles.label}>Başlık</Text>
+      <Text style={styles.label}>{t('habit.title')}</Text>
       <TextInput
         style={styles.input}
         value={title}
         onChangeText={setTitle}
-        placeholder="Alışkanlık başlığı"
+        placeholder={t('habit.titlePlaceholder')}
         placeholderTextColor={colors.faint}
         autoFocus={autoFocusTitle}
       />
 
       {/* Hatırlatma saati */}
-      <Text style={styles.label}>Hatırlatma saati</Text>
+      <Text style={styles.label}>{t('habit.reminder')}</Text>
       <View style={styles.row}>
         <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
           <Text style={styles.dateBtnText}>{timeLabel(remindAt)}</Text>
         </Pressable>
         {remindAt && (
           <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
-            <Text style={styles.clearBtnText}>Temizle</Text>
+            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
           </Pressable>
         )}
       </View>
@@ -185,7 +185,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
       )}
 
       {/* İkon (emoji) — seçili olana tekrar basınca kaldırılır */}
-      <Text style={styles.label}>İkon</Text>
+      <Text style={styles.label}>{t('habit.icon')}</Text>
       <View style={styles.iconGrid}>
         {HABIT_ICONS.map((em) => {
           const sel = icon === em;
@@ -202,7 +202,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
       </View>
 
       {/* Renk — seçili olana tekrar basınca varsayılana döner */}
-      <Text style={styles.label}>Renk</Text>
+      <Text style={styles.label}>{t('habit.color')}</Text>
       <View style={styles.colorRow}>
         {HABIT_COLORS.map((c) => {
           const sel = color === c;
@@ -219,13 +219,13 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
       </View>
 
       {/* Sıklık — her gün ya da haftanın belirli günleri */}
-      <Text style={styles.label}>Sıklık</Text>
+      <Text style={styles.label}>{t('habit.frequency')}</Text>
       <View style={styles.freqRow}>
         <Pressable
           style={[styles.freqBtn, everyDay && styles.freqBtnSel]}
           onPress={() => setEveryDay(true)}
         >
-          <Text style={[styles.freqBtnText, everyDay && styles.freqBtnTextSel]}>Her gün</Text>
+          <Text style={[styles.freqBtnText, everyDay && styles.freqBtnTextSel]}>{t('habit.everyDay')}</Text>
         </Pressable>
         <Pressable
           style={[styles.freqBtn, !everyDay && styles.freqBtnSel]}
@@ -236,14 +236,14 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
           }}
         >
           <Text style={[styles.freqBtnText, !everyDay && styles.freqBtnTextSel]}>
-            Belirli günler
+            {t('habit.specificDays')}
           </Text>
         </Pressable>
       </View>
 
       {!everyDay && (
         <View style={styles.dayRow}>
-          {WEEKDAY_OPTIONS.map(({ label, wd }) => {
+          {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
             const sel = weekdays.includes(wd);
             return (
               <Pressable
@@ -251,7 +251,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
                 style={[styles.dayChip, sel && styles.dayChipSel]}
                 onPress={() => toggleWeekday(wd)}
               >
-                <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{label}</Text>
+                <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{t(labelKey)}</Text>
               </Pressable>
             );
           })}
@@ -260,28 +260,28 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
 
       {/* Tarih aralığı: başlangıçtan önce / bitişten sonra alışkanlık görünmez,
           streak'i etkilemez. Boş = sınırsız. */}
-      <Text style={styles.label}>Başlangıç tarihi</Text>
+      <Text style={styles.label}>{t('habit.startDate')}</Text>
       <View style={styles.row}>
         <Pressable style={styles.dateBtn} onPress={() => setDatePicker('start')}>
           <Text style={styles.dateBtnText}>
-            {startDate ? shortDate(startDate) : 'Baştan beri'}
+            {startDate ? shortDate(startDate, lang) : t('habit.fromStart')}
           </Text>
         </Pressable>
         {startDate && (
           <Pressable style={styles.clearBtn} onPress={() => setStartDate(null)}>
-            <Text style={styles.clearBtnText}>Temizle</Text>
+            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
           </Pressable>
         )}
       </View>
 
-      <Text style={styles.label}>Bitiş tarihi (isteğe bağlı)</Text>
+      <Text style={styles.label}>{t('habit.endDate')}</Text>
       <View style={styles.row}>
         <Pressable style={styles.dateBtn} onPress={() => setDatePicker('end')}>
-          <Text style={styles.dateBtnText}>{endDate ? shortDate(endDate) : 'Süresiz'}</Text>
+          <Text style={styles.dateBtnText}>{endDate ? shortDate(endDate, lang) : t('habit.noEnd')}</Text>
         </Pressable>
         {endDate && (
           <Pressable style={styles.clearBtn} onPress={() => setEndDate(null)}>
-            <Text style={styles.clearBtnText}>Temizle</Text>
+            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
           </Pressable>
         )}
       </View>
@@ -307,13 +307,13 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
           (dakika). binary'de hedef alanı yok (yaptım/yapmadım). */}
       {kind === 'numeric' && (
         <>
-          <Text style={styles.label}>Günlük hedef</Text>
+          <Text style={styles.label}>{t('habit.dailyTarget')}</Text>
           <View style={styles.row}>
             <TextInput
               style={[styles.input, styles.targetInput]}
               value={targetText}
               onChangeText={setTargetText}
-              placeholder="örn. 8"
+              placeholder={t('habit.amountPlaceholder')}
               placeholderTextColor={colors.faint}
               keyboardType="numeric"
             />
@@ -321,27 +321,27 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
               style={[styles.input, styles.targetInput]}
               value={unit}
               onChangeText={setUnit}
-              placeholder="birim (bardak)"
+              placeholder={t('habit.unitPlaceholder')}
               placeholderTextColor={colors.faint}
               autoCapitalize="none"
             />
           </View>
-          <Text style={styles.hint}>Her gün ulaşmak istediğin miktar (ör. 8 bardak).</Text>
+          <Text style={styles.hint}>{t('habit.dailyTargetHint')}</Text>
         </>
       )}
 
       {kind === 'timer' && (
         <>
-          <Text style={styles.label}>Süre hedefi (dakika)</Text>
+          <Text style={styles.label}>{t('habit.durationTarget')}</Text>
           <TextInput
             style={styles.input}
             value={targetText}
             onChangeText={setTargetText}
-            placeholder="örn. 20"
+            placeholder={t('habit.durationPlaceholder')}
             placeholderTextColor={colors.faint}
             keyboardType="numeric"
           />
-          <Text style={styles.hint}>Zamanlayıcıyla geri sayılacak günlük süre (ör. 20 dk).</Text>
+          <Text style={styles.hint}>{t('habit.durationHint')}</Text>
         </>
       )}
 
@@ -349,14 +349,14 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
           ilerlemesi +1 artar (geri alınca −1). Yalnızca sayısal hedefler. */}
       {goals.length > 0 && (
         <>
-          <Text style={styles.label}>Hedefe bağla (isteğe bağlı)</Text>
+          <Text style={styles.label}>{t('habit.linkGoal')}</Text>
           <View style={styles.goalRow}>
             <Pressable
               style={[styles.goalChip, goalId === null && styles.goalChipSel]}
               onPress={() => setGoalId(null)}
             >
               <Text style={[styles.goalChipText, goalId === null && styles.goalChipTextSel]}>
-                Yok
+                {t('habit.none')}
               </Text>
             </Pressable>
             {goals.map((g) => {
@@ -374,7 +374,7 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
               );
             })}
           </View>
-          <Text style={styles.hint}>Tamamladığın her gün bu hedefe +1 sayılır.</Text>
+          <Text style={styles.hint}>{t('habit.linkGoalHint')}</Text>
         </>
       )}
 
@@ -489,9 +489,14 @@ const makeStyles = (c: Colors) =>
     saveBtn: {
       flex: 1,
       alignItems: 'center',
-      paddingVertical: 14,
-      borderRadius: 12,
+      paddingVertical: 15,
+      borderRadius: 14,
       backgroundColor: c.primary,
+      shadowColor: c.primary,
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
     },
     saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
   });

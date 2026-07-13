@@ -4,24 +4,33 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
+import { EntityIcon, type EntityType } from '@/ui/EntityIcon';
 import type { Colors } from './theme';
 
 function Bar({
+  type,
   label,
   done,
   total,
   styles,
+  iconColor,
 }: {
+  type: EntityType;
   label: string;
   done: number;
   total: number;
   styles: ReturnType<typeof makeStyles>;
+  iconColor: string;
 }) {
   const ratio = total > 0 ? done / total : 0;
   const complete = total > 0 && done >= total;
   return (
     <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
+      <View style={styles.labelRow}>
+        <EntityIcon type={type} size={14} color={iconColor} />
+        <Text style={styles.label}>{label}</Text>
+      </View>
       <View style={styles.track}>
         <View
           style={[styles.fill, { width: `${Math.round(ratio * 100)}%` }, complete && styles.fillDone]}
@@ -43,14 +52,31 @@ interface Props {
 
 export function DailySummary({ habitsDone, habitsTotal, tasksDone, tasksTotal }: Props) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   if (habitsTotal === 0 && tasksTotal === 0) return null;
   return (
     <View style={styles.card}>
       {habitsTotal > 0 && (
-        <Bar label="🔥 Alışkanlık" done={habitsDone} total={habitsTotal} styles={styles} />
+        <Bar
+          type="habit"
+          label={t('summary.habits')}
+          done={habitsDone}
+          total={habitsTotal}
+          styles={styles}
+          iconColor={colors.streak}
+        />
       )}
-      {tasksTotal > 0 && <Bar label="✅ Görev" done={tasksDone} total={tasksTotal} styles={styles} />}
+      {tasksTotal > 0 && (
+        <Bar
+          type="task"
+          label={t('summary.tasks')}
+          done={tasksDone}
+          total={tasksTotal}
+          styles={styles}
+          iconColor={colors.primary}
+        />
+      )}
     </View>
   );
 }
@@ -67,7 +93,8 @@ const makeStyles = (c: Colors) =>
       gap: 10,
     },
     row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    label: { width: 92, fontSize: 13, fontWeight: '600', color: c.muted },
+    labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, width: 92 },
+    label: { fontSize: 13, fontWeight: '600', color: c.muted },
     track: {
       flex: 1,
       height: 8,

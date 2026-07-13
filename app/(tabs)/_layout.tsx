@@ -4,21 +4,21 @@
 // doğrudan ekleme formunda (AddSheet) açılır. Ayarlar sekme olmaktan
 // çıktı: içeriği /profile ekranında, ekran başlıklarındaki 👤 ikonundan açılır.
 // Her sekmenin kendi büyük başlığı olduğu için sekme başlığı (header) gizli.
-// İkonlar emoji ile çiziliyor (ekstra ikon paketi bağımlılığı yok).
+// İkonlar çizgi (line-art) ikon setinden çiziliyor: Feather (takvim/onay-kutusu/
+// hedef) + Ionicons (alev). @expo/vector-icons Expo ile birlikte gelir; ekstra
+// bağımlılık yok. Odaktaki sekme primary renkte, diğerleri soluk (faint).
 
 import { useState } from 'react';
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { AddFab, AddFabButton } from '@/ui/AddFab';
 import { AddSheet, type Step } from '@/ui/AddSheet';
 import { useTheme } from '@/ui/ThemeProvider';
-
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
-  return <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.45 }}>{emoji}</Text>;
-}
+import { useI18n } from '@/i18n/I18nProvider';
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { t } = useI18n();
   // Kare ＋ butonunun "swing" menüsü (fan) ve seçilince açılan ekleme formu.
   const [fanOpen, setFanOpen] = useState(false);
   const [sheetStep, setSheetStep] = useState<Step | null>(null);
@@ -37,15 +37,15 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Bugün',
-            tabBarIcon: ({ focused }) => <TabIcon emoji="📅" focused={focused} />,
+            title: t('tabs.today'),
+            tabBarIcon: ({ color }) => <Feather name="calendar" size={22} color={color} />,
           }}
         />
         <Tabs.Screen
           name="tasks"
           options={{
-            title: 'Görevler',
-            tabBarIcon: ({ focused }) => <TabIcon emoji="✅" focused={focused} />,
+            title: t('tabs.tasks'),
+            tabBarIcon: ({ color }) => <Feather name="check-square" size={22} color={color} />,
           }}
         />
         <Tabs.Screen
@@ -60,15 +60,17 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="habits"
           options={{
-            title: 'Alışkanlıklar',
-            tabBarIcon: ({ focused }) => <TabIcon emoji="🔥" focused={focused} />,
+            title: t('tabs.habits'),
+            tabBarIcon: ({ color, focused }) => (
+              <Ionicons name={focused ? 'flame' : 'flame-outline'} size={23} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="goals"
           options={{
-            title: 'Hedefler',
-            tabBarIcon: ({ focused }) => <TabIcon emoji="🎯" focused={focused} />,
+            title: t('tabs.goals'),
+            tabBarIcon: ({ color }) => <Feather name="target" size={22} color={color} />,
           }}
         />
       </Tabs>

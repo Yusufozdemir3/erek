@@ -55,12 +55,15 @@ create table if not exists public.tasks (
   user_id      uuid not null,
   title        text not null,
   due_date     text,
+  end_time     text,
   priority     text not null default 'medium',
   recurrence   text,
   completed_at text,
   updated_at   timestamptz not null,
   deleted_at   timestamptz
 );
+-- Mevcut kurulumlar için idempotent kolon eklemesi (bitiş saati).
+alter table public.tasks add column if not exists end_time text;
 
 create table if not exists public.habit_logs (
   id         uuid primary key,

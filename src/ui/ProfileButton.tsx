@@ -5,10 +5,12 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from './theme';
 
 export function ProfileButton() {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   return (
     <Pressable
@@ -16,7 +18,7 @@ export function ProfileButton() {
       onPress={() => router.push('/profile')}
       hitSlop={8}
       accessibilityRole="button"
-      accessibilityLabel="Profil"
+      accessibilityLabel={t('profile.title')}
     >
       <Text style={styles.icon}>👤</Text>
     </Pressable>

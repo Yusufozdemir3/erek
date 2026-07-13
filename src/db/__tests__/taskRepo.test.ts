@@ -28,6 +28,19 @@ describe('create / getById / softDelete', () => {
     taskRepo.softDelete(task.id);
     expect(taskRepo.getById(task.id)).toBeNull();
   });
+
+  it('bitiş saati (end_time) oluşturmada yazılır ve güncellemeyle değişir', () => {
+    const task = createTask({ due_date: '2026-07-05T14:00:00', end_time: '15:30' });
+    expect(task.end_time).toBe('15:30');
+    expect(taskRepo.getById(task.id)!.end_time).toBe('15:30');
+
+    taskRepo.update(task.id, { end_time: null });
+    expect(taskRepo.getById(task.id)!.end_time).toBeNull();
+  });
+
+  it('varsayılan olarak bitiş saati boştur', () => {
+    expect(createTask().end_time).toBeNull();
+  });
 });
 
 describe('listByUser — sıralama: saatliler üstte (kendi içi saate göre), saatsizler altta (kendi içi önceliğe göre)', () => {

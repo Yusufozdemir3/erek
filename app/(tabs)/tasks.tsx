@@ -20,10 +20,13 @@ import { ProfileButton } from '@/ui/ProfileButton';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 import { PRIORITY_COLOR, shortDate, type Colors } from '@/ui/theme';
 
 export default function TasksScreen() {
   const { colors, shared } = useTheme();
+  // Not: aşağıdaki map değişkeni `t` (görev) ile çakışmasın diye i18n `tr` alınır.
+  const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user, dataVersion } = useAppData();
 
@@ -65,16 +68,16 @@ export default function TasksScreen() {
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
         <View style={shared.headerRow}>
-          <Text style={shared.greeting}>Görevler</Text>
+          <Text style={shared.greeting}>{tr('tabs.tasks')}</Text>
           <ProfileButton />
         </View>
-        <Text style={shared.subtitle}>{remaining} görev bekliyor</Text>
+        <Text style={shared.subtitle}>{tr('screen.tasksSubtitle', { n: remaining })}</Text>
 
         {tasks.length === 0 ? (
           <EmptyState
             emoji="📝"
-            title="Henüz görev yok"
-            subtitle="Alttaki ＋ ile ilk görevini ekle."
+            title={tr('empty.tasksTitle')}
+            subtitle={tr('empty.tasksBody')}
           />
         ) : (
           tasks.map((t, i) => {
@@ -86,7 +89,7 @@ export default function TasksScreen() {
                 layout={LinearTransition.duration(260)}
                 style={[shared.card, i === 0 && { marginTop: 20 }]}
               >
-                {time && !done && <TimeBadge time={time} />}
+                {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
                 <Pressable
                   onPress={() => toggleTask(t)}
                   hitSlop={8}
@@ -107,15 +110,15 @@ export default function TasksScreen() {
                   style={shared.cardBody}
                   onPress={() => setEditingTask(t)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${t.title}, düzenle`}
+                  accessibilityLabel={tr('common.editA11y', { title: t.title })}
                 >
                   <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
                   {((t.due_date && !done) || subtaskCounts[t.id]) && (
                     <Text style={styles.due}>
                       {[
-                        t.due_date && !done ? shortDate(t.due_date) : null,
+                        t.due_date && !done ? shortDate(t.due_date, lang) : null,
                         subtaskCounts[t.id]
-                          ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} alt görev`
+                          ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix')}`
                           : null,
                       ]
                         .filter(Boolean)

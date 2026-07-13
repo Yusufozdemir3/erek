@@ -144,6 +144,13 @@ ALTER TABLE habits ADD COLUMN kind TEXT NOT NULL DEFAULT 'binary';
 UPDATE habits SET kind = 'numeric' WHERE target_amount IS NOT NULL AND target_amount > 0;
 `;
 
+// Migration 009: göreve bitiş saati. due_date başlangıç/vade saatini gömer;
+// end_time o günün bitiş saatini "HH:MM" olarak tutar (aynı gün). NULL =
+// bitiş saati yok (mevcut davranış). Yalnız bir başlangıç saati varken anlamlı.
+export const migration009 = `
+ALTER TABLE tasks ADD COLUMN end_time TEXT;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -154,4 +161,5 @@ export const migrations = [
   { version: 6, sql: migration006 },
   { version: 7, sql: migration007 },
   { version: 8, sql: migration008 },
+  { version: 9, sql: migration009 },
 ];

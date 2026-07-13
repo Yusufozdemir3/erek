@@ -45,7 +45,9 @@
             "buildToolsVersion": "35.0.0"
           }
         }
-      ]
+      ],
+      "expo-localization",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

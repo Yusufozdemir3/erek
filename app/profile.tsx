@@ -19,17 +19,20 @@ import {
 } from '@/sync';
 import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
+import { LANG_LABELS, SUPPORTED_LANGS } from '@/i18n/translations';
 import { type Colors } from '@/ui/theme';
 import { ACCOUNTS_ENABLED } from '@/config';
 
-const THEME_OPTIONS: { mode: ThemeMode; label: string }[] = [
-  { mode: 'light', label: 'Açık' },
-  { mode: 'dark', label: 'Koyu' },
-  { mode: 'system', label: 'Sistem' },
+const THEME_OPTIONS: { mode: ThemeMode; labelKey: string }[] = [
+  { mode: 'light', labelKey: 'profile.themeLight' },
+  { mode: 'dark', labelKey: 'profile.themeDark' },
+  { mode: 'system', labelKey: 'profile.themeSystem' },
 ];
 
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
+  const { t, lang, setLang } = useI18n();
   const styles = makeStyles(colors);
   const { user, refreshUser } = useAppData();
   const [syncing, setSyncing] = useState(false);
@@ -71,11 +74,11 @@ export default function ProfileScreen() {
   // kullanıcı anonim/yerel moda döner (çıkışla aynı yerel son durum).
   const confirmDeleteAccount = () => {
     Alert.alert(
-      'Hesabı sil',
-      'Bulut hesabın ve buluttaki TÜM verilerin kalıcı olarak silinir; bu işlem geri alınamaz.\n\nCihazındaki veriler silinmez — uygulamayı hesapsız kullanmaya devam edersin.',
+      t('profile.deleteAccount'),
+      t('profile.deleteAccountConfirmBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Kalıcı olarak sil', style: 'destructive', onPress: doDeleteAccount },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('profile.deletePermanently'), style: 'destructive', onPress: doDeleteAccount },
       ]
     );
   };
@@ -89,9 +92,9 @@ export default function ProfileScreen() {
       setAuthUser(null);
       setSignedIn(false);
       setResult(null);
-      Alert.alert('Hesap silindi', 'Bulut hesabın ve buluttaki verilerin silindi. Cihazındaki veriler duruyor.');
+      Alert.alert(t('profile.deletedTitle'), t('profile.deletedBody'));
     } catch (e) {
-      Alert.alert('Silme başarısız', e instanceof Error ? e.message : String(e));
+      Alert.alert(t('profile.deleteFailedTitle'), e instanceof Error ? e.message : String(e));
     } finally {
       setDeleting(false);
     }
@@ -110,7 +113,7 @@ export default function ProfileScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {/* Görünüm (tema) */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Görünüm</Text>
+        <Text style={styles.cardTitle}>{t('profile.appearance')}</Text>
         <View style={styles.segRow}>
           {THEME_OPTIONS.map((opt) => {
             const on = mode === opt.mode;
@@ -120,12 +123,31 @@ export default function ProfileScreen() {
                 style={[styles.segBtn, on && styles.segBtnOn]}
                 onPress={() => setMode(opt.mode)}
               >
-                <Text style={[styles.segText, on && styles.segTextOn]}>{opt.label}</Text>
+                <Text style={[styles.segText, on && styles.segTextOn]}>{t(opt.labelKey)}</Text>
               </Pressable>
             );
           })}
         </View>
-        <Text style={styles.hint}>"Sistem" telefonun açık/koyu ayarını izler.</Text>
+        <Text style={styles.hint}>{t('profile.systemHint')}</Text>
+      </View>
+
+      {/* Dil */}
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.cardTitle}>{t('profile.language')}</Text>
+        <View style={styles.segRow}>
+          {SUPPORTED_LANGS.map((l) => {
+            const on = lang === l;
+            return (
+              <Pressable
+                key={l}
+                style={[styles.segBtn, on && styles.segBtnOn]}
+                onPress={() => setLang(l)}
+              >
+                <Text style={[styles.segText, on && styles.segTextOn]}>{LANG_LABELS[l]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       {/* Hesap + Bulut senkron — kapalı test (MVP) sürümünde gizli.
@@ -133,16 +155,14 @@ export default function ProfileScreen() {
       {ACCOUNTS_ENABLED && (
         <>
       <View style={[styles.card, { marginTop: 16 }]}>
-        <Text style={styles.cardTitle}>Hesap</Text>
+        <Text style={styles.cardTitle}>{t('profile.account')}</Text>
 
         {!isSyncConfigured ? (
-          <Text style={styles.muted}>
-            Hesap bağlamak için önce bulut senkronu yapılandır (aşağıya bak).
-          </Text>
+          <Text style={styles.muted}>{t('profile.syncNotConfigured')}</Text>
         ) : linked ? (
           <>
             <View style={styles.statusRow}>
-              <Text style={styles.muted}>Bağlı hesap</Text>
+              <Text style={styles.muted}>{t('profile.linkedAccount')}</Text>
               <Text style={styles.statusValue}>{authUser!.email}</Text>
             </View>
             <Pressable
@@ -153,7 +173,7 @@ export default function ProfileScreen() {
               {signingOut ? (
                 <ActivityIndicator color={colors.primary} />
               ) : (
-                <Text style={styles.outlineBtnText}>Çıkış yap</Text>
+                <Text style={styles.outlineBtnText}>{t('profile.signOut')}</Text>
               )}
             </Pressable>
             <Pressable
@@ -164,60 +184,49 @@ export default function ProfileScreen() {
               {deleting ? (
                 <ActivityIndicator color={colors.danger} />
               ) : (
-                <Text style={styles.dangerBtnText}>Hesabı sil</Text>
+                <Text style={styles.dangerBtnText}>{t('profile.deleteAccount')}</Text>
               )}
             </Pressable>
-            <Text style={styles.hint}>
-              Hesabı silmek buluttaki tüm verini kalıcı olarak kaldırır; cihazındaki veriler kalır.
-            </Text>
+            <Text style={styles.hint}>{t('profile.deleteAccountHint')}</Text>
           </>
         ) : (
           <>
-            <Text style={styles.muted}>
-              Şu an yerel (anonim) kullanıyorsun. Hesap bağlarsan verilerin buluta
-              yedeklenir ve başka cihazlarla senkronlanır.
-            </Text>
+            <Text style={styles.muted}>{t('profile.notLinkedBody')}</Text>
             <Pressable style={styles.syncBtn} onPress={() => router.push('/account')}>
-              <Text style={styles.syncBtnText}>Hesap bağla / Giriş yap</Text>
+              <Text style={styles.syncBtnText}>{t('profile.linkAccount')}</Text>
             </Pressable>
           </>
         )}
       </View>
 
       <View style={[styles.card, { marginTop: 16 }]}>
-        <Text style={styles.cardTitle}>Bulut senkron</Text>
+        <Text style={styles.cardTitle}>{t('profile.cloudSync')}</Text>
 
         {!isSyncConfigured ? (
-          <>
-            <Text style={styles.muted}>
-              Senkron henüz yapılandırılmadı. Proje kökündeki{' '}
-              <Text style={styles.code}>.env.example</Text> dosyasını{' '}
-              <Text style={styles.code}>.env</Text> olarak kopyalayıp Supabase
-              bilgilerini girin, ardından Expo'yu{' '}
-              <Text style={styles.code}>npx expo start -c</Text> ile yeniden başlatın.
-            </Text>
-          </>
+          <Text style={styles.muted}>{t('profile.syncNotConfiguredBody')}</Text>
         ) : (
           <>
             <View style={styles.statusRow}>
-              <Text style={styles.muted}>Durum</Text>
+              <Text style={styles.muted}>{t('profile.syncStatus')}</Text>
               <Text style={styles.statusValue}>
-                {signedIn ? (linked ? '✓ Bağlı (hesap)' : '✓ Bağlı (anonim)') : 'Bağlı değil'}
+                {signedIn
+                  ? linked
+                    ? t('profile.syncConnectedAccount')
+                    : t('profile.syncConnectedAnon')
+                  : t('profile.syncNotConnected')}
               </Text>
             </View>
 
             {result?.status === 'ok' && (
               <Text style={styles.okText}>
-                Son senkron: ↑{result.pushed} gönderildi · ↓{result.pulled} alındı
+                {t('profile.lastSync', { pushed: result.pushed ?? 0, pulled: result.pulled ?? 0 })}
               </Text>
             )}
             {result?.status === 'error' && (
-              <Text style={styles.errText}>Hata: {result.message}</Text>
+              <Text style={styles.errText}>{t('profile.syncError', { message: result.message ?? '' })}</Text>
             )}
             {result?.status === 'disabled' && (
-              <Text style={[styles.muted, { marginTop: 12 }]}>
-                Senkron şu an kapalı: oturum yok. Hesap bağlayınca kaldığı yerden sürer.
-              </Text>
+              <Text style={[styles.muted, { marginTop: 12 }]}>{t('profile.syncDisabled')}</Text>
             )}
 
             <Pressable
@@ -228,7 +237,7 @@ export default function ProfileScreen() {
               {syncing ? (
                 <ActivityIndicator color={colors.onAccent} />
               ) : (
-                <Text style={styles.syncBtnText}>Şimdi senkronla</Text>
+                <Text style={styles.syncBtnText}>{t('profile.syncNow')}</Text>
               )}
             </Pressable>
           </>
@@ -238,9 +247,7 @@ export default function ProfileScreen() {
       )}
 
       <Text style={styles.footnote}>
-        {ACCOUNTS_ENABLED
-          ? 'Veriler önce cihazda saklanır; senkron yalnızca buluta yedekler ve değişiklikleri birleştirir (son yazan kazanır).'
-          : 'Verilerin yalnızca bu cihazda saklanır.'}
+        {ACCOUNTS_ENABLED ? t('profile.footnoteSynced') : t('profile.footnoteLocal')}
       </Text>
     </ScrollView>
   );

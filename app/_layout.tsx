@@ -5,10 +5,17 @@ import { useEffect } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import {
+  ThemeProvider as NavThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+  type Theme,
+} from '@react-navigation/native';
 import { AppDataProvider } from '@/ui/AppData';
 import { OnboardingGate } from '@/ui/Onboarding';
 import { TimerProvider } from '@/ui/TimerProvider';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
+import { I18nProvider, useI18n } from '@/i18n/I18nProvider';
 import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notifications';
 import { Sentry } from '@/lib/sentry';
 
@@ -23,10 +30,29 @@ LogBox.ignoreLogs([
 
 // Tema'ya bağlı kabuk: durum çubuğu + Stack zemini/başlık renkleri aktif palete
 // göre. useTheme kullandığından ThemeProvider İÇİNDE render edilir.
+//
+// KRİTİK: expo-router içteki React Navigation konteynerinin tema zeminini
+// SİSTEM renk şemasından seçer. Bu yüzden telefon koyu, uygulama tercihi açık
+// iken navigation kabuğunun arka planı (ekran geçiş zemini, modal fonu) koyu
+// kalıyordu. NavThemeProvider'ı kendi şemamıza bağlayarak bunu düzeltiyoruz.
 function ThemedStack() {
   const { colors, scheme } = useTheme();
+  const { t } = useI18n();
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const navTheme: Theme = {
+    ...base,
+    dark: scheme === 'dark',
+    colors: {
+      ...base.colors,
+      background: colors.bg,
+      card: colors.card,
+      text: colors.text,
+      border: colors.border,
+      primary: colors.primary,
+    },
+  };
   return (
-    <>
+    <NavThemeProvider value={navTheme}>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
@@ -38,12 +64,12 @@ function ThemedStack() {
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="account" options={{ headerShown: true, title: 'Hesap', presentation: 'modal' }} />
-        <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profil', presentation: 'modal' }} />
+        <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
         <Stack.Screen name="habit/[id]" />
       </Stack>
       {/* İlk açılışta bir kez gösterilen tanıtım (kendi bayrağını yönetir). */}
       <OnboardingGate />
-    </>
+    </NavThemeProvider>
   );
 }
 
@@ -55,13 +81,15 @@ function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <AppDataProvider>
-        <TimerProvider>
-          <ThemedStack />
-        </TimerProvider>
-      </AppDataProvider>
-    </ThemeProvider>
+    <I18nProvider>
+      <ThemeProvider>
+        <AppDataProvider>
+          <TimerProvider>
+            <ThemedStack />
+          </TimerProvider>
+        </AppDataProvider>
+      </ThemeProvider>
+    </I18nProvider>
   );
 }
 

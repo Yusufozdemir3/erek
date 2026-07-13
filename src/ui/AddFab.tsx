@@ -13,15 +13,19 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Step } from '@/ui/AddSheet';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
+import { EntityIcon, type EntityType } from '@/ui/EntityIcon';
 import type { Colors } from '@/ui/theme';
 
 type AddStep = Exclude<Step, 'menu'>;
 
-// Seçenek daireleri sabit vurgu renkleri (iki modda da okunur).
-const OPTIONS: { step: AddStep; emoji: string; label: string; color: string }[] = [
-  { step: 'goal', emoji: '🎯', label: 'Hedef', color: '#f59e0b' },
-  { step: 'habit', emoji: '🔥', label: 'Alışkanlık', color: '#f97316' },
-  { step: 'task', emoji: '✅', label: 'Görev', color: '#6366f1' },
+// Seçenek daireleri sabit vurgu renkleri (iki modda da okunur). İkon: tab
+// bar'daki aynı çizgi ikon seti (EntityIcon); etiket i18n anahtarı (AddSheet
+// menüsüyle aynı 'add.*' anahtarları — tek kaynak, tutarlı metin).
+const OPTIONS: { step: AddStep; type: EntityType; labelKey: string; color: string }[] = [
+  { step: 'goal', type: 'goal', labelKey: 'add.goal', color: '#f59e0b' },
+  { step: 'habit', type: 'habit', labelKey: 'add.habit', color: '#f97316' },
+  { step: 'task', type: 'task', labelKey: 'add.task', color: '#6366f1' },
 ];
 
 // Sekme çubuğundaki kare ＋ butonu. `open` iken ＋ 45° dönerek × olur.
@@ -73,6 +77,7 @@ export function AddFab({
   onPick: (step: AddStep) => void;
 }) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   // Her seçenek için ayrı animasyon değeri (stagger'lı yay girişi) + arka fon.
   const anims = useRef(OPTIONS.map(() => new Animated.Value(0))).current;
@@ -128,13 +133,13 @@ export function AddFab({
               pointerEvents="box-none"
             >
               <Pressable style={styles.labelBtn} onPress={() => onPick(opt.step)} hitSlop={6}>
-                <Text style={styles.optionLabel}>{opt.label}</Text>
+                <Text style={styles.optionLabel}>{t(opt.labelKey)}</Text>
               </Pressable>
               <Pressable
                 style={[styles.optionCircle, { backgroundColor: opt.color }]}
                 onPress={() => onPick(opt.step)}
               >
-                <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                <EntityIcon type={opt.type} size={22} color="#ffffff" />
               </Pressable>
             </Animated.View>
           );
@@ -147,7 +152,10 @@ export function AddFab({
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     // — Sekme çubuğundaki kare buton —
-    buttonWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    // Üste hizala (flex-start) + kendi yarısı (18) kadar yukarı taşı: böylece
+    // karenin dikey merkezi, çubuk yüksekliğinden BAĞIMSIZ olarak tam üst
+    // çizgiye oturur. 45° dönünce yan köşeler çizgiye denk gelir.
+    buttonWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
     square: {
       width: 36,
       height: 36,
@@ -155,8 +163,8 @@ const makeStyles = (c: Colors) =>
       backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      // Sekme çubuğunun üst çizgisini ortalayacak kadar yukarı taşar.
-      marginTop: -26,
+      // Karenin merkezini çubuğun üst çizgisine ortalar (yarı yukarı = -18).
+      marginTop: -18,
       shadowColor: '#000',
       shadowOpacity: 0.2,
       shadowRadius: 6,
@@ -197,7 +205,6 @@ const makeStyles = (c: Colors) =>
       shadowOffset: { width: 0, height: 2 },
       elevation: 5,
     },
-    optionEmoji: { fontSize: 24 },
     labelBtn: {
       position: 'absolute',
       right: '50%',

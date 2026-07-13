@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { goalRepo, habitRepo, taskRepo } from '@/db';
+import { goalRepo, habitRepo, subtaskRepo, taskRepo } from '@/db';
 import type { GoalType, HabitKind } from '@/db';
 import { toYmd } from '@/lib/helpers';
 import { scheduleHabitReminder } from '@/lib/notifications';
@@ -20,6 +20,8 @@ import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
+import { EntityIcon, type EntityType } from '@/ui/EntityIcon';
 import { shortDate, type Colors } from '@/ui/theme';
 
 export type Step = 'menu' | 'task' | 'habit' | 'goal';
@@ -32,21 +34,24 @@ interface Props {
   initialStep?: Step;
 }
 
-const MENU_OPTIONS: { step: Step; emoji: string; title: string; desc: string }[] = [
-  { step: 'task', emoji: '✅', title: 'Görev', desc: 'Tek seferlik yapılacak iş' },
-  { step: 'habit', emoji: '🔥', title: 'Alışkanlık', desc: 'Düzenli tekrarlanan rutin' },
-  { step: 'goal', emoji: '🎯', title: 'Hedef', desc: 'Sayısal ya da tarihli büyük hedef' },
+// Metinler i18n anahtarı olarak tutulur; render'da t() ile çevrilir. İkonlar
+// EntityIcon ile tab bar'daki aynı çizgi ikon setinden (tutarlılık).
+const MENU_OPTIONS: { step: Step; type: EntityType; titleKey: string; descKey: string }[] = [
+  { step: 'task', type: 'task', titleKey: 'add.task', descKey: 'add.taskDesc' },
+  { step: 'habit', type: 'habit', titleKey: 'add.habit', descKey: 'add.habitDesc' },
+  { step: 'goal', type: 'goal', titleKey: 'add.goal', descKey: 'add.goalDesc' },
 ];
 
 // Alışkanlık oluşturmada ilk adım: takip tipi seçimi (aşamalı sihirbaz).
-const KIND_OPTIONS: { kind: HabitKind; emoji: string; title: string; desc: string }[] = [
-  { kind: 'binary', emoji: '✓', title: 'Basit (tik)', desc: 'Yaptım / yapmadım' },
-  { kind: 'numeric', emoji: '🔢', title: 'Sayısal değer', desc: 'Miktar hedefi — ör. 8 bardak su' },
-  { kind: 'timer', emoji: '⏱️', title: 'Zamanlayıcı', desc: 'Geri sayım — ör. 20 dk meditasyon' },
+const KIND_OPTIONS: { kind: HabitKind; emoji: string; titleKey: string; descKey: string }[] = [
+  { kind: 'binary', emoji: '✓', titleKey: 'add.kindBinary', descKey: 'add.kindBinaryDesc' },
+  { kind: 'numeric', emoji: '🔢', titleKey: 'add.kindNumeric', descKey: 'add.kindNumericDesc' },
+  { kind: 'timer', emoji: '⏱️', titleKey: 'add.kindTimer', descKey: 'add.kindTimerDesc' },
 ];
 
 export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { colors } = useTheme();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user, notifyDataChanged } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
@@ -82,15 +87,18 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     router.navigate(tab);
   };
 
-  // Görev, düzenleme paneliyle aynı TaskForm'la oluşturulur — öncelik, son tarih
-  // ve saat oluşturma anında ayarlanabilir (alt görevler yalnız sonradan).
+  // Görev, düzenleme paneliyle aynı TaskForm'la oluşturulur — öncelik, son tarih,
+  // saat ve (isteğe bağlı) alt görevler oluşturma anında ayarlanabilir.
   const addTask = (values: TaskFormValues) => {
-    taskRepo.create({
+    const created = taskRepo.create({
       user_id: user.id,
       title: values.title,
       priority: values.priority,
       due_date: values.due_date,
+      end_time: values.end_time,
     });
+    // Taslak alt görevleri, görev yazıldıktan sonra sırayla oluştur.
+    values.subtasks?.forEach((t) => subtaskRepo.create(created.id, t));
     finish('/(tabs)/tasks');
   };
 
@@ -103,10 +111,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     if (created.remind_at) {
       scheduleHabitReminder(created).then((ok) => {
         if (!ok) {
-          Alert.alert(
-            'Bildirim izni yok',
-            'Hatırlatma kaydedildi ama bildirim gönderebilmek için izin gerekiyor. Telefon ayarlarından bu uygulamaya bildirim izni verebilirsin.'
-          );
+          Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
         }
       });
     }
@@ -140,13 +145,15 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     <ModalCard visible={visible} onClose={onClose}>
           {step === 'menu' ? (
             <>
-              <Text style={styles.heading}>Ne eklemek istersin?</Text>
+              <Text style={styles.heading}>{t('add.menuTitle')}</Text>
               {MENU_OPTIONS.map((opt) => (
                 <Pressable key={opt.step} style={styles.option} onPress={() => setStep(opt.step)}>
-                  <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                  <View style={styles.optionIcon}>
+                    <EntityIcon type={opt.type} size={22} color={colors.primary} />
+                  </View>
                   <View style={styles.optionBody}>
-                    <Text style={styles.optionTitle}>{opt.title}</Text>
-                    <Text style={styles.optionDesc}>{opt.desc}</Text>
+                    <Text style={styles.optionTitle}>{t(opt.titleKey)}</Text>
+                    <Text style={styles.optionDesc}>{t(opt.descKey)}</Text>
                   </View>
                   <Text style={styles.optionChevron}>›</Text>
                 </Pressable>
@@ -165,10 +172,10 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   }}
                   hitSlop={8}
                 >
-                  <Text style={styles.backText}>‹ Geri</Text>
+                  <Text style={styles.backText}>{t('common.back')}</Text>
                 </Pressable>
                 <Text style={styles.heading}>
-                  {step === 'task' ? 'Yeni görev' : step === 'habit' ? 'Yeni alışkanlık' : 'Yeni hedef'}
+                  {step === 'task' ? t('add.newTask') : step === 'habit' ? t('add.newHabit') : t('add.newGoal')}
                 </Text>
                 {/* başlığı ortalamak için sol taraftaki "‹ Geri" genişliğinde boşluk */}
                 <View style={styles.headSpacer} />
@@ -184,10 +191,12 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                         style={styles.option}
                         onPress={() => setHabitKind(opt.kind)}
                       >
-                        <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                        <View style={styles.optionIcon}>
+                          <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                        </View>
                         <View style={styles.optionBody}>
-                          <Text style={styles.optionTitle}>{opt.title}</Text>
-                          <Text style={styles.optionDesc}>{opt.desc}</Text>
+                          <Text style={styles.optionTitle}>{t(opt.titleKey)}</Text>
+                          <Text style={styles.optionDesc}>{t(opt.descKey)}</Text>
                         </View>
                         <Text style={styles.optionChevron}>›</Text>
                       </Pressable>
@@ -198,19 +207,20 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   <HabitForm
                     userId={user.id}
                     kind={habitKind}
-                    submitLabel="Ekle"
+                    submitLabel={t('common.add')}
                     autoFocusTitle
                     onSubmit={addHabit}
                   />
                 )
               ) : step === 'task' ? (
-                // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat).
-                <TaskForm submitLabel="Ekle" autoFocusTitle onSubmit={addTask} />
+                // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat)
+                // + oluşturmada taslak alt görev ekleme.
+                <TaskForm submitLabel={t('common.add')} autoFocusTitle enableSubtaskDraft onSubmit={addTask} />
               ) : (
                 <>
                   <TextInput
                     style={styles.input}
-                    placeholder="Hedef başlığı (örn. 100 km koş)"
+                    placeholder={t('goal.titlePlaceholder')}
                     placeholderTextColor={colors.faint}
                     value={title}
                     onChangeText={setTitle}
@@ -230,7 +240,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                               onPress={() => setGoalType(g)}
                             >
                               <Text style={[styles.typeChipText, selected && styles.typeChipTextOn]}>
-                                {g === 'numeric' ? 'Sayısal' : 'Tarihli'}
+                                {g === 'numeric' ? t('goal.numeric') : t('goal.deadline')}
                               </Text>
                             </Pressable>
                           );
@@ -241,7 +251,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                         <View style={styles.inlineRow}>
                           <TextInput
                             style={[styles.input, { flex: 1 }]}
-                            placeholder="Hedef (örn. 100)"
+                            placeholder={t('goal.targetPlaceholder')}
                             placeholderTextColor={colors.faint}
                             keyboardType="numeric"
                             value={target}
@@ -249,7 +259,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                           />
                           <TextInput
                             style={[styles.input, { flex: 1 }]}
-                            placeholder="Birim (km, kitap)"
+                            placeholder={t('goal.unitPlaceholder')}
                             placeholderTextColor={colors.faint}
                             value={unit}
                             onChangeText={setUnit}
@@ -258,7 +268,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                       ) : (
                         <Pressable style={styles.input} onPress={() => setShowPicker(true)}>
                           <Text style={{ color: deadline ? colors.text : colors.faint, fontSize: 15 }}>
-                            {deadline ? shortDate(deadline) : 'Son tarih seç'}
+                            {deadline ? shortDate(deadline, lang) : t('goal.pickDeadline')}
                           </Text>
                         </Pressable>
                       )}
@@ -275,7 +285,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   )}
 
                   <Pressable style={styles.addBtn} onPress={addGoal}>
-                    <Text style={styles.addBtnText}>Ekle</Text>
+                    <Text style={styles.addBtnText}>{t('common.add')}</Text>
                   </Pressable>
                 </>
               )}
@@ -293,13 +303,23 @@ const makeStyles = (c: Colors) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: c.inputBg,
-      borderRadius: 14,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: c.border,
       padding: 14,
       marginBottom: 10,
     },
-    optionEmoji: { fontSize: 24, marginRight: 12 },
+    // Emoji için yuvarlak yumuşak kutu (premium his).
+    optionIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    optionEmoji: { fontSize: 22 },
     optionBody: { flex: 1 },
     optionTitle: { fontSize: 16, fontWeight: '700', color: c.text },
     optionDesc: { fontSize: 13, color: c.muted, marginTop: 2 },
@@ -337,10 +357,15 @@ const makeStyles = (c: Colors) =>
 
     addBtn: {
       backgroundColor: c.primary,
-      borderRadius: 12,
+      borderRadius: 14,
       alignItems: 'center',
-      paddingVertical: 14,
+      paddingVertical: 15,
       marginTop: 4,
+      shadowColor: c.primary,
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
     },
     addBtnText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
   });
