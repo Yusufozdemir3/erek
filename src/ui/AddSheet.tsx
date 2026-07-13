@@ -14,7 +14,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo, habitRepo, subtaskRepo, taskRepo } from '@/db';
 import type { GoalType, HabitKind } from '@/db';
 import { toYmd } from '@/lib/helpers';
-import { scheduleHabitReminder } from '@/lib/notifications';
+import { scheduleHabitReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
@@ -99,6 +99,10 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     });
     // Taslak alt görevleri, görev yazıldıktan sonra sırayla oluştur.
     values.subtasks?.forEach((t) => subtaskRepo.create(created.id, t));
+    // Son tarihte SAAT de seçildiyse o an bildirim kurulur (saatsizse no-op).
+    scheduleTaskReminder(created).then((ok) => {
+      if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
+    });
     finish('/(tabs)/tasks');
   };
 

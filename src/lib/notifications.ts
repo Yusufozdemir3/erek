@@ -10,7 +10,7 @@
 
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import type { Habit } from '@/db';
+import type { Habit, Task } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
@@ -165,5 +165,52 @@ export async function rescheduleAllReminders(habits: Habit[]): Promise<void> {
 
   for (const h of withReminder) {
     await scheduleHabitReminder(h);
+  }
+}
+
+// GÖREV hatırlatması: yalnızca son tarihte SAAT de seçilmişse anlamlıdır — o
+// saatte tek seferlik bildirim kurar (identifier: `task:${id}`, habit/timer
+// id'leriyle çakışmaz). Saatsiz, tamamlanmış ya da vadesi geçmiş görevlerde
+// mevcut bildirim iptal edilir, yeni kurulmaz.
+export async function scheduleTaskReminder(task: Task): Promise<boolean> {
+  await cancelTaskReminder(task.id);
+
+  if (task.completed_at) return true;
+  if (!task.due_date || task.due_date.length <= 10) return true; // saatsiz görev
+  const when = new Date(task.due_date);
+  if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) return true; // geçmiş
+
+  const granted = await ensurePermission();
+  if (!granted) return false;
+
+  const lang = await getStoredLang();
+  await Notifications.scheduleNotificationAsync({
+    identifier: `task:${task.id}`,
+    content: { title: translate(lang, 'notif.taskReminderTitle'), body: task.title },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
+  });
+  return true;
+}
+
+export async function cancelTaskReminder(taskId: string): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`task:${taskId}`);
+  } catch {
+    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+  }
+}
+
+// Açılışta tüm saatli, tamamlanmamış, vadesi geçmemiş görev hatırlatmalarını
+// yeniden kurar (bkz. rescheduleAllReminders — aynı gerekçe: cihaz/uygulama
+// yeniden başlaması programlanmış bildirimleri temizleyebilir).
+export async function rescheduleAllTaskReminders(tasks: Task[]): Promise<void> {
+  const withTime = tasks.filter((t) => !t.completed_at && t.due_date && t.due_date.length > 10);
+  if (withTime.length === 0) return;
+
+  const perm = await Notifications.getPermissionsAsync();
+  if (!perm.granted) return;
+
+  for (const t of withTime) {
+    await scheduleTaskReminder(t);
   }
 }

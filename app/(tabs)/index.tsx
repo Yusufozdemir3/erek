@@ -15,6 +15,7 @@ import type { Task } from '@/db';
 import { extractTime, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
+import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
@@ -72,6 +73,12 @@ export default function TodayScreen() {
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
+    if (completing) {
+      cancelTaskReminder(t.id);
+    } else {
+      const reopened = taskRepo.getById(t.id);
+      if (reopened) scheduleTaskReminder(reopened);
+    }
     reload();
   };
 

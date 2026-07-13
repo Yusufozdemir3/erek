@@ -13,6 +13,7 @@ import { subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { extractTime } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
+import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { PriorityMark } from '@/ui/PriorityMark';
@@ -59,6 +60,14 @@ export default function TasksScreen() {
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
+    // Tamamlanınca saatli hatırlatma varsa iptal edilir; geri açılınca (vadesi
+    // geçmemişse) yeniden kurulur.
+    if (completing) {
+      cancelTaskReminder(t.id);
+    } else {
+      const reopened = taskRepo.getById(t.id);
+      if (reopened) scheduleTaskReminder(reopened);
+    }
     // Yeniden sırala (tamamlanan alta iner); her kart Animated.View + LinearTransition
     // olduğu için konum değişimi yumuşakça animasyonlanır (Fabric'te de çalışır).
     reload();

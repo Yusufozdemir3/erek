@@ -162,6 +162,7 @@ const tr: Dict = {
     'Hatırlatma kaydedildi ama bildirim gönderebilmek için izin gerekiyor. Telefon ayarlarından bu uygulamaya bildirim izni verebilirsin.',
   'notif.channelName': 'Alışkanlık hatırlatmaları',
   'notif.reminderTitle': 'Alışkanlık zamanı',
+  'notif.taskReminderTitle': 'Görev zamanı',
   'notif.timerDoneTitle': 'Süre doldu ⏱️',
   'notif.timerDoneBody': '{title} — hedefe ulaştın!',
 
@@ -433,6 +434,7 @@ const en: Dict = {
     'The reminder was saved, but sending notifications needs permission. You can grant this app notification permission in your phone settings.',
   'notif.channelName': 'Habit reminders',
   'notif.reminderTitle': 'Habit time',
+  'notif.taskReminderTitle': 'Task time',
   'notif.timerDoneTitle': 'Time is up ⏱️',
   'notif.timerDoneBody': '{title} — you reached your goal!',
 
@@ -694,6 +696,7 @@ const de: Dict = {
     'Die Erinnerung wurde gespeichert, aber für Benachrichtigungen ist eine Erlaubnis nötig. Du kannst dieser App in den Telefoneinstellungen die Benachrichtigungserlaubnis erteilen.',
   'notif.channelName': 'Gewohnheits-Erinnerungen',
   'notif.reminderTitle': 'Zeit für deine Gewohnheit',
+  'notif.taskReminderTitle': 'Zeit für deine Aufgabe',
   'notif.timerDoneTitle': 'Zeit ist um ⏱️',
   'notif.timerDoneBody': '{title} — du hast dein Ziel erreicht!',
 

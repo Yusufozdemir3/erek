@@ -9,10 +9,11 @@
 // Mimari kural: SQL yok - yalnızca taskRepo/subtaskRepo çağrılır.
 
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
+import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -55,9 +56,12 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
     if (shouldBeCompleted && !isCompleted) {
       taskRepo.setCompleted(task.id, true);
       notifySuccess();
+      cancelTaskReminder(task.id); // tamamlandı — saatli hatırlatma varsa gerek kalmadı
     } else if (!shouldBeCompleted && isCompleted) {
       taskRepo.setCompleted(task.id, false);
       tapLight();
+      const reopened = taskRepo.getById(task.id);
+      if (reopened) scheduleTaskReminder(reopened); // geri açıldı — vadesi geçmemişse hatırlatma dönsün
     }
   };
 
@@ -94,12 +98,20 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       due_date: values.due_date,
       end_time: values.end_time,
     });
+    // Tarih/saat değişmiş olabilir — hatırlatma güncel değere göre yeniden kurulur.
+    const updated = taskRepo.getById(task.id);
+    if (updated) {
+      scheduleTaskReminder(updated).then((ok) => {
+        if (!ok) Alert.alert(tr('notif.noPermTitle'), tr('notif.noPermBody'));
+      });
+    }
     onChanged();
     onClose();
   };
 
   const handleDelete = () => {
     taskRepo.softDelete(task.id);
+    cancelTaskReminder(task.id);
     onChanged();
     onClose();
   };
