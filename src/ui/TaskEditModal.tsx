@@ -133,7 +133,13 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
               const done = s.completed === 1;
               return (
                 <View key={s.id} style={styles.subtaskRow}>
-                  <Pressable onPress={() => toggleSubtask(s)} hitSlop={8}>
+                  <Pressable
+                    onPress={() => toggleSubtask(s)}
+                    hitSlop={8}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: done }}
+                    accessibilityLabel={s.title}
+                  >
                     <View style={[styles.subtaskBox, done && styles.subtaskBoxDone]}>
                       {done && <Text style={styles.subtaskCheck}>✓</Text>}
                     </View>
