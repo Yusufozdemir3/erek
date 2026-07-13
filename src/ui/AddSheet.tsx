@@ -53,7 +53,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeStyles(colors);
-  const { user, notifyDataChanged } = useAppData();
+  const { user, notifyDataChanged, selectedDate } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
   const [title, setTitle] = useState('');
   // Alışkanlık sihirbazı: önce tip seçilir (null = tip seçim adımı).
@@ -214,8 +214,16 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                 )
               ) : step === 'task' ? (
                 // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat)
-                // + oluşturmada taslak alt görev ekleme.
-                <TaskForm submitLabel={t('common.add')} autoFocusTitle enableSubtaskDraft onSubmit={addTask} />
+                // + oluşturmada taslak alt görev ekleme. Son tarih "Bugün" ekranında
+                // o an bakılan güne varsayılanır (selectedDate) — Cuma'ya bakarken
+                // eklenen görev Cuma'ya gitsin diye.
+                <TaskForm
+                  initial={{ due_date: selectedDate }}
+                  submitLabel={t('common.add')}
+                  autoFocusTitle
+                  enableSubtaskDraft
+                  onSubmit={addTask}
+                />
               ) : (
                 <>
                   <TextInput

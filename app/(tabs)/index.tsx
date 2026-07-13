@@ -49,10 +49,11 @@ export default function TodayScreen() {
   // Not: map değişkeni `t` (görev) ile çakışmasın diye i18n `tr` alınır.
   const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
-  const { user } = useAppData();
+  // selectedDate paylaşılır (AppData): merkezi ＋ menüsü buradan okuyup yeni
+  // görevi bakılan güne varsayılan tarihle ekler.
+  const { user, selectedDate, setSelectedDate } = useAppData();
   const today = todayDate();
 
-  const [selectedDate, setSelectedDate] = useState(today); // "YYYY-MM-DD"
   const [showPicker, setShowPicker] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 

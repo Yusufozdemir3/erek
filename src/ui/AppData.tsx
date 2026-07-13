@@ -7,6 +7,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { habitRepo, initDataLayer, userRepo } from '@/db';
 import type { User } from '@/db';
+import { todayDate } from '@/lib/helpers';
 import { rescheduleAllReminders } from '@/lib/notifications';
 import { runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
@@ -23,6 +24,11 @@ interface AppData {
   // (üstte modal kapanınca focus olayı gelmez) görünür liste tazelenir.
   dataVersion: number;
   notifyDataChanged: () => void;
+  // "Bugün" ekranında o an bakılan gün ("YYYY-MM-DD"). Merkezi ＋ menüsü (AddSheet)
+  // sekme çubuğunda yaşadığı için hangi günün görüntülendiğini bilmez; burada
+  // paylaşılınca yeni görev bakılan güne varsayılan tarihle eklenir.
+  selectedDate: string;
+  setSelectedDate: (d: string) => void;
 }
 
 const AppDataContext = createContext<AppData | null>(null);
@@ -42,6 +48,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(todayDate());
 
   const notifyDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
 
@@ -88,7 +95,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppDataContext.Provider value={{ user, refreshUser, dataVersion, notifyDataChanged }}>
+    <AppDataContext.Provider
+      value={{ user, refreshUser, dataVersion, notifyDataChanged, selectedDate, setSelectedDate }}
+    >
       {children}
     </AppDataContext.Provider>
   );
