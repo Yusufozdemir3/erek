@@ -49,12 +49,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const timeLabel = (hm: string | null) => (hm ? hm : t('task.noTime'));
   const [title, setTitle] = useState(initial?.title ?? '');
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'medium');
-  // Son tarih: OLUŞTURMADA (initial yok) varsayılan olarak BUGÜN gelir — en sık
-  // senaryo "bugün yapılacak" ve tarihsiz görev "Bugün" ekranında görünmez.
-  // DÜZENLEMEDE ise mevcut değer korunur (null = bilinçli tarihsiz görev, bugüne
-  // çevrilmez). İstenmeyen tarih "Temizle" ile kaldırılabilir.
-  const [dueDate, setDueDate] = useState<string | null>(
-    initial === undefined ? todayDate() : initial.due_date ? initial.due_date.slice(0, 10) : null
+  // Son tarih artık ZORUNLU: her görevde bir tarih olmalı. Oluşturmada bugün,
+  // düzenlemede mevcut tarih (yoksa yine bugün) varsayılan gelir; kaldırma
+  // seçeneği yok (aşağıda "Temizle" düğmesi bilerek kaldırıldı).
+  const [dueDate, setDueDate] = useState<string>(
+    initial?.due_date ? initial.due_date.slice(0, 10) : todayDate()
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
@@ -76,8 +75,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const submit = () => {
     const t = title.trim();
     if (!t) return;
-    // Saat yalnızca bir tarih seçiliyken anlamlıdır.
-    const due_date = dueDate ? (dueTime ? `${dueDate}T${dueTime}:00` : dueDate) : null;
+    // Saat yalnızca bir tarih seçiliyken anlamlıdır; tarih artık her zaman var.
+    const due_date = dueTime ? `${dueDate}T${dueTime}:00` : dueDate;
     // Bitiş saati yalnız bir başlangıç saati varsa ve ondan SONRA ise geçerli.
     const end_time = dueTime && endTime && endTime > dueTime ? endTime : null;
     onSubmit({
@@ -138,17 +137,33 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         })}
       </View>
 
-      {/* Son tarih */}
+      {/* Son tarih — zorunlu, kaldırılamaz */}
       <Text style={styles.label}>{t('task.dueDate')}</Text>
       <View style={styles.row}>
         <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
           <Text style={styles.dateBtnText}>{longDateLabel(dueDate, lang, t('date.noDate'))}</Text>
         </Pressable>
-        {dueDate && (
+      </View>
+
+      {showPicker && (
+        <DateTimePicker
+          value={new Date(`${dueDate}T00:00:00`)}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          onChange={onPickDate}
+        />
+      )}
+
+      {/* Saat — isteğe bağlı */}
+      <Text style={styles.label}>{t('task.timeOptional')}</Text>
+      <View style={styles.row}>
+        <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
+          <Text style={styles.dateBtnText}>{timeLabel(dueTime)}</Text>
+        </Pressable>
+        {dueTime && (
           <Pressable
             style={styles.clearBtn}
             onPress={() => {
-              setDueDate(null);
               setDueTime(null);
               setEndTime(null);
             }}
@@ -158,74 +173,42 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         )}
       </View>
 
-      {showPicker && (
+      {showTimePicker && (
         <DateTimePicker
-          value={dueDate ? new Date(`${dueDate}T00:00:00`) : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          onChange={onPickDate}
+          value={hmToDate(dueTime)}
+          mode="time"
+          is24Hour
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onPickTime}
         />
       )}
 
-      {/* Saat — yalnızca bir tarih seçiliyken anlamlı */}
-      {dueDate && (
+      {/* Bitiş saati — yalnız bir başlangıç saati seçilmişken anlamlı */}
+      {dueTime && (
         <>
-          <Text style={styles.label}>{t('task.timeOptional')}</Text>
+          <Text style={styles.label}>{t('task.endTime')}</Text>
           <View style={styles.row}>
-            <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
-              <Text style={styles.dateBtnText}>{timeLabel(dueTime)}</Text>
+            <Pressable style={styles.dateBtn} onPress={() => setShowEndPicker(true)}>
+              <Text style={styles.dateBtnText}>{timeLabel(endTime)}</Text>
             </Pressable>
-            {dueTime && (
-              <Pressable
-                style={styles.clearBtn}
-                onPress={() => {
-                  setDueTime(null);
-                  setEndTime(null);
-                }}
-              >
+            {endTime && (
+              <Pressable style={styles.clearBtn} onPress={() => setEndTime(null)}>
                 <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
               </Pressable>
             )}
           </View>
+          {endTime && endTime <= dueTime && (
+            <Text style={styles.hint}>{t('task.endAfterStart')}</Text>
+          )}
 
-          {showTimePicker && (
+          {showEndPicker && (
             <DateTimePicker
-              value={hmToDate(dueTime)}
+              value={hmToDate(endTime ?? dueTime)}
               mode="time"
               is24Hour
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onPickTime}
+              onChange={onPickEndTime}
             />
-          )}
-
-          {/* Bitiş saati — yalnız bir başlangıç saati seçilmişken anlamlı */}
-          {dueTime && (
-            <>
-              <Text style={styles.label}>{t('task.endTime')}</Text>
-              <View style={styles.row}>
-                <Pressable style={styles.dateBtn} onPress={() => setShowEndPicker(true)}>
-                  <Text style={styles.dateBtnText}>{timeLabel(endTime)}</Text>
-                </Pressable>
-                {endTime && (
-                  <Pressable style={styles.clearBtn} onPress={() => setEndTime(null)}>
-                    <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-                  </Pressable>
-                )}
-              </View>
-              {endTime && endTime <= dueTime && (
-                <Text style={styles.hint}>{t('task.endAfterStart')}</Text>
-              )}
-
-              {showEndPicker && (
-                <DateTimePicker
-                  value={hmToDate(endTime ?? dueTime)}
-                  mode="time"
-                  is24Hour
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={onPickEndTime}
-                />
-              )}
-            </>
           )}
         </>
       )}
