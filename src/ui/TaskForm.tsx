@@ -10,7 +10,7 @@ import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import type { Priority } from '@/db';
-import { extractTime, hmToDate, toHm, toYmd } from '@/lib/helpers';
+import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -49,8 +49,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const timeLabel = (hm: string | null) => (hm ? hm : t('task.noTime'));
   const [title, setTitle] = useState(initial?.title ?? '');
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'medium');
+  // Son tarih: OLUŞTURMADA (initial yok) varsayılan olarak BUGÜN gelir — en sık
+  // senaryo "bugün yapılacak" ve tarihsiz görev "Bugün" ekranında görünmez.
+  // DÜZENLEMEDE ise mevcut değer korunur (null = bilinçli tarihsiz görev, bugüne
+  // çevrilmez). İstenmeyen tarih "Temizle" ile kaldırılabilir.
   const [dueDate, setDueDate] = useState<string | null>(
-    initial?.due_date ? initial.due_date.slice(0, 10) : null
+    initial === undefined ? todayDate() : initial.due_date ? initial.due_date.slice(0, 10) : null
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
