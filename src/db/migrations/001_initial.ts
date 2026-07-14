@@ -151,6 +151,17 @@ export const migration009 = `
 ALTER TABLE tasks ADD COLUMN end_time TEXT;
 `;
 
+// Migration 010: bağlı hedefe katkı biçimi. goal_contribution NULL/'per_completion'
+// (mevcut davranış: tamamlanan gün başına +1) | 'amount' (o gün yapılan miktar ×
+// goal_factor hedefe eklenir — birim uyuşmazlığında kullanıcı çarpanı kendi girer,
+// ör. 1 bardak = 0.25 litre). goal_factor varsayılan 1 (birimler zaten aynıysa
+// dokunulmaz). Yalnızca numeric/timer + bir hedefe bağlı alışkanlıkta anlamlı;
+// ikili alışkanlıkta "miktar" kavramı yok, hep per_completion sayılır.
+export const migration010 = `
+ALTER TABLE habits ADD COLUMN goal_contribution TEXT;
+ALTER TABLE habits ADD COLUMN goal_factor REAL NOT NULL DEFAULT 1;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -162,4 +173,5 @@ export const migrations = [
   { version: 7, sql: migration007 },
   { version: 8, sql: migration008 },
   { version: 9, sql: migration009 },
+  { version: 10, sql: migration010 },
 ];

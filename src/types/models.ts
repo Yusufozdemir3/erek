@@ -51,6 +51,11 @@ export interface Goal extends SyncFields {
   deadline: string | null;       // deadline tipi için bitiş tarihi
 }
 
+// Bağlı hedefe katkı biçimi: 'per_completion' (tamamlanan gün başına +1, binary'de
+// tek anlamlı seçenek) | 'amount' (o gün yapılan miktar × goal_factor hedefe eklenir,
+// yalnız numeric/timer'da anlamlı). NULL = 'per_completion' (geriye dönük varsayılan).
+export type GoalContribution = 'per_completion' | 'amount';
+
 export interface Habit extends SyncFields {
   user_id: string;
   goal_id: string | null;        // ileride bir hedefe bağlanabilir
@@ -64,6 +69,8 @@ export interface Habit extends SyncFields {
   unit: string | null;           // "bardak", "sayfa"; numeric hedefte anlamlı (timer/binary: null)
   start_date: string | null;     // "YYYY-MM-DD"; null = baştan beri
   end_date: string | null;       // "YYYY-MM-DD"; null = süresiz
+  goal_contribution: GoalContribution | null; // bkz. GoalContribution; NULL = per_completion
+  goal_factor: number;           // yalnız 'amount' modunda çarpan; varsayılan 1
 }
 
 // Bir görevin alt görevi (basit checklist maddesi).

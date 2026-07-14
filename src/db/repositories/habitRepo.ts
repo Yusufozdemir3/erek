@@ -4,7 +4,7 @@
 
 import { getDb } from '../database';
 import { isScheduledOn, isWithinHabitDates, newId, nowIso, parseJson, todayDate, toJson } from '../../lib/helpers';
-import type { Habit, HabitKind, HabitLog, Recurrence } from '../../types/models';
+import type { GoalContribution, Habit, HabitKind, HabitLog, Recurrence } from '../../types/models';
 import { goalRepo } from './goalRepo';
 
 function rowToHabit(row: any): Habit {
@@ -25,6 +25,8 @@ function rowToHabit(row: any): Habit {
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
+    goal_contribution: row.goal_contribution ?? null,
+    goal_factor: row.goal_factor ?? 1,
   };
 }
 
@@ -41,6 +43,8 @@ export interface CreateHabitInput {
   unit?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  goal_contribution?: GoalContribution | null; // NULL = per_completion (varsayılan)
+  goal_factor?: number;                        // yalnız 'amount' modunda anlamlı; varsayılan 1
 }
 
 export const habitRepo = {
@@ -50,8 +54,8 @@ export const habitRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO habits
-       (id, user_id, goal_id, title, kind, remind_at, icon, color, schedule, target_amount, unit, start_date, end_date, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
+       (id, user_id, goal_id, title, kind, remind_at, icon, color, schedule, target_amount, unit, start_date, end_date, goal_contribution, goal_factor, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0)`,
       [
         id,
         input.user_id,
@@ -66,6 +70,8 @@ export const habitRepo = {
         input.unit ?? null,
         input.start_date ?? null,
         input.end_date ?? null,
+        input.goal_contribution ?? null,
+        input.goal_factor ?? 1,
         now,
       ]
     );
@@ -105,6 +111,8 @@ export const habitRepo = {
     if (fields.unit !== undefined) { sets.push('unit = ?'); vals.push(fields.unit); }
     if (fields.start_date !== undefined) { sets.push('start_date = ?'); vals.push(fields.start_date); }
     if (fields.end_date !== undefined) { sets.push('end_date = ?'); vals.push(fields.end_date); }
+    if (fields.goal_contribution !== undefined) { sets.push('goal_contribution = ?'); vals.push(fields.goal_contribution); }
+    if (fields.goal_factor !== undefined) { sets.push('goal_factor = ?'); vals.push(fields.goal_factor); }
     if (sets.length === 0) return;
     sets.push('updated_at = ?'); vals.push(nowIso());
     sets.push('synced = 0');
@@ -142,19 +150,28 @@ export const habitRepo = {
     this.bumpGoalIfLinked(habitId, wasCompleted, completed);
   },
 
-  // Alışkanlık bir hedefe bağlıysa, TAMAMLANMA GEÇİŞİNDE bağlı hedefin
-  // ilerlemesini günceller: tamamlandı → +1, geri alındı → −1. Yalnızca durum
-  // gerçekten değiştiğinde çalışır; aynı durumu tekrar yazmak (ör. zaten
-  // tamamlanmış günü tekrar işaretlemek) hedefi etkilemez → çift sayım olmaz.
-  // Bir günü geçmişe dönük işaretlemek de geçerli bir geçiştir. goalRepo.addProgress
-  // 0..target aralığına sıkıştırır ve numeric olmayan hedefi zaten yok sayar.
+  // Alışkanlık bir hedefe "per_completion" modunda (varsayılan) bağlıysa,
+  // TAMAMLANMA GEÇİŞİNDE bağlı hedefin ilerlemesini günceller: tamamlandı → +1,
+  // geri alındı → −1. Yalnızca durum gerçekten değiştiğinde çalışır; aynı durumu
+  // tekrar yazmak (ör. zaten tamamlanmış günü tekrar işaretlemek) hedefi
+  // etkilemez → çift sayım olmaz. Bir günü geçmişe dönük işaretlemek de geçerli
+  // bir geçiştir. goalRepo.addProgress 0..target aralığına sıkıştırır ve numeric
+  // olmayan hedefi zaten yok sayar.
+  // 'amount' modundaki alışkanlıklar bu fonksiyona hiç girmez (bkz. incrementAmount) —
+  // onlarda katkı tamamlanma durumuna değil, o anki miktar farkına bağlıdır.
   // NOT: Çok-cihaz senkronunda goal.current_value LWW ile taşınır; bu, manuel
   // +1/+5 ilerlemesindeki mevcut sınırla aynıdır (eşzamanlı katkılar birleşmez).
-  bumpGoalIfLinked(habitId: string, wasCompleted: boolean, isCompleted: boolean): void {
+  // `habit` verilirse (incrementAmount zaten çekmişse) tekrar sorgu atılmaz.
+  bumpGoalIfLinked(
+    habitId: string,
+    wasCompleted: boolean,
+    isCompleted: boolean,
+    habit?: Habit | null
+  ): void {
     if (wasCompleted === isCompleted) return;
-    const habit = this.getById(habitId);
-    if (!habit?.goal_id) return;
-    goalRepo.addProgress(habit.goal_id, isCompleted ? 1 : -1);
+    const h = habit !== undefined ? habit : this.getById(habitId);
+    if (!h?.goal_id) return;
+    goalRepo.addProgress(h.goal_id, isCompleted ? 1 : -1);
   },
 
   // Bir alışkanlığın belirli gün tamamlanıp tamamlanmadığı.
@@ -212,6 +229,10 @@ export const habitRepo = {
     const wasCompleted = existing?.completed === 1;
     const current = existing ? existing.amount ?? 0 : 0;
     const next = Math.max(0, current + delta);
+    // 0 tabanına çarpınca istenen delta ile gerçekte uygulanan fark ayrışabilir
+    // (ör. current=2, delta=-5 istenirse next=0, gerçek fark -2'dir) — 'amount'
+    // modunda hedefe bunun (istenenin değil) gerçek farkı yansır.
+    const appliedDelta = next - current;
     const completed = target != null && target > 0 && next >= target ? 1 : 0;
     if (existing) {
       db.runSync(
@@ -225,9 +246,15 @@ export const habitRepo = {
         [newId(), habitId, date, completed, next, now]
       );
     }
-    // Nicel alışkanlıkta da hedefe katkı "tamamlanan gün" başına +1'dir (o gün
-    // yapılan miktar kadar DEĞİL): hedefe ulaşınca (0→1) +1, altına düşünce (1→0) −1.
-    this.bumpGoalIfLinked(habitId, wasCompleted, completed === 1);
+    // Hedefe katkı iki moddan biri: 'amount' ise HER değişiklikte (tamamlanma
+    // beklemeden) gerçek fark × çarpan hedefe yansır; yoksa (varsayılan
+    // per_completion) yalnızca tamamlanma DURUM geçişinde +1/-1 uygulanır.
+    const habit = this.getById(habitId);
+    if (habit?.goal_id && habit.goal_contribution === 'amount') {
+      if (appliedDelta !== 0) goalRepo.addProgress(habit.goal_id, appliedDelta * habit.goal_factor);
+    } else {
+      this.bumpGoalIfLinked(habitId, wasCompleted, completed === 1, habit);
+    }
   },
 
   // STREAK HESABI: bugünden geriye doğru, alışkanlığın PLANLI günlerini sayar.

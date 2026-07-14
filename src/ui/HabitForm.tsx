@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
-import type { Goal, HabitKind, Recurrence } from '@/db';
+import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
 import { hmToDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -41,6 +41,8 @@ export interface HabitFormValues {
   start_date: string | null;
   end_date: string | null;
   goal_id: string | null;
+  goal_contribution: GoalContribution | null; // yalnız goal_id varsa anlamlı; NULL = per_completion
+  goal_factor: number;                        // yalnız 'amount' modunda anlamlı
 }
 
 interface Props {
@@ -81,6 +83,20 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
   const [startDate, setStartDate] = useState<string | null>(initial?.start_date ?? null);
   const [endDate, setEndDate] = useState<string | null>(initial?.end_date ?? null);
   const [goalId, setGoalId] = useState<string | null>(initial?.goal_id ?? null);
+  // Bağlı hedefe katkı biçimi: 'per_completion' (varsayılan, gün başına +1) ya da
+  // 'amount' (o gün yapılan miktar × çarpan). Yalnızca nicel/zamanlayıcıda anlamlı
+  // (ikili alışkanlıkta "miktar" kavramı yoktur).
+  const [goalContribution, setGoalContribution] = useState<GoalContribution>(
+    initial?.goal_contribution ?? 'per_completion'
+  );
+  // Kullanıcıya çarpan yerine "kaç {alışkanlık birimi} bir {hedef birimi} eder?"
+  // diye SORULUR — ondalık yerine tam sayıyla düşünmesi doğal (ör. "4 bardak 1
+  // litre eder"). goal_factor'ün (litre/bardak) matematiksel TERSİdir; bu yüzden
+  // başlangıç değeri de tersine çevrilerek gösterilir. Varsayılan "1": birimler
+  // zaten aynıysa (ör. sayfa=sayfa) kullanıcı hiç dokunmadan doğru sonucu görür.
+  const [goalRatioText, setGoalRatioText] = useState(
+    initial?.goal_factor && initial.goal_factor > 0 ? String(1 / initial.goal_factor) : '1'
+  );
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showPicker, setShowPicker] = useState(false);
   // Hangi tarih seçici açık: başlangıç mı bitiş mi (null = kapalı).
@@ -117,6 +133,14 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
     }
     // Bitiş başlangıçtan önce olamaz; olduysa başlangıca çekilir (tek günlük aralık).
     const end_date = endDate && startDate && endDate < startDate ? startDate : endDate;
+    // Katkı biçimi yalnız bir hedefe bağlı nicel/zamanlayıcı alışkanlıkta anlamlı;
+    // aksi halde NULL (= per_completion) gönderilir.
+    const goal_contribution: GoalContribution | null =
+      goalId && kind !== 'binary' ? goalContribution : null;
+    // Kullanıcı "kaç {birim} bir {hedef birimi} eder" oranını girer (ör. 4);
+    // DB'de saklanan goal_factor bunun tersidir (0.25 — hedefe eklenecek gerçek çarpan).
+    const parsedRatio = parseFloat(goalRatioText.replace(',', '.'));
+    const goal_factor = Number.isFinite(parsedRatio) && parsedRatio > 0 ? 1 / parsedRatio : 1;
     onSubmit({
       title: t,
       kind,
@@ -129,6 +153,8 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
       start_date: startDate,
       end_date,
       goal_id: goalId,
+      goal_contribution,
+      goal_factor,
     });
   };
 
@@ -147,6 +173,28 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
       else setEndDate(ymd);
     }
   };
+
+  // "Kaç {birim} bir {hedef birimi} eder?" sorusunda kullanılan iki etiket.
+  // Zamanlayıcıda birim hep dakikadır (hedef dakika girilir); nicelde kullanıcının
+  // yazdığı birim, boşsa jenerik bir kelimeye düşer.
+  const habitUnitLabel = kind === 'timer' ? t('habit.minuteUnit') : unit.trim() || t('habit.genericUnit');
+  const selectedGoal = goals.find((g) => g.id === goalId);
+  const goalUnitLabel = selectedGoal?.unit?.trim() || t('habit.genericUnit');
+
+  // Tam sayıysa ondalık gösterme (AmountStepper.fmt ile aynı desen).
+  const fmtPreviewNum = (n: number) => (n % 1 === 0 ? String(n) : String(Math.round(n * 100) / 100));
+
+  // Canlı önizleme: girilen günlük hedef ve oran geçerliyse "günde X yaparsan
+  // hedefe Y eklenir" cümlesi için ham sayılar. Biri bile geçersizse gösterilmez.
+  const parsedDailyTarget = parseFloat(targetText.replace(',', '.'));
+  const parsedRatioPreview = parseFloat(goalRatioText.replace(',', '.'));
+  const contributionPreview =
+    Number.isFinite(parsedDailyTarget) &&
+    parsedDailyTarget > 0 &&
+    Number.isFinite(parsedRatioPreview) &&
+    parsedRatioPreview > 0
+      ? { target: parsedDailyTarget, result: parsedDailyTarget / parsedRatioPreview }
+      : null;
 
   return (
     <>
@@ -375,6 +423,65 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
             })}
           </View>
           <Text style={styles.hint}>{t('habit.linkGoalHint')}</Text>
+        </>
+      )}
+
+      {/* Katkı biçimi — yalnız nicel/zamanlayıcı VE bir hedefe bağlıyken anlamlı.
+          İkili alışkanlıkta "miktar" kavramı yok, hep gün başına +1'dir. */}
+      {goalId && kind !== 'binary' && (
+        <>
+          <Text style={styles.label}>{t('habit.goalContribution')}</Text>
+          <View style={styles.freqRow}>
+            <Pressable
+              style={[styles.freqBtn, goalContribution === 'per_completion' && styles.freqBtnSel]}
+              onPress={() => setGoalContribution('per_completion')}
+            >
+              <Text
+                style={[
+                  styles.freqBtnText,
+                  goalContribution === 'per_completion' && styles.freqBtnTextSel,
+                ]}
+              >
+                {t('habit.contribPerCompletion')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.freqBtn, goalContribution === 'amount' && styles.freqBtnSel]}
+              onPress={() => setGoalContribution('amount')}
+            >
+              <Text
+                style={[styles.freqBtnText, goalContribution === 'amount' && styles.freqBtnTextSel]}
+              >
+                {t('habit.contribAmount')}
+              </Text>
+            </Pressable>
+          </View>
+
+          {goalContribution === 'amount' && (
+            <>
+              <Text style={styles.label}>
+                {t('habit.goalRatioQuestion', { habitUnit: habitUnitLabel, goalUnit: goalUnitLabel })}
+              </Text>
+              <TextInput
+                style={[styles.input, styles.targetInput]}
+                value={goalRatioText}
+                onChangeText={setGoalRatioText}
+                placeholder="1"
+                placeholderTextColor={colors.faint}
+                keyboardType="numeric"
+              />
+              {contributionPreview != null && (
+                <Text style={styles.hint}>
+                  {t('habit.goalContributionPreview', {
+                    target: fmtPreviewNum(contributionPreview.target),
+                    habitUnit: habitUnitLabel,
+                    result: fmtPreviewNum(contributionPreview.result),
+                    goalUnit: goalUnitLabel,
+                  })}
+                </Text>
+              )}
+            </>
+          )}
         </>
       )}
 

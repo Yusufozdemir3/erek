@@ -96,6 +96,14 @@ const tr: Dict = {
   'habit.linkGoal': 'Hedefe bağla (isteğe bağlı)',
   'habit.none': 'Yok',
   'habit.linkGoalHint': 'Tamamladığın her gün bu hedefe +1 sayılır.',
+  'habit.goalContribution': 'Hedefe nasıl katkı yapsın?',
+  'habit.contribPerCompletion': 'Gün başına +1',
+  'habit.contribAmount': 'Yaptığım miktar',
+  'habit.minuteUnit': 'dakika',
+  'habit.genericUnit': 'birim',
+  'habit.goalRatioQuestion': 'Kaç {habitUnit} bir {goalUnit} eder?',
+  'habit.goalContributionPreview':
+    'Yani günde {target} {habitUnit} yaparsan, hedefe yaklaşık {result} {goalUnit} eklenir.',
   'habit.edit': 'Alışkanlığı düzenle',
 
   // Gün kısaltmaları (Pazartesi → Pazar)
@@ -382,6 +390,14 @@ const en: Dict = {
   'habit.linkGoal': 'Link to a goal (optional)',
   'habit.none': 'None',
   'habit.linkGoalHint': 'Each day you complete it counts +1 toward this goal.',
+  'habit.goalContribution': 'How should it contribute to the goal?',
+  'habit.contribPerCompletion': '+1 per day',
+  'habit.contribAmount': 'The amount I log',
+  'habit.minuteUnit': 'minute',
+  'habit.genericUnit': 'unit',
+  'habit.goalRatioQuestion': 'How many {habitUnit} make one {goalUnit}?',
+  'habit.goalContributionPreview':
+    'So if you log {target} {habitUnit} a day, about {result} {goalUnit} gets added to the goal.',
   'habit.edit': 'Edit habit',
 
   'weekday.mon': 'Mon',
@@ -651,6 +667,14 @@ const de: Dict = {
   'habit.linkGoal': 'Mit einem Ziel verknüpfen (optional)',
   'habit.none': 'Keins',
   'habit.linkGoalHint': 'Jeder Tag, an dem du sie erledigst, zählt +1 für dieses Ziel.',
+  'habit.goalContribution': 'Wie soll sie zum Ziel beitragen?',
+  'habit.contribPerCompletion': '+1 pro Tag',
+  'habit.contribAmount': 'Die erfasste Menge',
+  'habit.minuteUnit': 'Minute',
+  'habit.genericUnit': 'Einheit',
+  'habit.goalRatioQuestion': 'Wie viele {habitUnit} ergeben ein {goalUnit}?',
+  'habit.goalContributionPreview':
+    'Wenn du also täglich {target} {habitUnit} erfasst, kommen etwa {result} {goalUnit} zum Ziel hinzu.',
   'habit.edit': 'Gewohnheit bearbeiten',
 
   'weekday.mon': 'Mo',

@@ -541,3 +541,87 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
     expect(currentValue(goal.id)).toBe(0);
   });
 });
+
+describe('hedefe bağlı ilerleme — "amount" katkı modu', () => {
+  // per_completion'ın aksine: tamamlanma beklemez, HER miktar değişikliğinde
+  // gerçek fark × goal_factor doğrudan hedefe eklenir (birim dönüşümü için).
+  function createNumericGoal(target: number | null = 10, unit = 'litre') {
+    return goalRepo.create({
+      user_id: userId,
+      title: 'Su hedefi',
+      goal_type: 'numeric',
+      target_value: target,
+      unit,
+    });
+  }
+  const currentValue = (goalId: string) => goalRepo.getById(goalId)!.current_value;
+
+  it('tamamlanma beklemeden, her artışta fark × çarpan hedefe eklenir', () => {
+    const goal = createNumericGoal(10);
+    const habit = createHabit({
+      goal_id: goal.id,
+      target_amount: 5,
+      unit: 'bardak',
+      goal_contribution: 'amount',
+      goal_factor: 0.25,
+    });
+
+    habitRepo.incrementAmount(habit.id, TODAY, 2, 5); // 2/5 — henüz tamamlanmadı
+    expect(currentValue(goal.id)).toBe(0.5); // 2 × 0.25
+
+    habitRepo.incrementAmount(habit.id, TODAY, 3, 5); // 5/5 — tamamlandı, katkı yine farka göre
+    expect(currentValue(goal.id)).toBeCloseTo(1.25); // (2+3) × 0.25
+  });
+
+  it('miktar azaltılınca (geri alma) hedeften de aynı oranda düşer', () => {
+    const goal = createNumericGoal(10);
+    const habit = createHabit({
+      goal_id: goal.id,
+      target_amount: 5,
+      unit: 'bardak',
+      goal_contribution: 'amount',
+      goal_factor: 0.25,
+    });
+    habitRepo.incrementAmount(habit.id, TODAY, 5, 5);
+    expect(currentValue(goal.id)).toBeCloseTo(1.25);
+    habitRepo.incrementAmount(habit.id, TODAY, -2, 5);
+    expect(currentValue(goal.id)).toBeCloseTo(0.75); // (5-2) × 0.25
+  });
+
+  it('0 tabanına kırpılınca hedefe İSTENEN değil GERÇEK uygulanan fark yansır', () => {
+    const goal = createNumericGoal(10);
+    const habit = createHabit({
+      goal_id: goal.id,
+      target_amount: 5,
+      unit: 'bardak',
+      goal_contribution: 'amount',
+      goal_factor: 1,
+    });
+    habitRepo.incrementAmount(habit.id, TODAY, 2, 5); // amount 0→2
+    expect(currentValue(goal.id)).toBe(2);
+    habitRepo.incrementAmount(habit.id, TODAY, -10, 5); // istenen -10, gerçek fark -2 (0'a kırpılır)
+    expect(currentValue(goal.id)).toBe(0);
+  });
+
+  it('çarpan birim dönüşümü sağlar (5 bardak × 0.2 = 1 litre)', () => {
+    const goal = createNumericGoal(7, 'litre');
+    const habit = createHabit({
+      goal_id: goal.id,
+      target_amount: 5,
+      unit: 'bardak',
+      goal_contribution: 'amount',
+      goal_factor: 0.2,
+    });
+    habitRepo.incrementAmount(habit.id, TODAY, 5, 5);
+    expect(currentValue(goal.id)).toBeCloseTo(1);
+  });
+
+  it('goal_contribution belirtilmezse (varsayılan) eski per_completion davranışı korunur', () => {
+    const goal = createNumericGoal(10);
+    const habit = createHabit({ goal_id: goal.id, target_amount: 5, unit: 'bardak' }); // goal_contribution yok
+    habitRepo.incrementAmount(habit.id, TODAY, 2, 5); // henüz tamamlanmadı
+    expect(currentValue(goal.id)).toBe(0);
+    habitRepo.incrementAmount(habit.id, TODAY, 3, 5); // 5/5 tamam → +1
+    expect(currentValue(goal.id)).toBe(1);
+  });
+});
