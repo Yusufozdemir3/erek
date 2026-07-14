@@ -21,7 +21,7 @@ import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { LANG_LABELS, SUPPORTED_LANGS } from '@/i18n/translations';
-import { type Colors } from '@/ui/theme';
+import { ACCENT_ORDER, ACCENT_THEMES, type Colors } from '@/ui/theme';
 import { ACCOUNTS_ENABLED } from '@/config';
 
 const THEME_OPTIONS: { mode: ThemeMode; labelKey: string }[] = [
@@ -31,7 +31,7 @@ const THEME_OPTIONS: { mode: ThemeMode; labelKey: string }[] = [
 ];
 
 export default function ProfileScreen() {
-  const { colors, mode, setMode } = useTheme();
+  const { colors, scheme, mode, setMode, accent, setAccent } = useTheme();
   const { t, lang, setLang } = useI18n();
   const styles = makeStyles(colors);
   const { user, refreshUser } = useAppData();
@@ -129,6 +129,34 @@ export default function ProfileScreen() {
           })}
         </View>
         <Text style={styles.hint}>{t('profile.systemHint')}</Text>
+      </View>
+
+      {/* Vurgu (marka) rengi */}
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.cardTitle}>{t('profile.accentColor')}</Text>
+        <View style={styles.accentRow}>
+          {ACCENT_ORDER.map((key) => {
+            const on = accent === key;
+            const swatch = ACCENT_THEMES[key][scheme].primary;
+            return (
+              <Pressable
+                key={key}
+                style={styles.accentItem}
+                onPress={() => setAccent(key)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
+                accessibilityLabel={t(`profile.accent.${key}`)}
+              >
+                <View
+                  style={[styles.accentSwatch, { backgroundColor: swatch }, on && styles.accentSwatchOn]}
+                >
+                  {on && <Text style={styles.accentCheck}>✓</Text>}
+                </View>
+                <Text style={styles.accentLabel}>{t(`profile.accent.${key}`)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       {/* Dil */}
@@ -286,6 +314,21 @@ const makeStyles = (c: Colors) =>
     segBtnOn: { backgroundColor: c.primary, borderColor: c.primary },
     segText: { fontSize: 14, fontWeight: '700', color: c.muted },
     segTextOn: { color: c.onAccent },
+    // Vurgu rengi seçici — renkli daireler + altında kısa isim.
+    accentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+    accentItem: { alignItems: 'center', width: 64 },
+    accentSwatch: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    accentSwatchOn: { borderWidth: 3, borderColor: c.text },
+    accentCheck: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
+    accentLabel: { fontSize: 11, fontWeight: '600', color: c.muted, marginTop: 6, textAlign: 'center' },
     syncBtn: {
       backgroundColor: c.primary,
       borderRadius: 12,

@@ -49,26 +49,72 @@ export const lightColors: Colors = {
   onAccent: '#ffffff',
 };
 
+// Sıcak mürekkep: kahverengiye çalan neredeyse-siyah zemin (soğuk slate/lacivert
+// yerine) — açık moddaki krem zeminle (#F4F1EA) aynı ailede durur, metin rengi de
+// o kremle birebir aynıdır. İki mod böylece aynı editorial kimliğin parçası gibi
+// hisseder (bkz. vurgu renkleri: çam/kiremit/mürekkep/bordo/hardal de sıcak tonlar).
 export const darkColors: Colors = {
-  bg: '#0b1120',
-  card: '#1e293b',
-  border: '#334155',
-  line: '#475569',
-  text: '#f1f5f9',
-  muted: '#94a3b8',
-  faint: '#64748b',
+  bg: '#161412',
+  card: '#211f1c',
+  border: '#3a3632',
+  line: '#4a453f',
+  text: '#f4f1ea',
+  muted: '#a8a29a',
+  faint: '#78726a',
   primary: '#818cf8',
   primarySoft: '#312e81',
   done: '#34d399',
   streak: '#fb923c',
   danger: '#f87171',
-  track: '#334155',
-  inputBg: '#0f172a',
+  track: '#3a3632',
+  inputBg: '#1c1a17',
   onAccent: '#ffffff',
 };
 
 // Geriye uyumlu varsayılan (açık). Taşınmış bileşenler useTheme().colors kullanır.
 export const colors: Colors = lightColors;
+
+// Vurgu rengi (marka rengi) — kullanıcı Profil'den seçer, AsyncStorage'da saklanır
+// (bkz. ThemeProvider). Yalnızca primary/primarySoft'u geçersiz kılar; done/danger/
+// streak gibi anlamlı renkler ve zemin/metin tonları temadan (açık/koyu) gelmeye
+// devam eder — vurgu rengi yalnızca "marka" anlamına gelir.
+export type AccentKey = 'pine' | 'terracotta' | 'ink' | 'indigo' | 'wine' | 'mustard';
+
+interface AccentPalette {
+  primary: string;
+  primarySoft: string;
+}
+
+export const ACCENT_THEMES: Record<AccentKey, { light: AccentPalette; dark: AccentPalette }> = {
+  pine: {
+    light: { primary: '#2F5D45', primarySoft: '#DCE8DF' },
+    dark: { primary: '#6FA98A', primarySoft: '#1E3B2C' },
+  },
+  terracotta: {
+    light: { primary: '#C0532E', primarySoft: '#F5D9CC' },
+    dark: { primary: '#E08A65', primarySoft: '#4A2418' },
+  },
+  ink: {
+    light: { primary: '#1E3A5F', primarySoft: '#DAE3EE' },
+    dark: { primary: '#7FA8D6', primarySoft: '#1C3450' },
+  },
+  indigo: {
+    light: { primary: '#4f46e5', primarySoft: '#e0e7ff' },
+    dark: { primary: '#818cf8', primarySoft: '#312e81' },
+  },
+  wine: {
+    light: { primary: '#7A2E3A', primarySoft: '#F0D9DD' },
+    dark: { primary: '#C97A88', primarySoft: '#3D1820' },
+  },
+  mustard: {
+    light: { primary: '#96591A', primarySoft: '#F0DFC0' },
+    dark: { primary: '#D9A24B', primarySoft: '#402E10' },
+  },
+};
+
+// Profil ekranındaki seçici sırası; ilk eleman varsayılan vurgu rengidir.
+export const ACCENT_ORDER: AccentKey[] = ['pine', 'terracotta', 'ink', 'indigo', 'wine', 'mustard'];
+export const DEFAULT_ACCENT: AccentKey = 'pine';
 
 // Öncelik ve alışkanlık renkleri iki modda da aynı (canlı vurgular; koyuda da okunur).
 export const PRIORITY_COLOR: Record<Priority, string> = {
