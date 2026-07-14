@@ -68,6 +68,25 @@ export const subtaskRepo = {
     return { done: row?.done ?? 0, total: row?.total ?? 0 };
   },
 
+  // countForTask'in ÇOKLU sürümü: bir liste ekranı (Bugün/Görevler) her görev
+  // için ayrı sorgu (N+1) yerine tek GROUP BY ile tüm rozet sayılarını alır.
+  // Yalnızca en az bir (silinmemiş) alt görevi olan görevler döner — alt görevsiz
+  // görevler sonuçta hiç yer almaz (çağıran "total > 0" filtresine gerek kalmaz).
+  countsForTasks(taskIds: string[]): Record<string, { done: number; total: number }> {
+    if (taskIds.length === 0) return {};
+    const db = getDb();
+    const placeholders = taskIds.map(() => '?').join(',');
+    const rows = db.getAllSync<{ task_id: string; done: number; total: number }>(
+      `SELECT task_id, COALESCE(SUM(completed), 0) AS done, COUNT(*) AS total
+       FROM subtasks WHERE task_id IN (${placeholders}) AND deleted_at IS NULL
+       GROUP BY task_id`,
+      taskIds
+    );
+    const out: Record<string, { done: number; total: number }> = {};
+    for (const r of rows) out[r.task_id] = { done: r.done ?? 0, total: r.total ?? 0 };
+    return out;
+  },
+
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
     db.runSync(

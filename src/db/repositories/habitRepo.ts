@@ -177,6 +177,28 @@ export const habitRepo = {
     return row?.amount ?? 0;
   },
 
+  // getAmountOn + isCompletedOn'un ÇOKLU sürümü: "Bugün" ekranı, her alışkanlık
+  // için o günün miktar+tamamlanma bilgisini iki ayrı sorguyla (N+1) çekmek
+  // yerine tek soruda alır. habit_logs'ta UNIQUE(habit_id, log_date) olduğundan
+  // alışkanlık başına en çok bir satır döner; log'u olmayan alışkanlık sonuçta
+  // hiç yer almaz (çağıran amount=0 / completed=false varsayar).
+  getDayStates(
+    habitIds: string[],
+    date: string
+  ): Record<string, { amount: number; completed: boolean }> {
+    if (habitIds.length === 0) return {};
+    const db = getDb();
+    const placeholders = habitIds.map(() => '?').join(',');
+    const rows = db.getAllSync<{ habit_id: string; amount: number; completed: number }>(
+      `SELECT habit_id, amount, completed FROM habit_logs
+       WHERE log_date = ? AND habit_id IN (${placeholders})`,
+      [date, ...habitIds]
+    );
+    const out: Record<string, { amount: number; completed: boolean }> = {};
+    for (const r of rows) out[r.habit_id] = { amount: r.amount ?? 0, completed: r.completed === 1 };
+    return out;
+  },
+
   // Nicel alışkanlık: o günün miktarını delta kadar değiştirir (0'ın altına inmez).
   // completed, hedefe ulaşıldığında (amount >= target) 1 olur. target null/0 ise
   // completed hep 0 kalır. UNIQUE(habit_id, log_date) ile tek kayıt tutulur.

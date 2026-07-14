@@ -148,6 +148,40 @@ describe('incrementAmount / getAmountOn', () => {
   });
 });
 
+describe('getDayStates (çoklu gün durumu)', () => {
+  it('boş liste için boş nesne döner', () => {
+    expect(habitRepo.getDayStates([], TODAY)).toEqual({});
+  });
+
+  it('miktar+tamamlanmayı getAmountOn/isCompletedOn ile aynı verir; logsuz alışkanlık yer almaz', () => {
+    const quant = createHabit({ target_amount: 8 });        // nicel, tamamlanacak
+    const binary = createHabit();                           // ikili, işaretlenecek
+    const untouched = createHabit();                        // bugün log'u yok
+
+    habitRepo.incrementAmount(quant.id, TODAY, 8, 8);       // amount 8, completed
+    habitRepo.toggleLog(binary.id, TODAY, true);            // completed, amount 0
+
+    const states = habitRepo.getDayStates([quant.id, binary.id, untouched.id], TODAY);
+    expect(states[quant.id]).toEqual({ amount: 8, completed: true });
+    expect(states[binary.id]).toEqual({ amount: 0, completed: true });
+    // Bugün hiç log'u olmayan alışkanlık sonuçta yer almaz (çağıran 0/false varsayar).
+    expect(states[untouched.id]).toBeUndefined();
+
+    // Tekil metotlarla birebir tutarlı.
+    expect(states[quant.id].amount).toBe(habitRepo.getAmountOn(quant.id, TODAY));
+    expect(states[quant.id].completed).toBe(habitRepo.isCompletedOn(quant.id, TODAY));
+    expect(habitRepo.getAmountOn(untouched.id, TODAY)).toBe(0);
+    expect(habitRepo.isCompletedOn(untouched.id, TODAY)).toBe(false);
+  });
+
+  it('yalnızca istenen güne ait durumu döner (başka günü karıştırmaz)', () => {
+    const habit = createHabit({ target_amount: 5 });
+    habitRepo.incrementAmount(habit.id, '2026-06-30', 5, 5); // dün tamam
+    const states = habitRepo.getDayStates([habit.id], TODAY); // bugün log yok
+    expect(states[habit.id]).toBeUndefined();
+  });
+});
+
 describe('currentStreak — günlük plan', () => {
   it('hiç log yoksa 0', () => {
     const habit = createHabit();

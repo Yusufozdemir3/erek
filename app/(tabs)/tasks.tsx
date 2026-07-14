@@ -43,12 +43,9 @@ export default function TasksScreen() {
     const all = taskRepo.listByUser(user.id);
     all.sort((a, b) => Number(a.completed_at !== null) - Number(b.completed_at !== null));
     setTasks(all);
-    const counts: Record<string, { done: number; total: number }> = {};
-    for (const t of all) {
-      const c = subtaskRepo.countForTask(t.id);
-      if (c.total > 0) counts[t.id] = c;
-    }
-    setSubtaskCounts(counts);
+    // Alt görev rozet sayıları tek sorguda (N+1 yerine); alt görevsiz görevler
+    // sonuçta yer almaz.
+    setSubtaskCounts(subtaskRepo.countsForTasks(all.map((t) => t.id)));
     // dataVersion: ＋ menüsünden görev eklenince odak değişmeden tazelensin.
   }, [user.id, dataVersion]);
 

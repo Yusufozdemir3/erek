@@ -76,3 +76,38 @@ describe('countForTask', () => {
     expect(subtaskRepo.countForTask(taskId)).toEqual({ done: 1, total: 2 });
   });
 });
+
+describe('countsForTasks (çoklu)', () => {
+  it('boş liste için boş nesne döner (geçersiz IN () sorgusu kurulmaz)', () => {
+    expect(subtaskRepo.countsForTasks([])).toEqual({});
+  });
+
+  it('yalnızca alt görevi olan görevleri döner; countForTask ile aynı sayar', () => {
+    const userId = userRepo.getOrCreateLocal().id;
+    const other = taskRepo.create({ user_id: userId, title: 'Diğer görev' }).id;
+    const empty = taskRepo.create({ user_id: userId, title: 'Alt görevsiz' }).id;
+
+    const a = subtaskRepo.create(taskId, 'A');
+    subtaskRepo.create(taskId, 'B');
+    subtaskRepo.setCompleted(a.id, true);
+    const c = subtaskRepo.create(other, 'C');
+    subtaskRepo.setCompleted(c.id, true);
+
+    const counts = subtaskRepo.countsForTasks([taskId, other, empty]);
+    expect(counts).toEqual({
+      [taskId]: { done: 1, total: 2 },
+      [other]: { done: 1, total: 1 },
+    });
+    // Alt görevsiz görev sonuçta hiç yer almaz.
+    expect(counts[empty]).toBeUndefined();
+    // Tekil countForTask ile birebir aynı.
+    expect(counts[taskId]).toEqual(subtaskRepo.countForTask(taskId));
+  });
+
+  it('silinen alt görevleri saymaz', () => {
+    const a = subtaskRepo.create(taskId, 'A');
+    subtaskRepo.create(taskId, 'B');
+    subtaskRepo.softDelete(a.id);
+    expect(subtaskRepo.countsForTasks([taskId])).toEqual({ [taskId]: { done: 0, total: 1 } });
+  });
+});

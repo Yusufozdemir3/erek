@@ -42,23 +42,28 @@ export function useTodayData(userId: string, selectedDate: string, today: string
       ? taskRepo.listForToday(userId, selectedDate)
       : taskRepo.listByDueDate(userId, selectedDate);
     setTasks(taskList);
-    const counts: Record<string, { done: number; total: number }> = {};
-    for (const t of taskList) {
-      const c = subtaskRepo.countForTask(t.id);
-      if (c.total > 0) counts[t.id] = c;
-    }
-    setSubtaskCounts(counts);
+    // Alt görev rozet sayıları tek sorguda (N+1 yerine); alt görevsiz görevler
+    // sonuçta yer almaz — ayrı bir "total > 0" filtresine gerek yok.
+    setSubtaskCounts(subtaskRepo.countsForTasks(taskList.map((t) => t.id)));
+    // Yalnızca seçilen günde planlı (vadeli) ve yaşam aralığı (başlangıç/bitiş
+    // tarihi) içindeki alışkanlıklar görünsün.
+    const scheduled = habitRepo
+      .listByUser(userId)
+      .filter(
+        (h) =>
+          isScheduledOn(h.schedule, selectedDate) &&
+          isWithinHabitDates(h.start_date, h.end_date, selectedDate)
+      );
+    // O günün miktar+tamamlanma durumları tek sorguda (alışkanlık başına iki ayrı
+    // sorgu yerine). Log'u olmayan alışkanlık: miktar 0, tamamlanmadı.
+    const dayStates = habitRepo.getDayStates(
+      scheduled.map((h) => h.id),
+      selectedDate
+    );
     setHabits(
-      habitRepo
-        .listByUser(userId)
-        // Yalnızca seçilen günde planlı (vadeli) ve yaşam aralığı (başlangıç/
-        // bitiş tarihi) içindeki alışkanlıklar görünsün.
-        .filter(
-          (h) =>
-            isScheduledOn(h.schedule, selectedDate) &&
-            isWithinHabitDates(h.start_date, h.end_date, selectedDate)
-        )
-        .map((h) => ({
+      scheduled.map((h) => {
+        const state = dayStates[h.id];
+        return {
           id: h.id,
           title: h.title,
           kind: h.kind,
@@ -66,10 +71,11 @@ export function useTodayData(userId: string, selectedDate: string, today: string
           color: h.color,
           target: h.target_amount,
           unit: h.unit,
-          amount: habitRepo.getAmountOn(h.id, selectedDate),
-          completed: habitRepo.isCompletedOn(h.id, selectedDate),
+          amount: state?.amount ?? 0,
+          completed: state?.completed ?? false,
           streak: habitRepo.currentStreak(h.id),
-        }))
+        };
+      })
     );
   }, [userId, selectedDate, today, dataVersion]);
 
