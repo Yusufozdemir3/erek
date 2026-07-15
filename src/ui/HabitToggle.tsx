@@ -1,10 +1,12 @@
 // Alışkanlık işaret dairesi — hem "Bugün" hem "Alışkanlıklar" ekranında kullanılır.
 // Alışkanlığın rengiyle çevrelenmiş bir daire: tamamlandıysa dolu + ✓, değilse
-// soluk zeminli + emoji (varsa). İkon/renk yoksa varsayılan renge düşer.
+// soluk zeminli + ikon (varsa, alışkanlığın rengiyle tintlenmiş çizgi glif — bkz.
+// habitIcons.tsx). İkon/renk yoksa varsayılan renge düşer.
 // Salt görsel; dokunma davranışı çağıran ekranda (Pressable) tanımlanır.
 
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
+import { HabitIconGlyph } from '@/ui/habitIcons';
 import { DEFAULT_HABIT_COLOR } from './theme';
 
 interface Props {
@@ -25,9 +27,9 @@ export function HabitToggle({ icon, color, completed }: Props) {
     >
       {completed ? (
         <Text style={[styles.check, { color: colors.onAccent }]}>✓</Text>
-      ) : icon ? (
-        <Text style={styles.emoji}>{icon}</Text>
-      ) : null}
+      ) : (
+        <HabitIconGlyph id={icon} size={15} color={c} />
+      )}
     </View>
   );
 }
@@ -43,5 +45,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   check: { fontSize: 15, fontWeight: '800' },
-  emoji: { fontSize: 15 },
 });

@@ -4,17 +4,26 @@
 // çağırana aittir. onSubmit son (dönüştürülmüş) değerleri yukarı verir.
 // Parent, hedef/alışkanlık değişince taze başlangıç için `key` ile remount eder.
 // Mimari kural: SQL yok — yalnızca goalRepo (okuma, hedef bağlama listesi için).
+//
+// STEPPED (sihirbaz) MODU: `stepped` true ise (yalnızca oluşturmada, AddSheet)
+// alanlar 3-4 adıma bölünüp tek tek gösterilir — Kimlik (başlık+ikon+renk) →
+// Sıklık → Takip (varsa) → Hatırlatma. `stepped` false/verilmemişse (düzenleme,
+// HabitEditModal) TÜM alanlar eskisi gibi tek uzun kaydırmada gösterilir —
+// aynı JSX parçaları, yalnızca görünürlük koşulu değişir; alan SIRASI ya da
+// mantığı değişmez, edit akışı davranışsal olarak birebir korunur.
 
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
 import { hmToDate, todayDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { HABIT_COLORS, HABIT_ICONS, shortDate, type Colors } from '@/ui/theme';
+import { DEFAULT_HABIT_COLOR, HABIT_COLORS, shortDate, type Colors } from '@/ui/theme';
 
 // Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
 // Etiketler i18n anahtarı; render'da t() ile çevrilir.
@@ -47,21 +56,46 @@ export interface HabitFormValues {
 
 interface Props {
   userId: string;                       // hedef bağlama listesi bu kullanıcıdan
-  kind: HabitKind;                      // takip tipi (oluşturmada sihirbaz seçer; düzenlemede sabit)
+  // Takip tipi. Verilirse SABİTTİR (düzenleme — tip oluşturmadan sonra değişmez).
+  // Verilmezse (oluşturma) sihirbazın ilk adımı ('kind') tipi kullanıcıya seçtirir.
+  kind?: HabitKind;
   initial?: Partial<HabitFormValues>;   // düzenleme: mevcut değerler; oluşturma: yok (varsayılan)
   submitLabel: string;                  // "Kaydet" | "Ekle"
   onSubmit: (values: HabitFormValues) => void;
   onDelete?: () => void;                // yalnız düzenlemede: Sil düğmesi
   autoFocusTitle?: boolean;             // oluşturmada klavye hemen açılsın
+  stepped?: boolean;                    // sihirbaz modu (yalnız oluşturma — bkz. üst yorum)
 }
 
-export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDelete, autoFocusTitle }: Props) {
+type WizardStep = 'kind' | 'identity' | 'schedule' | 'tracking' | 'reminder';
+
+// Takip tipi seçimi — sihirbazın ilk adımı (yalnız oluşturmada, tip sabit
+// verilmemişse). Emoji yerine ikon setiyle aynı çizgi vektör dili (Feather).
+const KIND_OPTIONS: { kind: HabitKind; name: keyof typeof Feather.glyphMap; titleKey: string; descKey: string }[] = [
+  { kind: 'binary', name: 'check-circle', titleKey: 'add.kindBinary', descKey: 'add.kindBinaryDesc' },
+  { kind: 'numeric', name: 'hash', titleKey: 'add.kindNumeric', descKey: 'add.kindNumericDesc' },
+  { kind: 'timer', name: 'clock', titleKey: 'add.kindTimer', descKey: 'add.kindTimerDesc' },
+];
+
+export function HabitForm({
+  userId,
+  kind: fixedKind,
+  initial,
+  submitLabel,
+  onSubmit,
+  onDelete,
+  autoFocusTitle,
+  stepped,
+}: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   // "08:30" -> okunaklı etiket; null ise "Hatırlatma yok".
   const timeLabel = (hm: string | null) => (hm ? hm : t('habit.noReminder'));
   const initSchedule = initial?.schedule ?? null;
+  // Tip: sabit verilmişse (düzenleme) ondan; yoksa (oluşturma) kullanıcı sihirbazın
+  // ilk adımında seçer (null = henüz seçilmedi).
+  const [kind, setKind] = useState<HabitKind | null>(fixedKind ?? initial?.kind ?? null);
   const initWeekly =
     !!initSchedule && initSchedule.freq === 'weekly' && (initSchedule.weekdays?.length ?? 0) > 0;
 
@@ -116,7 +150,40 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
     setWeekdays((prev) => (prev.includes(wd) ? prev.filter((x) => x !== wd) : [...prev, wd]));
   };
 
+  // Sihirbaz adımları: 'kind' yalnızca tip sabit verilmemişse (oluşturma) baştaki
+  // ilk adımdır. 'tracking' yalnızca gösterecek bir şeyi varsa listeye girer
+  // (nicel/zamanlayıcının hedef alanı VAR ya da en az bir hedefe bağlanılabilir);
+  // tip henüz seçilmediyse (kind null) bu adım da henüz yoktur — tip seçilince
+  // gerekiyorsa devreye girer.
+  const needsKindStep = stepped && fixedKind == null;
+  const hasTrackingStep = kind != null && (kind !== 'binary' || goals.length > 0);
+  const steps: WizardStep[] = stepped
+    ? [
+        ...(needsKindStep ? (['kind'] as const) : []),
+        'identity',
+        'schedule',
+        ...(hasTrackingStep ? (['tracking'] as const) : []),
+        'reminder',
+      ]
+    : [];
+  const [stepIndex, setStepIndex] = useState(0);
+  const currentStep: WizardStep | null = stepped ? steps[Math.min(stepIndex, steps.length - 1)] : null;
+  // Bir alan grubu gösterilsin mi? Sihirbaz kapalıyken (düzenleme) hep true —
+  // tüm alanlar eskisi gibi tek seferde görünür, sıra/davranış değişmez.
+  const show = (s: WizardStep) => !stepped || currentStep === s;
+
+  const canProceed =
+    (currentStep !== 'kind' || kind != null) && (currentStep !== 'identity' || title.trim().length > 0);
+  const isLastStep = !stepped || stepIndex >= steps.length - 1;
+
+  const goNext = () => {
+    if (!isLastStep) setStepIndex((i) => i + 1);
+    else submit();
+  };
+  const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
+
   const submit = () => {
+    if (!kind) return; // tip seçilmeden gönderilemez (sihirbazda canProceed zaten engeller)
     const t = title.trim();
     if (!t) return;
     // "Belirli günler" seçili ama hiç gün yoksa "her gün" (null) kabul edilir.
@@ -201,163 +268,246 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
       ? { target: parsedDailyTarget, result: parsedDailyTarget / parsedRatioPreview }
       : null;
 
+  // Seçili renk yoksa varsayılan alışkanlık rengi — hem ikon ızgarasının
+  // "seçiliyken bu renkte görünür" önizlemesi hem de sihirbazın üstteki kimlik
+  // rozeti bunu kullanır.
+  const previewColor = color ?? DEFAULT_HABIT_COLOR;
+
   return (
     <>
-      {/* Başlık */}
-      <Text style={styles.label}>{t('habit.title')}</Text>
-      <TextInput
-        style={styles.input}
-        value={title}
-        onChangeText={setTitle}
-        placeholder={t('habit.titlePlaceholder')}
-        placeholderTextColor={colors.faint}
-        autoFocus={autoFocusTitle}
-      />
-
-      {/* Hatırlatma saati */}
-      <Text style={styles.label}>{t('habit.reminder')}</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
-          <Text style={styles.dateBtnText}>{timeLabel(remindAt)}</Text>
-        </Pressable>
-        {remindAt && (
-          <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
-            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {showPicker && (
-        <DateTimePicker
-          value={hmToDate(remindAt)}
-          mode="time"
-          is24Hour
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={onPickTime}
-        />
-      )}
-
-      {/* İkon (emoji) — seçili olana tekrar basınca kaldırılır */}
-      <Text style={styles.label}>{t('habit.icon')}</Text>
-      <View style={styles.iconGrid}>
-        {HABIT_ICONS.map((em) => {
-          const sel = icon === em;
-          return (
-            <Pressable
-              key={em}
-              style={[styles.iconCell, sel && styles.iconCellSel]}
-              onPress={() => setIcon(sel ? null : em)}
-            >
-              <Text style={styles.iconText}>{em}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Renk — seçili olana tekrar basınca varsayılana döner */}
-      <Text style={styles.label}>{t('habit.color')}</Text>
-      <View style={styles.colorRow}>
-        {HABIT_COLORS.map((c) => {
-          const sel = color === c;
-          return (
-            <Pressable
-              key={c}
-              style={[styles.swatch, { backgroundColor: c }, sel && styles.swatchSel]}
-              onPress={() => setColor(sel ? null : c)}
-            >
-              {sel && <Text style={styles.swatchCheck}>✓</Text>}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Sıklık — her gün ya da haftanın belirli günleri */}
-      <Text style={styles.label}>{t('habit.frequency')}</Text>
-      <View style={styles.freqRow}>
-        <Pressable
-          style={[styles.freqBtn, everyDay && styles.freqBtnSel]}
-          onPress={() => setEveryDay(true)}
-        >
-          <Text style={[styles.freqBtnText, everyDay && styles.freqBtnTextSel]}>{t('habit.everyDay')}</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.freqBtn, !everyDay && styles.freqBtnSel]}
-          onPress={() => {
-            setEveryDay(false);
-            // Boşsa yardımcı olsun diye bugünün gününü seçili getir.
-            if (weekdays.length === 0) setWeekdays([new Date().getDay()]);
-          }}
-        >
-          <Text style={[styles.freqBtnText, !everyDay && styles.freqBtnTextSel]}>
-            {t('habit.specificDays')}
+      {/* Sihirbazda (tip seçimi ve kimlik dışındaki adımlarda) üstte küçük bir
+          kimlik rozeti — hangi alışkanlığı ayarladığını hatırlatır. */}
+      {stepped && currentStep !== 'kind' && currentStep !== 'identity' && (
+        <View style={styles.previewRow}>
+          <View
+            style={[
+              styles.previewCircle,
+              { borderColor: previewColor, backgroundColor: previewColor + '22' },
+            ]}
+          >
+            <HabitIconGlyph id={icon} size={16} color={previewColor} />
+          </View>
+          <Text style={styles.previewTitle} numberOfLines={1}>
+            {title || t('habit.titlePlaceholder')}
           </Text>
-        </Pressable>
-      </View>
-
-      {!everyDay && (
-        <View style={styles.dayRow}>
-          {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
-            const sel = weekdays.includes(wd);
-            return (
-              <Pressable
-                key={wd}
-                style={[styles.dayChip, sel && styles.dayChipSel]}
-                onPress={() => toggleWeekday(wd)}
-              >
-                <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{t(labelKey)}</Text>
-              </Pressable>
-            );
-          })}
         </View>
       )}
 
-      {/* Tarih aralığı: başlangıçtan önce / bitişten sonra alışkanlık görünmez,
-          streak'i etkilemez. Boş = sınırsız. */}
-      <Text style={styles.label}>{t('habit.startDate')}</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setDatePicker('start')}>
-          <Text style={styles.dateBtnText}>
-            {startDate ? shortDate(startDate, lang) : t('habit.fromStart')}
-          </Text>
-        </Pressable>
-        {startDate && (
-          <Pressable style={styles.clearBtn} onPress={() => setStartDate(null)}>
-            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <Text style={styles.label}>{t('habit.endDate')}</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setDatePicker('end')}>
-          <Text style={styles.dateBtnText}>{endDate ? shortDate(endDate, lang) : t('habit.noEnd')}</Text>
-        </Pressable>
-        {endDate && (
-          <Pressable style={styles.clearBtn} onPress={() => setEndDate(null)}>
-            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {datePicker && (
-        <DateTimePicker
-          value={
-            (datePicker === 'start' ? startDate : endDate)
-              ? new Date(`${datePicker === 'start' ? startDate : endDate}T00:00:00`)
-              : new Date()
-          }
-          mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          // Bitiş, başlangıçtan önce seçilemesin (submit'te ayrıca güvence var).
-          minimumDate={
-            datePicker === 'end' && startDate ? new Date(`${startDate}T00:00:00`) : undefined
-          }
-          onChange={onPickDate}
-        />
+      {/* Takip tipi — yalnız sihirbazın ilk adımı (tip sabit verilmemişse) */}
+      {show('kind') && (
+        <>
+          <Text style={styles.label}>{t('habit.kindLabel')}</Text>
+          {KIND_OPTIONS.map((opt) => {
+            const sel = kind === opt.kind;
+            return (
+              <Pressable
+                key={opt.kind}
+                style={[styles.kindCard, sel && styles.kindCardSel]}
+                onPress={() => setKind(opt.kind)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: sel }}
+              >
+                <View style={[styles.kindIconWrap, sel && styles.kindIconWrapSel]}>
+                  <Feather name={opt.name} size={20} color={sel ? colors.onAccent : colors.primary} />
+                </View>
+                <View style={styles.kindBody}>
+                  <Text style={styles.kindTitle}>{t(opt.titleKey)}</Text>
+                  <Text style={styles.kindDesc}>{t(opt.descKey)}</Text>
+                </View>
+                {sel && <Feather name="check" size={18} color={colors.primary} />}
+              </Pressable>
+            );
+          })}
+        </>
       )}
 
-      {/* Tipe göre hedef alanı: numeric = günlük miktar + birim, timer = süre
-          (dakika). binary'de hedef alanı yok (yaptım/yapmadım). */}
+      {/* Başlık */}
+      {show('identity') && (
+        <>
+          <Text style={styles.label}>{t('habit.title')}</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder={t('habit.titlePlaceholder')}
+            placeholderTextColor={colors.faint}
+            autoFocus={autoFocusTitle}
+          />
+        </>
+      )}
+
+      {/* Hatırlatma saati */}
+      {show('reminder') && (
+        <>
+          <Text style={styles.label}>{t('habit.reminder')}</Text>
+          <View style={styles.row}>
+            <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
+              <Text style={styles.dateBtnText}>{timeLabel(remindAt)}</Text>
+            </Pressable>
+            {remindAt && (
+              <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
+                <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {showPicker && (
+            <DateTimePicker
+              value={hmToDate(remindAt)}
+              mode="time"
+              is24Hour
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onPickTime}
+            />
+          )}
+        </>
+      )}
+
+      {/* İkon + renk — çizgi vektör ikon seçili renkle tintlenir; seçili olana
+          tekrar basınca kaldırılır. */}
+      {show('identity') && (
+        <>
+          <Text style={styles.label}>{t('habit.icon')}</Text>
+          <View style={styles.iconGrid}>
+            {HABIT_ICON_SET.map((entry) => {
+              const sel = icon === entry.id;
+              return (
+                <Pressable
+                  key={entry.id}
+                  style={[
+                    styles.iconCell,
+                    sel && {
+                      borderColor: previewColor,
+                      backgroundColor: previewColor + '1f',
+                      borderWidth: 2,
+                    },
+                  ]}
+                  onPress={() => setIcon(sel ? null : entry.id)}
+                  accessibilityLabel={t(entry.labelKey)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sel }}
+                >
+                  <HabitIconGlyph id={entry.id} size={20} color={sel ? previewColor : colors.muted} />
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.label}>{t('habit.color')}</Text>
+          <View style={styles.colorRow}>
+            {HABIT_COLORS.map((c) => {
+              const sel = color === c;
+              return (
+                <Pressable
+                  key={c}
+                  style={[styles.swatch, { backgroundColor: c }, sel && styles.swatchSel]}
+                  onPress={() => setColor(sel ? null : c)}
+                >
+                  {sel && <Text style={styles.swatchCheck}>✓</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      )}
+
+      {/* Sıklık — her gün ya da haftanın belirli günleri, + tarih aralığı */}
+      {show('schedule') && (
+        <>
+          <Text style={styles.label}>{t('habit.frequency')}</Text>
+          <View style={styles.freqRow}>
+            <Pressable
+              style={[styles.freqBtn, everyDay && styles.freqBtnSel]}
+              onPress={() => setEveryDay(true)}
+            >
+              <Text style={[styles.freqBtnText, everyDay && styles.freqBtnTextSel]}>
+                {t('habit.everyDay')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.freqBtn, !everyDay && styles.freqBtnSel]}
+              onPress={() => {
+                setEveryDay(false);
+                // Boşsa yardımcı olsun diye bugünün gününü seçili getir.
+                if (weekdays.length === 0) setWeekdays([new Date().getDay()]);
+              }}
+            >
+              <Text style={[styles.freqBtnText, !everyDay && styles.freqBtnTextSel]}>
+                {t('habit.specificDays')}
+              </Text>
+            </Pressable>
+          </View>
+
+          {!everyDay && (
+            <View style={styles.dayRow}>
+              {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
+                const sel = weekdays.includes(wd);
+                return (
+                  <Pressable
+                    key={wd}
+                    style={[styles.dayChip, sel && styles.dayChipSel]}
+                    onPress={() => toggleWeekday(wd)}
+                  >
+                    <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{t(labelKey)}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Tarih aralığı: başlangıçtan önce / bitişten sonra alışkanlık görünmez,
+              streak'i etkilemez. Boş = sınırsız. */}
+          <Text style={styles.label}>{t('habit.startDate')}</Text>
+          <View style={styles.row}>
+            <Pressable style={styles.dateBtn} onPress={() => setDatePicker('start')}>
+              <Text style={styles.dateBtnText}>
+                {startDate ? shortDate(startDate, lang) : t('habit.fromStart')}
+              </Text>
+            </Pressable>
+            {startDate && (
+              <Pressable style={styles.clearBtn} onPress={() => setStartDate(null)}>
+                <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <Text style={styles.label}>{t('habit.endDate')}</Text>
+          <View style={styles.row}>
+            <Pressable style={styles.dateBtn} onPress={() => setDatePicker('end')}>
+              <Text style={styles.dateBtnText}>
+                {endDate ? shortDate(endDate, lang) : t('habit.noEnd')}
+              </Text>
+            </Pressable>
+            {endDate && (
+              <Pressable style={styles.clearBtn} onPress={() => setEndDate(null)}>
+                <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {datePicker && (
+            <DateTimePicker
+              value={
+                (datePicker === 'start' ? startDate : endDate)
+                  ? new Date(`${datePicker === 'start' ? startDate : endDate}T00:00:00`)
+                  : new Date()
+              }
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              // Bitiş, başlangıçtan önce seçilemesin (submit'te ayrıca güvence var).
+              minimumDate={
+                datePicker === 'end' && startDate ? new Date(`${startDate}T00:00:00`) : undefined
+              }
+              onChange={onPickDate}
+            />
+          )}
+        </>
+      )}
+
+      {/* Takip: tipe göre hedef alanı (numeric = günlük miktar + birim, timer =
+          süre dakika; binary'de hedef alanı yok) + hedefe bağla. */}
+      {show('tracking') && (
+        <>
       {kind === 'numeric' && (
         <>
           <Text style={styles.label}>{t('habit.dailyTarget')}</Text>
@@ -489,14 +639,48 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
           )}
         </>
       )}
+        </>
+      )}
+      {/* ↑ 'tracking' adımını kapatır (numeric/timer hedef + hedefe bağla + katkı biçimi) */}
 
-      {/* Eylemler — Sil yalnız düzenlemede (onDelete varsa) */}
-      <View style={styles.actions}>
-        {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
-        <Pressable style={styles.saveBtn} onPress={submit}>
-          <Text style={styles.saveBtnText}>{submitLabel}</Text>
-        </Pressable>
-      </View>
+      {/* Eylemler: sihirbazda alt gezinme (nokta göstergesi + Geri/İleri),
+          düzenlemede eskisi gibi Sil + Kaydet. */}
+      {stepped ? (
+        <View style={styles.wizardNav}>
+          <View style={styles.dots} accessibilityLabel={t('common.stepOfA11y', { n: stepIndex + 1, total: steps.length })}>
+            {steps.map((s, i) => (
+              <View key={s} style={[styles.dot, i === stepIndex && styles.dotActive]} />
+            ))}
+          </View>
+          <View style={styles.navBtns}>
+            {stepIndex > 0 && (
+              <Pressable
+                style={styles.navBackBtn}
+                onPress={goBack}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.back')}
+              >
+                <Text style={styles.navBackText}>‹</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={[styles.saveBtn, styles.navNextBtn, !canProceed && styles.saveBtnDisabled]}
+              onPress={goNext}
+              disabled={!canProceed}
+            >
+              <Text style={styles.saveBtnText}>{isLastStep ? submitLabel : t('common.next')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.actions}>
+          {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
+          <Pressable style={styles.saveBtn} onPress={submit}>
+            <Text style={styles.saveBtnText}>{submitLabel}</Text>
+          </Pressable>
+        </View>
+      )}
     </>
   );
 }
@@ -533,8 +717,6 @@ const makeStyles = (c: Colors) =>
       borderWidth: 1,
       borderColor: c.border,
     },
-    iconCellSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
-    iconText: { fontSize: 20 },
     colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
     swatch: {
       width: 34,
@@ -611,4 +793,66 @@ const makeStyles = (c: Colors) =>
       elevation: 4,
     },
     saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
+    saveBtnDisabled: { opacity: 0.4 },
+
+    // Sihirbaz: üstteki kimlik rozeti (kimlik dışındaki adımlarda gösterilir).
+    previewRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    previewCircle: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    previewTitle: { fontSize: 15, fontWeight: '700', color: c.text, flex: 1 },
+
+    // Sihirbaz: alt gezinme (nokta göstergesi + Geri/İleri).
+    wizardNav: { marginTop: 20 },
+    dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 16 },
+    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.border },
+    dotActive: { backgroundColor: c.primary, width: 18 },
+    navBtns: { flexDirection: 'row', gap: 12 },
+    navBackBtn: {
+      width: 50,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    navBackText: { fontSize: 20, fontWeight: '700', color: c.text },
+    navNextBtn: { flex: 1 },
+
+    // Sihirbaz: takip tipi seçim kartları (ilk adım).
+    kindCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.inputBg,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 14,
+      marginBottom: 10,
+    },
+    kindCardSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
+    kindIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    kindIconWrapSel: { backgroundColor: c.primary },
+    kindBody: { flex: 1 },
+    kindTitle: { fontSize: 16, fontWeight: '700', color: c.text },
+    kindDesc: { fontSize: 13, color: c.muted, marginTop: 2 },
   });

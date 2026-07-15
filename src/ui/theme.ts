@@ -126,11 +126,8 @@ export const PRIORITY_COLOR: Record<Priority, string> = {
 // Öncelik seçicideki sıralama (düşükten yükseğe).
 export const PRIORITY_ORDER: Priority[] = ['low', 'medium', 'high'];
 
-// Alışkanlık görsel kimliği için hazır emoji ve renk paletleri (seçici ızgaraları).
-export const HABIT_ICONS = [
-  '💧', '🏃', '📚', '🧘', '💪', '🥗', '😴', '🚭', '💊',
-  '✍️', '🎯', '🌱', '🙏', '☕', '🧠', '🎵', '🎨', '🧹',
-];
+// Alışkanlık renk paleti (ikon seti için bkz. src/ui/habitIcons.tsx — eskiden
+// burada ham emoji listesi vardı, çizgi vektör ikon setine geçildi).
 export const HABIT_COLORS = [
   '#4f46e5', '#0ea5e9', '#10b981', '#f59e0b',
   '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6',

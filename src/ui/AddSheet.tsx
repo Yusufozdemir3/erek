@@ -12,7 +12,7 @@ import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'r
 import { router } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo, habitRepo, subtaskRepo, taskRepo } from '@/db';
-import type { GoalType, HabitKind } from '@/db';
+import type { GoalType } from '@/db';
 import { toYmd } from '@/lib/helpers';
 import { scheduleHabitReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
@@ -42,13 +42,6 @@ const MENU_OPTIONS: { step: Step; type: EntityType; titleKey: string; descKey: s
   { step: 'goal', type: 'goal', titleKey: 'add.goal', descKey: 'add.goalDesc' },
 ];
 
-// Alışkanlık oluşturmada ilk adım: takip tipi seçimi (aşamalı sihirbaz).
-const KIND_OPTIONS: { kind: HabitKind; emoji: string; titleKey: string; descKey: string }[] = [
-  { kind: 'binary', emoji: '✓', titleKey: 'add.kindBinary', descKey: 'add.kindBinaryDesc' },
-  { kind: 'numeric', emoji: '🔢', titleKey: 'add.kindNumeric', descKey: 'add.kindNumericDesc' },
-  { kind: 'timer', emoji: '⏱️', titleKey: 'add.kindTimer', descKey: 'add.kindTimerDesc' },
-];
-
 export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
@@ -56,8 +49,6 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { user, notifyDataChanged, selectedDate } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
   const [title, setTitle] = useState('');
-  // Alışkanlık sihirbazı: önce tip seçilir (null = tip seçim adımı).
-  const [habitKind, setHabitKind] = useState<HabitKind | null>(null);
 
   // Hedef formu alanları (goals.tsx'ten taşındı).
   const [goalType, setGoalType] = useState<GoalType>('numeric');
@@ -71,7 +62,6 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     if (visible) {
       setStep(initialStep);
       setTitle('');
-      setHabitKind(null);
       setGoalType('numeric');
       setTarget('');
       setUnit('');
@@ -168,14 +158,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
             // güvenle kaydırılır, "Ekle" düğmesi kırpılmaz).
             <>
               <View style={styles.formHead}>
-                <Pressable
-                  onPress={() => {
-                    // Alışkanlık formundan geri → tip seçimine; başka her yerden → menü.
-                    if (step === 'habit' && habitKind) setHabitKind(null);
-                    else setStep('menu');
-                  }}
-                  hitSlop={8}
-                >
+                <Pressable onPress={() => setStep('menu')} hitSlop={8}>
                   <Text style={styles.backText}>{t('common.back')}</Text>
                 </Pressable>
                 <Text style={styles.heading}>
@@ -186,36 +169,15 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
               </View>
 
               {step === 'habit' ? (
-                habitKind === null ? (
-                  // 1. adım: takip tipini seç (tik / sayısal / zamanlayıcı).
-                  <>
-                    {KIND_OPTIONS.map((opt) => (
-                      <Pressable
-                        key={opt.kind}
-                        style={styles.option}
-                        onPress={() => setHabitKind(opt.kind)}
-                      >
-                        <View style={styles.optionIcon}>
-                          <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-                        </View>
-                        <View style={styles.optionBody}>
-                          <Text style={styles.optionTitle}>{t(opt.titleKey)}</Text>
-                          <Text style={styles.optionDesc}>{t(opt.descKey)}</Text>
-                        </View>
-                        <Text style={styles.optionChevron}>›</Text>
-                      </Pressable>
-                    ))}
-                  </>
-                ) : (
-                  // 2. adım: düzenleme paneliyle aynı tam form (seçilen tiple).
-                  <HabitForm
-                    userId={user.id}
-                    kind={habitKind}
-                    submitLabel={t('common.add')}
-                    autoFocusTitle
-                    onSubmit={addHabit}
-                  />
-                )
+                // Takip tipi (tik/sayısal/zamanlayıcı) sihirbazın kendi ilk adımı —
+                // HabitForm'a `kind` verilmez, kullanıcı stepped modda seçer.
+                <HabitForm
+                  userId={user.id}
+                  submitLabel={t('common.add')}
+                  autoFocusTitle
+                  stepped
+                  onSubmit={addHabit}
+                />
               ) : step === 'task' ? (
                 // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat)
                 // + oluşturmada taslak alt görev ekleme. Son tarih "Bugün" ekranında
@@ -331,7 +293,6 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'center',
       marginRight: 12,
     },
-    optionEmoji: { fontSize: 22 },
     optionBody: { flex: 1 },
     optionTitle: { fontSize: 16, fontWeight: '700', color: c.text },
     optionDesc: { fontSize: 13, color: c.muted, marginTop: 2 },
