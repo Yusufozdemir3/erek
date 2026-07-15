@@ -10,7 +10,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
-import { hmToDate, toHm, toYmd } from '@/lib/helpers';
+import { hmToDate, todayDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -80,7 +80,12 @@ export function HabitForm({ userId, kind, initial, submitLabel, onSubmit, onDele
         : String(initial.target_amount)
   );
   const [unit, setUnit] = useState(initial?.unit ?? '');
-  const [startDate, setStartDate] = useState<string | null>(initial?.start_date ?? null);
+  // OLUŞTURMADA (initial yok) varsayılan olarak BUGÜN gelir — en sık senaryo
+  // "bugünden itibaren" takip etmek. DÜZENLEMEDE mevcut değer korunur (null =
+  // bilinçli "baştan beri" tercihi, bugüne çevrilmez). "Temizle" ile kaldırılabilir.
+  const [startDate, setStartDate] = useState<string | null>(
+    initial === undefined ? todayDate() : initial.start_date ?? null
+  );
   const [endDate, setEndDate] = useState<string | null>(initial?.end_date ?? null);
   const [goalId, setGoalId] = useState<string | null>(initial?.goal_id ?? null);
   // Bağlı hedefe katkı biçimi: 'per_completion' (varsayılan, gün başına +1) ya da
