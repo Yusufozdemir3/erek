@@ -3,7 +3,7 @@
 // 👤 ikonundan açılan modal'a taşındı. Başlığı kök layout'taki native header verir.
 // Senkron yapılandırılmamışsa (.env boş) nasıl kurulacağını anlatır.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { userRepo } from '@/db';
+import { habitRepo, taskRepo, userRepo } from '@/db';
 import {
   currentAuthUser,
   currentUid,
@@ -26,6 +26,13 @@ import {
   type AuthUser,
   type SyncResult,
 } from '@/sync';
+import { rescheduleAllReminders, rescheduleAllTaskReminders } from '@/lib/notifications';
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  getNotificationPrefs,
+  setNotificationPref,
+  type NotificationPrefs,
+} from '@/lib/notificationPrefs';
 import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -50,6 +57,29 @@ export default function ProfileScreen() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+
+  // Kayıtlı bildirim tercihlerini bir kez yükle.
+  useEffect(() => {
+    getNotificationPrefs().then(setNotifPrefs);
+  }, []);
+
+  // Bir tercihi değiştir + kalıcılaştır + tüm alışkanlık/görev hatırlatmalarını
+  // DB'yi baz alarak hemen yeniden kur (kapatma anında iptal, açma anında kurulum
+  // scheduleHabitReminder/scheduleTaskReminder'ın kendi cancel-then-maybe-schedule
+  // mantığıyla otomatik olur). Aktif bir zamanlayıcının "süre doldu" bildirimi bu
+  // yeniden kurulumun dışındadır — TimerProvider ayrı bir bağlamda yaşar.
+  const toggleNotifPref = (key: keyof NotificationPrefs, value: boolean) => {
+    const next = { ...notifPrefs, [key]: value };
+    setNotifPrefs(next);
+    setNotificationPref(key, value).catch(() => {});
+    rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
+      console.warn('[Bildirim] Tercih sonrası yeniden kurulum başarısız:', e)
+    );
+    rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
+      console.warn('[Bildirim] Tercih sonrası görev yeniden kurulumu başarısız:', e)
+    );
+  };
 
   // E-posta hesabıyla bağlı mı? (anonim oturum "bağlı" sayılmaz)
   const linked = authUser != null && !authUser.isAnonymous && authUser.email != null;
@@ -202,6 +232,47 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>{t('profile.hideCompletedHint')}</Text>
       </View>
 
+      {/* Bildirim tercihleri */}
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.cardTitle}>{t('profile.notifications')}</Text>
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>{t('profile.notifEnabled')}</Text>
+          <Switch
+            value={notifPrefs.enabled}
+            onValueChange={(v) => toggleNotifPref('enabled', v)}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.card}
+          />
+        </View>
+
+        {(['habitReminders', 'taskReminders', 'timerDone', 'sound'] as const).map((key) => (
+          <View
+            key={key}
+            style={[styles.switchRow, styles.switchRowSpaced, !notifPrefs.enabled && styles.rowDisabled]}
+          >
+            <Text style={styles.switchLabel}>
+              {t(
+                key === 'habitReminders'
+                  ? 'profile.notifHabitReminders'
+                  : key === 'taskReminders'
+                    ? 'profile.notifTaskReminders'
+                    : key === 'timerDone'
+                      ? 'profile.notifTimerDone'
+                      : 'profile.notifSound'
+              )}
+            </Text>
+            <Switch
+              value={notifPrefs[key]}
+              onValueChange={(v) => toggleNotifPref(key, v)}
+              disabled={!notifPrefs.enabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.card}
+            />
+          </View>
+        ))}
+        <Text style={styles.hint}>{t('profile.notifSoundHint')}</Text>
+      </View>
+
       {/* Hesap + Bulut senkron — kapalı test (MVP) sürümünde gizli.
           Parola sıfırlama eklenince ACCOUNTS_ENABLED true yapılacak. */}
       {ACCOUNTS_ENABLED && (
@@ -322,7 +393,9 @@ const makeStyles = (c: Colors) =>
     code: { fontWeight: '700', color: c.text },
     statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    switchRowSpaced: { marginTop: 12 },
     switchLabel: { fontSize: 14, color: c.text, flex: 1, marginRight: 12 },
+    rowDisabled: { opacity: 0.4 },
     statusValue: { fontSize: 14, fontWeight: '700', color: c.text },
     okText: { fontSize: 13, color: c.done, fontWeight: '600', marginTop: 12 },
     errText: { fontSize: 13, color: c.danger, fontWeight: '600', marginTop: 12 },

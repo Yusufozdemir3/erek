@@ -14,15 +14,22 @@ import type { Habit, Task } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
+import { getNotificationPrefs, soundContent } from '@/lib/notificationPrefs';
 
 // Uygulama ön plandayken de bildirimin görünmesini sağlar. Bir kez kurulur.
+// Ses tercihi burada da (ön plan bildirimi) uygulanır; ana anahtar kapalıysa
+// uyarı tamamen gizlenir (arka plandaki schedule fonksiyonları zaten kurmaz,
+// ama bu handler yalnızca zaten kurulmuş/gelen bir bildirim içindir).
 export function setNotificationHandler(): void {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async () => {
+      const prefs = await getNotificationPrefs();
+      return {
+        shouldShowAlert: prefs.enabled,
+        shouldPlaySound: prefs.enabled && prefs.sound,
+        shouldSetBadge: false,
+      };
+    },
   });
 }
 
@@ -71,11 +78,18 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   const time = parseHm(habit.remind_at);
   if (!time) return true; // bozuk saat — sessizce atla
 
+  const prefs = await getNotificationPrefs();
+  if (!prefs.enabled || !prefs.habitReminders) return true; // kullanıcı bu türü kapatmış
+
   const granted = await ensurePermission();
   if (!granted) return false;
 
   const lang = await getStoredLang();
-  const content = { title: translate(lang, 'notif.reminderTitle'), body: habit.title };
+  const content = {
+    title: translate(lang, 'notif.reminderTitle'),
+    body: habit.title,
+    ...soundContent(prefs),
+  };
   const sched = habit.schedule;
   const weekdays = sched && sched.freq === 'weekly' ? sched.weekdays ?? [] : [];
 
@@ -128,6 +142,8 @@ export async function cancelHabitReminder(habitId: string): Promise<void> {
 export async function scheduleTimerDone(habit: Habit, secondsFromNow: number): Promise<void> {
   await cancelTimerDone(habit.id);
   if (secondsFromNow <= 0) return;
+  const prefs = await getNotificationPrefs();
+  if (!prefs.enabled || !prefs.timerDone) return; // kullanıcı bu türü kapatmış
   const granted = await ensurePermission();
   if (!granted) return;
   const lang = await getStoredLang();
@@ -136,6 +152,7 @@ export async function scheduleTimerDone(habit: Habit, secondsFromNow: number): P
     content: {
       title: translate(lang, 'notif.timerDoneTitle'),
       body: translate(lang, 'notif.timerDoneBody', { title: habit.title }),
+      ...soundContent(prefs),
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -180,13 +197,20 @@ export async function scheduleTaskReminder(task: Task): Promise<boolean> {
   const when = new Date(task.due_date);
   if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) return true; // geçmiş
 
+  const prefs = await getNotificationPrefs();
+  if (!prefs.enabled || !prefs.taskReminders) return true; // kullanıcı bu türü kapatmış
+
   const granted = await ensurePermission();
   if (!granted) return false;
 
   const lang = await getStoredLang();
   await Notifications.scheduleNotificationAsync({
     identifier: `task:${task.id}`,
-    content: { title: translate(lang, 'notif.taskReminderTitle'), body: task.title },
+    content: {
+      title: translate(lang, 'notif.taskReminderTitle'),
+      body: task.title,
+      ...soundContent(prefs),
+    },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
   });
   return true;

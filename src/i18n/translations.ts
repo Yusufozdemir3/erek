@@ -195,6 +195,13 @@ const tr: Dict = {
   'profile.footnoteLocal': 'Verilerin yalnızca bu cihazda saklanır.',
   'profile.todayScreen': 'Bugün ekranı',
   'profile.hideCompletedHint': 'Açıksa, Bugün ekranındaki tamamlanmış görev ve alışkanlıklar listeden gizlenir.',
+  'profile.notifications': 'Bildirimler',
+  'profile.notifEnabled': 'Bildirimler açık',
+  'profile.notifHabitReminders': 'Alışkanlık hatırlatmaları',
+  'profile.notifTaskReminders': 'Görev hatırlatmaları',
+  'profile.notifTimerDone': 'Zamanlayıcı bildirimi',
+  'profile.notifSound': 'Ses ve titreşim',
+  'profile.notifSoundHint': 'Kapatırsan bildirimler sessiz ve titreşimsiz gelir.',
 
   // Erişilebilirlik etiketleri (accessibilityLabel) — ekranda görünmez ama
   // ekran okuyucular için çevrilmeleri gerekir.
@@ -486,6 +493,13 @@ const en: Dict = {
   'profile.footnoteLocal': 'Your data is stored only on this device.',
   'profile.todayScreen': 'Today screen',
   'profile.hideCompletedHint': 'When on, completed tasks and habits are hidden from the Today list.',
+  'profile.notifications': 'Notifications',
+  'profile.notifEnabled': 'Notifications on',
+  'profile.notifHabitReminders': 'Habit reminders',
+  'profile.notifTaskReminders': 'Task reminders',
+  'profile.notifTimerDone': 'Timer notification',
+  'profile.notifSound': 'Sound and vibration',
+  'profile.notifSoundHint': 'Turn off to receive notifications silently, without vibration.',
 
   'common.editA11y': '{title}, edit',
   'task.subtaskCountSuffix': 'subtasks',
@@ -768,6 +782,13 @@ const de: Dict = {
   'profile.footnoteLocal': 'Deine Daten werden nur auf diesem Gerät gespeichert.',
   'profile.todayScreen': 'Heute-Bildschirm',
   'profile.hideCompletedHint': 'Wenn aktiv, werden erledigte Aufgaben und Gewohnheiten in der Heute-Liste ausgeblendet.',
+  'profile.notifications': 'Benachrichtigungen',
+  'profile.notifEnabled': 'Benachrichtigungen an',
+  'profile.notifHabitReminders': 'Gewohnheits-Erinnerungen',
+  'profile.notifTaskReminders': 'Aufgaben-Erinnerungen',
+  'profile.notifTimerDone': 'Timer-Benachrichtigung',
+  'profile.notifSound': 'Ton und Vibration',
+  'profile.notifSoundHint': 'Ausschalten, um Benachrichtigungen lautlos und ohne Vibration zu erhalten.',
 
   'common.editA11y': '{title}, bearbeiten',
   'task.subtaskCountSuffix': 'Unteraufgaben',
