@@ -5,6 +5,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { habitRepo, initDataLayer, taskRepo, userRepo } from '@/db';
 import type { User } from '@/db';
 import { todayDate } from '@/lib/helpers';
@@ -29,7 +30,13 @@ interface AppData {
   // paylaşılınca yeni görev bakılan güne varsayılan tarihle eklenir.
   selectedDate: string;
   setSelectedDate: (d: string) => void;
+  // "Bugün" ekranında tamamlanan görev/alışkanlıkları gizle tercihi — Profil'de
+  // ayarlanır (AsyncStorage'da kalıcı), ekran-özel bir filtre değil kalıcı bir tercih.
+  hideCompleted: boolean;
+  setHideCompleted: (v: boolean) => void;
 }
+
+const HIDE_COMPLETED_KEY = 'today:hideCompleted';
 
 const AppDataContext = createContext<AppData | null>(null);
 
@@ -49,8 +56,20 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayDate());
+  const [hideCompleted, setHideCompletedState] = useState(false);
 
   const notifyDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
+
+  const setHideCompleted = useCallback((v: boolean) => {
+    setHideCompletedState(v);
+    AsyncStorage.setItem(HIDE_COMPLETED_KEY, v ? '1' : '0').catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(HIDE_COMPLETED_KEY).then((v) => {
+      if (v === '1') setHideCompletedState(true);
+    });
+  }, []);
 
   useEffect(() => {
     // Şemayı kurar, anonim kullanıcıyı garantiler. Yalnızca ilk açılışta çalışır.
@@ -99,7 +118,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppDataContext.Provider
-      value={{ user, refreshUser, dataVersion, notifyDataChanged, selectedDate, setSelectedDate }}
+      value={{
+        user,
+        refreshUser,
+        dataVersion,
+        notifyDataChanged,
+        selectedDate,
+        setSelectedDate,
+        hideCompleted,
+        setHideCompleted,
+      }}
     >
       {children}
     </AppDataContext.Provider>

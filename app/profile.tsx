@@ -4,7 +4,16 @@
 // Senkron yapılandırılmamışsa (.env boş) nasıl kurulacağını anlatır.
 
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { userRepo } from '@/db';
 import {
@@ -34,7 +43,7 @@ export default function ProfileScreen() {
   const { colors, scheme, mode, setMode, accent, setAccent } = useTheme();
   const { t, lang, setLang } = useI18n();
   const styles = makeStyles(colors);
-  const { user, refreshUser } = useAppData();
+  const { user, refreshUser, hideCompleted, setHideCompleted } = useAppData();
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -178,6 +187,21 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Bugün ekranı tercihleri */}
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.cardTitle}>{t('profile.todayScreen')}</Text>
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>{t('today.hideCompleted')}</Text>
+          <Switch
+            value={hideCompleted}
+            onValueChange={setHideCompleted}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.card}
+          />
+        </View>
+        <Text style={styles.hint}>{t('profile.hideCompletedHint')}</Text>
+      </View>
+
       {/* Hesap + Bulut senkron — kapalı test (MVP) sürümünde gizli.
           Parola sıfırlama eklenince ACCOUNTS_ENABLED true yapılacak. */}
       {ACCOUNTS_ENABLED && (
@@ -297,6 +321,8 @@ const makeStyles = (c: Colors) =>
     hint: { fontSize: 12, color: c.faint, marginTop: 10 },
     code: { fontWeight: '700', color: c.text },
     statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    switchLabel: { fontSize: 14, color: c.text, flex: 1, marginRight: 12 },
     statusValue: { fontSize: 14, fontWeight: '700', color: c.text },
     okText: { fontSize: 13, color: c.done, fontWeight: '600', marginTop: 12 },
     errText: { fontSize: 13, color: c.danger, fontWeight: '600', marginTop: 12 },

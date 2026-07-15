@@ -45,6 +45,8 @@ function titleFor(ymd: string, today: string, lang: Lang, todayLabel: string): s
   return w.charAt(0).toLocaleUpperCase(locale) + w.slice(1);
 }
 
+type TypeFilter = 'all' | 'task' | 'habit';
+
 export default function TodayScreen() {
   const { colors, shared } = useTheme();
   // Not: map değişkeni `t` (görev) ile çakışmasın diye i18n `tr` alınır.
@@ -52,13 +54,28 @@ export default function TodayScreen() {
   const styles = makeStyles(colors);
   // selectedDate paylaşılır (AppData): merkezi ＋ menüsü buradan okuyup yeni
   // görevi bakılan güne varsayılan tarihle ekler.
-  const { user, selectedDate, setSelectedDate } = useAppData();
+  const { user, selectedDate, setSelectedDate, hideCompleted } = useAppData();
   const today = todayDate();
 
   const [showPicker, setShowPicker] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
   const { tasks, habits, subtaskCounts, reload } = useTodayData(user.id, selectedDate, today);
+
+  // Filtreler yalnızca görünümü daraltır — özet (DailySummary) ve gerçek
+  // "gün boş mu" durumu her zaman tam listeye göre hesaplanır.
+  const showTasks = typeFilter !== 'habit';
+  const showHabits = typeFilter !== 'task';
+  const filteredTasks = showTasks
+    ? tasks.filter((t) => !hideCompleted || t.completed_at === null)
+    : [];
+  const filteredHabits = showHabits
+    ? habits.filter((h) => !hideCompleted || !h.completed)
+    : [];
+  const dayIsEmpty = tasks.length === 0 && habits.length === 0;
+  const filterHidesEverything =
+    !dayIsEmpty && filteredTasks.length === 0 && filteredHabits.length === 0;
 
   const isToday = selectedDate === today;
   // Gelecek bir gün görüntüleniyorsa alışkanlık işaretlenemez — henüz yaşanmamış
@@ -151,18 +168,45 @@ export default function TodayScreen() {
           />
         )}
 
+        {/* Tür filtresi — yalnızca liste görünümünü daraltır. "Tamamlananları
+            gizle" artık kalıcı bir tercih olarak Profil'de ayarlanır. */}
+        {!dayIsEmpty && (
+          <View style={styles.filterRow}>
+            {(['all', 'task', 'habit'] as const).map((f) => {
+              const active = typeFilter === f;
+              const label =
+                f === 'all' ? tr('today.filterAll') : f === 'task' ? tr('tabs.tasks') : tr('tabs.habits');
+              return (
+                <Pressable
+                  key={f}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setTypeFilter(f)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
         {/* Görevler ve alışkanlıklar tek liste halinde, ayrı başlık olmadan.
             Görevde öncelik noktası, alışkanlıkta 🔥 seri ayırt edici işaret. */}
         <View style={styles.list}>
-          {tasks.length === 0 && habits.length === 0 ? (
+          {dayIsEmpty ? (
             <EmptyState
               emoji={isToday ? '🎉' : '🌙'}
               title={isToday ? tr('empty.todayTitle') : tr('empty.otherDayTitle')}
               subtitle={isToday ? tr('empty.todayBody') : undefined}
             />
+          ) : filterHidesEverything ? (
+            <EmptyState emoji="🔍" title={tr('today.filterEmpty')} />
           ) : (
             <>
-              {tasks.map((t) => {
+              {filteredTasks.map((t) => {
                 const done = t.completed_at !== null;
                 const time = extractTime(t.due_date);
                 return (
@@ -202,7 +246,7 @@ export default function TodayScreen() {
                 );
               })}
 
-              {habits.map((h) =>
+              {filteredHabits.map((h) =>
                 h.kind === 'timer' ? (
                   // Zamanlayıcı alışkanlık: salt-okunur ilerleme (Aşama B'de kontrol).
                   <Animated.View
@@ -284,6 +328,18 @@ const makeStyles = (c: Colors) =>
     backToday: { fontSize: 14, fontWeight: '700', color: c.primary },
     futureCard: { opacity: 0.5 },
     dateLink: { color: c.primary, fontWeight: '600' },
-    list: { marginTop: 24 },
+    filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 },
+    filterChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    filterChipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    filterChipText: { fontSize: 13, fontWeight: '600', color: c.muted },
+    filterChipTextActive: { color: c.onAccent },
+    list: { marginTop: 16 },
     subCount: { fontSize: 12, color: c.muted, marginTop: 3 },
   });

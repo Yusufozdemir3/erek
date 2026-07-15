@@ -132,6 +132,9 @@ const tr: Dict = {
   'screen.habitsSubtitle': 'Her gün küçük bir adım',
   'screen.goalsSubtitle': 'Büyük resmi takip et',
   'today.backToday': 'Bugüne dön',
+  'today.filterAll': 'Tümü',
+  'today.hideCompleted': 'Tamamlananları gizle',
+  'today.filterEmpty': 'Bu filtreye uyan bir şey yok',
 
   // Boş durumlar
   'empty.todayTitle': 'Bugün için her şey tamam',
@@ -190,6 +193,8 @@ const tr: Dict = {
   'profile.accent.wine': 'Bordo',
   'profile.accent.mustard': 'Hardal',
   'profile.footnoteLocal': 'Verilerin yalnızca bu cihazda saklanır.',
+  'profile.todayScreen': 'Bugün ekranı',
+  'profile.hideCompletedHint': 'Açıksa, Bugün ekranındaki tamamlanmış görev ve alışkanlıklar listeden gizlenir.',
 
   // Erişilebilirlik etiketleri (accessibilityLabel) — ekranda görünmez ama
   // ekran okuyucular için çevrilmeleri gerekir.
@@ -422,6 +427,9 @@ const en: Dict = {
   'screen.habitsSubtitle': 'A small step every day',
   'screen.goalsSubtitle': 'Track the big picture',
   'today.backToday': 'Back to today',
+  'today.filterAll': 'All',
+  'today.hideCompleted': 'Hide completed',
+  'today.filterEmpty': 'Nothing matches this filter',
 
   'empty.todayTitle': 'All done for today',
   'empty.todayBody': 'Nothing on your plan — enjoy it.',
@@ -476,6 +484,8 @@ const en: Dict = {
   'profile.accent.wine': 'Wine',
   'profile.accent.mustard': 'Mustard',
   'profile.footnoteLocal': 'Your data is stored only on this device.',
+  'profile.todayScreen': 'Today screen',
+  'profile.hideCompletedHint': 'When on, completed tasks and habits are hidden from the Today list.',
 
   'common.editA11y': '{title}, edit',
   'task.subtaskCountSuffix': 'subtasks',
@@ -699,6 +709,9 @@ const de: Dict = {
   'screen.habitsSubtitle': 'Jeden Tag ein kleiner Schritt',
   'screen.goalsSubtitle': 'Behalte das große Ganze im Blick',
   'today.backToday': 'Zurück zu heute',
+  'today.filterAll': 'Alle',
+  'today.hideCompleted': 'Erledigte ausblenden',
+  'today.filterEmpty': 'Nichts entspricht diesem Filter',
 
   'empty.todayTitle': 'Für heute alles erledigt',
   'empty.todayBody': 'Nichts geplant — genieße es.',
@@ -753,6 +766,8 @@ const de: Dict = {
   'profile.accent.wine': 'Wein',
   'profile.accent.mustard': 'Senf',
   'profile.footnoteLocal': 'Deine Daten werden nur auf diesem Gerät gespeichert.',
+  'profile.todayScreen': 'Heute-Bildschirm',
+  'profile.hideCompletedHint': 'Wenn aktiv, werden erledigte Aufgaben und Gewohnheiten in der Heute-Liste ausgeblendet.',
 
   'common.editA11y': '{title}, bearbeiten',
   'task.subtaskCountSuffix': 'Unteraufgaben',
