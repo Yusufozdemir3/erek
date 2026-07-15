@@ -208,6 +208,7 @@ const tr: Dict = {
   'goal.statRemaining': 'Kalan',
   'goal.statDeadline': 'Son tarih',
   'goal.statMilestones': 'Adımlar',
+  'goal.statsA11y': '{title} istatistiklerini aç',
 
   // Bildirim izni uyarısı
   'notif.noPermTitle': 'Bildirim izni yok',
@@ -293,6 +294,18 @@ const tr: Dict = {
   'stats.nextMonthA11y': 'Sonraki ay',
   'stats.streakHistory': 'Seri geçmişi',
   'stats.weekdayBreakdown': 'Haftanın günü',
+
+  // Hedef istatistik ekranı (goal/[id].tsx)
+  'goalStats.notFound': 'Hedef bulunamadı.',
+  'goalStats.paceTitle': 'Gereken tempo',
+  'goalStats.dailyPaceLine': 'Hedefe yetişmek için günde ortalama {amountUnit} gerekiyor.',
+  'goalStats.weeklyPaceHint': '(haftada ~{amountUnit})',
+  'goalStats.milestonePaceLine':
+    'Kalan {n} adım için ortalama her {days} günde bir adım tamamlamalısın.',
+  'goalStats.overdue': 'Son tarih geçti',
+  'goalStats.completed': '🎉 Hedef tamamlandı!',
+  'goalStats.noDeadline': 'Son tarih belirlenmemiş — tempo hesaplanamıyor.',
+  'goalStats.linkedHabits': 'Bağlı alışkanlıklar',
 
   // Streak kilometre taşı rozet etiketleri
   'milestone.week': '1 hafta',
@@ -550,6 +563,7 @@ const en: Dict = {
   'goal.statRemaining': 'Remaining',
   'goal.statDeadline': 'Due date',
   'goal.statMilestones': 'Milestones',
+  'goal.statsA11y': 'Open {title} statistics',
 
   'notif.noPermTitle': 'No notification permission',
   'notif.noPermBody':
@@ -629,6 +643,18 @@ const en: Dict = {
   'stats.nextMonthA11y': 'Next month',
   'stats.streakHistory': 'Streak history',
   'stats.weekdayBreakdown': 'Day of week',
+
+  // Goal statistics screen (goal/[id].tsx)
+  'goalStats.notFound': 'Goal not found.',
+  'goalStats.paceTitle': 'Pace needed',
+  'goalStats.dailyPaceLine': 'To stay on track, you need about {amountUnit} per day.',
+  'goalStats.weeklyPaceHint': '(~{amountUnit} per week)',
+  'goalStats.milestonePaceLine':
+    'For the remaining {n} steps, aim to finish about one every {days} days.',
+  'goalStats.overdue': 'Past due',
+  'goalStats.completed': '🎉 Goal completed!',
+  'goalStats.noDeadline': 'No due date set — pace can’t be calculated.',
+  'goalStats.linkedHabits': 'Linked habits',
 
   'milestone.week': '1 week',
   'milestone.month': '1 month',
@@ -881,6 +907,7 @@ const de: Dict = {
   'goal.statRemaining': 'Verbleibend',
   'goal.statDeadline': 'Fälligkeitsdatum',
   'goal.statMilestones': 'Etappen',
+  'goal.statsA11y': '{title}-Statistiken öffnen',
 
   'notif.noPermTitle': 'Keine Benachrichtigungserlaubnis',
   'notif.noPermBody':
@@ -960,6 +987,18 @@ const de: Dict = {
   'stats.nextMonthA11y': 'Nächster Monat',
   'stats.streakHistory': 'Serienverlauf',
   'stats.weekdayBreakdown': 'Wochentag',
+
+  // Ziel-Statistikbildschirm (goal/[id].tsx)
+  'goalStats.notFound': 'Ziel nicht gefunden.',
+  'goalStats.paceTitle': 'Benötigtes Tempo',
+  'goalStats.dailyPaceLine': 'Um im Plan zu bleiben, brauchst du etwa {amountUnit} pro Tag.',
+  'goalStats.weeklyPaceHint': '(~{amountUnit} pro Woche)',
+  'goalStats.milestonePaceLine':
+    'Für die verbleibenden {n} Schritte solltest du etwa alle {days} Tage einen Schritt abschließen.',
+  'goalStats.overdue': 'Überfällig',
+  'goalStats.completed': '🎉 Ziel erreicht!',
+  'goalStats.noDeadline': 'Kein Fälligkeitsdatum — Tempo kann nicht berechnet werden.',
+  'goalStats.linkedHabits': 'Verknüpfte Gewohnheiten',
 
   'milestone.week': '1 Woche',
   'milestone.month': '1 Monat',

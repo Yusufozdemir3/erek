@@ -171,7 +171,12 @@ export function HabitForm({
   const currentStep: WizardStep | null = stepped ? steps[Math.min(stepIndex, steps.length - 1)] : null;
   // Bir alan grubu gösterilsin mi? Sihirbaz kapalıyken (düzenleme) hep true —
   // tüm alanlar eskisi gibi tek seferde görünür, sıra/davranış değişmez.
-  const show = (s: WizardStep) => !stepped || currentStep === s;
+  // 'kind' İSTİSNA: takip tipi yalnızca oluşturma sihirbazında (needsKindStep
+  // varken) seçtirilir. Düzenlemede kind hep sabit verilir (fixedKind) ve tip
+  // sonradan değiştirilemez — alanları tutarsız bırakırdı (ör. hedefi zaten
+  // dakika olarak saklanmış bir zamanlayıcıyı ikili yapmak). Bu yüzden
+  // düzenlemede (stepped=false) bu bölüm hiç gösterilmez.
+  const show = (s: WizardStep) => (s === 'kind' ? stepped === true && currentStep === s : !stepped || currentStep === s);
 
   const canProceed =
     (currentStep !== 'kind' || kind != null) && (currentStep !== 'identity' || title.trim().length > 0);

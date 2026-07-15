@@ -9,7 +9,8 @@
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
 import { goalMilestoneRepo, goalRepo } from '@/db';
 import type { Goal } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
@@ -124,6 +125,15 @@ export default function GoalsScreen() {
                   {/* Başlığa dokununca düzenleme paneli açılır */}
                   <Pressable style={styles.titleArea} onPress={() => setEditing(goal)}>
                     <Text style={[styles.goalTitle, completed && styles.goalTitleDone]}>{goal.title}</Text>
+                  </Pressable>
+                  {/* İkona dokununca istatistik ekranı açılır (bkz. habits.tsx'teki hafta şeridi) */}
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('goal.statsA11y', { title: goal.title })}
+                  >
+                    <Feather name="bar-chart-2" size={18} color={colors.faint} />
                   </Pressable>
                 </View>
 
