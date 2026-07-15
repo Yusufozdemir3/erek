@@ -1,8 +1,14 @@
 // Hedef istatistik ekranının veri yükleme mantığı: ilerleme, kalan miktar/adım,
-// son tarihe göre gereken günlük/haftalık tempo ve bu hedefe bağlı alışkanlıklar.
-// Yeni bir geçmiş tablosu GEREKTİRMEZ — GoalEditModal'daki "anlık durum" şeridiyle
-// aynı kaynaklardan (goal.current_value/target_value/deadline) türetilir, burada
-// yalnızca daha zengin ve ayrı bir ekranda gösterilir (bkz. useHabitStats ile aynı desen).
+// son tarihe göre gereken günlük/haftalık/aylık tempo ve bu hedefe bağlı
+// alışkanlıklar. Yeni bir geçmiş tablosu GEREKTİRMEZ — GoalEditModal'daki "anlık
+// durum" şeridiyle aynı kaynaklardan (goal.current_value/target_value/deadline)
+// türetilir, burada yalnızca daha zengin ve ayrı bir ekranda gösterilir (bkz.
+// useHabitStats ile aynı desen).
+//
+// Ekran artık sekmeli (Genel/İstatistik/Adımlar/Düzenle) tek bir kalıcı
+// bileşen olduğundan (eskiden ayrı bir modal her açılışta unmount oluyordu),
+// milestone/goal mutasyonlarından sonra otomatik yeniden odaklanma OLMAZ —
+// çağıran taraf her mutasyondan sonra döndürülen `reload`'u elle çağırmalı.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -24,44 +30,53 @@ export interface GoalStats {
   completed: boolean;
   daysLeft: number | null; // null = son tarih yok; negatifse gecikmiş
   isOverdue: boolean;
-  // Yalnız 'numeric': hedefe son tarihte yetişmek için günde/haftada gereken miktar.
-  // Son tarih yoksa, tamamlandıysa ya da son tarih geçtiyse null.
+  overdueDays: number | null; // yalnız isOverdue iken dolu (pozitif)
+  // Yalnız 'numeric': hedefe son tarihte yetişmek için gereken tempo.
+  // Son tarih yoksa, tamamlandıysa ya da son tarih geçtiyse üçü de null.
   dailyPace: number | null;
   weeklyPace: number | null;
-  // Yalnız 'milestone':
+  monthlyPace: number | null;
+  // Adımlar artık HER İKİ tipte de opsiyonel olabilir ('numeric' hedefe de
+  // checklist eklenebilir) — bu alanlar milestonesTotal>0 iken doludur, tipe
+  // bakılmaksızın.
   milestones: GoalMilestone[];
   milestonesDone: number;
   milestonesTotal: number;
   milestonesRemaining: number;
   milestonePaceDays: number | null; // ortalama: kalan her adım için kaç gün var
+  milestoneWeeklyPace: number | null; // haftada tamamlanması gereken adım sayısı
   // Bu hedefe bağlı (goal_id ile işaretlenmiş) alışkanlıklar — bkz. HabitForm.linkGoal.
   linkedHabits: LinkedHabit[];
+  reload: () => void;
 }
 
-const EMPTY: GoalStats = {
-  goal: null,
+const EMPTY_BASE = {
+  goal: null as Goal | null,
   ratio: 0,
   remaining: null,
   completed: false,
   daysLeft: null,
   isOverdue: false,
+  overdueDays: null,
   dailyPace: null,
   weeklyPace: null,
-  milestones: [],
+  monthlyPace: null,
+  milestones: [] as GoalMilestone[],
   milestonesDone: 0,
   milestonesTotal: 0,
   milestonesRemaining: 0,
   milestonePaceDays: null,
-  linkedHabits: [],
+  milestoneWeeklyPace: null,
+  linkedHabits: [] as LinkedHabit[],
 };
 
 export function useGoalStats(goalId: string): GoalStats {
-  const [stats, setStats] = useState<GoalStats>(EMPTY);
+  const [stats, setStats] = useState<Omit<GoalStats, 'reload'>>(EMPTY_BASE);
 
   const reload = useCallback(() => {
     const goal = goalRepo.getById(goalId);
     if (!goal) {
-      setStats(EMPTY);
+      setStats(EMPTY_BASE);
       return;
     }
 
@@ -79,6 +94,7 @@ export function useGoalStats(goalId: string): GoalStats {
       daysLeft = Math.round((target.getTime() - today.getTime()) / 86_400_000);
     }
     const isOverdue = daysLeft != null && daysLeft < 0;
+    const overdueDays = isOverdue ? -daysLeft! : null;
 
     // Tempo hesabı yalnız gelecekte (bugün dahil) bir son tarihi olan, henüz
     // tamamlanmamış hedefte anlamlı. "Bugün son gün" (daysLeft=0) -> kalanın
@@ -87,23 +103,22 @@ export function useGoalStats(goalId: string): GoalStats {
     const dailyPace =
       !completed && remaining != null && effectiveDays != null ? remaining / effectiveDays : null;
     const weeklyPace = dailyPace != null ? dailyPace * 7 : null;
+    const monthlyPace = dailyPace != null ? dailyPace * 30 : null;
 
-    let milestones: GoalMilestone[] = [];
-    let milestonesDone = 0;
-    let milestonesTotal = 0;
-    let milestonePaceDays: number | null = null;
-    if (goal.goal_type === 'milestone') {
-      milestones = goalMilestoneRepo.listByGoal(goal.id);
-      const counts = goalMilestoneRepo.countForGoal(goal.id);
-      milestonesDone = counts.done;
-      milestonesTotal = counts.total;
-      const remainingSteps = Math.max(0, milestonesTotal - milestonesDone);
-      milestonePaceDays =
-        !completed && remainingSteps > 0 && effectiveDays != null
-          ? effectiveDays / remainingSteps
-          : null;
-    }
+    // Adımlar tipten bağımsız çekilir: 'milestone' hedefte zorunlu iş akışının
+    // parçası, 'numeric' hedefte tamamen opsiyonel bir checklist (tamamlanma
+    // durumunu ETKİLEMEZ — bkz. goalRepo.setCompleted'in tip koruması).
+    const milestones = goalMilestoneRepo.listByGoal(goal.id);
+    const milestoneCounts = goalMilestoneRepo.countForGoal(goal.id);
+    const milestonesDone = milestoneCounts.done;
+    const milestonesTotal = milestoneCounts.total;
     const milestonesRemaining = Math.max(0, milestonesTotal - milestonesDone);
+    // Tempo: adımı olan HERHANGİ bir hedefte anlamlı (yalnızca 'milestone' değil).
+    const milestonePaceDays =
+      !completed && milestonesRemaining > 0 && effectiveDays != null
+        ? effectiveDays / milestonesRemaining
+        : null;
+    const milestoneWeeklyPace = milestonePaceDays != null ? 7 / milestonePaceDays : null;
 
     // Bu hedefe bağlı alışkanlıklar — ayrı bir sorgu yerine tüm kullanıcı
     // alışkanlıkları tek listede zaten çekiliyor (liste büyüklüğü küçük).
@@ -119,18 +134,21 @@ export function useGoalStats(goalId: string): GoalStats {
       completed,
       daysLeft,
       isOverdue,
+      overdueDays,
       dailyPace,
       weeklyPace,
+      monthlyPace,
       milestones,
       milestonesDone,
       milestonesTotal,
       milestonesRemaining,
       milestonePaceDays,
+      milestoneWeeklyPace,
       linkedHabits,
     });
   }, [goalId]);
 
   useFocusEffect(reload);
 
-  return stats;
+  return { ...stats, reload };
 }

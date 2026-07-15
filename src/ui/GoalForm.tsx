@@ -1,5 +1,5 @@
-// Hedef form ALANLARI — hem oluşturma (AddSheet) hem düzenleme (GoalEditModal)
-// tarafından paylaşılır (Habit/TaskForm ile aynı desen). Alanlar, durum ve
+// Hedef form ALANLARI — hem oluşturma (AddSheet) hem düzenleme (app/goal/[id].tsx
+// 'Düzenle' sekmesi) tarafından paylaşılır (Habit/TaskForm ile aynı desen). Alanlar, durum ve
 // doğrulama burada; kalıcılık (create/update), milestone checklist bölümü ve
 // modal/sheet kabuğu çağırana aittir. onSubmit son (dönüştürülmüş) değerleri
 // yukarı verir.
@@ -221,7 +221,8 @@ export function GoalForm({
         />
       )}
 
-      {/* Düzenlemede milestone checklist (anında yazılır, parent GoalEditModal sağlar) */}
+      {/* Düzenlemede milestone checklist (anında yazılır, parent sağlar) — artık kullanılmıyor:
+          adımlar app/goal/[id].tsx'te ayrı bir 'Adımlar' sekmesinde yönetiliyor. */}
       {goalType === 'milestone' && children}
 
       {/* Oluşturmada taslak milestone editörü (hedef yazılınca birlikte oluşur) */}

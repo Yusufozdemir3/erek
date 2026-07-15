@@ -1,8 +1,13 @@
 // "Hedefler" sekmesi — iki tip hedef:
-//  - numeric: ilerleme çubuğu + artır/azalt (örn. 40/100 km)
-//  - milestone: adımlara bölünebilir (görev/alt görev mantığı) — kart üzerinden
-//    elle işaretlenir; tüm adımlar tamamlanınca (varsa) otomatik tamamlanır.
-// Her iki tipte de artık bir son tarih var (zorunlu, GoalForm'da ayarlanır).
+//  - numeric: ilerleme çubuğu (örn. 40/100 km)
+//  - milestone: adımlara bölünebilir (görev/alt görev mantığı) — tüm adımlar
+//    tamamlanınca (varsa) otomatik tamamlanır.
+// Her iki tipte de artık bir son tarih var (zorunlu, GoalForm'da ayarlanır) ve
+// isteğe bağlı adımlar (goal_milestones) olabilir — yalnızca 'milestone' tipte
+// zorunlu değil, 'numeric' hedefe de opsiyonel checklist olarak eklenebilir.
+// Liste SALT-OKUNUR bir özet/gezinme yüzeyi: ilerleme girişi (numeric stepper),
+// tamamlandı işaretleme (milestone) ve adım ekleme artık burada değil — hepsi
+// /goal/[id] ekranının 'Genel'/'Adımlar' sekmelerinde ("entry" tek yerde).
 // Ekleme burada yok: sekme çubuğundaki ＋ menüsünden yapılır (form AddSheet'te).
 // Mimari kural: SQL yok; yalnızca goalRepo/goalMilestoneRepo çağrılır.
 
@@ -13,10 +18,8 @@ import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { goalMilestoneRepo, goalRepo } from '@/db';
 import type { Goal } from '@/db';
-import { notifySuccess, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
-import { GoalEditModal } from '@/ui/GoalEditModal';
 import { ProfileButton } from '@/ui/ProfileButton';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -31,37 +34,24 @@ export default function GoalsScreen() {
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [milestoneCounts, setMilestoneCounts] = useState<Record<string, { done: number; total: number }>>({});
-  const [editing, setEditing] = useState<Goal | null>(null); // null = panel kapalı
   // Aynı anda yalnızca bir kartın swipe aksiyonları açık kalsın.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
+
+  // Düzenleme artık ayrı bir modal değil — /goal/[id] ekranının 'edit' sekmesi
+  // (bkz. app/goal/[id].tsx). Stats ikonu aynı ekranı 'stats' sekmesiyle açar.
+  const openGoal = (id: string, tab: 'stats' | 'edit') =>
+    router.push({ pathname: '/goal/[id]', params: { id, tab } });
 
   const reload = useCallback(() => {
     const list = goalRepo.listByUser(user.id);
     setGoals(list);
-    const milestoneGoalIds = list.filter((g) => g.goal_type === 'milestone').map((g) => g.id);
-    setMilestoneCounts(goalMilestoneRepo.countsForGoals(milestoneGoalIds));
+    // Adımlar artık her iki tipte de opsiyonel olabildiğinden tüm hedefler için
+    // sayılır (yalnızca gerçekten adımı olan hedefler sonuçta yer alır).
+    setMilestoneCounts(goalMilestoneRepo.countsForGoals(list.map((g) => g.id)));
     // dataVersion: ＋ menüsünden hedef eklenince odak değişmeden tazelensin.
   }, [user.id, dataVersion]);
 
   useFocusEffect(reload);
-
-  const step = (id: string, amount: number) => {
-    goalRepo.addProgress(id, amount);
-    // Hedefe ulaşıldıysa başarı titreşimi; yoksa hafif dokunuş.
-    const g = goalRepo.getById(id);
-    g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
-    reload();
-  };
-
-  // Yalnızca 'milestone' hedeflerde anlamlı — kart üzerindeki elle işaretleme.
-  // Adımlar varsa GoalEditModal'daki otomatik tamamlamayla senkron kalır (biri
-  // diğerini ezmez, tıpkı görev/alt görev ilişkisindeki gibi).
-  const toggleCompleted = (goal: Goal) => {
-    const completing = goal.completed_at === null;
-    goalRepo.setCompleted(goal.id, completing);
-    completing ? notifySuccess() : tapLight();
-    reload();
-  };
 
   // Silme onayı artık SwipeableRow'un kendi iki-dokunuşluk aksiyon düğmesinde
   // (sağa açılan panel) — burada doğrudan siliniyor.
@@ -101,7 +91,7 @@ export default function GoalsScreen() {
               <SwipeableRow
                 isOpen={openRowId === goal.id}
                 onOpenChange={(open) => setOpenRowId(open ? goal.id : null)}
-                onEdit={() => setEditing(goal)}
+                onEdit={() => openGoal(goal.id, 'edit')}
                 onDelete={() => remove(goal.id)}
                 editA11yLabel={t('common.editA11y', { title: goal.title })}
                 deleteA11yLabel={t('common.deleteA11y', { title: goal.title })}
@@ -109,26 +99,20 @@ export default function GoalsScreen() {
               {/* marginBottom kaldırıldı (0) — bkz. tasks.tsx'teki aynı düzeltme yorumu. */}
               <View style={[styles.goalCard, styles.noMargin]}>
                 <View style={styles.goalHead}>
+                  {/* Salt-okunur durum göstergesi — işaretleme artık /goal/[id]'nin
+                      Genel sekmesinde (bkz. dosya başı yorumu). */}
                   {goal.goal_type === 'milestone' && (
-                    <Pressable
-                      onPress={() => toggleCompleted(goal)}
-                      hitSlop={8}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: completed }}
-                      accessibilityLabel={goal.title}
-                    >
-                      <View style={[styles.checkbox, completed && styles.checkboxDone]}>
-                        {completed && <Text style={styles.checkmark}>✓</Text>}
-                      </View>
-                    </Pressable>
+                    <View style={[styles.checkbox, completed && styles.checkboxDone]}>
+                      {completed && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
                   )}
-                  {/* Başlığa dokununca düzenleme paneli açılır */}
-                  <Pressable style={styles.titleArea} onPress={() => setEditing(goal)}>
+                  {/* Başlığa dokununca hedef ekranı 'Düzenle' sekmesiyle açılır */}
+                  <Pressable style={styles.titleArea} onPress={() => openGoal(goal.id, 'edit')}>
                     <Text style={[styles.goalTitle, completed && styles.goalTitleDone]}>{goal.title}</Text>
                   </Pressable>
-                  {/* İkona dokununca istatistik ekranı açılır (bkz. habits.tsx'teki hafta şeridi) */}
+                  {/* İkona dokununca aynı ekran 'İstatistik' sekmesiyle açılır (bkz. habits.tsx'teki hafta şeridi) */}
                   <Pressable
-                    onPress={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })}
+                    onPress={() => openGoal(goal.id, 'stats')}
                     hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={t('goal.statsA11y', { title: goal.title })}
@@ -137,36 +121,24 @@ export default function GoalsScreen() {
                   </Pressable>
                 </View>
 
-                {goal.goal_type === 'numeric' ? (
+                {goal.goal_type === 'numeric' && (
                   <>
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, { width: `${Math.round(ratio * 100)}%` }]} />
                     </View>
-                    <View style={styles.goalFoot}>
-                      <Text style={styles.goalMeta}>
-                        {goal.current_value}
-                        {goal.target_value != null ? ` / ${goal.target_value}` : ''}
-                        {goal.unit ? ` ${goal.unit}` : ''}
-                      </Text>
-                      <View style={styles.steppers}>
-                        <Pressable style={styles.stepBtn} onPress={() => step(goal.id, -1)}>
-                          <Text style={styles.stepText}>−1</Text>
-                        </Pressable>
-                        <Pressable style={styles.stepBtn} onPress={() => step(goal.id, 1)}>
-                          <Text style={styles.stepText}>+1</Text>
-                        </Pressable>
-                        <Pressable style={styles.stepBtn} onPress={() => step(goal.id, 5)}>
-                          <Text style={styles.stepText}>+5</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  </>
-                ) : (
-                  counts && counts.total > 0 && (
                     <Text style={[styles.goalMeta, styles.standaloneMeta]}>
-                      {counts.done}/{counts.total} {t('goal.milestoneCountSuffix')}
+                      {goal.current_value}
+                      {goal.target_value != null ? ` / ${goal.target_value}` : ''}
+                      {goal.unit ? ` ${goal.unit}` : ''}
                     </Text>
-                  )
+                  </>
+                )}
+                {/* Adım rozeti artık her iki tipte de görünebilir — 'numeric' hedefe de
+                    opsiyonel adım eklenebiliyor (bkz. dosya başı yorumu). */}
+                {counts && counts.total > 0 && (
+                  <Text style={[styles.goalMeta, styles.standaloneMeta]}>
+                    {counts.done}/{counts.total} {t('goal.milestoneCountSuffix')}
+                  </Text>
                 )}
                 {!!dLabel && <Text style={styles.deadlineLeft}>{dLabel}</Text>}
               </View>
@@ -176,12 +148,6 @@ export default function GoalsScreen() {
           })
         )}
       </ScrollView>
-
-      <GoalEditModal
-        goal={editing}
-        onClose={() => setEditing(null)}
-        onChanged={reload}
-      />
     </SafeAreaView>
   );
 }
@@ -222,21 +188,7 @@ const makeStyles = (c: Colors) =>
       overflow: 'hidden',
     },
     progressFill: { height: '100%', borderRadius: 5, backgroundColor: c.primary },
-    goalFoot: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginTop: 12,
-    },
     goalMeta: { fontSize: 14, color: c.muted, fontWeight: '600' },
     standaloneMeta: { marginTop: 12 },
-    steppers: { flexDirection: 'row', gap: 6 },
-    stepBtn: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 8,
-      backgroundColor: c.primarySoft,
-    },
-    stepText: { fontSize: 14, fontWeight: '700', color: c.primary },
     deadlineLeft: { fontSize: 12, color: c.streak, fontWeight: '700', marginTop: 8 },
   });

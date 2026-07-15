@@ -136,7 +136,7 @@ export const goalRepo = {
   },
 
   // Yalnızca 'milestone' hedeflerde anlamlı (elle işaretleme ya da tüm adımlar
-  // tamamlanınca otomatik çağrılır — bkz. GoalEditModal). 'numeric' hedefte
+  // tamamlanınca otomatik çağrılır — bkz. app/goal/[id].tsx). 'numeric' hedefte
   // sessizce yok sayılır: tamamlanma zaten current_value>=target_value'dan gelir.
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
