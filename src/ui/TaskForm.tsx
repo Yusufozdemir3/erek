@@ -12,6 +12,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import type { Priority } from '@/db';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { TITLE_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, type Colors } from '@/ui/theme';
@@ -115,7 +116,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         placeholder={t('task.titlePlaceholder')}
         placeholderTextColor={colors.faint}
         autoFocus={autoFocusTitle}
+        maxLength={TITLE_MAX_LEN}
       />
+      <Text style={styles.counter}>
+        {title.length}/{TITLE_MAX_LEN}
+      </Text>
 
       {/* Öncelik */}
       <Text style={styles.label}>{t('task.priority')}</Text>
@@ -239,6 +244,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
               onSubmitEditing={addDraftSub}
               blurOnSubmit={false}
               returnKeyType="done"
+              maxLength={TITLE_MAX_LEN}
             />
             <Pressable style={styles.subAddBtn} onPress={addDraftSub}>
               <Text style={styles.subAddText}>＋</Text>
@@ -261,6 +267,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },
+    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
     input: {
       backgroundColor: c.inputBg,
       borderRadius: 12,

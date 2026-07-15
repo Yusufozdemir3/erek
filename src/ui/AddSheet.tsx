@@ -16,6 +16,7 @@ import type { GoalType } from '@/db';
 import { toYmd } from '@/lib/helpers';
 import { scheduleHabitReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
+import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
@@ -200,7 +201,11 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                     onChangeText={setTitle}
                     autoFocus
                     returnKeyType="done"
+                    maxLength={TITLE_MAX_LEN}
                   />
+                  <Text style={styles.counter}>
+                    {title.length}/{TITLE_MAX_LEN}
+                  </Text>
 
                   {step === 'goal' && (
                     <>
@@ -230,6 +235,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                             keyboardType="numeric"
                             value={target}
                             onChangeText={setTarget}
+                            maxLength={NUMBER_MAX_LEN}
                           />
                           <TextInput
                             style={[styles.input, { flex: 1 }]}
@@ -237,6 +243,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                             placeholderTextColor={colors.faint}
                             value={unit}
                             onChangeText={setUnit}
+                            maxLength={UNIT_MAX_LEN}
                           />
                         </View>
                       ) : (
@@ -302,6 +309,7 @@ const makeStyles = (c: Colors) =>
     backText: { fontSize: 15, fontWeight: '700', color: c.primary, marginBottom: 16 },
     headSpacer: { width: 44 },
 
+    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
     input: {
       backgroundColor: c.inputBg,
       borderRadius: 12,

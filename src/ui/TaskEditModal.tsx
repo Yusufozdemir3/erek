@@ -14,6 +14,7 @@ import { subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
+import { TITLE_MAX_LEN } from '@/ui/formLimits';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -163,6 +164,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
                 onSubmitEditing={addSubtask}
                 blurOnSubmit={false}
                 returnKeyType="done"
+                maxLength={TITLE_MAX_LEN}
               />
               <Pressable style={styles.subtaskAddBtn} onPress={addSubtask}>
                 <Text style={styles.subtaskAddText}>＋</Text>

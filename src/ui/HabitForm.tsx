@@ -20,6 +20,7 @@ import { goalRepo } from '@/db';
 import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
 import { hmToDate, todayDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -332,7 +333,11 @@ export function HabitForm({
             placeholder={t('habit.titlePlaceholder')}
             placeholderTextColor={colors.faint}
             autoFocus={autoFocusTitle}
+            maxLength={TITLE_MAX_LEN}
           />
+          <Text style={styles.counter}>
+            {title.length}/{TITLE_MAX_LEN}
+          </Text>
         </>
       )}
 
@@ -519,6 +524,7 @@ export function HabitForm({
               placeholder={t('habit.amountPlaceholder')}
               placeholderTextColor={colors.faint}
               keyboardType="numeric"
+              maxLength={SHORT_NUMBER_MAX_LEN}
             />
             <TextInput
               style={[styles.input, styles.targetInput]}
@@ -527,6 +533,7 @@ export function HabitForm({
               placeholder={t('habit.unitPlaceholder')}
               placeholderTextColor={colors.faint}
               autoCapitalize="none"
+              maxLength={UNIT_MAX_LEN}
             />
           </View>
           <Text style={styles.hint}>{t('habit.dailyTargetHint')}</Text>
@@ -543,6 +550,7 @@ export function HabitForm({
             placeholder={t('habit.durationPlaceholder')}
             placeholderTextColor={colors.faint}
             keyboardType="numeric"
+            maxLength={SHORT_NUMBER_MAX_LEN}
           />
           <Text style={styles.hint}>{t('habit.durationHint')}</Text>
         </>
@@ -624,6 +632,7 @@ export function HabitForm({
                 placeholder="1"
                 placeholderTextColor={colors.faint}
                 keyboardType="numeric"
+                maxLength={SHORT_NUMBER_MAX_LEN}
               />
               {contributionPreview != null && (
                 <Text style={styles.hint}>
@@ -694,6 +703,7 @@ const makeStyles = (c: Colors) =>
       marginBottom: 8,
       marginTop: 4,
     },
+    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
     input: {
       backgroundColor: c.inputBg,
       borderRadius: 12,

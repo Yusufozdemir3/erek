@@ -12,6 +12,7 @@ import { goalRepo } from '@/db';
 import type { Goal } from '@/db';
 import { toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -94,7 +95,11 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
           onChangeText={setTitle}
           placeholder={t('goal.titleShort')}
           placeholderTextColor={colors.faint}
+          maxLength={TITLE_MAX_LEN}
         />
+        <Text style={styles.counter}>
+          {title.length}/{TITLE_MAX_LEN}
+        </Text>
 
         {numeric ? (
           <>
@@ -108,6 +113,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
                   keyboardType="numeric"
                   placeholder={t('goal.targetExample')}
                   placeholderTextColor={colors.faint}
+                  maxLength={NUMBER_MAX_LEN}
                 />
               </View>
               <View style={styles.col}>
@@ -118,6 +124,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
                   onChangeText={setUnit}
                   placeholder={t('goal.unitExample')}
                   placeholderTextColor={colors.faint}
+                  maxLength={UNIT_MAX_LEN}
                 />
               </View>
             </View>
@@ -130,6 +137,7 @@ export function GoalEditModal({ goal, onClose, onChanged }: Props) {
               keyboardType="numeric"
               placeholder={t('goal.currentExample')}
               placeholderTextColor={colors.faint}
+              maxLength={NUMBER_MAX_LEN}
             />
           </>
         ) : (
@@ -192,6 +200,7 @@ const makeStyles = (c: Colors) =>
       marginBottom: 8,
       marginTop: 4,
     },
+    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
     input: {
       backgroundColor: c.inputBg,
       borderRadius: 12,
