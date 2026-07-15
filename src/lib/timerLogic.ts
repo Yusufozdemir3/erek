@@ -16,11 +16,12 @@ export interface ActiveTimer {
   targetSeconds: number; // hedef saniye
 }
 
-// Şu ana kadarki toplam saniye (base + geçen), HEDEFTE SINIRLI.
+// Şu ana kadarki toplam saniye (base + geçen). Hedefte KIRPILMAZ — kullanıcı
+// hedefi geçtikten sonra da zamanlayıcıyı istediği kadar çalıştırabilir.
 // Saat geriye alınmışsa (now < startedAt) geçen süre negatife düşmez.
 export function elapsedOf(a: ActiveTimer, now: number = Date.now()): number {
   const ran = Math.max(0, (now - a.startedAt) / 1000);
-  return Math.min(a.targetSeconds, a.baseSeconds + ran);
+  return a.baseSeconds + ran;
 }
 
 // Duraklat/bitir anında DB'ye eklenecek saniye (bu seansta koşan kısım).
@@ -29,7 +30,8 @@ export function commitDelta(a: ActiveTimer, now: number = Date.now()): number {
   return Math.max(0, Math.round(elapsedOf(a, now) - a.baseSeconds));
 }
 
-// Hedefe ulaşıldı mı? (otomatik tamamlama ve açılışta geri yükleme kararı)
+// Hedefe ulaşıldı mı? (tamamlanma işaretlenmesi ve açılışta geri yükleme kararı —
+// zamanlayıcı hedefte DURMAZ, yalnızca tamamlandı sayılır ve çalışmaya devam eder)
 export function isFinished(a: ActiveTimer, now: number = Date.now()): boolean {
   return elapsedOf(a, now) >= a.targetSeconds;
 }

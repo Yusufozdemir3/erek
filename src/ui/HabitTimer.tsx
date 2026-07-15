@@ -1,7 +1,8 @@
 // Zamanlayıcı alışkanlığın kart üzerindeki kontrolü.
 // Canlı sayaç "m:ss / m:ss" + Başlat/Duraklat düğmesi + (ilerleme varken) Sıfırla.
-// Çalışan durum ve tik TimerProvider'dan gelir; hedefe ulaşınca otomatik tamamlanır
-// ve ✓ görünür. `editable` yalnızca bugün için true (geçmiş gün salt-okunur).
+// Çalışan durum ve tik TimerProvider'dan gelir; hedefe ulaşınca ✓ rozeti görünür
+// ama zamanlayıcı DURMAZ, kullanıcı hedefi aşarak çalışmaya devam edebilir.
+// `editable` yalnızca bugün için true (geçmiş gün salt-okunur).
 // Değer metnine dokununca (timer çalışmıyorken) dakika olarak el ile girilebilir —
 // AmountStepper'daki "klavyeden gir" desenin aynısı, saniyeye çevrilip onSet'e geçilir.
 
@@ -80,30 +81,29 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
         </Pressable>
       )}
 
-      {reached ? (
-        <Text style={styles.doneCheck}>✓</Text>
-      ) : (
-        editable && (
-          <Pressable
-            style={[styles.btn, running && styles.btnOn]}
-            onPress={() => {
-              if (running) {
-                tapLight();
-                timer.pause();
-              } else {
-                tapMedium();
-                timer.start(habitId);
-              }
-            }}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel={running ? t('habit.timerPauseA11y') : t('habit.timerStartA11y')}
-          >
-            <Text style={[styles.btnText, running && styles.btnTextOn]}>
-              {running ? '❚❚' : '▶'}
-            </Text>
-          </Pressable>
-        )
+      {/* Hedefe ulaşınca ✓ rozeti görünür ama kontroller kaybolmaz — kullanıcı
+          isterse hedefi aşarak çalışmaya devam edebilir. */}
+      {reached && <Text style={styles.doneCheck}>✓</Text>}
+      {editable && (
+        <Pressable
+          style={[styles.btn, running && styles.btnOn]}
+          onPress={() => {
+            if (running) {
+              tapLight();
+              timer.pause();
+            } else {
+              tapMedium();
+              timer.start(habitId);
+            }
+          }}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={running ? t('habit.timerPauseA11y') : t('habit.timerStartA11y')}
+        >
+          <Text style={[styles.btnText, running && styles.btnTextOn]}>
+            {running ? '❚❚' : '▶'}
+          </Text>
+        </Pressable>
       )}
 
       {editable && !running && live > 0 && (

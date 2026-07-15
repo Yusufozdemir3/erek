@@ -28,8 +28,8 @@ describe('elapsedOf', () => {
     expect(elapsedOf(timer({ baseSeconds: 60 }), T0 + 30_000)).toBe(90);
   });
 
-  it('hedefi AŞMAZ (uygulama saatlerce kapalı kalsa da)', () => {
-    expect(elapsedOf(timer(), T0 + 5 * 3600_000)).toBe(1200);
+  it('hedefte kırpılmaz (kullanıcı hedefi geçtikten sonra da devam edebilir)', () => {
+    expect(elapsedOf(timer(), T0 + 5 * 3600_000)).toBe(5 * 3600);
   });
 
   it('saat geri alınmışsa (now < startedAt) negatife düşmez, base kalır', () => {
@@ -42,9 +42,9 @@ describe('commitDelta', () => {
     expect(commitDelta(timer({ baseSeconds: 300 }), T0 + 120_000)).toBe(120);
   });
 
-  it('hedefte kırpılır: base + delta hedefi aşamaz', () => {
-    // base 18 dk, hedef 20 dk, 10 dk koşmuş → yalnız 2 dk yazılır.
-    expect(commitDelta(timer({ baseSeconds: 18 * 60 }), T0 + 10 * 60_000)).toBe(120);
+  it('hedefte kırpılmaz: koşan sürenin tamamı yazılır', () => {
+    // base 18 dk, hedef 20 dk, 10 dk koşmuş → tamamı (10 dk) yazılır, 2 dk'da kesilmez.
+    expect(commitDelta(timer({ baseSeconds: 18 * 60 }), T0 + 10 * 60_000)).toBe(600);
   });
 
   it('tam saniyeye yuvarlar ve asla negatif olmaz', () => {
@@ -55,9 +55,9 @@ describe('commitDelta', () => {
 
   it('GECE YARISI KARARI: 23:50 → 00:20 seansının tamamı tek delta olarak döner (başlangıç gününe yazılır)', () => {
     // Karar: seans başladığı güne yazılır (a.date sabit). 30 dk'nın tamamı
-    // tek parçadır; gün dönümünde bölünmez.
+    // tek parçadır; gün dönümünde bölünmez, hedefte de kırpılmaz.
     const a = timer({ date: '2026-07-08' }); // 23:50'de başladı varsay
-    expect(commitDelta(a, T0 + 30 * 60_000)).toBe(1200); // hedefte (20 dk) kırpılmış
+    expect(commitDelta(a, T0 + 30 * 60_000)).toBe(1800);
     expect(a.date).toBe('2026-07-08'); // gün alanı değişmez — hep başlangıç günü
   });
 });

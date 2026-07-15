@@ -1,9 +1,11 @@
 // Zamanlayıcı alışkanlıkların CANLI sayaç motoru (Aşama B).
 // Aynı anda tek bir zamanlayıcı çalışır. Çalışan durum AsyncStorage'da tutulur;
 // böylece uygulama kapansa/arka plana atılsa da süre gerçek duvar-saatiyle işler
-// (startedAt damgasından hesaplanır). Duraklat/bitir/sıfırla ya da hedefe ulaşınca
-// biriken saniye habit_logs.amount'a yazılır (habitRepo.incrementAmount) ve
-// hedefe ulaşınca completed=1 olur. Bildirim hedef anına kurulur.
+// (startedAt damgasından hesaplanır). Duraklat/bitir'de biriken saniye
+// habit_logs.amount'a yazılır (habitRepo.incrementAmount). Hedefe ulaşınca
+// completed=1 olur AMA zamanlayıcı DURMAZ — kullanıcı isterse hedefi aşarak
+// çalışmaya devam edebilir (celebratedRef, oturum başına tek seferlik
+// commit+haptik+bildirim-iptali sağlar). Bildirim hedef anına kurulur.
 //
 // Tek doğru kaynak yine SQLite: bu modül yalnızca "şu an ne kadar süre geçti"nin
 // geçici (çalışan) durumunu ve tik'i yönetir; kalıcı toplam DB'dedir.
@@ -22,7 +24,7 @@ const ACTIVE_KEY = 'timer:active';
 
 interface TimerApi {
   isRunning: (habitId: string) => boolean;
-  // Aktif alışkanlık için canlı saniye (base + geçen), hedefte sınırlı; değilse null.
+  // Aktif alışkanlık için canlı saniye (base + geçen, hedefi aşabilir); değilse null.
   liveSeconds: (habitId: string) => number | null;
   start: (habitId: string) => void;
   pause: () => void;
@@ -44,6 +46,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   // Interval/async içinde en güncel active'e erişmek için ref (kapanış bayatlamasın).
   const activeRef = useRef<ActiveTimer | null>(null);
   activeRef.current = active;
+  // Bu oturumda hedefe ulaşma "kutlaması" (commit+haptik) zaten yapıldı mı —
+  // her saniye tekrar tetiklenmesin diye. start()'ta her yeni oturumda sıfırlanır.
+  const celebratedRef = useRef(false);
 
   const persist = (a: ActiveTimer | null) => {
     if (a) AsyncStorage.setItem(ACTIVE_KEY, JSON.stringify(a));
@@ -60,7 +65,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const stopActive = useCallback(() => {
     const a = activeRef.current;
     if (!a) return;
-    const reachedTarget = isFinished(a);
+    // Kutlama tıkta zaten yapıldıysa (hedefe ulaşılıp çalışmaya devam edildiyse)
+    // duraklatmada ikinci kez başarı titreşimi vermeyelim.
+    const reachedTarget = isFinished(a) && !celebratedRef.current;
     commit(a);
     setActive(null);
     persist(null);
@@ -68,7 +75,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     notifyDataChanged();
   }, [commit, notifyDataChanged]);
 
-  // Açılışta kalıcı durumu geri yükle; kapalıyken hedef dolduysa hemen tamamla.
+  // Açılışta kalıcı durumu geri yükle. Kapalıyken hedef dolduysa ilerlemeyi
+  // hemen DB'ye yaz (tamamlandı sayılsın, bağlı hedefe +1 işlensin) ama
+  // zamanlayıcıyı DURDURMA — kullanıcı isterse çalışmaya devam etsin.
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(ACTIVE_KEY);
@@ -77,8 +86,11 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         const a = JSON.parse(raw) as ActiveTimer;
         if (isFinished(a)) {
           commit(a);
-          persist(null);
+          celebratedRef.current = true;
           notifyDataChanged();
+          const updated: ActiveTimer = { ...a, baseSeconds: elapsedOf(a), startedAt: Date.now() };
+          setActive(updated);
+          persist(updated);
         } else {
           setActive(a);
         }
@@ -90,16 +102,29 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Aktifken her saniye: hedefe ulaşınca otomatik tamamla, yoksa render tetikle.
+  // Aktifken her saniye: hedefe ilk ulaşıldığında ilerlemeyi DB'ye yaz + başarı
+  // titreşimi ver, ama zamanlayıcıyı DURDURMA — sayaç tabanı güncellenip aynı
+  // oturuma (hedefi aşarak) devam eder. Sonraki tiklerde yalnızca render tetiklenir.
   useEffect(() => {
     if (!active) return;
     const id = setInterval(() => {
       const a = activeRef.current;
-      if (a && isFinished(a)) stopActive();
-      else setNow(Date.now());
+      if (!a) return;
+      if (!celebratedRef.current && isFinished(a)) {
+        celebratedRef.current = true;
+        commit(a);
+        notifySuccess();
+        notifyDataChanged();
+        const updated: ActiveTimer = { ...a, baseSeconds: elapsedOf(a), startedAt: Date.now() };
+        activeRef.current = updated;
+        setActive(updated);
+        persist(updated);
+      } else {
+        setNow(Date.now());
+      }
     }, 1000);
     return () => clearInterval(id);
-  }, [active, stopActive]);
+  }, [active, commit, notifyDataChanged]);
 
   const start = useCallback(
     (habitId: string) => {
@@ -108,12 +133,14 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       const target = habit.target_amount;
       const date = todayDate();
       const base = habitRepo.getAmountOn(habitId, date);
-      if (base >= target) return; // zaten tamamlanmış
+      // Not: hedefe zaten ulaşılmış olsa bile başlatılabilir — kullanıcı hedefi
+      // aştıktan sonra da devam edebilir (bkz. celebratedRef).
       // Tek aktif zamanlayıcı: başkası çalışıyorsa önce onu kaydet.
       if (activeRef.current && activeRef.current.habitId !== habitId) {
         commit(activeRef.current);
         notifyDataChanged();
       }
+      celebratedRef.current = base >= target; // zaten tamamlanmışsa yeniden kutlama.
       const a: ActiveTimer = {
         habitId,
         date,
@@ -123,7 +150,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       };
       setActive(a);
       persist(a);
-      scheduleTimerDone(habit, target - base);
+      if (base < target) scheduleTimerDone(habit, target - base);
     },
     [commit, notifyDataChanged]
   );
