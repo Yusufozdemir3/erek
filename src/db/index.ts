@@ -8,14 +8,16 @@ import { taskRepo } from './repositories/taskRepo';
 import { subtaskRepo } from './repositories/subtaskRepo';
 import { habitRepo } from './repositories/habitRepo';
 import { goalRepo } from './repositories/goalRepo';
+import { goalMilestoneRepo } from './repositories/goalMilestoneRepo';
 
-export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo };
+export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo };
 export type {
   User,
   Task,
   Subtask,
   Habit,
   Goal,
+  GoalMilestone,
   HabitLog,
   Recurrence,
   Priority,

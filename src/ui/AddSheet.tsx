@@ -8,22 +8,19 @@
 // Mimari kural: SQL yok — yalnızca repo çağrıları.
 
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { goalRepo, habitRepo, subtaskRepo, taskRepo } from '@/db';
-import type { GoalType } from '@/db';
-import { toYmd } from '@/lib/helpers';
+import { goalMilestoneRepo, goalRepo, habitRepo, subtaskRepo, taskRepo } from '@/db';
 import { scheduleHabitReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
-import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
+import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { EntityIcon, type EntityType } from '@/ui/EntityIcon';
-import { shortDate, type Colors } from '@/ui/theme';
+import type { Colors } from '@/ui/theme';
 
 export type Step = 'menu' | 'task' | 'habit' | 'goal';
 
@@ -45,30 +42,14 @@ const MENU_OPTIONS: { step: Step; type: EntityType; titleKey: string; descKey: s
 
 export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { colors } = useTheme();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const { user, notifyDataChanged, selectedDate } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
-  const [title, setTitle] = useState('');
 
-  // Hedef formu alanları (goals.tsx'ten taşındı).
-  const [goalType, setGoalType] = useState<GoalType>('numeric');
-  const [target, setTarget] = useState('');
-  const [unit, setUnit] = useState('');
-  const [deadline, setDeadline] = useState<string | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
-
-  // Her açılışta istenen adıma (varsayılan menü) ve boş forma dön.
+  // Her açılışta istenen adıma (varsayılan menü) dön.
   useEffect(() => {
-    if (visible) {
-      setStep(initialStep);
-      setTitle('');
-      setGoalType('numeric');
-      setTarget('');
-      setUnit('');
-      setDeadline(null);
-      setShowPicker(false);
-    }
+    if (visible) setStep(initialStep);
   }, [visible, initialStep]);
 
   // Ekleme sonrası: menüyü kapat, listeleri tazele, ilgili sekmeye git.
@@ -113,27 +94,20 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     finish('/(tabs)/habits');
   };
 
-  const addGoal = () => {
-    const t = title.trim();
-    if (!t) return;
-    if (goalType === 'numeric') {
-      const targetNum = parseFloat(target.replace(',', '.'));
-      goalRepo.create({
-        user_id: user.id,
-        title: t,
-        goal_type: 'numeric',
-        target_value: Number.isFinite(targetNum) ? targetNum : null,
-        unit: unit.trim() || null,
-      });
-    } else {
-      goalRepo.create({ user_id: user.id, title: t, goal_type: 'deadline', deadline });
-    }
+  // Hedef, düzenleme paneliyle aynı GoalForm'la oluşturulur — tip (sayısal/parçalı)
+  // yalnızca burada seçilir, deadline zorunlu, taslak milestone'lar hedefle
+  // birlikte yazılır.
+  const addGoal = (values: GoalFormValues) => {
+    const created = goalRepo.create({
+      user_id: user.id,
+      title: values.title,
+      goal_type: values.goal_type,
+      target_value: values.target_value,
+      unit: values.unit,
+      deadline: values.deadline,
+    });
+    values.milestones?.forEach((m) => goalMilestoneRepo.create(created.id, m));
     finish('/(tabs)/goals');
-  };
-
-  const onPickDate = (_e: unknown, picked?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (picked) setDeadline(toYmd(picked));
   };
 
   return (
@@ -192,83 +166,14 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   onSubmit={addTask}
                 />
               ) : (
-                <>
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('goal.titlePlaceholder')}
-                    placeholderTextColor={colors.faint}
-                    value={title}
-                    onChangeText={setTitle}
-                    autoFocus
-                    returnKeyType="done"
-                    maxLength={TITLE_MAX_LEN}
-                  />
-                  <Text style={styles.counter}>
-                    {title.length}/{TITLE_MAX_LEN}
-                  </Text>
-
-                  {step === 'goal' && (
-                    <>
-                      <View style={styles.typeRow}>
-                        {(['numeric', 'deadline'] as GoalType[]).map((g) => {
-                          const selected = g === goalType;
-                          return (
-                            <Pressable
-                              key={g}
-                              style={[styles.typeChip, selected && styles.typeChipOn]}
-                              onPress={() => setGoalType(g)}
-                            >
-                              <Text style={[styles.typeChipText, selected && styles.typeChipTextOn]}>
-                                {g === 'numeric' ? t('goal.numeric') : t('goal.deadline')}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-
-                      {goalType === 'numeric' ? (
-                        <View style={styles.inlineRow}>
-                          <TextInput
-                            style={[styles.input, { flex: 1 }]}
-                            placeholder={t('goal.targetPlaceholder')}
-                            placeholderTextColor={colors.faint}
-                            keyboardType="numeric"
-                            value={target}
-                            onChangeText={setTarget}
-                            maxLength={NUMBER_MAX_LEN}
-                          />
-                          <TextInput
-                            style={[styles.input, { flex: 1 }]}
-                            placeholder={t('goal.unitPlaceholder')}
-                            placeholderTextColor={colors.faint}
-                            value={unit}
-                            onChangeText={setUnit}
-                            maxLength={UNIT_MAX_LEN}
-                          />
-                        </View>
-                      ) : (
-                        <Pressable style={styles.input} onPress={() => setShowPicker(true)}>
-                          <Text style={{ color: deadline ? colors.text : colors.faint, fontSize: 15 }}>
-                            {deadline ? shortDate(deadline, lang) : t('goal.pickDeadline')}
-                          </Text>
-                        </Pressable>
-                      )}
-
-                      {showPicker && (
-                        <DateTimePicker
-                          value={deadline ? new Date(`${deadline}T00:00:00`) : new Date()}
-                          mode="date"
-                          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                          onChange={onPickDate}
-                        />
-                      )}
-                    </>
-                  )}
-
-                  <Pressable style={styles.addBtn} onPress={addGoal}>
-                    <Text style={styles.addBtnText}>{t('common.add')}</Text>
-                  </Pressable>
-                </>
+                // Hedef: düzenleme paneliyle aynı GoalForm — tip (sayısal/parçalı)
+                // yalnızca oluştururken seçilir.
+                <GoalForm
+                  submitLabel={t('common.add')}
+                  autoFocusTitle
+                  enableMilestoneDraft
+                  onSubmit={addGoal}
+                />
               )}
             </>
           )}
@@ -308,45 +213,4 @@ const makeStyles = (c: Colors) =>
     formHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     backText: { fontSize: 15, fontWeight: '700', color: c.primary, marginBottom: 16 },
     headSpacer: { width: 44 },
-
-    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
-    input: {
-      backgroundColor: c.inputBg,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.border,
-      marginBottom: 12,
-    },
-    typeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-    typeChip: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: 10,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    typeChipOn: { backgroundColor: c.primary, borderColor: c.primary },
-    typeChipText: { fontSize: 14, fontWeight: '600', color: c.muted },
-    typeChipTextOn: { color: c.onAccent },
-    inlineRow: { flexDirection: 'row', gap: 8 },
-
-    addBtn: {
-      backgroundColor: c.primary,
-      borderRadius: 14,
-      alignItems: 'center',
-      paddingVertical: 15,
-      marginTop: 4,
-      shadowColor: c.primary,
-      shadowOpacity: 0.35,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 4,
-    },
-    addBtnText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
   });

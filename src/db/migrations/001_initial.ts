@@ -162,6 +162,33 @@ ALTER TABLE habits ADD COLUMN goal_contribution TEXT;
 ALTER TABLE habits ADD COLUMN goal_factor REAL NOT NULL DEFAULT 1;
 `;
 
+// Migration 011: hedefler yeniden şekillendi. 'deadline' tipi ayrı bir tip olmaktan
+// çıkar — ARTIK HER hedefin (numeric dahil) bir deadline'ı olabilir (deadline
+// kolonu zaten vardı, yalnızca tek tipe özel kullanılıyordu). goal_type'ın ikinci
+// değeri 'milestone' olur (görev/alt görev mantığının aynısı: parçalara/adımlara
+// bölünebilen hedef). Mevcut 'deadline' tipi kayıtlar 'milestone'a çevrilir —
+// deadline değerleri zaten dolu olduğundan veri kaybı yok.
+// completed_at: yalnızca 'milestone' hedeflerde elle/otomatik (tüm adımlar
+// tamamlanınca) işaretlenir. 'numeric' hedef tamamlanmayı current_value >=
+// target_value'dan türetmeye devam eder (dokunulmadı, completed_at hep NULL kalır).
+// goal_milestones: subtasks ile birebir aynı desen (başlık+tamamlandı+sıra).
+export const migration011 = `
+ALTER TABLE goals ADD COLUMN completed_at TEXT;
+UPDATE goals SET goal_type = 'milestone' WHERE goal_type = 'deadline';
+CREATE TABLE IF NOT EXISTS goal_milestones (
+  id         TEXT PRIMARY KEY NOT NULL,
+  goal_id    TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  completed  INTEGER NOT NULL DEFAULT 0,
+  position   INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  synced     INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (goal_id) REFERENCES goals(id)
+);
+CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal ON goal_milestones(goal_id);
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -174,4 +201,5 @@ export const migrations = [
   { version: 8, sql: migration008 },
   { version: 9, sql: migration009 },
   { version: 10, sql: migration010 },
+  { version: 11, sql: migration011 },
 ];

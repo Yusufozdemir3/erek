@@ -1,5 +1,6 @@
 // Hedef (Goal) repository.
-// İki tip: 'numeric' (50/100 km gibi ilerleme) ve 'deadline' (tarihe kadar yapılacak).
+// İki tip: 'numeric' (50/100 km gibi ilerleme) ve 'milestone' (adımlara bölünebilir,
+// görev/alt görev mantığıyla aynı). Her iki tipte de artık bir deadline olabilir.
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -15,6 +16,7 @@ function rowToGoal(row: any): Goal {
     current_value: row.current_value,
     unit: row.unit,
     deadline: row.deadline,
+    completed_at: row.completed_at,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -100,9 +102,9 @@ export const goalRepo = {
   },
 
   // Sayısal hedefte ilerlemeyi artırır (örn. +5 km). Hedefi aşmaz.
-  // Yalnızca 'numeric' hedeflerde anlamlı: deadline hedefte current_value
+  // Yalnızca 'numeric' hedeflerde anlamlı: 'milestone' hedefte current_value
   // kullanılmadığından sessizce yok sayılır (bağlı alışkanlık geçişi de buraya
-  // düşer; deadline hedefe bağlansa bile sayaç bozulmaz).
+  // düşer; milestone hedefe bağlansa bile sayaç bozulmaz).
   addProgress(id: string, amount: number): void {
     const db = getDb();
     const goal = this.getById(id);
@@ -124,6 +126,26 @@ export const goalRepo = {
       return Math.min(1, goal.current_value / goal.target_value);
     }
     return 0;
+  },
+
+  // Bir hedefin tamamlanmış sayılıp sayılmadığı — TİPE göre farklı kaynaktan:
+  // 'numeric' oran/hedeften türer (ayrı bir bayrak tutulmaz); 'milestone' elle
+  // ya da tüm adımlar tamamlanınca otomatik işaretlenen completed_at'ten okunur.
+  isCompleted(goal: Goal): boolean {
+    return goal.goal_type === 'numeric' ? this.progressRatio(goal) >= 1 : goal.completed_at != null;
+  },
+
+  // Yalnızca 'milestone' hedeflerde anlamlı (elle işaretleme ya da tüm adımlar
+  // tamamlanınca otomatik çağrılır — bkz. GoalEditModal). 'numeric' hedefte
+  // sessizce yok sayılır: tamamlanma zaten current_value>=target_value'dan gelir.
+  setCompleted(id: string, completed: boolean): void {
+    const db = getDb();
+    const goal = this.getById(id);
+    if (!goal || goal.goal_type !== 'milestone') return;
+    db.runSync(
+      `UPDATE goals SET completed_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+      [completed ? nowIso() : null, nowIso(), id]
+    );
   },
 
   softDelete(id: string): void {

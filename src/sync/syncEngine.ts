@@ -35,8 +35,13 @@ interface TableCfg {
 const TABLES: TableCfg[] = [
   {
     table: 'goals',
-    cols: ['id', 'user_id', 'title', 'goal_type', 'target_value', 'current_value', 'unit', 'deadline', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'title', 'goal_type', 'target_value', 'current_value', 'unit', 'deadline', 'completed_at', 'updated_at', 'deleted_at'],
     hasUserId: true,
+  },
+  {
+    table: 'goal_milestones',
+    cols: ['id', 'goal_id', 'title', 'completed', 'position', 'updated_at', 'deleted_at'],
+    hasUserId: false, // sahiplik ebeveyn hedef üzerinden (RLS de öyle)
   },
   {
     table: 'habits',

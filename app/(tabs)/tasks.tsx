@@ -18,6 +18,7 @@ import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { ProfileButton } from '@/ui/ProfileButton';
+import { SwipeableRow } from '@/ui/SwipeableRow';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -33,6 +34,8 @@ export default function TasksScreen() {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // Aynı anda yalnızca bir kartın swipe aksiyonları açık kalsın.
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
   // Görev kartındaki "1/3 alt görev" rozeti; yalnızca alt görevi olanlar girer.
   const [subtaskCounts, setSubtaskCounts] = useState<
     Record<string, { done: number; total: number }>
@@ -70,6 +73,12 @@ export default function TasksScreen() {
     reload();
   };
 
+  const removeTask = (t: Task) => {
+    taskRepo.softDelete(t.id);
+    cancelTaskReminder(t.id);
+    reload();
+  };
+
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
@@ -93,46 +102,61 @@ export default function TasksScreen() {
               <Animated.View
                 key={t.id}
                 layout={LinearTransition.duration(260)}
-                style={[shared.card, i === 0 && { marginTop: 20 }]}
+                style={[styles.rowSpacing, i === 0 && { marginTop: 20 }]}
               >
-                {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
-                <Pressable
-                  onPress={() => toggleTask(t)}
-                  hitSlop={8}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: done }}
-                  accessibilityLabel={t.title}
+                <SwipeableRow
+                  isOpen={openRowId === t.id}
+                  onOpenChange={(open) => setOpenRowId(open ? t.id : null)}
+                  onEdit={() => setEditingTask(t)}
+                  onDelete={() => removeTask(t)}
+                  editA11yLabel={tr('common.editA11y', { title: t.title })}
+                  deleteA11yLabel={tr('common.deleteA11y', { title: t.title })}
                 >
-                  <View
-                    style={[
-                      shared.checkbox,
-                      done ? shared.checkboxDone : { borderColor: PRIORITY_COLOR[t.priority] },
-                    ]}
-                  >
-                    {done && <Text style={shared.checkmark}>✓</Text>}
+                  {/* marginBottom kaldırıldı (0) — shared.card'daki alt boşluk
+                      artık dış sarmalayıcıda (rowSpacing); yoksa kartın kendi
+                      boyanmamış marj payını aksiyon paneli renkle doldurup
+                      kartın hemen altında ince bir şerit olarak sızdırıyordu. */}
+                  <View style={[shared.card, styles.noMargin]}>
+                    {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
+                    <Pressable
+                      onPress={() => toggleTask(t)}
+                      hitSlop={8}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: done }}
+                      accessibilityLabel={t.title}
+                    >
+                      <View
+                        style={[
+                          shared.checkbox,
+                          done ? shared.checkboxDone : { borderColor: PRIORITY_COLOR[t.priority] },
+                        ]}
+                      >
+                        {done && <Text style={shared.checkmark}>✓</Text>}
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={shared.cardBody}
+                      onPress={() => setEditingTask(t)}
+                      accessibilityRole="button"
+                      accessibilityLabel={tr('common.editA11y', { title: t.title })}
+                    >
+                      <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
+                      {((t.due_date && !done) || subtaskCounts[t.id]) && (
+                        <Text style={styles.due}>
+                          {[
+                            t.due_date && !done ? shortDate(t.due_date, lang) : null,
+                            subtaskCounts[t.id]
+                              ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix')}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join('  ·  ')}
+                        </Text>
+                      )}
+                    </Pressable>
+                    {!done && <PriorityMark priority={t.priority} />}
                   </View>
-                </Pressable>
-                <Pressable
-                  style={shared.cardBody}
-                  onPress={() => setEditingTask(t)}
-                  accessibilityRole="button"
-                  accessibilityLabel={tr('common.editA11y', { title: t.title })}
-                >
-                  <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                  {((t.due_date && !done) || subtaskCounts[t.id]) && (
-                    <Text style={styles.due}>
-                      {[
-                        t.due_date && !done ? shortDate(t.due_date, lang) : null,
-                        subtaskCounts[t.id]
-                          ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix')}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join('  ·  ')}
-                    </Text>
-                  )}
-                </Pressable>
-                {!done && <PriorityMark priority={t.priority} />}
+                </SwipeableRow>
               </Animated.View>
             );
           })
@@ -147,4 +171,6 @@ export default function TasksScreen() {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     due: { fontSize: 12, color: c.muted, marginTop: 3 },
+    rowSpacing: { marginBottom: 8 },
+    noMargin: { marginBottom: 0 },
   });

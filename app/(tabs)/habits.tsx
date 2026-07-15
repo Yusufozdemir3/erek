@@ -11,6 +11,7 @@ import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
+import { cancelHabitReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
 import { EmptyState } from '@/ui/EmptyState';
@@ -19,6 +20,7 @@ import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { ProfileButton } from '@/ui/ProfileButton';
+import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { type Colors } from '@/ui/theme';
@@ -29,6 +31,8 @@ export default function HabitsScreen() {
   const styles = makeStyles(colors);
   const { user } = useAppData();
   const [editing, setEditing] = useState<Habit | null>(null); // null = panel kapalı
+  // Aynı anda yalnızca bir kartın swipe aksiyonları açık kalsın.
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   const { today, habits, reload } = useHabitsData(user.id);
 
@@ -54,6 +58,12 @@ export default function HabitsScreen() {
     setEditing(habitRepo.getById(h.id));
   };
 
+  const removeHabit = (h: HabitListItem) => {
+    habitRepo.softDelete(h.id);
+    cancelHabitReminder(h.id);
+    reload();
+  };
+
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
@@ -71,7 +81,17 @@ export default function HabitsScreen() {
           />
         ) : (
           habits.map((h, i) => (
-            <View key={h.id} style={[shared.card, styles.habitCard, i === 0 && { marginTop: 20 }]}>
+            <View key={h.id} style={[styles.rowSpacing, i === 0 && { marginTop: 20 }]}>
+            <SwipeableRow
+              isOpen={openRowId === h.id}
+              onOpenChange={(open) => setOpenRowId(open ? h.id : null)}
+              onEdit={() => openEdit(h)}
+              onDelete={() => removeHabit(h)}
+              editA11yLabel={t('common.editA11y', { title: h.title })}
+              deleteA11yLabel={t('common.deleteA11y', { title: h.title })}
+            >
+            {/* marginBottom kaldırıldı (0) — bkz. tasks.tsx'teki aynı düzeltme yorumu. */}
+            <View style={[shared.card, styles.habitCard, styles.noMargin]}>
               <View style={styles.habitTop}>
                 {/* Nicel alışkanlıkta daire yalnızca durum gösterir (dokunmaz);
                     ikili alışkanlıkta daireye dokununca bugünü işaretler. */}
@@ -149,6 +169,8 @@ export default function HabitsScreen() {
                 ))}
               </Pressable>
             </View>
+            </SwipeableRow>
+            </View>
           ))
         )}
       </ScrollView>
@@ -165,6 +187,8 @@ export default function HabitsScreen() {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     habitCard: { flexDirection: 'column', alignItems: 'stretch' },
+    rowSpacing: { marginBottom: 8 },
+    noMargin: { marginBottom: 0 },
     habitTop: { flexDirection: 'row', alignItems: 'center' },
     titleArea: { flex: 1 },
     remind: { fontSize: 12, color: c.muted, marginTop: 2 },

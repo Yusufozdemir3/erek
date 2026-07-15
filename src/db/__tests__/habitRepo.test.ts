@@ -529,11 +529,11 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
     expect(currentValue(goal.id)).toBe(1);
   });
 
-  it('deadline hedefe bağlı olsa bile sayaç bozulmaz (numeric guard)', () => {
+  it('parçalı (milestone) hedefe bağlı olsa bile sayaç bozulmaz (numeric guard)', () => {
     const goal = goalRepo.create({
       user_id: userId,
       title: 'Sınav',
-      goal_type: 'deadline',
+      goal_type: 'milestone',
       deadline: '2026-08-01',
     });
     const habit = createHabit({ goal_id: goal.id });

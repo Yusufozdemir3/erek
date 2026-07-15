@@ -11,14 +11,16 @@ create table if not exists public.goals (
   id            uuid primary key,
   user_id       uuid not null,
   title         text not null,
-  goal_type     text not null,
+  goal_type     text not null,             -- 'numeric' | 'milestone'
   target_value  double precision,
   current_value double precision not null default 0,
   unit          text,
   deadline      text,
+  completed_at  text,                      -- yalnız 'milestone' hedeflerde anlamlı
   updated_at    timestamptz not null,
   deleted_at    timestamptz
 );
+alter table public.goals add column if not exists completed_at text;
 
 create table if not exists public.habits (
   id         uuid primary key,
@@ -84,6 +86,16 @@ create table if not exists public.subtasks (
   deleted_at timestamptz
 );
 
+create table if not exists public.goal_milestones (
+  id         uuid primary key,
+  goal_id    uuid not null,
+  title      text not null,
+  completed  integer not null default 0,
+  position   integer not null default 0,
+  updated_at timestamptz not null,
+  deleted_at timestamptz
+);
+
 alter table public.habit_logs add column if not exists amount double precision not null default 0;
 
 -- Senkron pull'u updated_at'e göre filtreler; indeksle.
@@ -92,6 +104,7 @@ create index if not exists idx_habits_updated on public.habits(updated_at);
 create index if not exists idx_tasks_updated  on public.tasks(updated_at);
 create index if not exists idx_logs_updated   on public.habit_logs(updated_at);
 create index if not exists idx_subtasks_updated on public.subtasks(updated_at);
+create index if not exists idx_goal_milestones_updated on public.goal_milestones(updated_at);
 
 -- ROW LEVEL SECURITY -------------------------------------------------------
 alter table public.goals      enable row level security;
@@ -99,6 +112,7 @@ alter table public.habits     enable row level security;
 alter table public.tasks      enable row level security;
 alter table public.habit_logs enable row level security;
 alter table public.subtasks   enable row level security;
+alter table public.goal_milestones enable row level security;
 
 -- Policy'ler idempotent: önce varsa düşür, sonra yeniden kur. Böylece bu dosya
 -- güvenle yeniden çalıştırılabilir ("already exists" hatası vermez, yarım kalmaz).
@@ -142,6 +156,19 @@ create policy "own subtasks" on public.subtasks
     where t.id = subtasks.task_id and t.user_id = auth.uid()
   ));
 
+-- goal_milestones'ın da user_id'si yok; sahiplik bağlı olduğu hedef üzerinden.
+drop policy if exists "own goal_milestones" on public.goal_milestones;
+create policy "own goal_milestones" on public.goal_milestones
+  for all
+  using (exists (
+    select 1 from public.goals g
+    where g.id = goal_milestones.goal_id and g.user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from public.goals g
+    where g.id = goal_milestones.goal_id and g.user_id = auth.uid()
+  ));
+
 -- HESAP SİLME ---------------------------------------------------------------
 -- Uygulama içi "Hesabı sil" (Google Play hesap-silme zorunluluğu). İstemci
 -- kendi auth kullanıcısını doğrudan silemez (admin API service_role ister ve
@@ -164,6 +191,7 @@ begin
   -- Çocuk tablolar önce (bulut şemasında FK kısıtı yok ama sıra temiz olsun).
   delete from public.habit_logs where habit_id in (select id from public.habits where user_id = uid);
   delete from public.subtasks   where task_id  in (select id from public.tasks  where user_id = uid);
+  delete from public.goal_milestones where goal_id in (select id from public.goals where user_id = uid);
   delete from public.tasks  where user_id = uid;
   delete from public.habits where user_id = uid;
   delete from public.goals  where user_id = uid;

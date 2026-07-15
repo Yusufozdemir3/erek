@@ -1,6 +1,6 @@
 // goalRepo testleri: CRUD, sayısal ilerleme (addProgress) kırpması,
-// update'teki current_value clamp'i, progressRatio ve deadline hedeflerde
-// sayaç mantığının sessizce yok sayılması.
+// update'teki current_value clamp'i, progressRatio, parçalı (milestone)
+// hedeflerde sayaç mantığının sessizce yok sayılması ve isCompleted/setCompleted.
 
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
@@ -24,11 +24,11 @@ function numericGoal(extra: Partial<Parameters<typeof goalRepo.create>[0]> = {})
   });
 }
 
-function deadlineGoal(extra: Partial<Parameters<typeof goalRepo.create>[0]> = {}) {
+function milestoneGoal(extra: Partial<Parameters<typeof goalRepo.create>[0]> = {}) {
   return goalRepo.create({
     user_id: userId,
     title: 'Tez bitir',
-    goal_type: 'deadline',
+    goal_type: 'milestone',
     deadline: '2026-09-01',
     ...extra,
   });
@@ -47,13 +47,14 @@ describe('create / getById', () => {
     expect(fromDb!.synced).toBe(0);
   });
 
-  it('tarihli hedefi oluşturur (target_value/unit null, deadline dolu)', () => {
-    const goal = deadlineGoal();
+  it('parçalı (milestone) hedefi oluşturur (target_value/unit null, deadline dolu)', () => {
+    const goal = milestoneGoal();
     const fromDb = goalRepo.getById(goal.id)!;
-    expect(fromDb.goal_type).toBe('deadline');
+    expect(fromDb.goal_type).toBe('milestone');
     expect(fromDb.deadline).toBe('2026-09-01');
     expect(fromDb.target_value).toBeNull();
     expect(fromDb.unit).toBeNull();
+    expect(fromDb.completed_at).toBeNull();
   });
 
   it('silinmiş hedef getById ile gelmez', () => {
@@ -66,7 +67,7 @@ describe('create / getById', () => {
 describe('listByUser', () => {
   it('yalnızca kullanıcının silinmemiş hedeflerini döner', () => {
     const a = numericGoal({ title: 'A' });
-    const b = deadlineGoal({ title: 'B' });
+    const b = milestoneGoal({ title: 'B' });
     const c = numericGoal({ title: 'C' });
     goalRepo.softDelete(b.id);
 
@@ -146,8 +147,8 @@ describe('addProgress', () => {
     expect(goalRepo.getById(goal.id)!.current_value).toBe(9999);
   });
 
-  it('tarihli (deadline) hedefte sessizce yok sayılır (sayaç bozulmaz)', () => {
-    const goal = deadlineGoal();
+  it('parçalı (milestone) hedefte sessizce yok sayılır (sayaç bozulmaz)', () => {
+    const goal = milestoneGoal();
     goalRepo.addProgress(goal.id, 10);
     expect(goalRepo.getById(goal.id)!.current_value).toBe(0);
   });
@@ -170,10 +171,36 @@ describe('progressRatio', () => {
     expect(goalRepo.progressRatio(goalRepo.getById(goal.id)!)).toBe(1);
   });
 
-  it('tarihli hedefte ya da hedef değeri yoksa 0 döner', () => {
-    expect(goalRepo.progressRatio(deadlineGoal())).toBe(0);
+  it('parçalı hedefte ya da hedef değeri yoksa 0 döner', () => {
+    expect(goalRepo.progressRatio(milestoneGoal())).toBe(0);
     expect(goalRepo.progressRatio(numericGoal({ target_value: null }))).toBe(0);
     expect(goalRepo.progressRatio(numericGoal({ target_value: 0 }))).toBe(0);
+  });
+});
+
+describe('isCompleted / setCompleted', () => {
+  it('sayısal hedefte oran 1\'e ulaşınca tamamlanmış sayılır (bayrak yok)', () => {
+    const goal = numericGoal({ target_value: 100 });
+    expect(goalRepo.isCompleted(goalRepo.getById(goal.id)!)).toBe(false);
+    goalRepo.addProgress(goal.id, 100);
+    expect(goalRepo.isCompleted(goalRepo.getById(goal.id)!)).toBe(true);
+  });
+
+  it('parçalı hedefte tamamlanma yalnızca completed_at bayrağından gelir', () => {
+    const goal = milestoneGoal();
+    expect(goalRepo.isCompleted(goal)).toBe(false);
+    goalRepo.setCompleted(goal.id, true);
+    const done = goalRepo.getById(goal.id)!;
+    expect(done.completed_at).not.toBeNull();
+    expect(goalRepo.isCompleted(done)).toBe(true);
+    goalRepo.setCompleted(goal.id, false);
+    expect(goalRepo.getById(goal.id)!.completed_at).toBeNull();
+  });
+
+  it('sayısal hedefte setCompleted sessizce yok sayılır', () => {
+    const goal = numericGoal();
+    goalRepo.setCompleted(goal.id, true);
+    expect(goalRepo.getById(goal.id)!.completed_at).toBeNull();
   });
 });
 

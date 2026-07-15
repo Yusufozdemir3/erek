@@ -3,7 +3,11 @@
 // Senkron için ortak alanlar: updated_at (son yazan kazanır), deleted_at (soft delete).
 
 export type Priority = 'low' | 'medium' | 'high';
-export type GoalType = 'numeric' | 'deadline';
+// 'numeric': ilerleme çubuğu (current/target). 'milestone': görev/alt görev
+// mantığıyla aynı — adımlara bölünebilir (goal_milestones), elle/otomatik
+// tamamlanır. Her iki tipte de artık bir deadline olabilir (eskiden yalnızca
+// ayrı bir 'deadline' tipi vardı — bkz. migration011).
+export type GoalType = 'numeric' | 'milestone';
 // Alışkanlık takip tipi. 'binary' = yaptım/yapmadım; 'numeric' = miktar hedefi;
 // 'timer' = geri sayım (target_amount hedef saniye, amount biriken saniye).
 export type HabitKind = 'binary' | 'numeric' | 'timer';
@@ -48,7 +52,20 @@ export interface Goal extends SyncFields {
   target_value: number | null;   // numeric için: hedef (örn. 100 km)
   current_value: number;         // numeric için: mevcut (örn. 40 km)
   unit: string | null;           // "km", "kitap", "saat"
-  deadline: string | null;       // deadline tipi için bitiş tarihi
+  deadline: string | null;       // "YYYY-MM-DD"; artık her iki tipte de kullanılabilir
+  // Yalnızca 'milestone' hedeflerde elle/otomatik (tüm adımlar tamamlanınca)
+  // yazılır. 'numeric' hedefte hep NULL — tamamlanma current_value>=target_value'dan
+  // türetilir (bkz. goalRepo.isCompleted).
+  completed_at: string | null;
+}
+
+// Bir hedefin adımı/parçası (goal_type='milestone' için basit checklist maddesi).
+// Subtask ile birebir aynı desen: kendi tarihi/önceliği yok, yalnızca başlık + durum.
+export interface GoalMilestone extends SyncFields {
+  goal_id: string;
+  title: string;
+  completed: 0 | 1;
+  position: number; // oluşturma sırası; liste bu sırayla gösterilir
 }
 
 // Bağlı hedefe katkı biçimi: 'per_completion' (tamamlanan gün başına +1, binary'de
