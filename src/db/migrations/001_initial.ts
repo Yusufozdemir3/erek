@@ -189,6 +189,25 @@ CREATE TABLE IF NOT EXISTS goal_milestones (
 CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal ON goal_milestones(goal_id);
 `;
 
+// Migration 012: hedef girdi geçmişi. Hedefin 'Genel' sekmesinde kullanıcı serbest
+// bir miktar yazıp "Ekle"ye bastığında current_value zaten güncellenir (goalRepo.
+// addProgress); bu tablo YALNIZCA "ne zaman ne kadar eklendi" günlüğünü tutar ki
+// kullanıcı geçmişini görebilsin — current_value ASLA bu tablodan türetilmez (tek
+// doğru kaynak goals.current_value'dur). goal_milestones ile birebir aynı desen
+// (updated_at hem oluşturma hem silinme damgası, deleted_at + synced).
+export const migration012 = `
+CREATE TABLE IF NOT EXISTS goal_entries (
+  id         TEXT PRIMARY KEY NOT NULL,
+  goal_id    TEXT NOT NULL,
+  amount     REAL NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  synced     INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (goal_id) REFERENCES goals(id)
+);
+CREATE INDEX IF NOT EXISTS idx_goal_entries_goal ON goal_entries(goal_id);
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -202,4 +221,5 @@ export const migrations = [
   { version: 9, sql: migration009 },
   { version: 10, sql: migration010 },
   { version: 11, sql: migration011 },
+  { version: 12, sql: migration012 },
 ];

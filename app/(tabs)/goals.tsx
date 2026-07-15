@@ -140,7 +140,12 @@ export default function GoalsScreen() {
                     {counts.done}/{counts.total} {t('goal.milestoneCountSuffix')}
                   </Text>
                 )}
-                {!!dLabel && <Text style={styles.deadlineLeft}>{dLabel}</Text>}
+                {/* Son tarih artık kartın sağ alt köşesinde küçük bir rozet gibi. */}
+                {!!dLabel && (
+                  <View style={styles.deadlineRow}>
+                    <Text style={styles.deadlineLeft}>{dLabel}</Text>
+                  </View>
+                )}
               </View>
               </SwipeableRow>
               </View>
@@ -159,7 +164,7 @@ const makeStyles = (c: Colors) =>
       borderRadius: 14,
       borderWidth: 1,
       borderColor: c.border,
-      padding: 16,
+      padding: 13,
       marginBottom: 10, // noMargin ile ezilir (bkz. rowSpacing); dış sarmalayıcıya taşındı
     },
     goalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
@@ -181,14 +186,16 @@ const makeStyles = (c: Colors) =>
     noMargin: { marginBottom: 0 },
 
     progressTrack: {
-      height: 10,
+      height: 9,
       borderRadius: 5,
       backgroundColor: c.track,
-      marginTop: 14,
+      marginTop: 10,
       overflow: 'hidden',
     },
     progressFill: { height: '100%', borderRadius: 5, backgroundColor: c.primary },
     goalMeta: { fontSize: 14, color: c.muted, fontWeight: '600' },
-    standaloneMeta: { marginTop: 12 },
-    deadlineLeft: { fontSize: 12, color: c.streak, fontWeight: '700', marginTop: 8 },
+    standaloneMeta: { marginTop: 8 },
+    // Son tarih — sağ alt köşede küçük bir rozet.
+    deadlineRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
+    deadlineLeft: { fontSize: 11, color: c.streak, fontWeight: '700' },
   });

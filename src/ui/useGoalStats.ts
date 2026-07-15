@@ -12,8 +12,8 @@
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { goalMilestoneRepo, goalRepo, habitRepo } from '@/db';
-import type { Goal, GoalMilestone } from '@/db';
+import { goalEntryRepo, goalMilestoneRepo, goalRepo, habitRepo } from '@/db';
+import type { Goal, GoalEntry, GoalMilestone } from '@/db';
 import { todayDate } from '@/lib/helpers';
 
 export interface LinkedHabit {
@@ -47,6 +47,9 @@ export interface GoalStats {
   milestoneWeeklyPace: number | null; // haftada tamamlanması gereken adım sayısı
   // Bu hedefe bağlı (goal_id ile işaretlenmiş) alışkanlıklar — bkz. HabitForm.linkGoal.
   linkedHabits: LinkedHabit[];
+  // "Genel" sekmesindeki serbest miktar girişlerinin geçmişi (en yeniden en
+  // eskiye) — yalnızca bir günlük, current_value'nun kaynağı DEĞİL.
+  entries: GoalEntry[];
   reload: () => void;
 }
 
@@ -68,6 +71,7 @@ const EMPTY_BASE = {
   milestonePaceDays: null,
   milestoneWeeklyPace: null,
   linkedHabits: [] as LinkedHabit[],
+  entries: [] as GoalEntry[],
 };
 
 export function useGoalStats(goalId: string): GoalStats {
@@ -127,6 +131,8 @@ export function useGoalStats(goalId: string): GoalStats {
       .filter((h) => h.goal_id === goal.id)
       .map((h) => ({ id: h.id, title: h.title, icon: h.icon, color: h.color }));
 
+    const entries = goalEntryRepo.listByGoal(goal.id);
+
     setStats({
       goal,
       ratio,
@@ -145,6 +151,7 @@ export function useGoalStats(goalId: string): GoalStats {
       milestonePaceDays,
       milestoneWeeklyPace,
       linkedHabits,
+      entries,
     });
   }, [goalId]);
 

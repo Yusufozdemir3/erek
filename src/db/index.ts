@@ -9,8 +9,9 @@ import { subtaskRepo } from './repositories/subtaskRepo';
 import { habitRepo } from './repositories/habitRepo';
 import { goalRepo } from './repositories/goalRepo';
 import { goalMilestoneRepo } from './repositories/goalMilestoneRepo';
+import { goalEntryRepo } from './repositories/goalEntryRepo';
 
-export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo };
+export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo };
 export type {
   User,
   Task,
@@ -18,6 +19,7 @@ export type {
   Habit,
   Goal,
   GoalMilestone,
+  GoalEntry,
   HabitLog,
   Recurrence,
   Priority,

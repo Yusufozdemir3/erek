@@ -96,6 +96,17 @@ create table if not exists public.goal_milestones (
   deleted_at timestamptz
 );
 
+-- Hedefin 'Genel' sekmesinde serbest miktar girişiyle ("Ekle") eklenen kayıtların
+-- günlüğü. Yalnızca görüntüleme içindir — goals.current_value tek doğru kaynak
+-- olmaya devam eder, bu tablodan TÜRETİLMEZ.
+create table if not exists public.goal_entries (
+  id         uuid primary key,
+  goal_id    uuid not null,
+  amount     double precision not null,
+  updated_at timestamptz not null,
+  deleted_at timestamptz
+);
+
 alter table public.habit_logs add column if not exists amount double precision not null default 0;
 
 -- Senkron pull'u updated_at'e göre filtreler; indeksle.
@@ -105,6 +116,7 @@ create index if not exists idx_tasks_updated  on public.tasks(updated_at);
 create index if not exists idx_logs_updated   on public.habit_logs(updated_at);
 create index if not exists idx_subtasks_updated on public.subtasks(updated_at);
 create index if not exists idx_goal_milestones_updated on public.goal_milestones(updated_at);
+create index if not exists idx_goal_entries_updated on public.goal_entries(updated_at);
 
 -- ROW LEVEL SECURITY -------------------------------------------------------
 alter table public.goals      enable row level security;
@@ -113,6 +125,7 @@ alter table public.tasks      enable row level security;
 alter table public.habit_logs enable row level security;
 alter table public.subtasks   enable row level security;
 alter table public.goal_milestones enable row level security;
+alter table public.goal_entries enable row level security;
 
 -- Policy'ler idempotent: önce varsa düşür, sonra yeniden kur. Böylece bu dosya
 -- güvenle yeniden çalıştırılabilir ("already exists" hatası vermez, yarım kalmaz).
@@ -169,6 +182,19 @@ create policy "own goal_milestones" on public.goal_milestones
     where g.id = goal_milestones.goal_id and g.user_id = auth.uid()
   ));
 
+-- goal_entries'ın da user_id'si yok; sahiplik bağlı olduğu hedef üzerinden.
+drop policy if exists "own goal_entries" on public.goal_entries;
+create policy "own goal_entries" on public.goal_entries
+  for all
+  using (exists (
+    select 1 from public.goals g
+    where g.id = goal_entries.goal_id and g.user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from public.goals g
+    where g.id = goal_entries.goal_id and g.user_id = auth.uid()
+  ));
+
 -- HESAP SİLME ---------------------------------------------------------------
 -- Uygulama içi "Hesabı sil" (Google Play hesap-silme zorunluluğu). İstemci
 -- kendi auth kullanıcısını doğrudan silemez (admin API service_role ister ve
@@ -192,6 +218,7 @@ begin
   delete from public.habit_logs where habit_id in (select id from public.habits where user_id = uid);
   delete from public.subtasks   where task_id  in (select id from public.tasks  where user_id = uid);
   delete from public.goal_milestones where goal_id in (select id from public.goals where user_id = uid);
+  delete from public.goal_entries    where goal_id in (select id from public.goals where user_id = uid);
   delete from public.tasks  where user_id = uid;
   delete from public.habits where user_id = uid;
   delete from public.goals  where user_id = uid;

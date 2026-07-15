@@ -68,6 +68,16 @@ export interface GoalMilestone extends SyncFields {
   position: number; // oluşturma sırası; liste bu sırayla gösterilir
 }
 
+// Hedefin 'Genel' sekmesinde serbest miktar girişiyle ("Ekle") eklenen bir kayıt.
+// Yalnızca bir GÜNLÜKTÜR (audit log) — goal.current_value zaten tek doğru kaynak,
+// bu tablodan TÜRETİLMEZ; yalnızca "ne zaman ne kadar eklendi" geçmişini tutar,
+// kullanıcı Genel sekmesinde görebilsin diye. updated_at hem oluşturma hem (varsa)
+// silinme zaman damgasıdır — SyncFields'daki diğer tüm tablolarla aynı desen.
+export interface GoalEntry extends SyncFields {
+  goal_id: string;
+  amount: number; // pozitif ya da negatif (düzeltme) olabilir
+}
+
 // Bağlı hedefe katkı biçimi: 'per_completion' (tamamlanan gün başına +1, binary'de
 // tek anlamlı seçenek) | 'amount' (o gün yapılan miktar × goal_factor hedefe eklenir,
 // yalnız numeric/timer'da anlamlı). NULL = 'per_completion' (geriye dönük varsayılan).

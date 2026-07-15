@@ -17,7 +17,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { goalMilestoneRepo, goalRepo } from '@/db';
+import { goalEntryRepo, goalMilestoneRepo, goalRepo } from '@/db';
 import type { GoalMilestone } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { TITLE_MAX_LEN } from '@/ui/formLimits';
@@ -25,7 +25,7 @@ import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { useGoalStats, type LinkedHabit } from '@/ui/useGoalStats';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { DEFAULT_HABIT_COLOR, deadlineLabel, shortDate, type Colors } from '@/ui/theme';
+import { DATE_LOCALE, DEFAULT_HABIT_COLOR, deadlineLabel, shortDate, type Colors } from '@/ui/theme';
 
 type Styles = ReturnType<typeof makeStyles>;
 type GoalTab = 'overview' | 'stats' | 'milestones' | 'edit';
@@ -33,6 +33,14 @@ type GoalTab = 'overview' | 'stats' | 'milestones' | 'edit';
 // Tam sayıysa ondalık gösterme, değilse 1 ondalık (AmountStepper'daki fmt ile aynı desen).
 function fmtAmount(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
+// Girdi geçmişi satırı için tarih+saat ("15 Tem, 14:32").
+function fmtEntryWhen(iso: string, lang: 'tr' | 'en' | 'de'): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString(DATE_LOCALE[lang], { day: 'numeric', month: 'short' });
+  const time = d.toLocaleTimeString(DATE_LOCALE[lang], { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time}`;
 }
 
 function StatCard({
@@ -89,15 +97,26 @@ export default function GoalDetailScreen() {
   const stats = useGoalStats(id);
   const [activeTab, setActiveTab] = useState<GoalTab>((tab as GoalTab) || 'overview');
   const [newMilestone, setNewMilestone] = useState('');
+  // Genel sekmesindeki serbest miktar girişi ("kaç {unit} ekledin?").
+  const [entryText, setEntryText] = useState('');
 
   const goal = stats.goal;
 
-  // — Genel sekmesi: veri girişi ("entry") —
-  const adjustProgress = (amount: number) => {
+  // — Genel sekmesi: veri girişi ("entry") — kullanıcı istediği miktarı yazar,
+  // "Ekle" ile o an biriken ilerlemeye eklenir (goalRepo.addProgress bir DELTA'dır,
+  // mutlak değer değil — negatif yazarak düzeltme de yapılabilir). Ayrıca
+  // goalEntryRepo'ya tarihiyle bir günlük kaydı düşülür ki kullanıcı Genel
+  // sekmesinde "ne zaman ne kadar eklediğini" görebilsin (current_value'nun
+  // kaynağı yine addProgress'tir, bu kayıt salt görüntüleme içindir).
+  const submitEntry = () => {
     if (!goal) return;
-    goalRepo.addProgress(goal.id, amount);
+    const parsed = parseFloat(entryText.replace(',', '.'));
+    if (!Number.isFinite(parsed) || parsed === 0) return;
+    goalRepo.addProgress(goal.id, parsed);
+    goalEntryRepo.create(goal.id, parsed);
     const g = goalRepo.getById(goal.id);
     g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
+    setEntryText('');
     stats.reload();
   };
   const toggleGoalCompleted = () => {
@@ -224,25 +243,50 @@ export default function GoalDetailScreen() {
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, { width: `${Math.round(stats.ratio * 100)}%` }]} />
                     </View>
-                    <View style={styles.entryRow}>
-                      <Text style={styles.overviewLine}>
-                        {fmtAmount(goal.current_value)}
-                        {goal.target_value != null ? ` / ${fmtAmount(goal.target_value)}` : ''}
-                        {goal.unit ? ` ${goal.unit}` : ''}
-                      </Text>
-                      {/* Veri girişi burada — bkz. dosya başı yorumu. */}
-                      <View style={styles.steppers}>
-                        <Pressable style={styles.stepBtn} onPress={() => adjustProgress(-1)}>
-                          <Text style={styles.stepText}>−1</Text>
-                        </Pressable>
-                        <Pressable style={styles.stepBtn} onPress={() => adjustProgress(1)}>
-                          <Text style={styles.stepText}>+1</Text>
-                        </Pressable>
-                        <Pressable style={styles.stepBtn} onPress={() => adjustProgress(5)}>
-                          <Text style={styles.stepText}>+5</Text>
-                        </Pressable>
-                      </View>
+                    <Text style={styles.overviewLine}>
+                      {fmtAmount(goal.current_value)}
+                      {goal.target_value != null ? ` / ${fmtAmount(goal.target_value)}` : ''}
+                      {goal.unit ? ` ${goal.unit}` : ''}
+                    </Text>
+                    {/* Veri girişi burada — kullanıcı istediği miktarı yazıp Ekle'ye basar
+                        (bkz. dosya başı yorumu). Negatif yazarak düzeltme de yapılabilir. */}
+                    <View style={styles.entryInputRow}>
+                      <TextInput
+                        style={styles.entryInput}
+                        value={entryText}
+                        onChangeText={setEntryText}
+                        placeholder={t('habit.amountPlaceholder')}
+                        placeholderTextColor={colors.faint}
+                        keyboardType="numeric"
+                        onSubmitEditing={submitEntry}
+                        returnKeyType="done"
+                      />
+                      <Pressable style={styles.entryAddBtn} onPress={submitEntry}>
+                        <Text style={styles.entryAddText}>{t('common.add')}</Text>
+                      </Pressable>
                     </View>
+
+                    {/* Girdi geçmişi — kullanıcının tarihiyle görebilmesi için (bkz. dosya başı yorumu). */}
+                    {stats.entries.length > 0 && (
+                      <View style={styles.entryHistory}>
+                        <Text style={styles.entryHistoryTitle}>{t('goal.entryHistory')}</Text>
+                        {stats.entries.map((e) => (
+                          <View key={e.id} style={styles.entryHistoryRow}>
+                            <Text
+                              style={[
+                                styles.entryHistoryAmount,
+                                e.amount < 0 && styles.entryHistoryAmountNeg,
+                              ]}
+                            >
+                              {e.amount >= 0 ? '+' : ''}
+                              {fmtAmount(e.amount)}
+                              {goal.unit ? ` ${goal.unit}` : ''}
+                            </Text>
+                            <Text style={styles.entryHistoryDate}>{fmtEntryWhen(e.updated_at, lang)}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </>
                 ) : (
                   <View style={styles.entryRow}>
@@ -467,7 +511,7 @@ const makeStyles = (c: Colors) =>
       overflow: 'hidden',
     },
     progressFill: { height: '100%', borderRadius: 5, backgroundColor: c.primary },
-    overviewLine: { fontSize: 15, fontWeight: '700', color: c.text },
+    overviewLine: { fontSize: 15, fontWeight: '700', color: c.text, marginTop: 10 },
     deadlineLine: { fontSize: 13, color: c.streak, fontWeight: '700', marginTop: 6 },
 
     // — Genel sekmesi: veri girişi —
@@ -478,14 +522,42 @@ const makeStyles = (c: Colors) =>
       marginTop: 10,
       gap: 10,
     },
-    steppers: { flexDirection: 'row', gap: 6 },
-    stepBtn: {
+    // Serbest miktar girişi: kullanıcı yazar, "Ekle"ye basar (numeric hedef).
+    entryInputRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
+    entryInput: {
+      flex: 1,
+      backgroundColor: c.inputBg,
+      borderRadius: 10,
       paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 8,
-      backgroundColor: c.primarySoft,
+      paddingVertical: 9,
+      fontSize: 14,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
     },
-    stepText: { fontSize: 14, fontWeight: '700', color: c.primary },
+    entryAddBtn: {
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 10,
+      backgroundColor: c.primary,
+    },
+    entryAddText: { fontSize: 14, fontWeight: '700', color: c.onAccent },
+
+    // — Girdi geçmişi —
+    entryHistory: { marginTop: 20 },
+    entryHistoryTitle: { fontSize: 13, fontWeight: '700', color: c.muted, marginBottom: 8 },
+    entryHistoryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 7,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    entryHistoryAmount: { fontSize: 14, fontWeight: '700', color: c.primary },
+    entryHistoryAmountNeg: { color: c.danger },
+    entryHistoryDate: { fontSize: 12, color: c.faint },
+
     completeToggleBtn: {
       paddingHorizontal: 14,
       paddingVertical: 8,

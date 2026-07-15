@@ -44,6 +44,11 @@ const TABLES: TableCfg[] = [
     hasUserId: false, // sahiplik ebeveyn hedef üzerinden (RLS de öyle)
   },
   {
+    table: 'goal_entries',
+    cols: ['id', 'goal_id', 'amount', 'updated_at', 'deleted_at'],
+    hasUserId: false, // sahiplik ebeveyn hedef üzerinden (RLS de öyle)
+  },
+  {
     table: 'habits',
     cols: ['id', 'user_id', 'goal_id', 'title', 'kind', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'start_date', 'end_date', 'updated_at', 'deleted_at'],
     hasUserId: true,

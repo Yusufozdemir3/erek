@@ -211,6 +211,7 @@ const tr: Dict = {
   'goal.statsA11y': '{title} istatistiklerini aç',
   'goal.markComplete': 'Tamamlandı işaretle',
   'goal.markIncomplete': 'Tamamlanmadı işaretle',
+  'goal.entryHistory': 'Girdi geçmişi',
 
   // Bildirim izni uyarısı
   'notif.noPermTitle': 'Bildirim izni yok',
@@ -575,6 +576,7 @@ const en: Dict = {
   'goal.statsA11y': 'Open {title} statistics',
   'goal.markComplete': 'Mark as completed',
   'goal.markIncomplete': 'Mark as incomplete',
+  'goal.entryHistory': 'Entry history',
 
   'notif.noPermTitle': 'No notification permission',
   'notif.noPermBody':
@@ -928,6 +930,7 @@ const de: Dict = {
   'goal.statsA11y': '{title}-Statistiken öffnen',
   'goal.markComplete': 'Als erledigt markieren',
   'goal.markIncomplete': 'Als nicht erledigt markieren',
+  'goal.entryHistory': 'Verlauf',
 
   'notif.noPermTitle': 'Keine Benachrichtigungserlaubnis',
   'notif.noPermBody':
