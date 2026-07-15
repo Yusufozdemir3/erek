@@ -1,4 +1,4 @@
-// Alışkanlık istatistik ekranı — son 90 günün ısı haritası + özet sayılar.
+// Alışkanlık istatistik ekranı — özet sayılar, güç puanı, rozetler + aylık takvim.
 // "Alışkanlıklar" sekmesinde bir kartın haftalık geçmiş şeridine dokununca açılır.
 // Mimari kural: SQL yok; yalnızca useHabitStats (habitRepo üzerinden) çağrılır.
 
@@ -8,8 +8,10 @@ import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fmtClock } from '@/lib/helpers';
 import { STREAK_MILESTONES } from '@/lib/milestones';
-import { useHabitStats, type DayCell, type ScorePoint, type StreakEntry, type WeekdayStat } from '@/ui/useHabitStats';
+import { useHabitStats, type ScorePoint, type StreakEntry, type WeekdayStat } from '@/ui/useHabitStats';
 import { useHabitCalendar, type CalendarDay } from '@/ui/useHabitCalendar';
+import { LineChart } from '@/ui/LineChart';
+import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { DATE_LOCALE, DEFAULT_HABIT_COLOR, shortDate, type Colors } from '@/ui/theme';
@@ -22,24 +24,6 @@ function fmtAmount(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
 
-function Heatmap({ days, color, styles }: { days: DayCell[]; color: string; styles: Styles }) {
-  return (
-    <View style={styles.grid}>
-      {days.map((d) => (
-        <View
-          key={d.date}
-          style={[
-            styles.cell,
-            !d.scheduled && styles.cellUnscheduled,
-            d.scheduled && d.completed && { backgroundColor: color },
-            d.scheduled && !d.completed && styles.cellMissed,
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
 function StatCard({ label, value, styles }: { label: string; value: string; styles: Styles }) {
   return (
     <View style={styles.statCard}>
@@ -49,22 +33,29 @@ function StatCard({ label, value, styles }: { label: string; value: string; styl
   );
 }
 
-// Güç puanı grafiği: her gün için 0..1 skoru ince bir çubukla temsil eder
-// (bar sparkline). Yeni SVG bağımlılığı gerektirmesin diye salt View'lerle.
-function ScoreGraph({ score, color, styles }: { score: ScorePoint[]; color: string; styles: Styles }) {
+// Güç puanı grafiği: her gün için 0..1 skoru alan+çizgi olarak gösterir. Salt
+// View'lerle (bkz. LineChart) çizilir — yeni SVG/native bağımlılığı yok. Arkada
+// %100 / %50 / %0 referans çizgileri okumayı kolaylaştırır; ringColor uç-nokta
+// dairesinin halka rengi (kart zemini).
+function ScoreGraph({
+  score,
+  color,
+  ringColor,
+  styles,
+}: {
+  score: ScorePoint[];
+  color: string;
+  ringColor: string;
+  styles: Styles;
+}) {
   if (score.length === 0) return null;
+  const values = score.map((p) => p.score);
   return (
-    <View style={styles.scoreBars}>
-      {score.map((p) => (
-        <View key={p.date} style={styles.scoreBarTrack}>
-          <View
-            style={[
-              styles.scoreBarFill,
-              { height: `${Math.max(3, Math.round(p.score * 100))}%`, backgroundColor: color },
-            ]}
-          />
-        </View>
-      ))}
+    <View style={styles.chartWrap}>
+      <View style={[styles.chartGrid, { top: 0 }]} />
+      <View style={[styles.chartGrid, { top: '50%' }]} />
+      <View style={[styles.chartGrid, { bottom: 0 }]} />
+      <LineChart values={values} color={color} height={72} dotRingColor={ringColor} />
     </View>
   );
 }
@@ -201,7 +192,7 @@ export default function HabitStatsScreen() {
         ) : (
           <>
             <View style={styles.headRow}>
-              {stats.habit.icon && <Text style={styles.icon}>{stats.habit.icon}</Text>}
+              {stats.habit.icon && <HabitIconGlyph id={stats.habit.icon} size={26} color={habitColor} />}
               <Text style={shared.greeting}>{stats.habit.title}</Text>
             </View>
 
@@ -236,7 +227,7 @@ export default function HabitStatsScreen() {
                     %{Math.round(stats.score[stats.score.length - 1].score * 100)}
                   </Text>
                 </View>
-                <ScoreGraph score={stats.score} color={habitColor} styles={styles} />
+                <ScoreGraph score={stats.score} color={habitColor} ringColor={colors.card} styles={styles} />
                 <Text style={styles.scoreHint}>{t('stats.scoreHint')}</Text>
               </View>
             )}
@@ -262,26 +253,6 @@ export default function HabitStatsScreen() {
                   </View>
                 );
               })}
-            </View>
-
-            <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>
-              {t('stats.last90Summary', { done: stats.completedCount, total: stats.scheduledCount })}
-            </Text>
-            <Heatmap days={stats.days} color={stats.habit.color ?? DEFAULT_HABIT_COLOR} styles={styles} />
-
-            <View style={styles.legend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: stats.habit.color ?? DEFAULT_HABIT_COLOR }]} />
-                <Text style={styles.legendText}>{t('stats.legendDone')}</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, styles.cellMissed]} />
-                <Text style={styles.legendText}>{t('stats.legendMissed')}</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, styles.cellUnscheduled]} />
-                <Text style={styles.legendText}>{t('stats.legendUnscheduled')}</Text>
-              </View>
             </View>
 
             {/* Haftanın günü — hangi günler güçlü/zayıf tamamlanıyor. */}
@@ -353,7 +324,6 @@ const makeStyles = (c: Colors) =>
     backRow: { marginBottom: 12 },
     backText: { fontSize: 15, fontWeight: '700', color: c.primary },
     headRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    icon: { fontSize: 28 },
 
     statsRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
     statCard: {
@@ -397,29 +367,23 @@ const makeStyles = (c: Colors) =>
     badgeDaysEarned: { color: c.text },
     badgeLabel: { fontSize: 11, color: c.muted, marginTop: 1 },
 
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-    cell: {
-      width: 20,
-      height: 20,
-      borderRadius: 5,
-      backgroundColor: c.track,
-    },
-    // Kaçırılan gün: iki temada da okunur bir kırmızı. Planlı değil: zeminden
-    // ayrılan soluk gri (bg değil — bg zeminle aynı olup görünmez kalıyordu).
+    // Kaçırılan gün (aylık takvim): iki temada da okunur bir kırmızı. Planlı
+    // değil: zeminden ayrılan soluk gri (bg değil — bg zeminle aynı olup görünmez
+    // kalıyordu).
     cellMissed: { backgroundColor: '#f87171' },
     cellUnscheduled: { backgroundColor: c.border },
 
-    legend: { flexDirection: 'row', gap: 16, marginTop: 16, flexWrap: 'wrap' },
-    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    legendDot: { width: 12, height: 12, borderRadius: 4, backgroundColor: c.track },
-    legendText: { fontSize: 12, color: c.muted },
-
-    // — Güç puanı grafiği —
+    // — Güç puanı çizgisel grafiği —
     scoreHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     scoreHint: { fontSize: 11, color: c.faint, marginTop: 10, lineHeight: 15 },
-    scoreBars: { flexDirection: 'row', alignItems: 'flex-end', height: 48, gap: 1.5, marginTop: 12 },
-    scoreBarTrack: { flex: 1, height: '100%', justifyContent: 'flex-end' },
-    scoreBarFill: { width: '100%', borderRadius: 1, minHeight: 2 },
+    chartWrap: { height: 72, marginTop: 12, position: 'relative' },
+    chartGrid: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      height: 1,
+      backgroundColor: c.border,
+    },
 
     // — Haftanın günü çubuk grafiği —
     wdRow: { flexDirection: 'row', gap: 8 },

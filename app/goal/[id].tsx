@@ -22,6 +22,7 @@ import type { GoalMilestone } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { TITLE_MAX_LEN } from '@/ui/formLimits';
 import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
+import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useGoalStats, type LinkedHabit } from '@/ui/useGoalStats';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -79,7 +80,7 @@ function LinkedHabitRow({ habit, styles }: { habit: LinkedHabit; styles: Styles 
       accessibilityRole="button"
     >
       <View style={[styles.habitDot, { backgroundColor: color + '22', borderColor: color }]}>
-        {habit.icon ? <Text style={styles.habitIconText}>{habit.icon}</Text> : null}
+        {habit.icon ? <HabitIconGlyph id={habit.icon} size={14} color={color} /> : null}
       </View>
       <Text style={styles.habitTitle} numberOfLines={1}>
         {habit.title}
@@ -590,7 +591,6 @@ const makeStyles = (c: Colors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    habitIconText: { fontSize: 14 },
     habitTitle: { flex: 1, fontSize: 14, color: c.text, fontWeight: '600' },
     habitChevron: { fontSize: 18, color: c.faint },
 

@@ -10,12 +10,6 @@ import { isScheduledOn, isWithinHabitDates, lastDays, todayDate, WEEKDAY_DISPLAY
 
 const WINDOW_DAYS = 90;
 
-export interface DayCell {
-  date: string;
-  scheduled: boolean;
-  completed: boolean;
-}
-
 // Seri geçmişi (habitRepo.allStreaks'in aynısı — burada yalnız tip takma adı).
 export interface StreakEntry {
   length: number;
@@ -39,7 +33,6 @@ export interface WeekdayStat {
 
 export interface HabitStats {
   habit: Habit | null;
-  days: DayCell[];             // son 90 gün, en eskiden bugüne
   currentStreak: number;
   longestStreak: number;
   completionRate: number;      // 0..1, yalnızca planlı günler üzerinden
@@ -53,7 +46,6 @@ export interface HabitStats {
 
 const EMPTY: HabitStats = {
   habit: null,
-  days: [],
   currentStreak: 0,
   longestStreak: 0,
   completionRate: 0,
@@ -115,21 +107,19 @@ export function useHabitStats(habitId: string): HabitStats {
     const logs = habitRepo.logsInRange(habitId, dates[0]);
     const completedDates = new Set(logs.filter((l) => l.completed === 1).map((l) => l.log_date));
 
+    // Planlı gün sayımı (tamamlanma oranı için). Aralık dışı (başlangıçtan önce /
+    // bitişten sonra) günler planlı sayılmaz, orana girmez.
     let scheduledCount = 0;
     let completedCount = 0;
-    const days: DayCell[] = dates.map((date) => {
-      // Aralık dışı (başlangıçtan önce / bitişten sonra) günler planlı sayılmaz:
-      // ısı haritasında gri görünür, "kaçırıldı" (kırmızı) olmaz, orana girmez.
+    for (const date of dates) {
       const scheduled =
         isScheduledOn(habit.schedule, date) &&
         isWithinHabitDates(habit.start_date, habit.end_date, date);
-      const completed = completedDates.has(date);
       if (scheduled) {
         scheduledCount++;
-        if (completed) completedCount++;
+        if (completedDates.has(date)) completedCount++;
       }
-      return { date, scheduled, completed };
-    });
+    }
 
     const totalAmount =
       habit.target_amount != null ? logs.reduce((sum, l) => sum + (l.amount ?? 0), 0) : null;
@@ -138,7 +128,6 @@ export function useHabitStats(habitId: string): HabitStats {
 
     setStats({
       habit,
-      days,
       currentStreak: habitRepo.currentStreak(habitId),
       longestStreak: habitRepo.longestStreak(habitId),
       completionRate: scheduledCount > 0 ? completedCount / scheduledCount : 0,
