@@ -124,6 +124,32 @@ export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boo
   return true;
 }
 
+// Tekrarlayan bir görev tamamlanınca due_date'in ileri sarılacağı SONRAKİ tarih.
+// currentDue "YYYY-MM-DD" ya da saatli "YYYY-MM-DDTHH:MM:SS" olabilir; saat
+// bileşeni (varsa) korunur. today'den ve currentDue'nun gününden KESİN sonraki,
+// kurala uyan ilk gün seçilir — gecikmiş bir görev geçmişe değil, ilk gelecek
+// slota atlar (bugünden önceki günler asla üretilmez). Kurala uyan gün 366 gün
+// içinde bulunamazsa (ör. haftalık kuralda hiç gün seçili değilse) null döner;
+// çağıran bu durumda görevi ileri sarmak yerine normal tamamlamaya düşer.
+export function nextTaskOccurrence(
+  recurrence: Recurrence,
+  currentDue: string,
+  today: string
+): string | null {
+  const timePart = currentDue.length > 10 ? currentDue.slice(10) : '';
+  const dueYmd = currentDue.slice(0, 10);
+  // Gecikmiş görevde bugünden (dolayısıyla yarından) devam et; erken tamamlanan
+  // (vadesi gelecekte) görevde kendi gününden sonrasına geç.
+  const baseYmd = dueYmd > today ? dueYmd : today;
+  const d = new Date(`${baseYmd}T00:00:00`);
+  for (let i = 0; i < 366; i++) {
+    d.setDate(d.getDate() + 1);
+    const ymd = toYmd(d);
+    if (isScheduledOn(recurrence, ymd)) return `${ymd}${timePart}`;
+  }
+  return null;
+}
+
 // Sıklık kuralının okunabilir kısa etiketi ("Her gün" / "Pzt·Çar·Cum").
 // everyDayLabel ve dayLabels (JS getDay() sırasıyla, 0=Pazar...6=Cumartesi)
 // çağırandan (t()) gelir — bu fonksiyon dile bağımlı metin barındırmaz.

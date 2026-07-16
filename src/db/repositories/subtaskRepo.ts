@@ -95,6 +95,19 @@ export const subtaskRepo = {
     );
   },
 
+  // Bir görevin TAMAMLANMIŞ alt görevlerini sıfırlar (yeniden aç). Tekrarlayan
+  // bir görev bir sonraki tekrara ileri sarıldığında çağrılır — yeni tekrar taze
+  // (tümü işaretsiz) bir checklist'le başlasın. Yalnızca completed=1 satırlara
+  // dokunur; zaten işaretsizlerde gereksiz senkron churn'ü üretmez.
+  reopenForTask(taskId: string): void {
+    const db = getDb();
+    db.runSync(
+      `UPDATE subtasks SET completed = 0, updated_at = ?, synced = 0
+       WHERE task_id = ? AND deleted_at IS NULL AND completed = 1`,
+      [nowIso(), taskId]
+    );
+  },
+
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();

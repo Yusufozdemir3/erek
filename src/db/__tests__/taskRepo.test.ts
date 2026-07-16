@@ -1,7 +1,9 @@
 // taskRepo testleri: CRUD ve sıralama (önce tarih/saat, sonra öncelik).
 
 import { taskRepo } from '../repositories/taskRepo';
+import { subtaskRepo } from '../repositories/subtaskRepo';
 import { userRepo } from '../repositories/userRepo';
+import { todayDate } from '../../lib/helpers';
 import { resetTestDb } from '../../test/dbTestUtils';
 
 let userId: string;
@@ -110,5 +112,47 @@ describe('update', () => {
     const task = createTask();
     taskRepo.update(task.id, { due_date: '2026-07-05T09:00:00' });
     expect(taskRepo.getById(task.id)!.due_date).toBe('2026-07-05T09:00:00');
+  });
+
+  it('recurrence yazılır ve temizlenir (JSON round-trip)', () => {
+    const task = createTask();
+    taskRepo.update(task.id, { recurrence: { freq: 'weekly', weekdays: [1, 3, 5] } });
+    expect(taskRepo.getById(task.id)!.recurrence).toEqual({ freq: 'weekly', weekdays: [1, 3, 5] });
+    taskRepo.update(task.id, { recurrence: null });
+    expect(taskRepo.getById(task.id)!.recurrence).toBeNull();
+  });
+});
+
+describe('setCompleted — tekrar (recurrence)', () => {
+  it('tekrarsız görev normal tamamlanır', () => {
+    const task = createTask({ due_date: '2026-07-05' });
+    taskRepo.setCompleted(task.id, true);
+    expect(taskRepo.getById(task.id)!.completed_at).not.toBeNull();
+  });
+
+  it('günlük tekrarlayan görev tamamlanınca tamamlanmaz, sonraki güne ileri sarılır', () => {
+    const today = todayDate();
+    const task = createTask({ due_date: today, recurrence: { freq: 'daily' } });
+    taskRepo.setCompleted(task.id, true);
+    const after = taskRepo.getById(task.id)!;
+    // Tamamlanmadı — ilerledi.
+    expect(after.completed_at).toBeNull();
+    // Yeni tarih bugünden KESİN sonra (bugünden düşer, sonraki tekrarda görünür).
+    expect(after.due_date! > today).toBe(true);
+  });
+
+  it('ileri sarınca tamamlanmış alt görevler sıfırlanır (taze checklist)', () => {
+    const today = todayDate();
+    const task = createTask({ due_date: today, recurrence: { freq: 'daily' } });
+    const sub = subtaskRepo.create(task.id, 'Adım');
+    subtaskRepo.setCompleted(sub.id, true);
+    taskRepo.setCompleted(task.id, true);
+    expect(subtaskRepo.listByTask(task.id)[0].completed).toBe(0);
+  });
+
+  it('geri alma (completed=false) tekrarlayan görevde de completed_at temizler', () => {
+    const task = createTask({ due_date: '2026-07-05', recurrence: { freq: 'daily' } });
+    taskRepo.setCompleted(task.id, false);
+    expect(taskRepo.getById(task.id)!.completed_at).toBeNull();
   });
 });

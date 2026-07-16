@@ -3,7 +3,8 @@
 // Her yazma işlemi updated_at'i tazeler ve synced=0 yapar (senkron bekliyor).
 
 import { getDb } from '../database';
-import { newId, nowIso, parseJson, toJson } from '../../lib/helpers';
+import { subtaskRepo } from './subtaskRepo';
+import { newId, nextTaskOccurrence, nowIso, parseJson, toJson, todayDate } from '../../lib/helpers';
 import type { Task, Priority, Recurrence } from '../../types/models';
 
 // Öncelik sıralama anahtarı: yüksek->düşük.
@@ -143,8 +144,31 @@ export const taskRepo = {
   },
 
   // Görevi tamamlandı olarak işaretle (ya da geri al).
+  //
+  // TEKRARLAYAN görevde "tamamla" (completed=true) farklı davranır: görev
+  // tamamlandı işaretlenmek YERİNE bir sonraki tekrar tarihine ILERI SARILIR
+  // (kullanıcı kararı: ayrı kopya/geçmiş tutulmaz, aynı satır ilerler). Böylece
+  // görev bugünden düşer ve sonraki tekrar gününde yeniden görünür; alt görevleri
+  // varsa taze bir checklist için sıfırlanır. Geri alma (completed=false) her
+  // zaman normal yolla (completed_at temizlenir) işler. Kural bozuk/çözülemezse
+  // (nextTaskOccurrence null) normal tamamlamaya düşülür.
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
+    if (completed) {
+      const task = this.getById(id);
+      if (task && task.recurrence) {
+        const today = todayDate();
+        const next = nextTaskOccurrence(task.recurrence, task.due_date ?? today, today);
+        if (next) {
+          db.runSync(
+            `UPDATE tasks SET due_date = ?, completed_at = NULL, updated_at = ?, synced = 0 WHERE id = ?`,
+            [next, nowIso(), id]
+          );
+          subtaskRepo.reopenForTask(id);
+          return;
+        }
+      }
+    }
     db.runSync(
       `UPDATE tasks SET completed_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
       [completed ? nowIso() : null, nowIso(), id]

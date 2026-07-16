@@ -73,6 +73,8 @@ const tr: Dict = {
   'task.subtasksOptional': 'Alt görevler (isteğe bağlı)',
   'task.addSubtask': 'Alt görev ekle…',
   'task.edit': 'Görevi düzenle',
+  'task.repeat': 'Tekrar',
+  'task.repeatNone': 'Tekrar yok',
 
   // Alışkanlık formu
   'habit.kindLabel': 'Takip tipi',
@@ -447,6 +449,8 @@ const en: Dict = {
   'task.subtasksOptional': 'Subtasks (optional)',
   'task.addSubtask': 'Add subtask…',
   'task.edit': 'Edit task',
+  'task.repeat': 'Repeat',
+  'task.repeatNone': 'No repeat',
 
   'habit.kindLabel': 'Tracking type',
   'habit.title': 'Title',
@@ -802,6 +806,8 @@ const de: Dict = {
   'task.subtasksOptional': 'Unteraufgaben (optional)',
   'task.addSubtask': 'Unteraufgabe hinzufügen…',
   'task.edit': 'Aufgabe bearbeiten',
+  'task.repeat': 'Wiederholung',
+  'task.repeatNone': 'Keine Wiederholung',
 
   'habit.kindLabel': 'Verfolgungsart',
   'habit.title': 'Titel',

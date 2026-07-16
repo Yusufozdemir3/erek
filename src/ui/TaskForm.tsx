@@ -9,7 +9,7 @@
 import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import type { Priority } from '@/db';
+import type { Priority, Recurrence } from '@/db';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { TITLE_MAX_LEN } from '@/ui/formLimits';
@@ -17,12 +17,29 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, type Colors } from '@/ui/theme';
 
+// Tekrar seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
+// HabitForm'daki sıklık seçiciyle aynı desen — tutarlı görünüm.
+const WEEKDAY_OPTIONS = [
+  { labelKey: 'weekday.mon', wd: 1 },
+  { labelKey: 'weekday.tue', wd: 2 },
+  { labelKey: 'weekday.wed', wd: 3 },
+  { labelKey: 'weekday.thu', wd: 4 },
+  { labelKey: 'weekday.fri', wd: 5 },
+  { labelKey: 'weekday.sat', wd: 6 },
+  { labelKey: 'weekday.sun', wd: 0 },
+];
+
+// Tekrar modu: 'none' = tek seferlik (varsayılan), 'daily' = her gün,
+// 'weekly' = haftanın belirli günleri.
+type RepeatMode = 'none' | 'daily' | 'weekly';
+
 // taskRepo.create/update'in beklediği alanlarla örtüşür (due_date saat gömülü).
 export interface TaskFormValues {
   title: string;
   priority: Priority;
   due_date: string | null; // "YYYY-MM-DD" | "YYYY-MM-DDTHH:MM:SS" | null
   end_time: string | null;  // "HH:MM" | null — yalnız başlangıç saati varken anlamlı
+  recurrence: Recurrence | null; // null = tek seferlik; tamamlanınca ileri sarılır
   // Yalnız oluşturmada (enableSubtaskDraft): görevle birlikte yazılacak alt
   // görev başlıkları. Düzenlemede alt görevler anında yazıldığı için buradan
   // gelmez (undefined).
@@ -30,7 +47,7 @@ export interface TaskFormValues {
 }
 
 interface Props {
-  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null }>;
+  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null }>;
   submitLabel: string;                  // "Kaydet" | "Ekle"
   onSubmit: (values: TaskFormValues) => void;
   onDelete?: () => void;                // yalnız düzenlemede: Sil düğmesi
@@ -58,6 +75,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
+  // Tekrar: kuraldan başlangıç modunu çıkar (haftalık + en az bir gün varsa
+  // 'weekly', başka bir kural varsa 'daily', kural yoksa 'none').
+  const initRec = initial?.recurrence ?? null;
+  const initRepeatMode: RepeatMode = !initRec
+    ? 'none'
+    : initRec.freq === 'weekly' && (initRec.weekdays?.length ?? 0) > 0
+      ? 'weekly'
+      : 'daily';
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>(initRepeatMode);
+  const [weekdays, setWeekdays] = useState<number[]>(
+    initRec?.freq === 'weekly' ? initRec.weekdays ?? [] : []
+  );
   const [showPicker, setShowPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -73,6 +102,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   };
   const removeDraftSub = (i: number) => setDraftSubs((prev) => prev.filter((_, idx) => idx !== i));
 
+  const toggleWeekday = (wd: number) => {
+    setWeekdays((prev) => (prev.includes(wd) ? prev.filter((x) => x !== wd) : [...prev, wd]));
+  };
+
   const submit = () => {
     const t = title.trim();
     if (!t) return;
@@ -80,11 +113,21 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     const due_date = dueTime ? `${dueDate}T${dueTime}:00` : dueDate;
     // Bitiş saati yalnız bir başlangıç saati varsa ve ondan SONRA ise geçerli.
     const end_time = dueTime && endTime && endTime > dueTime ? endTime : null;
+    // Tekrar kuralı: 'none' → tek seferlik. 'weekly' ama hiç gün seçilmemişse
+    // (kullanıcı tekrar İSTEDİ ama gün işaretlemedi) 'daily'ye düşülür — sessizce
+    // "tekrar yok"a çevirmek isteği kaybederdi.
+    const recurrence: Recurrence | null =
+      repeatMode === 'none'
+        ? null
+        : repeatMode === 'weekly' && weekdays.length > 0
+          ? { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) }
+          : { freq: 'daily' };
     onSubmit({
       title: t,
       priority,
       due_date,
       end_time,
+      recurrence,
       subtasks: enableSubtaskDraft ? draftSubs : undefined,
     });
   };
@@ -218,6 +261,55 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
+      {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler.
+          Tekrarlayan bir görev tamamlanınca bir sonraki tekrar tarihine ileri
+          sarılır (aynı görev; ayrı kopya/geçmiş tutulmaz). */}
+      <Text style={styles.label}>{t('task.repeat')}</Text>
+      <View style={styles.row}>
+        {(['none', 'daily', 'weekly'] as RepeatMode[]).map((mode) => {
+          const sel = repeatMode === mode;
+          return (
+            <Pressable
+              key={mode}
+              style={[styles.freqBtn, sel && styles.freqBtnSel]}
+              onPress={() => {
+                setRepeatMode(mode);
+                // "Belirli günler" seçilince boşsa yardımcı olsun diye bugünün
+                // gününü seçili getir (HabitForm deseni).
+                if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
+              }}
+            >
+              <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>
+                {t(
+                  mode === 'none'
+                    ? 'task.repeatNone'
+                    : mode === 'daily'
+                      ? 'habit.everyDay'
+                      : 'habit.specificDays'
+                )}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {repeatMode === 'weekly' && (
+        <View style={styles.dayRow}>
+          {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
+            const sel = weekdays.includes(wd);
+            return (
+              <Pressable
+                key={wd}
+                style={[styles.dayChip, sel && styles.dayChipSel]}
+                onPress={() => toggleWeekday(wd)}
+              >
+                <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{t(labelKey)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
       {/* Düzenlemede alt görev bölümü buraya gelir (anında yazılır). */}
       {children}
 
@@ -304,6 +396,32 @@ const makeStyles = (c: Colors) =>
     clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
     clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
     hint: { fontSize: 12, color: c.danger, marginTop: -6, marginBottom: 10 },
+    // Tekrar seçici (HabitForm sıklık seçicisiyle aynı görünüm).
+    freqBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    freqBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
+    freqBtnText: { fontSize: 14, fontWeight: '600', color: c.muted },
+    freqBtnTextSel: { color: c.primary },
+    dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+    dayChip: {
+      width: 42,
+      paddingVertical: 8,
+      borderRadius: 10,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    dayChipSel: { borderColor: c.primary, backgroundColor: c.primary },
+    dayChipText: { fontSize: 13, fontWeight: '700', color: c.muted },
+    dayChipTextSel: { color: c.onAccent },
     actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
     saveBtn: {
       flex: 1,

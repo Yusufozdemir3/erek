@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { extractTime, toYmd, todayDate } from '@/lib/helpers';
+import { extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
 import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
@@ -87,16 +87,24 @@ export default function TodayScreen() {
   const habitsDone = habits.filter((h) => h.completed).length;
   const tasksDone = tasks.filter((t) => t.completed_at !== null).length;
 
+  // Tekrarlayan görev kartındaki "🔁 Her gün / Pzt·Çar·Cum" rozeti için gün
+  // etiketleri (JS getDay sırasıyla, 0=Pazar) — scheduleLabel ile birleştirilir.
+  const dayLabels = [
+    tr('weekday.sun'), tr('weekday.mon'), tr('weekday.tue'), tr('weekday.wed'),
+    tr('weekday.thu'), tr('weekday.fri'), tr('weekday.sat'),
+  ];
+
   const toggleTask = (t: Task) => {
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
-    if (completing) {
-      cancelTaskReminder(t.id);
-    } else {
-      const reopened = taskRepo.getById(t.id);
-      if (reopened) scheduleTaskReminder(reopened);
-    }
+    // Tekrarlayan görev "tamamla"da tamamlanmak yerine bir sonraki tarihe ileri
+    // sarabilir — bu durumda görev hâlâ tamamlanmamış ama yeni tarihlidir. Bu
+    // yüzden güncel duruma bakarız: tamamlanmamışsa (geri açıldı ya da ileri
+    // sardı) hatırlatmayı yeni değere göre kur, tamamlandıysa iptal et.
+    const after = taskRepo.getById(t.id);
+    if (after && after.completed_at === null) scheduleTaskReminder(after);
+    else cancelTaskReminder(t.id);
     reload();
   };
 
@@ -241,9 +249,18 @@ export default function TodayScreen() {
                       accessibilityLabel={tr('common.editA11y', { title: t.title })}
                     >
                       <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                      {subtaskCounts[t.id] && (
+                      {(t.recurrence || subtaskCounts[t.id]) && (
                         <Text style={styles.subCount}>
-                          {subtaskCounts[t.id].done}/{subtaskCounts[t.id].total} {tr('task.subtaskCountSuffix')}
+                          {[
+                            t.recurrence
+                              ? `🔁 ${scheduleLabel(t.recurrence, tr('habit.everyDay'), dayLabels)}`
+                              : null,
+                            subtaskCounts[t.id]
+                              ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix')}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join('  ·  ')}
                         </Text>
                       )}
                     </Pressable>

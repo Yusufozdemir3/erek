@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { extractTime } from '@/lib/helpers';
+import { extractTime, scheduleLabel } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
@@ -56,18 +56,23 @@ export default function TasksScreen() {
 
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
 
+  // Tekrarlayan görev rozeti ("🔁 Her gün / Pzt·Çar·Cum") için gün etiketleri
+  // (JS getDay sırasıyla, 0=Pazar) — scheduleLabel ile birleştirilir.
+  const dayLabels = [
+    tr('weekday.sun'), tr('weekday.mon'), tr('weekday.tue'), tr('weekday.wed'),
+    tr('weekday.thu'), tr('weekday.fri'), tr('weekday.sat'),
+  ];
+
   const toggleTask = (t: Task) => {
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
-    // Tamamlanınca saatli hatırlatma varsa iptal edilir; geri açılınca (vadesi
-    // geçmemişse) yeniden kurulur.
-    if (completing) {
-      cancelTaskReminder(t.id);
-    } else {
-      const reopened = taskRepo.getById(t.id);
-      if (reopened) scheduleTaskReminder(reopened);
-    }
+    // Tekrarlayan görev "tamamla"da tamamlanmak yerine bir sonraki tarihe ileri
+    // sarabilir (hâlâ tamamlanmamış, yeni tarihli). Güncel duruma göre karar
+    // ver: tamamlanmamışsa hatırlatmayı yeni değere göre kur, tamamlandıysa iptal.
+    const after = taskRepo.getById(t.id);
+    if (after && after.completed_at === null) scheduleTaskReminder(after);
+    else cancelTaskReminder(t.id);
     // Yeniden sırala (tamamlanan alta iner); her kart Animated.View + LinearTransition
     // olduğu için konum değişimi yumuşakça animasyonlanır (Fabric'te de çalışır).
     reload();
@@ -141,9 +146,12 @@ export default function TasksScreen() {
                       accessibilityLabel={tr('common.editA11y', { title: t.title })}
                     >
                       <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                      {((t.due_date && !done) || subtaskCounts[t.id]) && (
+                      {((t.due_date && !done) || subtaskCounts[t.id] || t.recurrence) && (
                         <Text style={styles.due}>
                           {[
+                            t.recurrence
+                              ? `🔁 ${scheduleLabel(t.recurrence, tr('habit.everyDay'), dayLabels)}`
+                              : null,
                             t.due_date && !done ? shortDate(t.due_date, lang) : null,
                             subtaskCounts[t.id]
                               ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix')}`

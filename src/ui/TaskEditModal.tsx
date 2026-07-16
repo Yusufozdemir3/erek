@@ -57,7 +57,12 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
     if (shouldBeCompleted && !isCompleted) {
       taskRepo.setCompleted(task.id, true);
       notifySuccess();
-      cancelTaskReminder(task.id); // tamamlandı — saatli hatırlatma varsa gerek kalmadı
+      // Tekrarlayan görev ileri sarmış olabilir (hâlâ tamamlanmamış ama yeni
+      // tarihli) — o durumda hatırlatmayı yeni tarihe göre yeniden kur; aksi
+      // halde (gerçekten tamamlandı) sadece iptal et.
+      const after = taskRepo.getById(task.id);
+      if (after && after.completed_at === null) scheduleTaskReminder(after);
+      else cancelTaskReminder(task.id);
     } else if (!shouldBeCompleted && isCompleted) {
       taskRepo.setCompleted(task.id, false);
       tapLight();
@@ -98,6 +103,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       priority: values.priority,
       due_date: values.due_date,
       end_time: values.end_time,
+      recurrence: values.recurrence,
     });
     // Tarih/saat değişmiş olabilir — hatırlatma güncel değere göre yeniden kurulur.
     const updated = taskRepo.getById(task.id);
@@ -123,7 +129,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       {/* key: farklı göreve geçince form taze başlangıç değerleriyle kurulur */}
       <TaskForm
         key={task.id}
-        initial={{ title: task.title, priority: task.priority, due_date: task.due_date, end_time: task.end_time }}
+        initial={{ title: task.title, priority: task.priority, due_date: task.due_date, end_time: task.end_time, recurrence: task.recurrence }}
         submitLabel={tr('common.save')}
         onSubmit={handleSave}
         onDelete={handleDelete}

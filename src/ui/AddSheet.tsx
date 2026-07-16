@@ -68,6 +68,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       priority: values.priority,
       due_date: values.due_date,
       end_time: values.end_time,
+      recurrence: values.recurrence,
     });
     // Taslak alt görevleri, görev yazıldıktan sonra sırayla oluştur.
     values.subtasks?.forEach((t) => subtaskRepo.create(created.id, t));

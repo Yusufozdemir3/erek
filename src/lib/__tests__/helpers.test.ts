@@ -7,6 +7,7 @@ import {
   isScheduledOn,
   isWithinHabitDates,
   lastDays,
+  nextTaskOccurrence,
   parseJson,
   scheduleLabel,
   toHm,
@@ -89,6 +90,41 @@ describe('isWithinHabitDates', () => {
     expect(isWithinHabitDates('2026-07-01', '2026-07-10', '2026-07-05')).toBe(true);
     expect(isWithinHabitDates('2026-07-01', '2026-07-10', '2026-06-30')).toBe(false);
     expect(isWithinHabitDates('2026-07-01', '2026-07-10', '2026-07-11')).toBe(false);
+  });
+});
+
+describe('nextTaskOccurrence', () => {
+  // 2026-07-15 Çarşamba, 2026-07-16 Perşembe, 2026-07-17 Cuma (getDay: Çar=3).
+  const daily: Recurrence = { freq: 'daily' };
+
+  it('günlük: bugün vadeli görev bir sonraki güne (yarına) sarılır', () => {
+    expect(nextTaskOccurrence(daily, '2026-07-15', '2026-07-15')).toBe('2026-07-16');
+  });
+
+  it('günlük: gecikmiş görev geçmişe değil, bugünden sonraki güne sarılır', () => {
+    // Vade 3 gün önce ama bugün 15'i → sonraki = 16 (geçmiş üretilmez).
+    expect(nextTaskOccurrence(daily, '2026-07-12', '2026-07-15')).toBe('2026-07-16');
+  });
+
+  it('saat bileşeni korunur', () => {
+    expect(nextTaskOccurrence(daily, '2026-07-15T09:30:00', '2026-07-15')).toBe(
+      '2026-07-16T09:30:00'
+    );
+  });
+
+  it('haftalık: bir sonraki seçili güne atlar (Pzt·Cum kuralında Çarşamba→Cuma)', () => {
+    const weekly: Recurrence = { freq: 'weekly', weekdays: [1, 5] }; // Pzt, Cum
+    // Bugün Çarşamba (15) → sonraki seçili gün Cuma (17).
+    expect(nextTaskOccurrence(weekly, '2026-07-15', '2026-07-15')).toBe('2026-07-17');
+  });
+
+  it('haftalık kuralda hiç gün yoksa null (çözülemez — çağıran normal tamamlar)', () => {
+    expect(nextTaskOccurrence({ freq: 'weekly', weekdays: [] }, '2026-07-15', '2026-07-15')).toBeNull();
+  });
+
+  it('erken tamamlanan (vadesi gelecekte) görev kendi gününden sonrasına geçer', () => {
+    // Vade 20'si, bugün 15'i → base 20, günlük sonraki = 21.
+    expect(nextTaskOccurrence(daily, '2026-07-20', '2026-07-15')).toBe('2026-07-21');
   });
 });
 
