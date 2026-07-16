@@ -4,7 +4,7 @@
 // sonra doğrudan repository fonksiyonlarını çağırır - context içine SQL sızmaz.
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { habitRepo, initDataLayer, taskRepo, userRepo } from '@/db';
 import type { User } from '@/db';
@@ -14,6 +14,7 @@ import { runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
+import { refreshWidget } from '@/widget/widgetData';
 
 interface AppData {
   user: User;
@@ -98,6 +99,24 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useCallback(() => {
     setUser(userRepo.getOrCreateLocal());
   }, []);
+
+  // Ana ekran widget'ını kullanıcı hazır olunca ve her veri değişiminde tazele.
+  // dataVersion, notifyDataChanged ile artar (＋ menüsüyle ekleme, zamanlayıcı
+  // commit'i, hedef güncellemesi…) → bu efekt hepsini kapsar. Bugün ekranındaki
+  // alışkanlık işaretlemeleri lokal reload kullandığından oraya ayrıca çağrı var.
+  // Android dışında ve Expo Go'da refreshWidget sessizce no-op'tur.
+  useEffect(() => {
+    if (user) refreshWidget(user.id);
+  }, [user, dataVersion]);
+
+  // Uygulama öne gelince de tazele: arka planda geçen süre, gün dönümü ve
+  // (Profil'den yapılan) tema/dil değişimi bir sonraki açılışta widget'a yansısın.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && user) refreshWidget(user.id);
+    });
+    return () => sub.remove();
+  }, [user]);
 
   if (error) {
     return (

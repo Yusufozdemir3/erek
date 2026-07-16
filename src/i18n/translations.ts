@@ -171,6 +171,11 @@ const tr: Dict = {
   'today.hideCompleted': 'Tamamlananları gizle',
   'today.filterEmpty': 'Bu filtreye uyan bir şey yok',
 
+  // Ana ekran widget'ı
+  'widget.title': 'Bugün',
+  'widget.summary': '{done}/{total} tamamlandı',
+  'widget.empty': 'Bugüne planlı alışkanlık yok',
+
   // Boş durumlar
   'empty.todayTitle': 'Bugün için her şey tamam',
   'empty.todayBody': 'Planında bir şey yok — keyfini çıkar.',
@@ -534,6 +539,11 @@ const en: Dict = {
   'today.hideCompleted': 'Hide completed',
   'today.filterEmpty': 'Nothing matches this filter',
 
+  // Home screen widget
+  'widget.title': 'Today',
+  'widget.summary': '{done}/{total} done',
+  'widget.empty': 'No habits planned for today',
+
   'empty.todayTitle': 'All done for today',
   'empty.todayBody': 'Nothing on your plan — enjoy it.',
   'empty.otherDayTitle': 'This day is empty',
@@ -883,6 +893,11 @@ const de: Dict = {
   'today.filterAll': 'Alle',
   'today.hideCompleted': 'Erledigte ausblenden',
   'today.filterEmpty': 'Nichts entspricht diesem Filter',
+
+  // Startbildschirm-Widget
+  'widget.title': 'Heute',
+  'widget.summary': '{done}/{total} erledigt',
+  'widget.empty': 'Keine Gewohnheiten für heute geplant',
 
   'empty.todayTitle': 'Für heute alles erledigt',
   'empty.todayBody': 'Nichts geplant — genieße es.',

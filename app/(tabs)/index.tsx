@@ -17,6 +17,7 @@ import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
 import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
+import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DailySummary } from '@/ui/DailySummary';
@@ -105,6 +106,9 @@ export default function TodayScreen() {
     habitRepo.toggleLog(h.id, selectedDate, completing);
     completing ? notifySuccess() : tapLight();
     reload();
+    // İşaretleme lokal reload kullanır (dataVersion artmaz); ana ekran widget'ını
+    // ayrıca tazele. refreshWidget her zaman BUGÜNÜ hesaplar (selectedDate değil).
+    refreshWidget(user.id);
   };
 
   const adjustHabit = (h: HabitView, delta: number) => {
@@ -112,6 +116,7 @@ export default function TodayScreen() {
     habitRepo.incrementAmount(h.id, selectedDate, delta, h.target);
     tapLight();
     reload();
+    refreshWidget(user.id);
   };
 
   // Klavyeden girilen mutlak değer — mevcut delta tabanlı incrementAmount'a
@@ -120,6 +125,7 @@ export default function TodayScreen() {
     if (isFuture) return;
     habitRepo.incrementAmount(h.id, selectedDate, value - h.amount, h.target);
     reload();
+    refreshWidget(user.id);
   };
 
   const onPickDate = (_e: unknown, picked?: Date) => {
