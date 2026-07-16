@@ -13,17 +13,20 @@
 // Mimari kural: SQL yok; yalnızca useGoalStats + goalRepo/goalMilestoneRepo çağrılır.
 
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { goalEntryRepo, goalMilestoneRepo, goalRepo } from '@/db';
 import type { GoalMilestone } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { TITLE_MAX_LEN } from '@/ui/formLimits';
+import { diffDays, todayDate, toYmd } from '@/lib/helpers';
+import { cancelGoalReminder, scheduleGoalReminder } from '@/lib/notifications';
+import { NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
 import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { HabitIconGlyph } from '@/ui/habitIcons';
-import { useGoalStats, type LinkedHabit } from '@/ui/useGoalStats';
+import { useGoalStats, type GoalStats, type LinkedHabit } from '@/ui/useGoalStats';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { DATE_LOCALE, DEFAULT_HABIT_COLOR, deadlineLabel, shortDate, type Colors } from '@/ui/theme';
@@ -42,6 +45,53 @@ function fmtEntryWhen(iso: string, lang: 'tr' | 'en' | 'de'): string {
   const date = d.toLocaleDateString(DATE_LOCALE[lang], { day: 'numeric', month: 'short' });
   const time = d.toLocaleTimeString(DATE_LOCALE[lang], { hour: '2-digit', minute: '2-digit' });
   return `${date}, ${time}`;
+}
+
+// İstatistik sekmesinin en üstündeki tek "sonuç" bandı — kullanıcının asıl
+// merak ettiği "yetişecek miyim?" sorusunu 6 kutuyu birleştirmeden tek cümleyle
+// yanıtlar. Yalnız sayısal hedefte ve tempo/son tarih verisi varken üretilir;
+// yoksa null (bant gösterilmez). tone renk verir: good=yeşil, bad=kırmızı,
+// neutral=vurgu.
+type Verdict = { text: string; sub?: string; tone: 'good' | 'bad' | 'neutral' };
+function buildVerdict(
+  goal: { goal_type: string; deadline: string | null; unit: string | null },
+  stats: GoalStats,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  lang: 'tr' | 'en' | 'de',
+  fmt: (n: number) => string
+): Verdict | null {
+  if (goal.goal_type !== 'numeric') return null;
+  const unitSuffix = goal.unit ? ` ${goal.unit}` : '';
+  if (stats.completed) return { text: t('goalStats.verdictDone'), tone: 'good' };
+
+  // Gerçek tempodan tahmini bitiş var: son tarihle kıyasla.
+  if (stats.projectedFinishDate) {
+    const finish = shortDate(stats.projectedFinishDate, lang);
+    if (goal.deadline) {
+      const gap = diffDays(stats.projectedFinishDate, goal.deadline); // >0 = erken
+      if (gap > 0) return { text: t('goalStats.verdictEarly', { date: finish, n: gap }), tone: 'good' };
+      if (gap === 0) return { text: t('goalStats.verdictOnTime', { date: finish }), tone: 'good' };
+      return {
+        text: t('goalStats.verdictLate', { date: finish, n: -gap }),
+        sub:
+          stats.dailyPace != null
+            ? t('goalStats.verdictFix', { amount: `${fmt(stats.dailyPace)}${unitSuffix}` })
+            : undefined,
+        tone: 'bad',
+      };
+    }
+    return { text: t('goalStats.verdictFinish', { date: finish }), tone: 'neutral' };
+  }
+
+  // Henüz girdi yok ama gereken tempo hesaplanabiliyor: yalnız gerekliliği söyle.
+  if (stats.dailyPace != null && goal.deadline) {
+    return { text: t('goalStats.verdictNeed', { amount: `${fmt(stats.dailyPace)}${unitSuffix}` }), tone: 'neutral' };
+  }
+  return null;
+}
+
+function StatGroupTitle({ label, styles }: { label: string; styles: Styles }) {
+  return <Text style={styles.groupTitle}>{label}</Text>;
 }
 
 function StatCard({
@@ -98,6 +148,10 @@ export default function GoalDetailScreen() {
   const stats = useGoalStats(id);
   const [activeTab, setActiveTab] = useState<GoalTab>((tab as GoalTab) || 'overview');
   const [newMilestone, setNewMilestone] = useState('');
+  // Yeni adımın opsiyonel miktarı (yalnız sayısal hedefte görünür) ve son tarihi.
+  const [newMilestoneAmount, setNewMilestoneAmount] = useState('');
+  const [newMilestoneDate, setNewMilestoneDate] = useState<string | null>(null);
+  const [showMilestoneDatePicker, setShowMilestoneDatePicker] = useState(false);
   // Genel sekmesindeki serbest miktar girişi ("kaç {unit} ekledin?").
   const [entryText, setEntryText] = useState('');
 
@@ -109,6 +163,14 @@ export default function GoalDetailScreen() {
   // goalEntryRepo'ya tarihiyle bir günlük kaydı düşülür ki kullanıcı Genel
   // sekmesinde "ne zaman ne kadar eklediğini" görebilsin (current_value'nun
   // kaynağı yine addProgress'tir, bu kayıt salt görüntüleme içindir).
+  // Tamamlanma durumu değişmiş olabilecek her mutasyondan sonra hatırlatmayı
+  // güncel duruma göre yeniden kur: scheduleGoalReminder tamamlanan/remind_at'sız
+  // hedefte kendiliğinden yalnız iptal eder (cancel-then-maybe-schedule deseni).
+  const refreshReminder = () => {
+    const g = goalRepo.getById(id);
+    if (g) scheduleGoalReminder(g).catch(() => {});
+  };
+
   const submitEntry = () => {
     if (!goal) return;
     const parsed = parseFloat(entryText.replace(',', '.'));
@@ -118,6 +180,7 @@ export default function GoalDetailScreen() {
     const g = goalRepo.getById(goal.id);
     g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
     setEntryText('');
+    refreshReminder();
     stats.reload();
   };
   const toggleGoalCompleted = () => {
@@ -125,6 +188,7 @@ export default function GoalDetailScreen() {
     const completing = goal.completed_at === null;
     goalRepo.setCompleted(goal.id, completing);
     completing ? notifySuccess() : tapLight();
+    refreshReminder();
     stats.reload();
   };
 
@@ -147,15 +211,27 @@ export default function GoalDetailScreen() {
   };
   const refreshMilestones = () => {
     syncGoalCompletion();
+    refreshReminder(); // adımlar hedefi tamamlamış/geri açmış olabilir
     stats.reload();
   };
   const addMilestone = () => {
     const v = newMilestone.trim();
     if (!v || !goal) return;
-    goalMilestoneRepo.create(goal.id, v);
+    // Miktar yalnız sayısal hedefte anlamlı; doluysa adım ara-eşik olur
+    // (girişlerle dolar, işaretlenmez), boşsa sıradan checklist maddesi.
+    const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
+    const amount =
+      goal.goal_type === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
+        ? parsedAmount
+        : null;
+    goalMilestoneRepo.create(goal.id, v, { amount, due_date: newMilestoneDate });
     setNewMilestone('');
+    setNewMilestoneAmount('');
+    setNewMilestoneDate(null);
     refreshMilestones();
   };
+  // Yalnız checklist (miktarsız) adımlar elle işaretlenir; ara-eşik adımının
+  // durumu girişlerden türetilir (bkz. milestoneViews).
   const toggleMilestone = (m: GoalMilestone) => {
     goalMilestoneRepo.setCompleted(m.id, m.completed === 0);
     refreshMilestones();
@@ -173,14 +249,17 @@ export default function GoalDetailScreen() {
       target_value: values.target_value,
       unit: values.unit,
       deadline: values.deadline,
+      remind_at: values.remind_at,
       ...(values.current_value != null ? { current_value: values.current_value } : {}),
     });
+    refreshReminder();
     stats.reload();
     setActiveTab('overview');
   };
   const handleDelete = () => {
     if (!goal) return;
     goalRepo.softDelete(goal.id);
+    cancelGoalReminder(goal.id).catch(() => {});
     router.back();
   };
 
@@ -325,86 +404,150 @@ export default function GoalDetailScreen() {
               </View>
             )}
 
-            {/* — İSTATİSTİK — sayı+etiket kartları, cümle değil */}
+            {/* — İSTATİSTİK — üstte tek sonuç bandı, altında kompakt üst satır ve
+                başlıklı gruplar (gereken tempo / senin tempon). Onlarca eşit kutu
+                yerine hiyerarşi: göz önce "yetişecek miyim?" cevabına gider. */}
             {activeTab === 'stats' && (
-              <View style={styles.statsGrid}>
-                {goal.goal_type === 'numeric' && (
-                  <>
-                    <StatCard label={t('goal.statRatio')} value={`%${Math.round(stats.ratio * 100)}`} styles={styles} />
-                    <StatCard
-                      label={t('goal.statRemaining')}
-                      value={
-                        stats.remaining != null
-                          ? `${fmtAmount(stats.remaining)}${goal.unit ? ` ${goal.unit}` : ''}`
-                          : '–'
-                      }
-                      styles={styles}
-                    />
-                  </>
-                )}
+              <View>
+                {(() => {
+                  const verdict = buildVerdict(goal, stats, t, lang, fmtAmount);
+                  return verdict ? (
+                    <View
+                      style={[
+                        styles.verdict,
+                        verdict.tone === 'good' && styles.verdictGood,
+                        verdict.tone === 'bad' && styles.verdictBad,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.verdictText,
+                          verdict.tone === 'good' && styles.verdictTextGood,
+                          verdict.tone === 'bad' && styles.verdictTextBad,
+                        ]}
+                      >
+                        {verdict.text}
+                      </Text>
+                      {verdict.sub && <Text style={styles.verdictSub}>{verdict.sub}</Text>}
+                    </View>
+                  ) : null;
+                })()}
 
-                <StatCard
-                  label={t('goal.statDeadline')}
-                  value={goal.deadline ? shortDate(goal.deadline, lang) : '–'}
-                  styles={styles}
-                />
-
-                {stats.isOverdue ? (
+                {/* Üst satır — bir bakışta "neredeyim": ilerleme, kalan, son tarih, kalan gün */}
+                <View style={styles.statsGrid}>
+                  {goal.goal_type === 'numeric' && (
+                    <>
+                      <StatCard label={t('goal.statRatio')} value={`%${Math.round(stats.ratio * 100)}`} styles={styles} />
+                      <StatCard
+                        label={t('goal.statRemaining')}
+                        value={
+                          stats.remaining != null
+                            ? `${fmtAmount(stats.remaining)}${goal.unit ? ` ${goal.unit}` : ''}`
+                            : '–'
+                        }
+                        styles={styles}
+                      />
+                    </>
+                  )}
                   <StatCard
-                    label={t('goalStats.overdueDaysLabel')}
-                    value={String(stats.overdueDays)}
-                    accent="danger"
+                    label={t('goal.statDeadline')}
+                    value={goal.deadline ? shortDate(goal.deadline, lang) : '–'}
                     styles={styles}
                   />
-                ) : stats.daysLeft != null ? (
-                  <StatCard label={t('goalStats.daysLeftLabel')} value={String(stats.daysLeft)} styles={styles} />
-                ) : null}
+                  {stats.isOverdue ? (
+                    <StatCard
+                      label={t('goalStats.overdueDaysLabel')}
+                      value={String(stats.overdueDays)}
+                      accent="danger"
+                      styles={styles}
+                    />
+                  ) : stats.daysLeft != null ? (
+                    <StatCard label={t('goalStats.daysLeftLabel')} value={String(stats.daysLeft)} styles={styles} />
+                  ) : null}
+                </View>
 
+                {/* Gereken tempo — app'in senden istediği (son tarihe yetişmek için) */}
                 {goal.goal_type === 'numeric' && stats.dailyPace != null && (
                   <>
-                    <StatCard
-                      label={t('goalStats.dailyPaceLabel')}
-                      value={`${fmtAmount(stats.dailyPace)}${goal.unit ? ` ${goal.unit}` : ''}`}
-                      accent="primary"
-                      styles={styles}
-                    />
-                    <StatCard
-                      label={t('goalStats.weeklyPaceLabel')}
-                      value={`${fmtAmount(stats.weeklyPace!)}${goal.unit ? ` ${goal.unit}` : ''}`}
-                      styles={styles}
-                    />
-                    <StatCard
-                      label={t('goalStats.monthlyPaceLabel')}
-                      value={`${fmtAmount(stats.monthlyPace!)}${goal.unit ? ` ${goal.unit}` : ''}`}
-                      styles={styles}
-                    />
+                    <StatGroupTitle label={t('goalStats.groupRequiredPace')} styles={styles} />
+                    <View style={styles.statsGrid}>
+                      <StatCard
+                        label={t('goalStats.dailyPaceLabel')}
+                        value={`${fmtAmount(stats.dailyPace)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                        accent="primary"
+                        styles={styles}
+                      />
+                      <StatCard
+                        label={t('goalStats.weeklyPaceLabel')}
+                        value={`${fmtAmount(stats.weeklyPace!)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                        styles={styles}
+                      />
+                    </View>
                   </>
                 )}
 
-                {/* Adım tabanlı kartlar — adımı olan HER hedefte görünür, tipe bakılmaksızın
-                    (bkz. dosya başı yorumu: 'numeric' hedefe de opsiyonel checklist eklenebilir). */}
+                {/* Senin temponun — gerçekte yaptığın; üstteki grupla kıyaslanır */}
+                {goal.goal_type === 'numeric' && stats.avgDaily != null && (
+                  <>
+                    <StatGroupTitle label={t('goalStats.groupYourPace')} styles={styles} />
+                    <View style={styles.statsGrid}>
+                      <StatCard
+                        label={t('goalStats.avgDailyLabel')}
+                        value={`${fmtAmount(stats.avgDaily)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                        styles={styles}
+                      />
+                      {stats.last7Total != null && (
+                        <StatCard
+                          label={t('goalStats.last7Label')}
+                          value={`${fmtAmount(stats.last7Total)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                          styles={styles}
+                        />
+                      )}
+                      {stats.behindAmount != null && Math.abs(stats.behindAmount) >= 0.05 && (
+                        <StatCard
+                          label={t(stats.behindAmount > 0 ? 'goalStats.behindLabel' : 'goalStats.aheadLabel')}
+                          value={`${fmtAmount(Math.abs(stats.behindAmount))}${goal.unit ? ` ${goal.unit}` : ''}`}
+                          accent={stats.behindAmount > 0 ? 'danger' : undefined}
+                          styles={styles}
+                        />
+                      )}
+                      {stats.daysElapsed != null && (
+                        <StatCard
+                          label={t('goalStats.daysElapsedLabel')}
+                          value={String(stats.daysElapsed)}
+                          styles={styles}
+                        />
+                      )}
+                    </View>
+                  </>
+                )}
+
+                {/* Adımlar — adımı olan HER hedefte görünür, tipe bakılmaksızın */}
                 {stats.milestonesTotal > 0 && (
                   <>
-                    <StatCard
-                      label={t('goalStats.milestonesRemainingLabel')}
-                      value={String(stats.milestonesRemaining)}
-                      styles={styles}
-                    />
-                    {stats.milestonePaceDays != null && (
-                      <>
-                        <StatCard
-                          label={t('goalStats.milestonePaceLabel')}
-                          value={fmtAmount(stats.milestonePaceDays)}
-                          accent="primary"
-                          styles={styles}
-                        />
-                        <StatCard
-                          label={t('goalStats.milestoneWeeklyLabel')}
-                          value={fmtAmount(stats.milestoneWeeklyPace!)}
-                          styles={styles}
-                        />
-                      </>
-                    )}
+                    <StatGroupTitle label={t('goalStats.groupMilestones')} styles={styles} />
+                    <View style={styles.statsGrid}>
+                      <StatCard
+                        label={t('goalStats.milestonesRemainingLabel')}
+                        value={String(stats.milestonesRemaining)}
+                        styles={styles}
+                      />
+                      {stats.milestonePaceDays != null && (
+                        <>
+                          <StatCard
+                            label={t('goalStats.milestonePaceLabel')}
+                            value={fmtAmount(stats.milestonePaceDays)}
+                            accent="primary"
+                            styles={styles}
+                          />
+                          <StatCard
+                            label={t('goalStats.milestoneWeeklyLabel')}
+                            value={fmtAmount(stats.milestoneWeeklyPace!)}
+                            styles={styles}
+                          />
+                        </>
+                      )}
+                    </View>
                   </>
                 )}
 
@@ -412,31 +555,77 @@ export default function GoalDetailScreen() {
               </View>
             )}
 
-            {/* — ADIMLAR — her iki tipte de kullanılabilir; anında yazılır (subtask deseni) */}
+            {/* — ADIMLAR — iki kip: sayısal hedefte miktarlı adım = ara-eşik
+                (girişlerle kümülatif dolar, İŞARETLENEMEZ, yüzde barı gösterir);
+                miktarsız adım = elle işaretlenen checklist (subtask deseni). */}
             {activeTab === 'milestones' && (
               <View>
-                {stats.milestones.map((m) => {
-                  const done = m.completed === 1;
+                {stats.milestoneViews.map((v) => {
+                  const m = v.milestone;
+                  const threshold = goal.goal_type === 'numeric' && m.amount != null && m.amount > 0;
+                  const done = v.reached;
+                  const overdue = !!m.due_date && !done && m.due_date < todayDate();
                   return (
                     <View key={m.id} style={styles.milestoneRow}>
-                      <Pressable
-                        onPress={() => toggleMilestone(m)}
-                        hitSlop={8}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: done }}
-                        accessibilityLabel={m.title}
-                      >
-                        <View style={[styles.milestoneBox, done && styles.milestoneBoxDone]}>
-                          {done && <Text style={styles.milestoneCheck}>✓</Text>}
+                      {threshold ? (
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.milestoneTopRow}>
+                            <Text style={[styles.milestoneTitle, done && styles.milestoneTitleDone]}>
+                              {m.title}
+                            </Text>
+                            <Text style={[styles.milestonePct, done && styles.milestonePctDone]}>
+                              {done ? '✓' : `%${Math.round(v.ratio * 100)}`}
+                            </Text>
+                          </View>
+                          <View style={styles.milestoneBarTrack}>
+                            <View
+                              style={[styles.milestoneBarFill, { width: `${Math.round(v.ratio * 100)}%` }]}
+                            />
+                          </View>
+                          <View style={styles.milestoneMetaRow}>
+                            <Text style={styles.milestoneMeta}>
+                              {fmtAmount(m.amount!)}
+                              {goal.unit ? ` ${goal.unit}` : ''}
+                            </Text>
+                            {m.due_date && (
+                              <Text style={[styles.milestoneMeta, overdue && styles.milestoneMetaOverdue]}>
+                                {shortDate(m.due_date, lang)}
+                              </Text>
+                            )}
+                          </View>
                         </View>
-                      </Pressable>
-                      <Text style={[styles.milestoneTitle, done && styles.milestoneTitleDone]}>{m.title}</Text>
+                      ) : (
+                        <>
+                          <Pressable
+                            onPress={() => toggleMilestone(m)}
+                            hitSlop={8}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: done }}
+                            accessibilityLabel={m.title}
+                          >
+                            <View style={[styles.milestoneBox, done && styles.milestoneBoxDone]}>
+                              {done && <Text style={styles.milestoneCheck}>✓</Text>}
+                            </View>
+                          </Pressable>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.milestoneTitle, done && styles.milestoneTitleDone]}>
+                              {m.title}
+                            </Text>
+                            {m.due_date && (
+                              <Text style={[styles.milestoneMeta, overdue && styles.milestoneMetaOverdue]}>
+                                {shortDate(m.due_date, lang)}
+                              </Text>
+                            )}
+                          </View>
+                        </>
+                      )}
                       <Pressable onPress={() => removeMilestone(m)} hitSlop={10}>
                         <Text style={styles.milestoneDelete}>×</Text>
                       </Pressable>
                     </View>
                   );
                 })}
+
                 <View style={styles.milestoneAddRow}>
                   <TextInput
                     style={styles.milestoneInput}
@@ -449,10 +638,46 @@ export default function GoalDetailScreen() {
                     returnKeyType="done"
                     maxLength={TITLE_MAX_LEN}
                   />
+                  {goal.goal_type === 'numeric' && (
+                    <TextInput
+                      style={styles.milestoneAmountInput}
+                      value={newMilestoneAmount}
+                      onChangeText={setNewMilestoneAmount}
+                      placeholder={goal.unit ?? t('goal.milestoneAmountPlaceholder')}
+                      placeholderTextColor={colors.faint}
+                      keyboardType="numeric"
+                      maxLength={NUMBER_MAX_LEN}
+                    />
+                  )}
+                  <Pressable
+                    style={[styles.milestoneDateBtn, newMilestoneDate && styles.milestoneDateBtnSet]}
+                    onPress={() =>
+                      newMilestoneDate ? setNewMilestoneDate(null) : setShowMilestoneDatePicker(true)
+                    }
+                    accessibilityLabel={t('goal.milestoneDueA11y')}
+                  >
+                    <Text style={styles.milestoneDateBtnText}>
+                      {newMilestoneDate ? `${shortDate(newMilestoneDate, lang)} ×` : '📅'}
+                    </Text>
+                  </Pressable>
                   <Pressable style={styles.milestoneAddBtn} onPress={addMilestone}>
                     <Text style={styles.milestoneAddText}>＋</Text>
                   </Pressable>
                 </View>
+                {showMilestoneDatePicker && (
+                  <DateTimePicker
+                    value={new Date(`${newMilestoneDate ?? todayDate()}T00:00:00`)}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                    onChange={(_e: unknown, picked?: Date) => {
+                      setShowMilestoneDatePicker(Platform.OS === 'ios');
+                      if (picked) setNewMilestoneDate(toYmd(picked));
+                    }}
+                  />
+                )}
+                {goal.goal_type === 'numeric' && (
+                  <Text style={styles.milestoneHint}>{t('goal.milestoneThresholdHint')}</Text>
+                )}
               </View>
             )}
 
@@ -594,6 +819,29 @@ const makeStyles = (c: Colors) =>
     habitTitle: { flex: 1, fontSize: 14, color: c.text, fontWeight: '600' },
     habitChevron: { fontSize: 18, color: c.faint },
 
+    // — İstatistik: sonuç bandı + grup başlıkları —
+    verdict: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.card,
+      padding: 16,
+      marginBottom: 18,
+    },
+    verdictGood: { borderColor: c.done, backgroundColor: c.done + '18' },
+    verdictBad: { borderColor: c.danger, backgroundColor: c.danger + '18' },
+    verdictText: { fontSize: 16, fontWeight: '800', color: c.text, lineHeight: 22 },
+    verdictTextGood: { color: c.done },
+    verdictTextBad: { color: c.danger },
+    verdictSub: { fontSize: 13, color: c.muted, fontWeight: '600', marginTop: 6 },
+    groupTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.muted,
+      marginTop: 22,
+      marginBottom: 10,
+    },
+
     // — İstatistik kartları (grid) —
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     statCard: {
@@ -612,8 +860,45 @@ const makeStyles = (c: Colors) =>
     statLabel: { fontSize: 11, color: c.muted, marginTop: 4, textAlign: 'center' },
     paceHint: { fontSize: 12, color: c.faint, marginTop: 4, width: '100%' },
 
-    // — Adımlar (milestone checklist) —
+    // — Adımlar (checklist + ara-eşik barları) —
     milestoneRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
+    milestoneTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+    milestonePct: { fontSize: 13, fontWeight: '800', color: c.primary },
+    milestonePctDone: { color: c.done },
+    milestoneBarTrack: {
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: c.track,
+      overflow: 'hidden',
+      marginTop: 6,
+    },
+    milestoneBarFill: { height: '100%', borderRadius: 4, backgroundColor: c.primary },
+    milestoneMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+    milestoneMeta: { fontSize: 11, color: c.faint, fontWeight: '600' },
+    milestoneMetaOverdue: { color: c.danger },
+    milestoneAmountInput: {
+      width: 76,
+      textAlign: 'center',
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    milestoneDateBtn: {
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+      paddingHorizontal: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    milestoneDateBtnSet: { borderColor: c.primary, backgroundColor: c.primarySoft },
+    milestoneDateBtnText: { fontSize: 12, fontWeight: '700', color: c.muted },
+    milestoneHint: { fontSize: 11, color: c.faint, marginTop: 10, lineHeight: 15 },
     milestoneBox: {
       width: 20,
       height: 20,

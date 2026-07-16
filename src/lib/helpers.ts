@@ -110,16 +110,54 @@ export function isWithinHabitDates(
   return true;
 }
 
+// İki "YYYY-MM-DD" arasındaki tam gün farkı (b - a; b ileriyse pozitif).
+export function diffDays(aYmd: string, bYmd: string): number {
+  const a = new Date(`${aYmd}T00:00:00`);
+  const b = new Date(`${bYmd}T00:00:00`);
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+}
+
+// Verilen günün içinde bulunduğu haftanın pazartesisi ("YYYY-MM-DD").
+// Kota ("haftada X kez") hesapları haftayı hep Pazartesi başlangıçlı sayar.
+export function weekStartOf(dateYmd: string): string {
+  const d = new Date(`${dateYmd}T00:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return toYmd(d);
+}
+
+// Haftalık ESNEK KOTA kuralı mı ("haftada X kez", gün seçilmeden)?
+// Kota kuralında hiçbir gün tek başına "vadeli" değildir: alışkanlık her gün
+// yapılabilir, başarı ölçüsü haftalık toplamdır (seri de hafta bazında sayılır).
+export function isQuotaSchedule(schedule: Recurrence | null): boolean {
+  return (
+    !!schedule &&
+    schedule.freq === 'weekly' &&
+    (schedule.weekdays?.length ?? 0) === 0 &&
+    (schedule.timesPerWeek ?? 0) > 0
+  );
+}
+
 // Bir tekrar kuralı verilen günde ("YYYY-MM-DD") geçerli mi? null = her gün.
 // Alışkanlığın o gün "vadeli/planlı" olup olmadığını belirler (streak + Bugün filtresi).
+// Kota kuralı (haftada X kez) her gün "müsait" sayılır — değerlendirme haftalıktır.
 export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boolean {
   if (!schedule || schedule.freq === 'daily') return true;
-  const d = new Date(`${dateYmd}T00:00:00`);
   if (schedule.freq === 'weekly') {
+    if (isQuotaSchedule(schedule)) return true;
+    const d = new Date(`${dateYmd}T00:00:00`);
     return schedule.weekdays?.includes(d.getDay()) ?? false;
   }
   if (schedule.freq === 'monthly') {
-    return d.getDate() === schedule.monthDay;
+    return new Date(`${dateYmd}T00:00:00`).getDate() === schedule.monthDay;
+  }
+  if (schedule.freq === 'interval') {
+    const every = schedule.every ?? 0;
+    if (every < 1 || !schedule.anchor) return true; // bozuk kural — güvenli taraf: her gün
+    const diff = diffDays(schedule.anchor, dateYmd);
+    return diff >= 0 && diff % every === 0;
+  }
+  if (schedule.freq === 'yearly') {
+    return schedule.dates?.includes(dateYmd.slice(5)) ?? false;
   }
   return true;
 }
@@ -142,7 +180,8 @@ export function nextTaskOccurrence(
   // (vadesi gelecekte) görevde kendi gününden sonrasına geç.
   const baseYmd = dueYmd > today ? dueYmd : today;
   const d = new Date(`${baseYmd}T00:00:00`);
-  for (let i = 0; i < 366; i++) {
+  // 4+ yıl tarama: yıllık kuralda 29 Şubat gibi en seyrek gün bile bulunur.
+  for (let i = 0; i < 1462; i++) {
     d.setDate(d.getDate() + 1);
     const ymd = toYmd(d);
     if (isScheduledOn(recurrence, ymd)) return `${ymd}${timePart}`;
@@ -150,21 +189,58 @@ export function nextTaskOccurrence(
   return null;
 }
 
-// Sıklık kuralının okunabilir kısa etiketi ("Her gün" / "Pzt·Çar·Cum").
-// everyDayLabel ve dayLabels (JS getDay() sırasıyla, 0=Pazar...6=Cumartesi)
-// çağırandan (t()) gelir — bu fonksiyon dile bağımlı metin barındırmaz.
-export function scheduleLabel(
-  schedule: Recurrence | null,
-  everyDayLabel: string,
-  dayLabels: string[]
-): string {
-  if (!schedule || schedule.freq === 'daily') return everyDayLabel;
+// scheduleLabel'ın dil bağımlı parçaları — çağıran t() üzerinden üretir
+// (bkz. buildScheduleLabels). Bu modül çevrilmiş metin barındırmaz.
+export interface ScheduleLabels {
+  everyDay: string;
+  dayNames: string[]; // JS getDay() sırası (0=Pazar ... 6=Cumartesi)
+  everyNDays: (n: number) => string;   // "3 günde bir"
+  timesPerWeek: (n: number) => string; // "Haftada 3 kez"
+  monthDay: (d: number) => string;     // "Her ayın 15'i"
+  yearly: (dates: string) => string;   // "Her yıl: 12 Şub, 1 Oca"
+  formatMonthDay: (md: string) => string; // "MM-DD" -> "12 Şub" (yerelli) ya da "12.02"
+}
+
+// Ortak etiket fabrikası: hem React tarafı (useI18n().t) hem React-dışı taraf
+// (translate(lang, ...)) aynı imzada bir çevirici verebilir. formatMonthDay
+// verilmezse yerelsiz "GG.AA" biçimi kullanılır.
+export function buildScheduleLabels(
+  tr: (key: string, params?: Record<string, string | number>) => string,
+  formatMonthDay?: (md: string) => string
+): ScheduleLabels {
+  const DAY_KEYS = [
+    'weekday.sun', 'weekday.mon', 'weekday.tue', 'weekday.wed',
+    'weekday.thu', 'weekday.fri', 'weekday.sat',
+  ];
+  return {
+    everyDay: tr('habit.everyDay'),
+    dayNames: DAY_KEYS.map((k) => tr(k)),
+    everyNDays: (n) => tr('schedule.everyNDays', { n }),
+    timesPerWeek: (n) => tr('schedule.timesPerWeek', { n }),
+    monthDay: (d) => tr('schedule.monthDay', { d }),
+    yearly: (dates) => tr('schedule.yearly', { dates }),
+    formatMonthDay: formatMonthDay ?? ((md) => md.split('-').reverse().join('.')),
+  };
+}
+
+// Sıklık kuralının okunabilir kısa etiketi ("Her gün" / "Pzt·Çar·Cum" /
+// "3 günde bir" / "Haftada 3 kez" / "Her ayın 15'i" / "Her yıl: ...").
+export function scheduleLabel(schedule: Recurrence | null, labels: ScheduleLabels): string {
+  if (!schedule || schedule.freq === 'daily') return labels.everyDay;
   if (schedule.freq === 'weekly') {
+    if (isQuotaSchedule(schedule)) return labels.timesPerWeek(schedule.timesPerWeek ?? 1);
     const wds = schedule.weekdays ?? [];
-    if (wds.length === 0 || wds.length === 7) return everyDayLabel;
+    if (wds.length === 0 || wds.length === 7) return labels.everyDay;
     return WEEKDAY_DISPLAY_ORDER.filter((w) => wds.includes(w))
-      .map((w) => dayLabels[w])
+      .map((w) => labels.dayNames[w])
       .join('·');
   }
-  return everyDayLabel;
+  if (schedule.freq === 'monthly') return labels.monthDay(schedule.monthDay ?? 1);
+  if (schedule.freq === 'interval') return labels.everyNDays(schedule.every ?? 1);
+  if (schedule.freq === 'yearly') {
+    const ds = [...(schedule.dates ?? [])].sort();
+    if (ds.length === 0) return labels.everyDay;
+    return labels.yearly(ds.map(labels.formatMonthDay).join(', '));
+  }
+  return labels.everyDay;
 }

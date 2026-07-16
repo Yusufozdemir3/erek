@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { habitRepo, taskRepo, userRepo } from '@/db';
+import { goalRepo, habitRepo, taskRepo, userRepo } from '@/db';
 import {
   currentAuthUser,
   currentUid,
@@ -26,7 +26,11 @@ import {
   type AuthUser,
   type SyncResult,
 } from '@/sync';
-import { rescheduleAllReminders, rescheduleAllTaskReminders } from '@/lib/notifications';
+import {
+  rescheduleAllGoalReminders,
+  rescheduleAllReminders,
+  rescheduleAllTaskReminders,
+} from '@/lib/notifications';
 import {
   DEFAULT_NOTIFICATION_PREFS,
   getNotificationPrefs,
@@ -47,7 +51,7 @@ const THEME_OPTIONS: { mode: ThemeMode; labelKey: string }[] = [
 ];
 
 export default function ProfileScreen() {
-  const { colors, scheme, mode, setMode, accent, setAccent } = useTheme();
+  const { colors, scheme, mode, setMode, accent, setAccent, darkStyle, setDarkStyle } = useTheme();
   const { t, lang, setLang } = useI18n();
   const styles = makeStyles(colors);
   const { user, refreshUser, hideCompleted, setHideCompleted } = useAppData();
@@ -78,6 +82,9 @@ export default function ProfileScreen() {
     );
     rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
       console.warn('[Bildirim] Tercih sonrası görev yeniden kurulumu başarısız:', e)
+    );
+    rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
+      console.warn('[Bildirim] Tercih sonrası hedef yeniden kurulumu başarısız:', e)
     );
   };
 
@@ -168,6 +175,29 @@ export default function ProfileScreen() {
           })}
         </View>
         <Text style={styles.hint}>{t('profile.systemHint')}</Text>
+
+        {/* Koyu tema stili — sıcak mürekkep / tam siyah (AMOLED). Işık temada da
+            seçilebilir kalır; koyu tema aktifleşince etkisini gösterir. */}
+        <Text style={styles.subCardTitle}>{t('profile.darkStyle')}</Text>
+        <View style={styles.segRow}>
+          {(
+            [
+              { style: 'warm', labelKey: 'profile.darkWarm' },
+              { style: 'black', labelKey: 'profile.darkBlack' },
+            ] as { style: 'warm' | 'black'; labelKey: string }[]
+          ).map((opt) => {
+            const on = darkStyle === opt.style;
+            return (
+              <Pressable
+                key={opt.style}
+                style={[styles.segBtn, on && styles.segBtnOn]}
+                onPress={() => setDarkStyle(opt.style)}
+              >
+                <Text style={[styles.segText, on && styles.segTextOn]}>{t(opt.labelKey)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       {/* Vurgu (marka) rengi */}
@@ -245,7 +275,7 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {(['habitReminders', 'taskReminders', 'timerDone', 'sound'] as const).map((key) => (
+        {(['habitReminders', 'taskReminders', 'goalReminders', 'timerDone', 'sound'] as const).map((key) => (
           <View
             key={key}
             style={[styles.switchRow, styles.switchRowSpaced, !notifPrefs.enabled && styles.rowDisabled]}
@@ -256,9 +286,11 @@ export default function ProfileScreen() {
                   ? 'profile.notifHabitReminders'
                   : key === 'taskReminders'
                     ? 'profile.notifTaskReminders'
-                    : key === 'timerDone'
-                      ? 'profile.notifTimerDone'
-                      : 'profile.notifSound'
+                    : key === 'goalReminders'
+                      ? 'profile.notifGoalReminders'
+                      : key === 'timerDone'
+                        ? 'profile.notifTimerDone'
+                        : 'profile.notifSound'
               )}
             </Text>
             <Switch
@@ -388,6 +420,8 @@ const makeStyles = (c: Colors) =>
       padding: 16,
     },
     cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12 },
+    // Kart içi ikinci başlık (ör. Görünüm kartındaki "Koyu tema stili").
+    subCardTitle: { fontSize: 13, fontWeight: '700', color: c.muted, marginTop: 16, marginBottom: 10 },
     muted: { fontSize: 14, color: c.muted, lineHeight: 20 },
     hint: { fontSize: 12, color: c.faint, marginTop: 10 },
     code: { fontWeight: '700', color: c.text },

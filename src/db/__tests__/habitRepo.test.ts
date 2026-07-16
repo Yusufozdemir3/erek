@@ -407,47 +407,65 @@ describe('allStreaks', () => {
   });
 });
 
-describe('scoreHistory', () => {
-  it('hiç log yoksa boş dizi', () => {
-    const habit = createHabit();
-    expect(habitRepo.scoreHistory(habit.id, 90)).toEqual([]);
+describe('kota (haftada X kez) — hafta bazlı seriler', () => {
+  // TODAY (1 Tem Çar) haftası: 29 Haz Pzt – 5 Tem Paz. Önceki hafta: 22-28 Haz.
+  const quota3 = { freq: 'weekly' as const, timesPerWeek: 3 };
+
+  it('bu haftanın kotası dolunca güncel seri 1 (hafta) olur', () => {
+    const habit = createHabit({ schedule: quota3 });
+    habitRepo.toggleLog(habit.id, '2026-06-29', true); // Pzt
+    habitRepo.toggleLog(habit.id, '2026-06-30', true); // Sal
+    habitRepo.toggleLog(habit.id, TODAY, true);        // Çar
+    expect(habitRepo.currentStreak(habit.id)).toBe(1);
   });
 
-  it('her tamamlanan günde skor artar, kaçırılan günde düşer', () => {
-    const habit = createHabit();
-    habitRepo.toggleLog(habit.id, '2026-06-28', true);
-    habitRepo.toggleLog(habit.id, '2026-06-29', true);
-    // 30 Haziran kaçırıldı
-    habitRepo.toggleLog(habit.id, TODAY, true);
-
-    const history = habitRepo.scoreHistory(habit.id, 90);
-    const byDate = new Map(history.map((h) => [h.date, h.score]));
-    expect(byDate.get('2026-06-28')!).toBeGreaterThan(0);
-    expect(byDate.get('2026-06-29')!).toBeGreaterThan(byDate.get('2026-06-28')!);
-    // Kaçırılan gün skoru düşürür.
-    expect(byDate.get('2026-06-30')!).toBeLessThan(byDate.get('2026-06-29')!);
-    // Skor her zaman 0..1 aralığında.
-    for (const h of history) {
-      expect(h.score).toBeGreaterThanOrEqual(0);
-      expect(h.score).toBeLessThanOrEqual(1);
-    }
-  });
-
-  it('yalnızca istenen son N günü döner', () => {
-    const habit = createHabit();
+  it('bu hafta henüz dolmadıysa seriyi bozmaz; önceki dolu haftalar sayılır', () => {
+    const habit = createHabit({ schedule: quota3 });
+    // Önceki hafta (22-28 Haz): kota dolu.
+    habitRepo.toggleLog(habit.id, '2026-06-22', true);
     habitRepo.toggleLog(habit.id, '2026-06-24', true);
-    habitRepo.toggleLog(habit.id, TODAY, true);
-    expect(habitRepo.scoreHistory(habit.id, 3)).toHaveLength(3);
+    habitRepo.toggleLog(habit.id, '2026-06-26', true);
+    // Bu hafta: yalnız 1 (kota dolmadı ama hafta bitmedi → tolere edilir).
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    expect(habitRepo.currentStreak(habit.id)).toBe(1);
   });
 
-  it('plansız günde skor değişmez (bir önceki değerle taşınır)', () => {
-    const schedule = { freq: 'weekly' as const, weekdays: [1, 3, 5] }; // Pzt/Çar/Cum
-    const habit = createHabit({ schedule });
-    habitRepo.toggleLog(habit.id, '2026-06-24', true); // Çar (planlı)
-    const history = habitRepo.scoreHistory(habit.id, 90);
-    const byDate = new Map(history.map((h) => [h.date, h.score]));
-    // 25 Haziran (Perşembe) plansız — skor 24 Haziran'la aynı kalmalı.
-    expect(byDate.get('2026-06-25')).toBe(byDate.get('2026-06-24'));
+  it('araya kota dolmamış tam hafta girerse seri kırılır', () => {
+    const habit = createHabit({ schedule: quota3 });
+    // 2 hafta önce (15-21 Haz) dolu.
+    habitRepo.toggleLog(habit.id, '2026-06-15', true);
+    habitRepo.toggleLog(habit.id, '2026-06-16', true);
+    habitRepo.toggleLog(habit.id, '2026-06-17', true);
+    // Geçen hafta (22-28 Haz) yalnız 1 → kota dolmadı.
+    habitRepo.toggleLog(habit.id, '2026-06-23', true);
+    // Bu hafta dolu.
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    habitRepo.toggleLog(habit.id, '2026-06-30', true);
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(habitRepo.currentStreak(habit.id)).toBe(1);
+    expect(habitRepo.longestStreak(habit.id)).toBe(1);
+  });
+
+  it('longestStreak/allStreaks hafta sayar; allStreaks hafta aralığı döner', () => {
+    const habit = createHabit({ schedule: { freq: 'weekly', timesPerWeek: 2 } });
+    // 15-21 Haz: 2 ✓, 22-28 Haz: 2 ✓ → 2 haftalık seri.
+    habitRepo.toggleLog(habit.id, '2026-06-15', true);
+    habitRepo.toggleLog(habit.id, '2026-06-18', true);
+    habitRepo.toggleLog(habit.id, '2026-06-22', true);
+    habitRepo.toggleLog(habit.id, '2026-06-27', true);
+    expect(habitRepo.longestStreak(habit.id)).toBe(2);
+    const streaks = habitRepo.allStreaks(habit.id);
+    // start = ilk haftanın pazartesisi, end = son haftanın pazarı.
+    expect(streaks[0]).toEqual({ length: 2, start: '2026-06-15', end: '2026-06-28' });
+  });
+
+  it('completionsInWeek verilen günün haftasındaki tamamlanan gün sayısıdır', () => {
+    const habit = createHabit({ schedule: quota3 });
+    habitRepo.toggleLog(habit.id, '2026-06-29', true); // bu hafta
+    habitRepo.toggleLog(habit.id, TODAY, true);        // bu hafta
+    habitRepo.toggleLog(habit.id, '2026-06-28', true); // önceki haftanın pazarı
+    expect(habitRepo.completionsInWeek(habit.id, TODAY)).toBe(2);
+    expect(habitRepo.completionsInWeek(habit.id, '2026-06-28')).toBe(1);
   });
 });
 

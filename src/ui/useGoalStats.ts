@@ -12,9 +12,10 @@
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { goalEntryRepo, goalMilestoneRepo, goalRepo, habitRepo } from '@/db';
-import type { Goal, GoalEntry, GoalMilestone } from '@/db';
+import { goalEntryRepo, goalMilestoneRepo, goalRepo, habitRepo, milestoneViews as computeMilestoneViews } from '@/db';
+import type { Goal, GoalEntry, GoalMilestone, MilestoneView } from '@/db';
 import { todayDate } from '@/lib/helpers';
+import { goalProjection } from '@/lib/goalProjection';
 
 export interface LinkedHabit {
   id: string;
@@ -36,10 +37,30 @@ export interface GoalStats {
   dailyPace: number | null;
   weeklyPace: number | null;
   monthlyPace: number | null;
+  // — Girdi geçmişinden türetilen gerçekleşen tempo + projeksiyonlar (numeric) —
+  // avgDaily: günlük ortalama ilerleme. Son 14 günde girdi varsa o pencereden,
+  // yoksa ilk girdiden bugüne genel ortalamadan hesaplanır. Girdi yoksa null.
+  avgDaily: number | null;
+  // Bu hızla son tarihte ulaşılacak miktar (deadline gelecekte + avgDaily varken).
+  projectedAtDeadline: number | null;
+  // Bu hızla hedefin biteceği tahmini tarih ("YYYY-MM-DD"; avgDaily>0 iken).
+  projectedFinishDate: string | null;
+  // Doğrusal plana göre fark: pozitif = plana göre GERİDE, negatif = önde.
+  // Plan: ilk girdi gününde 0'dan son tarihte hedefe düz çizgi.
+  behindAmount: number | null;
+  // İlk girdiden bugüne geçen gün (girdi yoksa null).
+  daysElapsed: number | null;
+  // Günlük ortalama ilerlemenin hedefe oranı (0..1; %'ye çevirip göster).
+  dailyPercent: number | null;
+  // Son 7 günde girilen toplam miktar (girdi yoksa null).
+  last7Total: number | null;
   // Adımlar artık HER İKİ tipte de opsiyonel olabilir ('numeric' hedefe de
   // checklist eklenebilir) — bu alanlar milestonesTotal>0 iken doludur, tipe
   // bakılmaksızın.
   milestones: GoalMilestone[];
+  // Adım görünümleri: miktarı olan adımlar current_value'dan kümülatif dolan
+  // ara-eşik barları; miktarsızlar checklist (bkz. goalMilestoneRepo.milestoneViews).
+  milestoneViews: MilestoneView[];
   milestonesDone: number;
   milestonesTotal: number;
   milestonesRemaining: number;
@@ -64,7 +85,15 @@ const EMPTY_BASE = {
   dailyPace: null,
   weeklyPace: null,
   monthlyPace: null,
+  avgDaily: null,
+  projectedAtDeadline: null,
+  projectedFinishDate: null,
+  behindAmount: null,
+  daysElapsed: null,
+  dailyPercent: null,
+  last7Total: null,
   milestones: [] as GoalMilestone[],
+  milestoneViews: [] as MilestoneView[],
   milestonesDone: 0,
   milestonesTotal: 0,
   milestonesRemaining: 0,
@@ -110,12 +139,14 @@ export function useGoalStats(goalId: string): GoalStats {
     const monthlyPace = dailyPace != null ? dailyPace * 30 : null;
 
     // Adımlar tipten bağımsız çekilir: 'milestone' hedefte zorunlu iş akışının
-    // parçası, 'numeric' hedefte tamamen opsiyonel bir checklist (tamamlanma
-    // durumunu ETKİLEMEZ — bkz. goalRepo.setCompleted'in tip koruması).
+    // parçası, 'numeric' hedefte miktarlı ara-eşik ya da (miktarsızsa) checklist
+    // (tamamlanma durumunu ETKİLEMEZ — bkz. goalRepo.setCompleted'in tip koruması).
+    // "done" sayısı görünümlerden gelir: eşik adımı current_value'dan, checklist
+    // adımı completed kolonundan sayılır.
     const milestones = goalMilestoneRepo.listByGoal(goal.id);
-    const milestoneCounts = goalMilestoneRepo.countForGoal(goal.id);
-    const milestonesDone = milestoneCounts.done;
-    const milestonesTotal = milestoneCounts.total;
+    const views = computeMilestoneViews(milestones, goal.current_value);
+    const milestonesDone = views.filter((v) => v.reached).length;
+    const milestonesTotal = views.length;
     const milestonesRemaining = Math.max(0, milestonesTotal - milestonesDone);
     // Tempo: adımı olan HERHANGİ bir hedefte anlamlı (yalnızca 'milestone' değil).
     const milestonePaceDays =
@@ -133,6 +164,37 @@ export function useGoalStats(goalId: string): GoalStats {
 
     const entries = goalEntryRepo.listByGoal(goal.id);
 
+    // Gerçekleşen tempo + projeksiyonlar (yalnız numeric hedefte anlamlı). Saf
+    // fonksiyona çıkarıldı (bkz. lib/goalProjection.ts — tasarım kararları + test).
+    const {
+      avgDaily,
+      daysElapsed,
+      last7Total,
+      projectedAtDeadline,
+      projectedFinishDate,
+      behindAmount,
+      dailyPercent,
+    } =
+      goal.goal_type === 'numeric'
+        ? goalProjection({
+            entries,
+            target: goal.target_value,
+            current: goal.current_value,
+            remaining,
+            daysLeft,
+            completed,
+            today: todayDate(),
+          })
+        : {
+            avgDaily: null,
+            daysElapsed: null,
+            last7Total: null,
+            projectedAtDeadline: null,
+            projectedFinishDate: null,
+            behindAmount: null,
+            dailyPercent: null,
+          };
+
     setStats({
       goal,
       ratio,
@@ -144,7 +206,15 @@ export function useGoalStats(goalId: string): GoalStats {
       dailyPace,
       weeklyPace,
       monthlyPace,
+      avgDaily,
+      projectedAtDeadline,
+      projectedFinishDate,
+      behindAmount,
+      daysElapsed,
+      dailyPercent,
+      last7Total,
       milestones,
+      milestoneViews: views,
       milestonesDone,
       milestonesTotal,
       milestonesRemaining,

@@ -112,6 +112,34 @@ export async function signInWithEmail(email: string, password: string): Promise<
   await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
+// — PAROLA SIFIRLAMA — uygulama İÇİ kod akışı (deep link/web sayfası gerekmez):
+// 1) requestPasswordReset(email): Supabase kurtarma e-postası yollar.
+//    ÖNEMLİ: e-posta şablonunda 6 haneli kod ({{ .Token }}) görünmeli —
+//    Supabase panelinde Authentication > Email Templates > "Reset Password"
+//    şablonuna {{ .Token }} eklenir (varsayılan şablon yalnız link içerir).
+// 2) resetPasswordWithCode(email, kod, yeniParola): kodu verifyOtp(type:
+//    'recovery') ile doğrular (bu, oturum da açar) ve updateUser ile yeni
+//    parolayı yazar. Başarılıysa kullanıcı GİRİŞ YAPMIŞ olur.
+export async function requestPasswordReset(email: string): Promise<void> {
+  if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) throw error;
+}
+
+export async function resetPasswordWithCode(
+  email: string,
+  code: string,
+  newPassword: string
+): Promise<void> {
+  if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
+  const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: 'recovery' });
+  if (error) throw error;
+  const { error: updErr } = await supabase.auth.updateUser({ password: newPassword });
+  if (updErr) throw updErr;
+  // Kod doğrulaması gerçek bir oturum açtı — bilerek-çıkış bayrağı artık bayat.
+  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
+}
+
 // Hesabı ve buluttaki TÜM veriyi KALICI olarak siler (Google Play hesap-silme
 // zorunluluğu). Sunucudaki SECURITY DEFINER delete_account() RPC'si çağrılır
 // (bkz. supabase/schema.sql): kullanıcının satırlarını ve auth kaydını tek

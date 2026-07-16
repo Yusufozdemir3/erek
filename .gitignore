@@ -23,6 +23,10 @@ yarn-error.*
 # macOS
 .DS_Store
 
+# IDE (makineye özel)
+.idea/
+.vscode/
+
 # Yerel ortam değişkenleri (kimlik bilgileri). Şablon .env.example izlenir.
 .env
 .env.*

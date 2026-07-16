@@ -12,10 +12,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import type { Priority, Recurrence } from '@/db';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
-import { TITLE_MAX_LEN } from '@/ui/formLimits';
+import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, type Colors } from '@/ui/theme';
+import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, shortDate, type Colors } from '@/ui/theme';
 
 // Tekrar seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
 // HabitForm'daki sıklık seçiciyle aynı desen — tutarlı görünüm.
@@ -30,8 +30,9 @@ const WEEKDAY_OPTIONS = [
 ];
 
 // Tekrar modu: 'none' = tek seferlik (varsayılan), 'daily' = her gün,
-// 'weekly' = haftanın belirli günleri.
-type RepeatMode = 'none' | 'daily' | 'weekly';
+// 'weekly' = haftanın belirli günleri, 'interval' = her X günde bir,
+// 'monthly' = her ayın belirli günü, 'yearly' = her yıl belirli tarihler.
+type RepeatMode = 'none' | 'daily' | 'weekly' | 'interval' | 'monthly' | 'yearly';
 
 // taskRepo.create/update'in beklediği alanlarla örtüşür (due_date saat gömülü).
 export interface TaskFormValues {
@@ -75,21 +76,41 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
-  // Tekrar: kuraldan başlangıç modunu çıkar (haftalık + en az bir gün varsa
-  // 'weekly', başka bir kural varsa 'daily', kural yoksa 'none').
+  // Tekrar: kuraldan başlangıç modunu çıkar.
   const initRec = initial?.recurrence ?? null;
   const initRepeatMode: RepeatMode = !initRec
     ? 'none'
-    : initRec.freq === 'weekly' && (initRec.weekdays?.length ?? 0) > 0
-      ? 'weekly'
-      : 'daily';
+    : initRec.freq === 'interval'
+      ? 'interval'
+      : initRec.freq === 'monthly'
+        ? 'monthly'
+        : initRec.freq === 'yearly'
+          ? 'yearly'
+          : initRec.freq === 'weekly' && (initRec.weekdays?.length ?? 0) > 0
+            ? 'weekly'
+            : 'daily';
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(initRepeatMode);
   const [weekdays, setWeekdays] = useState<number[]>(
     initRec?.freq === 'weekly' ? initRec.weekdays ?? [] : []
   );
+  // interval: kaç günde bir (metin; >=2 geçerli).
+  const [everyNText, setEveryNText] = useState(
+    initRec?.freq === 'interval' ? String(initRec.every ?? 2) : '2'
+  );
+  // monthly: ayın günü (1-31; varsayılan seçili son tarihin günü).
+  const [monthDayText, setMonthDayText] = useState(
+    initRec?.freq === 'monthly'
+      ? String(initRec.monthDay ?? 1)
+      : String(Number((initial?.due_date ?? todayDate()).slice(8, 10)))
+  );
+  // yearly: "MM-DD" listesi (yıl bileşeni yok).
+  const [yearDates, setYearDates] = useState<string[]>(
+    initRec?.freq === 'yearly' ? [...(initRec.dates ?? [])].sort() : []
+  );
   const [showPicker, setShowPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showYearDatePicker, setShowYearDatePicker] = useState(false);
   // Oluşturmada taslak alt görevler (henüz görev yok → string listesi).
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
   const [newSub, setNewSub] = useState('');
@@ -113,15 +134,36 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     const due_date = dueTime ? `${dueDate}T${dueTime}:00` : dueDate;
     // Bitiş saati yalnız bir başlangıç saati varsa ve ondan SONRA ise geçerli.
     const end_time = dueTime && endTime && endTime > dueTime ? endTime : null;
-    // Tekrar kuralı: 'none' → tek seferlik. 'weekly' ama hiç gün seçilmemişse
-    // (kullanıcı tekrar İSTEDİ ama gün işaretlemedi) 'daily'ye düşülür — sessizce
-    // "tekrar yok"a çevirmek isteği kaybederdi.
-    const recurrence: Recurrence | null =
-      repeatMode === 'none'
-        ? null
-        : repeatMode === 'weekly' && weekdays.length > 0
+    // Tekrar kuralı: 'none' → tek seferlik. Eksik/geçersiz alt girdiler makul
+    // bir varsayılana düşer ("tekrar istedi"yi sessizce kaybetmemek için):
+    // haftalıkta gün yoksa 'daily', aralıkta sayı <2 ise 'daily', aylıkta gün
+    // 1-31 dışındaysa son tarihin günü, yıllıkta tarih yoksa son tarihin günü.
+    let recurrence: Recurrence | null = null;
+    if (repeatMode === 'daily') {
+      recurrence = { freq: 'daily' };
+    } else if (repeatMode === 'weekly') {
+      recurrence =
+        weekdays.length > 0
           ? { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) }
           : { freq: 'daily' };
+    } else if (repeatMode === 'interval') {
+      const n = parseInt(everyNText, 10);
+      recurrence =
+        Number.isFinite(n) && n >= 2
+          ? { freq: 'interval', every: n, anchor: dueDate }
+          : { freq: 'daily' };
+    } else if (repeatMode === 'monthly') {
+      const d = parseInt(monthDayText, 10);
+      recurrence = {
+        freq: 'monthly',
+        monthDay: Number.isFinite(d) && d >= 1 && d <= 31 ? d : Number(dueDate.slice(8, 10)),
+      };
+    } else if (repeatMode === 'yearly') {
+      recurrence = {
+        freq: 'yearly',
+        dates: yearDates.length > 0 ? yearDates : [dueDate.slice(5, 10)],
+      };
+    }
     onSubmit({
       title: t,
       priority,
@@ -261,12 +303,21 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler.
-          Tekrarlayan bir görev tamamlanınca bir sonraki tekrar tarihine ileri
-          sarılır (aynı görev; ayrı kopya/geçmiş tutulmaz). */}
+      {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler /
+          her X günde bir / her ay / her yıl. Tekrarlayan bir görev tamamlanınca
+          bir sonraki tekrar tarihine ileri sarılır (aynı görev; kopya yok). */}
       <Text style={styles.label}>{t('task.repeat')}</Text>
-      <View style={styles.row}>
-        {(['none', 'daily', 'weekly'] as RepeatMode[]).map((mode) => {
+      <View style={styles.repeatRow}>
+        {(
+          [
+            { mode: 'none', labelKey: 'task.repeatNone' },
+            { mode: 'daily', labelKey: 'habit.everyDay' },
+            { mode: 'weekly', labelKey: 'habit.specificDays' },
+            { mode: 'interval', labelKey: 'habit.freqInterval' },
+            { mode: 'monthly', labelKey: 'task.freqMonthly' },
+            { mode: 'yearly', labelKey: 'task.freqYearly' },
+          ] as { mode: RepeatMode; labelKey: string }[]
+        ).map(({ mode, labelKey }) => {
           const sel = repeatMode === mode;
           return (
             <Pressable
@@ -275,19 +326,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
               onPress={() => {
                 setRepeatMode(mode);
                 // "Belirli günler" seçilince boşsa yardımcı olsun diye bugünün
-                // gününü seçili getir (HabitForm deseni).
+                // gününü seçili getir (HabitForm deseni). Yıllıkta da son tarih
+                // ilk tarih olarak gelir.
                 if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
+                if (mode === 'yearly' && yearDates.length === 0) setYearDates([dueDate.slice(5, 10)]);
               }}
             >
-              <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>
-                {t(
-                  mode === 'none'
-                    ? 'task.repeatNone'
-                    : mode === 'daily'
-                      ? 'habit.everyDay'
-                      : 'habit.specificDays'
-                )}
-              </Text>
+              <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>{t(labelKey)}</Text>
             </Pressable>
           );
         })}
@@ -308,6 +353,68 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             );
           })}
         </View>
+      )}
+
+      {repeatMode === 'interval' && (
+        <View style={styles.freqNumRow}>
+          <Text style={styles.freqNumLabel}>{t('habit.everyNPrompt')}</Text>
+          <TextInput
+            style={styles.freqNumInput}
+            value={everyNText}
+            onChangeText={setEveryNText}
+            keyboardType="number-pad"
+            maxLength={SHORT_NUMBER_MAX_LEN}
+          />
+          <Text style={styles.freqNumHint}>{t('habit.everyNHint')}</Text>
+        </View>
+      )}
+
+      {repeatMode === 'monthly' && (
+        <View style={styles.freqNumRow}>
+          <Text style={styles.freqNumLabel}>{t('task.monthDayPrompt')}</Text>
+          <TextInput
+            style={styles.freqNumInput}
+            value={monthDayText}
+            onChangeText={setMonthDayText}
+            keyboardType="number-pad"
+            maxLength={2}
+          />
+          <Text style={styles.freqNumHint}>{t('task.monthDayHint')}</Text>
+        </View>
+      )}
+
+      {repeatMode === 'yearly' && (
+        <>
+          <View style={styles.dayRow}>
+            {yearDates.map((md) => (
+              <Pressable
+                key={md}
+                style={[styles.dayChip, styles.yearDateChip]}
+                onPress={() => setYearDates((prev) => prev.filter((x) => x !== md))}
+                accessibilityLabel={t('task.removeDateA11y', { date: shortDate(`2000-${md}`, lang) })}
+              >
+                <Text style={styles.yearDateChipText}>{shortDate(`2000-${md}`, lang)} ×</Text>
+              </Pressable>
+            ))}
+            <Pressable style={styles.dayChip} onPress={() => setShowYearDatePicker(true)}>
+              <Text style={styles.dayChipText}>{t('task.addDate')}</Text>
+            </Pressable>
+          </View>
+          {showYearDatePicker && (
+            <DateTimePicker
+              value={new Date(`${dueDate}T00:00:00`)}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              onChange={(_e: unknown, picked?: Date) => {
+                setShowYearDatePicker(Platform.OS === 'ios');
+                if (picked) {
+                  const md = toYmd(picked).slice(5, 10); // yıl bileşeni atılır
+                  setYearDates((prev) => (prev.includes(md) ? prev : [...prev, md].sort()));
+                }
+              }}
+            />
+          )}
+        </>
       )}
 
       {/* Düzenlemede alt görev bölümü buraya gelir (anında yazılır). */}
@@ -396,9 +503,12 @@ const makeStyles = (c: Colors) =>
     clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
     clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
     hint: { fontSize: 12, color: c.danger, marginTop: -6, marginBottom: 10 },
-    // Tekrar seçici (HabitForm sıklık seçicisiyle aynı görünüm).
+    // Tekrar seçici (HabitForm sıklık seçicisiyle aynı görünüm). 6 seçenek
+    // olduğundan satır sarar; flexBasis üçlü sıraya oturtur.
+    repeatRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
     freqBtn: {
-      flex: 1,
+      flexGrow: 1,
+      flexBasis: '30%',
       alignItems: 'center',
       paddingVertical: 10,
       borderRadius: 10,
@@ -406,6 +516,25 @@ const makeStyles = (c: Colors) =>
       borderColor: c.border,
       backgroundColor: c.inputBg,
     },
+    // "Kaç günde bir? / Ayın günü" satırı.
+    freqNumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+    freqNumLabel: { fontSize: 14, fontWeight: '600', color: c.text },
+    freqNumInput: {
+      width: 64,
+      textAlign: 'center',
+      backgroundColor: c.inputBg,
+      borderRadius: 10,
+      paddingVertical: 8,
+      fontSize: 15,
+      fontWeight: '700',
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
+    // Yıllık tarihlere seçilen "12 Şub ×" çipleri.
+    yearDateChip: { width: undefined, paddingHorizontal: 10, backgroundColor: c.primarySoft, borderColor: c.primary },
+    yearDateChipText: { fontSize: 13, fontWeight: '700', color: c.primary },
     freqBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
     freqBtnText: { fontSize: 14, fontWeight: '600', color: c.muted },
     freqBtnTextSel: { color: c.primary },

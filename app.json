@@ -3,7 +3,7 @@
     "name": "Erek",
     "slug": "habit-app",
     "owner": "yusufozdemir",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "habitapp",

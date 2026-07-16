@@ -11,6 +11,8 @@ export {
   signInWithEmail,
   signOutAccount,
   deleteAccountAndData,
+  requestPasswordReset,
+  resetPasswordWithCode,
   type AuthUser,
 } from './auth';
 export { runSync, prepareFullResync, clearLocalData, type SyncResult } from './syncEngine';

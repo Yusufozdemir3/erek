@@ -1,7 +1,7 @@
 // goalMilestoneRepo testleri: ekleme sırası (position), toggle, soft delete,
-// sayım. subtaskRepo.test.ts ile birebir aynı desen (goal_id yerine task_id).
+// sayım + ara-eşik (amount) türetmesi. subtaskRepo.test.ts ile aynı temel desen.
 
-import { goalMilestoneRepo } from '../repositories/goalMilestoneRepo';
+import { goalMilestoneRepo, milestoneViews } from '../repositories/goalMilestoneRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
@@ -77,35 +77,62 @@ describe('countForGoal', () => {
   });
 });
 
-describe('countsForGoals (çoklu)', () => {
-  it('boş liste için boş nesne döner (geçersiz IN () sorgusu kurulmaz)', () => {
-    expect(goalMilestoneRepo.countsForGoals([])).toEqual({});
-  });
-
-  it('yalnızca adımı olan hedefleri döner; countForGoal ile aynı sayar', () => {
-    const userId = userRepo.getOrCreateLocal().id;
-    const other = goalRepo.create({ user_id: userId, title: 'Diğer hedef', goal_type: 'milestone' }).id;
-    const empty = goalRepo.create({ user_id: userId, title: 'Adımsız', goal_type: 'milestone' }).id;
-
-    const a = goalMilestoneRepo.create(goalId, 'A');
-    goalMilestoneRepo.create(goalId, 'B');
-    goalMilestoneRepo.setCompleted(a.id, true);
-    const c = goalMilestoneRepo.create(other, 'C');
-    goalMilestoneRepo.setCompleted(c.id, true);
-
-    const counts = goalMilestoneRepo.countsForGoals([goalId, other, empty]);
-    expect(counts).toEqual({
-      [goalId]: { done: 1, total: 2 },
-      [other]: { done: 1, total: 1 },
+describe('create — miktar + son tarih (ara-eşik alanları)', () => {
+  it('amount ve due_date kaydedilip geri okunur; verilmezse null', () => {
+    const withExtras = goalMilestoneRepo.create(goalId, 'Kitap A', {
+      amount: 300,
+      due_date: '2026-08-01',
     });
-    expect(counts[empty]).toBeUndefined();
-    expect(counts[goalId]).toEqual(goalMilestoneRepo.countForGoal(goalId));
+    expect(withExtras.amount).toBe(300);
+    expect(withExtras.due_date).toBe('2026-08-01');
+
+    const plain = goalMilestoneRepo.create(goalId, 'Sade');
+    expect(plain.amount).toBeNull();
+    expect(plain.due_date).toBeNull();
+
+    const list = goalMilestoneRepo.listByGoal(goalId);
+    expect(list[0].amount).toBe(300);
+    expect(list[1].amount).toBeNull();
+  });
+});
+
+describe('milestoneViews — ara-eşik türetme (saf fonksiyon)', () => {
+  const ms = (title: string, amount: number | null, completed: 0 | 1 = 0) => ({
+    id: title,
+    goal_id: 'g',
+    title,
+    completed,
+    position: 0,
+    amount,
+    due_date: null,
+    updated_at: '',
+    deleted_at: null,
+    synced: 0 as const,
   });
 
-  it('silinen adımları saymaz', () => {
-    const a = goalMilestoneRepo.create(goalId, 'A');
-    goalMilestoneRepo.create(goalId, 'B');
-    goalMilestoneRepo.softDelete(a.id);
-    expect(goalMilestoneRepo.countsForGoals([goalId])).toEqual({ [goalId]: { done: 0, total: 1 } });
+  it('miktarlı adımlar sırayla kümülatif dolar', () => {
+    // Eşikler: A=300 (0..300), B=400 (300..700), C=300 (700..1000).
+    const views = milestoneViews([ms('A', 300), ms('B', 400), ms('C', 300)], 450);
+    expect(views[0].reached).toBe(true);   // 450 >= 300
+    expect(views[0].ratio).toBe(1);
+    expect(views[1].reached).toBe(false);  // 450 < 700
+    expect(views[1].ratio).toBeCloseTo((450 - 300) / 400);
+    expect(views[2].reached).toBe(false);
+    expect(views[2].ratio).toBe(0);
+  });
+
+  it('current 0 iken hepsi boş, hedefin tamamında hepsi dolu', () => {
+    const list = [ms('A', 300), ms('B', 400)];
+    expect(milestoneViews(list, 0).every((v) => !v.reached && v.ratio === 0)).toBe(true);
+    expect(milestoneViews(list, 700).every((v) => v.reached && v.ratio === 1)).toBe(true);
+  });
+
+  it('miktarsız (checklist) adım completed kolonundan okunur, kümülatife karışmaz', () => {
+    const views = milestoneViews([ms('A', 300), ms('Not', null, 1), ms('B', 200)], 350);
+    expect(views[1].reached).toBe(true); // completed=1
+    expect(views[1].ratio).toBe(1);
+    // B'nin eşiği 300..500 — 'Not' araya girse de kümülatif bozulmaz.
+    expect(views[2].ratio).toBeCloseTo((350 - 300) / 200);
+    expect(views[2].reached).toBe(false);
   });
 });

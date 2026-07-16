@@ -8,10 +8,11 @@ import { taskRepo } from './repositories/taskRepo';
 import { subtaskRepo } from './repositories/subtaskRepo';
 import { habitRepo } from './repositories/habitRepo';
 import { goalRepo } from './repositories/goalRepo';
-import { goalMilestoneRepo } from './repositories/goalMilestoneRepo';
+import { goalMilestoneRepo, milestoneViews } from './repositories/goalMilestoneRepo';
 import { goalEntryRepo } from './repositories/goalEntryRepo';
 
-export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo };
+export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews };
+export type { MilestoneView } from './repositories/goalMilestoneRepo';
 export type {
   User,
   Task,

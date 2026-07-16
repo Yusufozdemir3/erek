@@ -17,6 +17,7 @@ create table if not exists public.goals (
   unit          text,
   deadline      text,
   completed_at  text,                      -- yalnız 'milestone' hedeflerde anlamlı
+  remind_at     text,                      -- "HH:MM" günlük giriş hatırlatması
   updated_at    timestamptz not null,
   deleted_at    timestamptz
 );
@@ -92,9 +93,16 @@ create table if not exists public.goal_milestones (
   title      text not null,
   completed  integer not null default 0,
   position   integer not null default 0,
+  amount     double precision,
+  due_date   text,
   updated_at timestamptz not null,
   deleted_at timestamptz
 );
+-- Mevcut kurulumlar için idempotent kolon eklemeleri (adım miktarı + son tarihi,
+-- hedefe günlük giriş hatırlatma saati) — yerel migration013'ün karşılığı.
+alter table public.goal_milestones add column if not exists amount double precision;
+alter table public.goal_milestones add column if not exists due_date text;
+alter table public.goals add column if not exists remind_at text;
 
 -- Hedefin 'Genel' sekmesinde serbest miktar girişiyle ("Ekle") eklenen kayıtların
 -- günlüğü. Yalnızca görüntüleme içindir — goals.current_value tek doğru kaynak

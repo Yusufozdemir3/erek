@@ -1,5 +1,6 @@
-// Hedef adımı (GoalMilestone) repository — basit checklist, subtaskRepo ile
-// birebir aynı desen. UI asla SQL görmez - sadece bu fonksiyonları çağırır.
+// Hedef adımı (GoalMilestone) repository — subtaskRepo ile aynı temel desen.
+// İki adım kipi var (bkz. models.GoalMilestone): checklist (milestone hedef)
+// ve ara-eşik (numeric hedef + amount). UI asla SQL görmez.
 // Her yazma işlemi updated_at'i tazeler ve synced=0 yapar (senkron bekliyor).
 
 import { getDb } from '../database';
@@ -13,15 +14,47 @@ function rowToMilestone(row: any): GoalMilestone {
     title: row.title,
     completed: row.completed,
     position: row.position,
+    amount: row.amount,
+    due_date: row.due_date,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
   };
 }
 
+// Ara-eşik kipindeki adımın görünüm durumu (bkz. milestoneViews).
+export interface MilestoneView {
+  milestone: GoalMilestone;
+  ratio: number;    // 0..1 — adımın kendi doluluk oranı
+  reached: boolean; // kümülatif eşik aşıldı mı (checklist kipinde completed)
+}
+
+// SAYISAL hedefin adım görünümleri: miktarı olan adımlar position sırasıyla
+// KÜMÜLATİF eşikler oluşturur ve hedefin current_value'sundan sırayla dolar —
+// elle işaretlenmez, yalnız girişlere bağlı değişir. Miktarı olmayan (eski/
+// checklist) adımlar kendi completed durumunu korur. Saf fonksiyon (SQL yok) —
+// hem UI hem test doğrudan çağırır.
+export function milestoneViews(milestones: GoalMilestone[], currentValue: number): MilestoneView[] {
+  let cumulative = 0;
+  return milestones.map((m) => {
+    if (m.amount == null || m.amount <= 0) {
+      return { milestone: m, ratio: m.completed === 1 ? 1 : 0, reached: m.completed === 1 };
+    }
+    const start = cumulative;
+    cumulative += m.amount;
+    const ratio = Math.max(0, Math.min(1, (currentValue - start) / m.amount));
+    return { milestone: m, ratio, reached: currentValue >= cumulative };
+  });
+}
+
 export const goalMilestoneRepo = {
   // Yeni adım; listenin sonuna eklenir (position = mevcut en büyük + 1).
-  create(goalId: string, title: string): GoalMilestone {
+  // extra: numeric hedefte ara-eşik miktarı ve/veya opsiyonel son tarih.
+  create(
+    goalId: string,
+    title: string,
+    extra: { amount?: number | null; due_date?: string | null } = {}
+  ): GoalMilestone {
     const db = getDb();
     const id = newId();
     const now = nowIso();
@@ -30,10 +63,12 @@ export const goalMilestoneRepo = {
       [goalId]
     );
     const position = (row?.maxPos ?? -1) + 1;
+    const amount = extra.amount ?? null;
+    const due_date = extra.due_date ?? null;
     db.runSync(
-      `INSERT INTO goal_milestones (id, goal_id, title, completed, position, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, 0, ?, ?, NULL, 0)`,
-      [id, goalId, title, position, now]
+      `INSERT INTO goal_milestones (id, goal_id, title, completed, position, amount, due_date, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, 0, ?, ?, ?, ?, NULL, 0)`,
+      [id, goalId, title, position, amount, due_date, now]
     );
     return {
       id,
@@ -41,6 +76,8 @@ export const goalMilestoneRepo = {
       title,
       completed: 0,
       position,
+      amount,
+      due_date,
       updated_at: now,
       deleted_at: null,
       synced: 0,
@@ -66,24 +103,6 @@ export const goalMilestoneRepo = {
       [goalId]
     );
     return { done: row?.done ?? 0, total: row?.total ?? 0 };
-  },
-
-  // countForGoal'ün ÇOKLU sürümü: liste ekranı her hedef için ayrı sorgu (N+1)
-  // yerine tek GROUP BY ile tüm rozet sayılarını alır. Yalnızca en az bir
-  // (silinmemiş) adımı olan hedefler döner.
-  countsForGoals(goalIds: string[]): Record<string, { done: number; total: number }> {
-    if (goalIds.length === 0) return {};
-    const db = getDb();
-    const placeholders = goalIds.map(() => '?').join(',');
-    const rows = db.getAllSync<{ goal_id: string; done: number; total: number }>(
-      `SELECT goal_id, COALESCE(SUM(completed), 0) AS done, COUNT(*) AS total
-       FROM goal_milestones WHERE goal_id IN (${placeholders}) AND deleted_at IS NULL
-       GROUP BY goal_id`,
-      goalIds
-    );
-    const out: Record<string, { done: number; total: number }> = {};
-    for (const r of rows) out[r.goal_id] = { done: r.done ?? 0, total: r.total ?? 0 };
-    return out;
   },
 
   setCompleted(id: string, completed: boolean): void {

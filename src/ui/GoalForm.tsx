@@ -18,7 +18,7 @@ import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import type { GoalType } from '@/db';
-import { todayDate, toYmd } from '@/lib/helpers';
+import { hmToDate, todayDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -33,6 +33,7 @@ export interface GoalFormValues {
   // Yalnız düzenleme + numeric'te anlamlı; oluşturmada null (repo 0 varsayar).
   current_value: number | null;
   deadline: string;
+  remind_at: string | null; // "08:30" günlük giriş hatırlatması; null = yok
   milestones?: string[]; // yalnız enableMilestoneDraft'ta doldurulur
 }
 
@@ -44,6 +45,7 @@ interface Props {
     unit: string | null;
     current_value: number;
     deadline: string | null;
+    remind_at: string | null;
   }>;
   submitLabel: string;
   onSubmit: (values: GoalFormValues) => void;
@@ -81,7 +83,10 @@ export function GoalForm({
   // Her hedefte artık zorunlu bir son tarih var — oluşturmada bugün varsayılan
   // (TaskForm'daki due date kararının aynısı), düzenlemede mevcut değer.
   const [deadline, setDeadline] = useState(initial?.deadline ?? todayDate());
+  // Günlük giriş hatırlatma saati ("08:30") — HabitForm'daki remind_at deseni.
+  const [remindAt, setRemindAt] = useState<string | null>(initial?.remind_at ?? null);
   const [showPicker, setShowPicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [draftMilestones, setDraftMilestones] = useState<string[]>([]);
   const [newMilestone, setNewMilestone] = useState('');
 
@@ -107,6 +112,7 @@ export function GoalForm({
       unit: numeric && unit.trim() ? unit.trim() : null,
       current_value: numeric && isEditing && Number.isFinite(currentNum) ? currentNum : null,
       deadline,
+      remind_at: remindAt,
       milestones: enableMilestoneDraft ? draftMilestones : undefined,
     });
   };
@@ -221,6 +227,33 @@ export function GoalForm({
         />
       )}
 
+      {/* Günlük giriş hatırlatması — isteğe bağlı ("şu hedefe giriş yapmayı
+          unutma" bildirimi her gün bu saatte gelir; bkz. scheduleGoalReminder). */}
+      <Text style={styles.label}>{t('goal.remindLabel')}</Text>
+      <View style={styles.row}>
+        <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
+          <Text style={styles.dateBtnText}>{remindAt ?? t('habit.noReminder')}</Text>
+        </Pressable>
+        {remindAt && (
+          <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
+            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {showTimePicker && (
+        <DateTimePicker
+          value={hmToDate(remindAt)}
+          mode="time"
+          is24Hour
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(_e: unknown, picked?: Date) => {
+            setShowTimePicker(Platform.OS === 'ios');
+            if (picked) setRemindAt(toHm(picked));
+          }}
+        />
+      )}
+
       {/* Düzenlemede milestone checklist (anında yazılır, parent sağlar) — artık kullanılmıyor:
           adımlar app/goal/[id].tsx'te ayrı bir 'Adımlar' sekmesinde yönetiliyor. */}
       {goalType === 'milestone' && children}
@@ -319,6 +352,8 @@ const makeStyles = (c: Colors) =>
       backgroundColor: c.inputBg,
     },
     dateBtnText: { fontSize: 15, color: c.text },
+    clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
+    clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
     actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
     saveBtn: {
       flex: 1,

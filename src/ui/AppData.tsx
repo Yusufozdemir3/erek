@@ -6,10 +6,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { habitRepo, initDataLayer, taskRepo, userRepo } from '@/db';
+import { goalRepo, habitRepo, initDataLayer, taskRepo, userRepo } from '@/db';
 import type { User } from '@/db';
 import { todayDate } from '@/lib/helpers';
-import { rescheduleAllReminders, rescheduleAllTaskReminders } from '@/lib/notifications';
+import {
+  rescheduleAllGoalReminders,
+  rescheduleAllReminders,
+  rescheduleAllTaskReminders,
+} from '@/lib/notifications';
 import { runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -85,6 +89,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         );
         rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
           console.warn('[Bildirim] Açılışta görev hatırlatmaları programlanamadı:', e)
+        );
+        rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
+          console.warn('[Bildirim] Açılışta hedef hatırlatmaları programlanamadı:', e)
         );
         // Açılışta arka planda bir kez senkronla (yapılandırılmamışsa sessiz geçer).
         // Hesap özelliği kapalıyken (MVP) senkron hiç başlamaz — hiçbir veri

@@ -208,6 +208,20 @@ CREATE TABLE IF NOT EXISTS goal_entries (
 CREATE INDEX IF NOT EXISTS idx_goal_entries_goal ON goal_entries(goal_id);
 `;
 
+// Migration 013: hedef adımlarına miktar + son tarih, hedeflere hatırlatma saati.
+// goal_milestones.amount: SAYISAL hedeflerde adım bir "ara eşik"tir — adımın
+// yüzdesi hedefin current_value'sundan KÜMÜLATİF türetilir (adımlar sırayla
+// dolar), elle işaretlenmez (bkz. goalMilestoneRepo.milestoneViews). 'milestone'
+// tipi hedeflerde amount NULL kalır, checkbox davranışı değişmez.
+// goal_milestones.due_date: her iki tipte de opsiyonel adım son tarihi.
+// goals.remind_at: "HH:MM" — hedefe günlük giriş hatırlatması (habits.remind_at
+// deseni; bkz. notifications.scheduleGoalReminder).
+export const migration013 = `
+ALTER TABLE goal_milestones ADD COLUMN amount REAL;
+ALTER TABLE goal_milestones ADD COLUMN due_date TEXT;
+ALTER TABLE goals ADD COLUMN remind_at TEXT;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -222,4 +236,5 @@ export const migrations = [
   { version: 10, sql: migration010 },
   { version: 11, sql: migration011 },
   { version: 12, sql: migration012 },
+  { version: 13, sql: migration013 },
 ];

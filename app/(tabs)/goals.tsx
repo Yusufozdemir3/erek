@@ -16,8 +16,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { goalMilestoneRepo, goalRepo } from '@/db';
+import { goalMilestoneRepo, goalRepo, milestoneViews } from '@/db';
 import type { Goal } from '@/db';
+import { cancelGoalReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { ProfileButton } from '@/ui/ProfileButton';
@@ -45,9 +46,18 @@ export default function GoalsScreen() {
   const reload = useCallback(() => {
     const list = goalRepo.listByUser(user.id);
     setGoals(list);
-    // Adımlar artık her iki tipte de opsiyonel olabildiğinden tüm hedefler için
-    // sayılır (yalnızca gerçekten adımı olan hedefler sonuçta yer alır).
-    setMilestoneCounts(goalMilestoneRepo.countsForGoals(list.map((g) => g.id)));
+    // Adım rozetleri görünümlerden türetilir: miktarlı (ara-eşik) adımın "done"
+    // durumu completed kolonunda DEĞİL, hedefin current_value'sundadır (bkz.
+    // milestoneViews). Hedef sayısı küçük — hedef başına sorgu kabul edilir
+    // (useGoalStats.linkedHabits'teki aynı gerekçe).
+    const counts: Record<string, { done: number; total: number }> = {};
+    for (const g of list) {
+      const views = milestoneViews(goalMilestoneRepo.listByGoal(g.id), g.current_value);
+      if (views.length > 0) {
+        counts[g.id] = { done: views.filter((v) => v.reached).length, total: views.length };
+      }
+    }
+    setMilestoneCounts(counts);
     // dataVersion: ＋ menüsünden hedef eklenince odak değişmeden tazelensin.
   }, [user.id, dataVersion]);
 
@@ -57,6 +67,7 @@ export default function GoalsScreen() {
   // (sağa açılan panel) — burada doğrudan siliniyor.
   const remove = (id: string) => {
     goalRepo.softDelete(id);
+    cancelGoalReminder(id).catch(() => {});
     reload();
   };
 

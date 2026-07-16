@@ -21,6 +21,7 @@ import {
   ACCENT_THEMES,
   DEFAULT_ACCENT,
   DEFAULT_HABIT_COLOR,
+  blackColors,
   darkColors,
   lightColors,
   fullDateLabel,
@@ -32,17 +33,20 @@ import { WIDGET_NAME, writeSnapshot, type WidgetColors, type WidgetSnapshot } fr
 // okumak için (bkz. src/ui/ThemeProvider.tsx).
 const MODE_KEY = 'theme:mode';
 const ACCENT_KEY = 'theme:accent';
+const DARK_STYLE_KEY = 'theme:darkStyle';
 
-// Aktif paleti React dışında çözer: kayıtlı mod + vurgu + sistem şeması.
+// Aktif paleti React dışında çözer: kayıtlı mod + vurgu + koyu stil + sistem şeması.
 async function resolveColors(): Promise<WidgetColors> {
-  const [mode, accentRaw] = await Promise.all([
+  const [mode, accentRaw, darkStyle] = await Promise.all([
     AsyncStorage.getItem(MODE_KEY),
     AsyncStorage.getItem(ACCENT_KEY),
+    AsyncStorage.getItem(DARK_STYLE_KEY),
   ]);
   const system = Appearance.getColorScheme(); // 'light' | 'dark' | null
   const scheme: 'light' | 'dark' =
     mode === 'dark' || mode === 'light' ? mode : system === 'dark' ? 'dark' : 'light';
-  const base = scheme === 'dark' ? darkColors : lightColors;
+  const base =
+    scheme === 'dark' ? (darkStyle === 'black' ? blackColors : darkColors) : lightColors;
   const accent: AccentKey =
     accentRaw && accentRaw in ACCENT_THEMES ? (accentRaw as AccentKey) : DEFAULT_ACCENT;
   const primary = ACCENT_THEMES[accent][scheme].primary;

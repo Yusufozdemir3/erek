@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { goalRepo, habitRepo } from '@/db';
 import type { HabitKind } from '@/db';
-import { lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
+import { buildScheduleLabels, isQuotaSchedule, lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Lang } from '@/i18n/translations';
@@ -45,12 +45,7 @@ export function useHabitsData(userId: string) {
 
   const reload = useCallback(() => {
     const week = lastDays(7);
-    // JS getDay() sırasıyla (0=Pazar...6=Cumartesi) çevrilmiş gün etiketleri.
-    const dayLabels = [
-      t('weekday.sun'), t('weekday.mon'), t('weekday.tue'), t('weekday.wed'),
-      t('weekday.thu'), t('weekday.fri'), t('weekday.sat'),
-    ];
-    const everyDayLabel = t('habit.everyDay');
+    const labels = buildScheduleLabels(t, (md) => shortDate(`2000-${md}`, lang));
     // Bağlı hedef başlıklarını tek sorguda map'le (alışkanlık başına ayrı sorgu yok).
     const goalTitles = new Map(goalRepo.listByUser(userId).map((g) => [g.id, g.title]));
     setHabits(
@@ -69,7 +64,7 @@ export function useHabitsData(userId: string) {
           remindAt: h.remind_at,
           icon: h.icon,
           color: h.color,
-          days: h.schedule ? scheduleLabel(h.schedule, everyDayLabel, dayLabels) : null,
+          days: h.schedule ? scheduleLabel(h.schedule, labels) : null,
           period: periodLabel(h.start_date, h.end_date, lang),
           target: h.target_amount,
           unit: h.unit,

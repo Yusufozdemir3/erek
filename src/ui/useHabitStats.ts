@@ -1,14 +1,18 @@
-// Alışkanlık istatistik ekranının veri yükleme mantığı: son 90 günün ısı
-// haritası + güncel/en uzun seri + tamamlanma oranı + (nicelse) toplam miktar.
-// Hepsi tek bir logsInRange sorgusundan türetilir.
+// Alışkanlık istatistik ekranının veri yükleme mantığı: özet sayılar
+// (güncel/en uzun seri, tamamlanma oranı, toplam miktar), gün/hafta/ay
+// tamamlama serileri (çubuk grafik) ve seri geçmişi.
+// Hepsi logsInRange/allLogs sorgularından türetilir.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
-import type { Habit } from '@/db';
-import { isScheduledOn, isWithinHabitDates, lastDays, todayDate, WEEKDAY_DISPLAY_ORDER } from '@/lib/helpers';
+import type { Habit, HabitLog } from '@/db';
+import { isQuotaSchedule, isScheduledOn, isWithinHabitDates, lastDays, todayDate, toYmd } from '@/lib/helpers';
 
 const WINDOW_DAYS = 90;
+const DAY_BUCKETS = 30;
+const WEEK_BUCKETS = 12;
+const MONTH_BUCKETS = 12;
 
 // Seri geçmişi (habitRepo.allStreaks'in aynısı — burada yalnız tip takma adı).
 export interface StreakEntry {
@@ -17,18 +21,17 @@ export interface StreakEntry {
   end: string;
 }
 
-// Güç puanı grafiği bir günü (habitRepo.scoreHistory'nin aynısı).
-export interface ScorePoint {
+// Grafik kovası: date = kovanın başlangıç günü ("YYYY-MM-DD"), ratio = 0..1.
+export interface ChartBucket {
   date: string;
-  score: number; // 0..1
+  ratio: number;
 }
 
-// Haftanın bir günü için tamamlanma oranı. wd = JS getDay() (0=Pazar...6=Cumartesi).
-export interface WeekdayStat {
-  wd: number;
-  scheduled: number;
-  completed: number;
-  rate: number; // 0..1; scheduled=0 ise 0
+// Gün/hafta/ay serileri — istatistik ekranındaki çubuk grafiğin üç görünümü.
+export interface HabitChartSeries {
+  day: ChartBucket[];
+  week: ChartBucket[];
+  month: ChartBucket[];
 }
 
 export interface HabitStats {
@@ -39,9 +42,8 @@ export interface HabitStats {
   scheduledCount: number;
   completedCount: number;
   totalAmount: number | null;  // nicel değilse (target_amount yoksa) null
-  weekday: WeekdayStat[];       // Pazartesi'den Pazar'a sıralı, 7 eleman (veri yoksa [])
-  streaks: StreakEntry[];       // büyükten küçüğe, TÜM geçmiş seriler
-  score: ScorePoint[];          // son 90 gün, en eskiden bugüne (veri yoksa [])
+  streaks: StreakEntry[];       // büyükten küçüğe geçmiş seriler
+  series: HabitChartSeries | null; // hiç log yoksa null (grafik gizlenir)
 }
 
 const EMPTY: HabitStats = {
@@ -52,45 +54,123 @@ const EMPTY: HabitStats = {
   scheduledCount: 0,
   completedCount: 0,
   totalAmount: null,
-  weekday: [],
   streaks: [],
-  score: [],
+  series: null,
 };
 
-// Haftanın günü kırılımı: alışkanlığın ilk logundan (ya da varsa ondan önceki
-// start_date'ten) bugüne kadar gün gün yürüyüp yalnızca PLANLI günleri JS
-// getDay()'e göre kovalar — hangi günlerin güçlü/zayıf olduğunu gösterir.
-// Log yoksa [] (henüz veri yok, UI boş durum gösterir).
-function weekdayBreakdown(habit: Habit, allLogs: { log_date: string; completed: 0 | 1 }[]): WeekdayStat[] {
-  if (allLogs.length === 0) return [];
+// Bir günün 0..1 tamamlama oranı: ikili alışkanlıkta 0/1; nicel/zamanlayıcıda
+// yapılan miktarın hedefe oranı (1'de kırpılır — hedefi aşmak grafiği taşırmaz).
+function dayRatio(habit: Habit, log: HabitLog | undefined): number {
+  if (!log) return 0;
+  if (habit.target_amount != null && habit.target_amount > 0) {
+    return Math.min(1, (log.amount ?? 0) / habit.target_amount);
+  }
+  return log.completed === 1 ? 1 : 0;
+}
 
-  const completed = new Set(allLogs.filter((l) => l.completed === 1).map((l) => l.log_date));
-  const firstLogDate = allLogs[0].log_date;
-  const firstDate = habit.start_date && habit.start_date < firstLogDate ? habit.start_date : firstLogDate;
-  const today = todayDate();
-
-  const buckets = Array.from({ length: 7 }, () => ({ scheduled: 0, completed: 0 }));
-  const cursor = new Date(`${firstDate}T00:00:00`);
-  const end = new Date(`${today}T00:00:00`);
+// İki tarih (dahil) arasındaki planlı gün / tamamlanan gün oranı.
+// Gelecek günler sayılmaz (henüz yaşanmadı); planlı gün yoksa 0.
+// KOTA (haftada X kez) kuralında payda gün başına kota/7'dir — tam bir haftada
+// tam kota, kısmi aralıkta oransal (hafta sınırı gözetmeyen yaklaşıklık).
+function rangeRatio(
+  habit: Habit,
+  completedSet: Set<string>,
+  startYmd: string,
+  endYmd: string,
+  today: string
+): number {
+  const quota = isQuotaSchedule(habit.schedule) ? habit.schedule!.timesPerWeek! : null;
+  let scheduled = 0;
+  let done = 0;
+  let quotaDays = 0;
+  const cursor = new Date(`${startYmd}T00:00:00`);
+  const end = new Date(`${endYmd}T00:00:00`);
   while (cursor <= end) {
-    const y = cursor.getFullYear();
-    const m = String(cursor.getMonth() + 1).padStart(2, '0');
-    const d = String(cursor.getDate()).padStart(2, '0');
-    const dateStr = `${y}-${m}-${d}`;
-    if (isScheduledOn(habit.schedule, dateStr) && isWithinHabitDates(habit.start_date, habit.end_date, dateStr)) {
-      const wd = cursor.getDay();
-      buckets[wd].scheduled++;
-      if (completed.has(dateStr)) buckets[wd].completed++;
+    const ymd = toYmd(cursor);
+    if (ymd > today) break;
+    if (isScheduledOn(habit.schedule, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
+      if (quota) quotaDays++;
+      else scheduled++;
+      if (completedSet.has(ymd)) done++;
     }
     cursor.setDate(cursor.getDate() + 1);
   }
+  if (quota) {
+    const expected = (quota * quotaDays) / 7;
+    return expected > 0 ? Math.min(1, done / expected) : 0;
+  }
+  return scheduled > 0 ? done / scheduled : 0;
+}
 
-  return WEEKDAY_DISPLAY_ORDER.map((wd) => ({
-    wd,
-    scheduled: buckets[wd].scheduled,
-    completed: buckets[wd].completed,
-    rate: buckets[wd].scheduled > 0 ? buckets[wd].completed / buckets[wd].scheduled : 0,
+// Serinin başındaki, alışkanlığın doğumundan (ilk log / start_date) tümüyle
+// önce biten boş kovaları at — yeni bir alışkanlıkta 10 ay boş çubuk gösterme.
+function trimLeading(buckets: ChartBucket[], bucketEndOf: (b: ChartBucket) => string, firstDate: string): ChartBucket[] {
+  let i = 0;
+  while (i < buckets.length - 1 && bucketEndOf(buckets[i]) < firstDate) i++;
+  return buckets.slice(i);
+}
+
+function buildSeries(habit: Habit, allLogs: HabitLog[]): HabitChartSeries | null {
+  if (allLogs.length === 0) return null;
+  const today = todayDate();
+  const logByDate = new Map(allLogs.map((l) => [l.log_date, l]));
+  const completedSet = new Set(allLogs.filter((l) => l.completed === 1).map((l) => l.log_date));
+  const firstLogDate = allLogs[0].log_date;
+  const firstDate = habit.start_date && habit.start_date < firstLogDate ? habit.start_date : firstLogDate;
+
+  // — Gün: son 30 gün, kova = tek gün —
+  const day: ChartBucket[] = lastDays(DAY_BUCKETS).map((date) => ({
+    date,
+    ratio:
+      isScheduledOn(habit.schedule, date) && isWithinHabitDates(habit.start_date, habit.end_date, date)
+        ? dayRatio(habit, logByDate.get(date))
+        : 0,
   }));
+
+  // — Hafta: son 12 hafta (Pazartesi başlangıçlı), kova = hafta —
+  const week: ChartBucket[] = [];
+  const monday = new Date(`${today}T00:00:00`);
+  const jsDay = monday.getDay(); // 0=Pazar
+  monday.setDate(monday.getDate() - ((jsDay + 6) % 7)); // bu haftanın pazartesisi
+  for (let i = WEEK_BUCKETS - 1; i >= 0; i--) {
+    const start = new Date(monday);
+    start.setDate(monday.getDate() - i * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    week.push({
+      date: toYmd(start),
+      ratio: rangeRatio(habit, completedSet, toYmd(start), toYmd(end), today),
+    });
+  }
+
+  // — Ay: son 12 takvim ayı, kova = ay —
+  const month: ChartBucket[] = [];
+  const now = new Date(`${today}T00:00:00`);
+  for (let i = MONTH_BUCKETS - 1; i >= 0; i--) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0); // ayın son günü
+    month.push({
+      date: toYmd(start),
+      ratio: rangeRatio(habit, completedSet, toYmd(start), toYmd(end), today),
+    });
+  }
+
+  const endOfDay = (b: ChartBucket) => b.date;
+  const endOfWeek = (b: ChartBucket) => {
+    const d = new Date(`${b.date}T00:00:00`);
+    d.setDate(d.getDate() + 6);
+    return toYmd(d);
+  };
+  const endOfMonth = (b: ChartBucket) => {
+    const d = new Date(`${b.date}T00:00:00`);
+    return toYmd(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  };
+
+  return {
+    day: trimLeading(day, endOfDay, firstDate),
+    week: trimLeading(week, endOfWeek, firstDate),
+    month: trimLeading(month, endOfMonth, firstDate),
+  };
 }
 
 export function useHabitStats(habitId: string): HabitStats {
@@ -120,6 +200,11 @@ export function useHabitStats(habitId: string): HabitStats {
         if (completedDates.has(date)) completedCount++;
       }
     }
+    // KOTA kuralında "her gün müsait" olduğu için gün bazlı payda yanıltır —
+    // oran, pencere üzerindeki oransal kota beklentisine göre hesaplanır.
+    const quotaRate = isQuotaSchedule(habit.schedule)
+      ? Math.min(1, completedCount / Math.max(1, (habit.schedule!.timesPerWeek! * scheduledCount) / 7))
+      : null;
 
     const totalAmount =
       habit.target_amount != null ? logs.reduce((sum, l) => sum + (l.amount ?? 0), 0) : null;
@@ -130,13 +215,12 @@ export function useHabitStats(habitId: string): HabitStats {
       habit,
       currentStreak: habitRepo.currentStreak(habitId),
       longestStreak: habitRepo.longestStreak(habitId),
-      completionRate: scheduledCount > 0 ? completedCount / scheduledCount : 0,
+      completionRate: quotaRate ?? (scheduledCount > 0 ? completedCount / scheduledCount : 0),
       scheduledCount,
       completedCount,
       totalAmount,
-      weekday: weekdayBreakdown(habit, allLogs),
       streaks: habitRepo.allStreaks(habitId),
-      score: habitRepo.scoreHistory(habitId, WINDOW_DAYS),
+      series: buildSeries(habit, allLogs),
     });
   }, [habitId]);
 

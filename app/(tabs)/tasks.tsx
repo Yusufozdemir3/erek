@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { extractTime, scheduleLabel } from '@/lib/helpers';
+import { buildScheduleLabels, extractTime, scheduleLabel } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
@@ -56,12 +56,9 @@ export default function TasksScreen() {
 
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
 
-  // Tekrarlayan görev rozeti ("🔁 Her gün / Pzt·Çar·Cum") için gün etiketleri
-  // (JS getDay sırasıyla, 0=Pazar) — scheduleLabel ile birleştirilir.
-  const dayLabels = [
-    tr('weekday.sun'), tr('weekday.mon'), tr('weekday.tue'), tr('weekday.wed'),
-    tr('weekday.thu'), tr('weekday.fri'), tr('weekday.sat'),
-  ];
+  // Tekrarlayan görev rozeti ("🔁 Her gün / Pzt·Çar·Cum / Her yıl: ...") için
+  // etiket seti (bkz. helpers.buildScheduleLabels).
+  const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
   const toggleTask = (t: Task) => {
     const completing = t.completed_at === null;
@@ -150,7 +147,7 @@ export default function TasksScreen() {
                         <Text style={styles.due}>
                           {[
                             t.recurrence
-                              ? `🔁 ${scheduleLabel(t.recurrence, tr('habit.everyDay'), dayLabels)}`
+                              ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
                               : null,
                             t.due_date && !done ? shortDate(t.due_date, lang) : null,
                             subtaskCounts[t.id]

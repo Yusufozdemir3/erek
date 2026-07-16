@@ -12,6 +12,8 @@ const mockSignInWithPassword = jest.fn();
 const mockSignUp = jest.fn();
 const mockUpdateUser = jest.fn();
 const mockRpc = jest.fn();
+const mockResetPasswordForEmail = jest.fn();
+const mockVerifyOtp = jest.fn();
 
 jest.mock('../supabase', () => ({
   supabase: {
@@ -22,6 +24,8 @@ jest.mock('../supabase', () => ({
       signInWithPassword: (args: unknown) => mockSignInWithPassword(args),
       signUp: (args: unknown) => mockSignUp(args),
       updateUser: (args: unknown) => mockUpdateUser(args),
+      resetPasswordForEmail: (email: string) => mockResetPasswordForEmail(email),
+      verifyOtp: (args: unknown) => mockVerifyOtp(args),
     },
     rpc: (fn: string) => mockRpc(fn),
   },
@@ -32,6 +36,8 @@ import {
   deleteAccountAndData,
   ensureSignedIn,
   linkEmailToAnonymous,
+  requestPasswordReset,
+  resetPasswordWithCode,
   signInWithEmail,
   signOutAccount,
   signUpWithEmail,
@@ -53,6 +59,8 @@ beforeEach(async () => {
   mockSignUp.mockResolvedValue({ data: { session: null }, error: null });
   mockUpdateUser.mockResolvedValue({ error: null });
   mockRpc.mockResolvedValue({ error: null });
+  mockResetPasswordForEmail.mockResolvedValue({ error: null });
+  mockVerifyOtp.mockResolvedValue({ error: null });
 });
 
 describe('ensureSignedIn', () => {
@@ -154,6 +162,30 @@ describe('çıkış bayrağının yaşam döngüsü', () => {
 
     await expect(deleteAccountAndData()).resolves.toBeUndefined();
     expect(await AsyncStorage.getItem(SIGNED_OUT_KEY)).toBe('1');
+  });
+
+  it('resetPasswordWithCode: kodu doğrular, parolayı yeniler, bayrağı temizler', async () => {
+    await signOutAccount(); // bayrak set
+    await resetPasswordWithCode('a@b.c', ' 123456 ', 'yeniparola');
+
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ email: 'a@b.c', token: '123456', type: 'recovery' });
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'yeniparola' });
+    // Kod doğrulaması gerçek oturum açtı — bilerek-çıkış bayrağı temizlenmeli.
+    expect(await AsyncStorage.getItem(SIGNED_OUT_KEY)).toBeNull();
+  });
+
+  it('resetPasswordWithCode: kod geçersizse fırlatır, parola güncellenmez, bayrak kalır', async () => {
+    await signOutAccount();
+    mockVerifyOtp.mockResolvedValue({ error: new Error('Token has expired or is invalid') });
+
+    await expect(resetPasswordWithCode('a@b.c', '000000', 'yeniparola')).rejects.toThrow();
+    expect(mockUpdateUser).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(SIGNED_OUT_KEY)).toBe('1');
+  });
+
+  it('requestPasswordReset e-postayı Supabase\'e iletir', async () => {
+    await requestPasswordReset('a@b.c');
+    expect(mockResetPasswordForEmail).toHaveBeenCalledWith('a@b.c');
   });
 
   it('bayrak çıkış denemesinden ÖNCE yazılır (yarış penceresi kapalı); çıkış hata verse de kalır', async () => {

@@ -17,6 +17,7 @@ function rowToGoal(row: any): Goal {
     unit: row.unit,
     deadline: row.deadline,
     completed_at: row.completed_at,
+    remind_at: row.remind_at,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -30,6 +31,7 @@ export interface CreateGoalInput {
   target_value?: number | null;
   unit?: string | null;
   deadline?: string | null;
+  remind_at?: string | null;
 }
 
 export const goalRepo = {
@@ -39,10 +41,11 @@ export const goalRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO goals
-       (id, user_id, title, goal_type, target_value, current_value, unit, deadline, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, NULL, 0)`,
+       (id, user_id, title, goal_type, target_value, current_value, unit, deadline, remind_at, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL, 0)`,
       [id, input.user_id, input.title, input.goal_type,
-       input.target_value ?? null, input.unit ?? null, input.deadline ?? null, now]
+       input.target_value ?? null, input.unit ?? null, input.deadline ?? null,
+       input.remind_at ?? null, now]
     );
     return this.getById(id)!;
   },
@@ -74,6 +77,7 @@ export const goalRepo = {
       target_value: number | null;
       unit: string | null;
       deadline: string | null;
+      remind_at: string | null;
       current_value: number;
     }>
   ): void {
@@ -84,6 +88,7 @@ export const goalRepo = {
     if (fields.target_value !== undefined) { sets.push('target_value = ?'); vals.push(fields.target_value); }
     if (fields.unit !== undefined) { sets.push('unit = ?'); vals.push(fields.unit); }
     if (fields.deadline !== undefined) { sets.push('deadline = ?'); vals.push(fields.deadline); }
+    if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
     if (fields.current_value !== undefined) {
       // Hedef belirliyse aşmasın; negatif olmasın. Hedef bu çağrıda da değişebilir.
       const cap = fields.target_value !== undefined

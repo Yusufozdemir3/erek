@@ -1,16 +1,18 @@
-// Alışkanlık istatistik ekranı — özet sayılar, güç puanı, rozetler + aylık takvim.
+// Alışkanlık istatistik ekranı — özet sayılar, Gün/Hafta/Ay tamamlama grafiği,
+// seri geçmişi (ilk 5), aylık takvim + en altta rozetler.
 // "Alışkanlıklar" sekmesinde bir kartın haftalık geçmiş şeridine dokununca açılır.
 // Mimari kural: SQL yok; yalnızca useHabitStats (habitRepo üzerinden) çağrılır.
 
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { fmtClock } from '@/lib/helpers';
+import { fmtClock, isQuotaSchedule } from '@/lib/helpers';
 import { STREAK_MILESTONES } from '@/lib/milestones';
-import { useHabitStats, type ScorePoint, type StreakEntry, type WeekdayStat } from '@/ui/useHabitStats';
+import { useHabitStats, type ChartBucket, type HabitChartSeries, type StreakEntry } from '@/ui/useHabitStats';
 import { useHabitCalendar, type CalendarDay } from '@/ui/useHabitCalendar';
-import { LineChart } from '@/ui/LineChart';
+import { BarChart } from '@/ui/BarChart';
 import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -33,30 +35,75 @@ function StatCard({ label, value, styles }: { label: string; value: string; styl
   );
 }
 
-// Güç puanı grafiği: her gün için 0..1 skoru alan+çizgi olarak gösterir. Salt
-// View'lerle (bkz. LineChart) çizilir — yeni SVG/native bağımlılığı yok. Arkada
-// %100 / %50 / %0 referans çizgileri okumayı kolaylaştırır; ringColor uç-nokta
-// dairesinin halka rengi (kart zemini).
-function ScoreGraph({
-  score,
+// Tamamlama grafiği kartının içi: Gün/Hafta/Ay segment seçici + çubuk grafik.
+// Gün görünümünde her çubuk o günün oranı (nicel/zamanlayıcıda miktar/hedef,
+// ikilide 0/1); hafta/ay görünümünde kovanın planlı-gün tamamlanma oranı.
+// Seyrek eksen etiketleri (ilk/orta/son kova) çağıranın verdiği biçimleyiciyle
+// üretilir (yerel ay/gün adları için).
+type ChartPeriod = 'day' | 'week' | 'month';
+
+function CompletionChart({
+  series,
   color,
-  ringColor,
+  t,
+  formatLabel,
   styles,
+  trackColor,
+  labelColor,
 }: {
-  score: ScorePoint[];
+  series: HabitChartSeries;
   color: string;
-  ringColor: string;
+  t: (key: string) => string;
+  formatLabel: (period: ChartPeriod, bucket: ChartBucket) => string;
   styles: Styles;
+  trackColor: string;
+  labelColor: string;
 }) {
-  if (score.length === 0) return null;
-  const values = score.map((p) => p.score);
+  const [period, setPeriod] = useState<ChartPeriod>('day');
+  const buckets = series[period];
+  const ratios = buckets.map((b) => b.ratio);
+  // İlk/orta/son kovadan seyrek etiketler (2 kovada ilk+son, tek kovada yalnız o).
+  const labelIdx =
+    buckets.length >= 3
+      ? [0, Math.floor((buckets.length - 1) / 2), buckets.length - 1]
+      : buckets.map((_, i) => i);
+  const labels = [...new Set(labelIdx)].map((i) => formatLabel(period, buckets[i]));
+  const current = buckets.length > 0 ? buckets[buckets.length - 1].ratio : 0;
+
+  const PERIODS: { key: ChartPeriod; labelKey: string }[] = [
+    { key: 'day', labelKey: 'stats.periodDay' },
+    { key: 'week', labelKey: 'stats.periodWeek' },
+    { key: 'month', labelKey: 'stats.periodMonth' },
+  ];
+
   return (
-    <View style={styles.chartWrap}>
-      <View style={[styles.chartGrid, { top: 0 }]} />
-      <View style={[styles.chartGrid, { top: '50%' }]} />
-      <View style={[styles.chartGrid, { bottom: 0 }]} />
-      <LineChart values={values} color={color} height={72} dotRingColor={ringColor} />
-    </View>
+    <>
+      <View style={styles.periodRow}>
+        {PERIODS.map((p) => {
+          const sel = period === p.key;
+          return (
+            <Pressable
+              key={p.key}
+              style={[styles.periodBtn, sel && styles.periodBtnSel]}
+              onPress={() => setPeriod(p.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: sel }}
+            >
+              <Text style={[styles.periodText, sel && styles.periodTextSel]}>{t(p.labelKey)}</Text>
+            </Pressable>
+          );
+        })}
+        <View style={{ flex: 1 }} />
+        <Text style={styles.periodCurrent}>%{Math.round(current * 100)}</Text>
+      </View>
+      <BarChart
+        ratios={ratios}
+        color={color}
+        trackColor={trackColor}
+        labels={labels}
+        labelColor={labelColor}
+      />
+    </>
   );
 }
 
@@ -102,27 +149,30 @@ function MonthCalendar({
   );
 }
 
-// Seri geçmişi: en uzundan en kısaya, her satırda uzunluk + tarih aralığı +
-// en uzuna göre oranlı bir çubuk (kabaca karşılaştırma için).
+// Seri geçmişi: en uzundan en kısaya İLK 5 seri, her satırda uzunluk + tarih
+// aralığı + en uzuna göre oranlı bir çubuk (kabaca karşılaştırma için).
 function StreakList({
   streaks,
   color,
   lang,
   t,
+  suffixKey,
   styles,
 }: {
   streaks: StreakEntry[];
   color: string;
   lang: Lang;
   t: (key: string, params?: Record<string, string | number>) => string;
+  suffixKey: string; // kota alışkanlıkta '{n} hafta', diğerlerinde '{n} gün'
   styles: Styles;
 }) {
-  const max = streaks[0]?.length ?? 1;
+  const top = streaks.slice(0, 5);
+  const max = top[0]?.length ?? 1;
   return (
     <View style={{ gap: 8 }}>
-      {streaks.map((s, i) => (
+      {top.map((s, i) => (
         <View key={`${s.start}-${i}`} style={styles.streakRow}>
-          <Text style={styles.streakLen}>{t('stats.daysSuffix', { n: s.length })}</Text>
+          <Text style={styles.streakLen}>{t(suffixKey, { n: s.length })}</Text>
           <View style={styles.streakBarTrack}>
             <View
               style={[styles.streakBarFill, { width: `${(s.length / max) * 100}%`, backgroundColor: color }]}
@@ -137,36 +187,6 @@ function StreakList({
   );
 }
 
-// Haftanın günü grafiği: Pzt..Paz, her çubuk o günün tamamlanma oranı.
-function WeekdayChart({
-  weekday,
-  color,
-  t,
-  styles,
-}: {
-  weekday: WeekdayStat[];
-  color: string;
-  t: (key: string) => string;
-  styles: Styles;
-}) {
-  const WD_KEYS = ['weekday.mon', 'weekday.tue', 'weekday.wed', 'weekday.thu', 'weekday.fri', 'weekday.sat', 'weekday.sun'];
-  return (
-    <View style={styles.wdRow}>
-      {weekday.map((w, i) => (
-        <View key={w.wd} style={styles.wdCol}>
-          <Text style={styles.wdPct}>{w.scheduled > 0 ? `%${Math.round(w.rate * 100)}` : '–'}</Text>
-          <View style={styles.wdBarTrack}>
-            <View
-              style={[styles.wdBarFill, { height: `${Math.max(3, Math.round(w.rate * 100))}%`, backgroundColor: color }]}
-            />
-          </View>
-          <Text style={styles.wdLabel}>{t(WD_KEYS[i])}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 export default function HabitStatsScreen() {
   const { colors, shared } = useTheme();
   const { t, lang } = useI18n();
@@ -175,10 +195,23 @@ export default function HabitStatsScreen() {
   const stats = useHabitStats(id);
   const calendar = useHabitCalendar(id);
   const habitColor = stats.habit?.color ?? DEFAULT_HABIT_COLOR;
+  // Kota (haftada X kez) alışkanlıkta seriler HAFTA bazındadır: etiket/birim
+  // farklı, rozet eşikleri (gün cinsinden) hafta×7 ile karşılaştırılır.
+  const isQuota = isQuotaSchedule(stats.habit?.schedule ?? null);
+  const streakDays = isQuota ? stats.longestStreak * 7 : stats.longestStreak;
   const monthLabel = new Date(calendar.year, calendar.month, 1).toLocaleDateString(DATE_LOCALE[lang], {
     month: 'long',
     year: 'numeric',
   });
+
+  // Grafiğin seyrek eksen etiketleri: gün/hafta kovasında "28 Haz" gibi kısa
+  // tarih (hafta kovasında haftanın pazartesisi), ay kovasında yalnız ay adı.
+  const formatBucketLabel = (period: ChartPeriod, bucket: ChartBucket): string => {
+    if (period === 'month') {
+      return new Date(`${bucket.date}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], { month: 'short' });
+    }
+    return shortDate(bucket.date, lang);
+  };
 
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
@@ -197,8 +230,16 @@ export default function HabitStatsScreen() {
             </View>
 
             <View style={styles.statsRow}>
-              <StatCard label={t('stats.currentStreak')} value={`🔥 ${stats.currentStreak}`} styles={styles} />
-              <StatCard label={t('stats.longestStreak')} value={String(stats.longestStreak)} styles={styles} />
+              <StatCard
+                label={t(isQuota ? 'stats.currentStreakWeeks' : 'stats.currentStreak')}
+                value={`🔥 ${stats.currentStreak}`}
+                styles={styles}
+              />
+              <StatCard
+                label={t(isQuota ? 'stats.longestStreakWeeks' : 'stats.longestStreak')}
+                value={String(stats.longestStreak)}
+                styles={styles}
+              />
               <StatCard
                 label={t('stats.completionRate')}
                 value={`%${Math.round(stats.completionRate * 100)}`}
@@ -217,61 +258,36 @@ export default function HabitStatsScreen() {
               </View>
             )}
 
-            {/* Güç puanı — Loop Habit Tracker'daki fikirden esinlenen, son
-                günlere ağırlık veren üstel hareketli ortalama (bkz. habitRepo.scoreHistory). */}
-            {stats.score.length > 0 && (
+            {/* Tamamlama grafiği — Gün/Hafta/Ay seçilebilir çubuk görünüm. */}
+            {stats.series && (
               <View style={[styles.card, { marginTop: 12 }]}>
-                <View style={styles.scoreHead}>
-                  <Text style={styles.cardLabel}>{t('stats.score')}</Text>
-                  <Text style={[styles.cardValue, { marginTop: 0 }]}>
-                    %{Math.round(stats.score[stats.score.length - 1].score * 100)}
-                  </Text>
-                </View>
-                <ScoreGraph score={stats.score} color={habitColor} ringColor={colors.card} styles={styles} />
-                <Text style={styles.scoreHint}>{t('stats.scoreHint')}</Text>
+                <Text style={styles.cardLabel}>{t('stats.chart')}</Text>
+                <CompletionChart
+                  series={stats.series}
+                  color={habitColor}
+                  t={t}
+                  formatLabel={formatBucketLabel}
+                  styles={styles}
+                  trackColor={colors.track}
+                  labelColor={colors.faint}
+                />
               </View>
             )}
 
-            {/* Rozetler — en uzun seri eşiği geçtiyse kazanılmış sayılır (seri
-                düşse bile madalya kalır). Kilitliler soluk. */}
-            <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>{t('stats.badges')}</Text>
-            <View style={styles.badgeRow}>
-              {STREAK_MILESTONES.map((m) => {
-                const earned = stats.longestStreak >= m.days;
-                return (
-                  <View
-                    key={m.days}
-                    style={[styles.badge, earned ? styles.badgeEarned : styles.badgeLocked]}
-                  >
-                    <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>
-                      {m.emoji}
-                    </Text>
-                    <Text style={[styles.badgeDays, earned && styles.badgeDaysEarned]}>
-                      {t('stats.daysSuffix', { n: m.days })}
-                    </Text>
-                    <Text style={styles.badgeLabel}>{t(m.labelKey)}</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Haftanın günü — hangi günler güçlü/zayıf tamamlanıyor. */}
-            {stats.weekday.length > 0 && (
-              <>
-                <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>
-                  {t('stats.weekdayBreakdown')}
-                </Text>
-                <WeekdayChart weekday={stats.weekday} color={habitColor} t={t} styles={styles} />
-              </>
-            )}
-
-            {/* Seri geçmişi — en uzundan en kısaya TÜM geçmiş seriler. */}
+            {/* Seri geçmişi — en uzun 5 seri. */}
             {stats.streaks.length > 0 && (
               <>
                 <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>
                   {t('stats.streakHistory')}
                 </Text>
-                <StreakList streaks={stats.streaks} color={habitColor} lang={lang} t={t} styles={styles} />
+                <StreakList
+                  streaks={stats.streaks}
+                  color={habitColor}
+                  lang={lang}
+                  t={t}
+                  suffixKey={isQuota ? 'stats.weeksSuffix' : 'stats.daysSuffix'}
+                  styles={styles}
+                />
               </>
             )}
 
@@ -312,6 +328,29 @@ export default function HabitStatsScreen() {
               )}
             </View>
             <MonthCalendar weeks={calendar.weeks} color={habitColor} styles={styles} />
+
+            {/* Rozetler — en uzun seri eşiği geçtiyse kazanılmış sayılır (seri
+                düşse bile madalya kalır). Kilitliler soluk. */}
+            <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>{t('stats.badges')}</Text>
+            <View style={styles.badgeRow}>
+              {STREAK_MILESTONES.map((m) => {
+                const earned = streakDays >= m.days;
+                return (
+                  <View
+                    key={m.days}
+                    style={[styles.badge, earned ? styles.badgeEarned : styles.badgeLocked]}
+                  >
+                    <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>
+                      {m.emoji}
+                    </Text>
+                    <Text style={[styles.badgeDays, earned && styles.badgeDaysEarned]}>
+                      {t('stats.daysSuffix', { n: m.days })}
+                    </Text>
+                    <Text style={styles.badgeLabel}>{t(m.labelKey)}</Text>
+                  </View>
+                );
+              })}
+            </View>
           </>
         )}
       </ScrollView>
@@ -373,32 +412,20 @@ const makeStyles = (c: Colors) =>
     cellMissed: { backgroundColor: '#f87171' },
     cellUnscheduled: { backgroundColor: c.border },
 
-    // — Güç puanı çizgisel grafiği —
-    scoreHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    scoreHint: { fontSize: 11, color: c.faint, marginTop: 10, lineHeight: 15 },
-    chartWrap: { height: 72, marginTop: 12, position: 'relative' },
-    chartGrid: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      height: 1,
-      backgroundColor: c.border,
+    // — Tamamlama grafiği (Gün/Hafta/Ay) —
+    periodRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, marginBottom: 14 },
+    periodBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
     },
-
-    // — Haftanın günü çubuk grafiği —
-    wdRow: { flexDirection: 'row', gap: 8 },
-    wdCol: { flex: 1, alignItems: 'center' },
-    wdPct: { fontSize: 10, color: c.muted, fontWeight: '700', marginBottom: 4 },
-    wdBarTrack: {
-      width: '100%',
-      height: 56,
-      borderRadius: 6,
-      backgroundColor: c.track,
-      justifyContent: 'flex-end',
-      overflow: 'hidden',
-    },
-    wdBarFill: { width: '100%', borderRadius: 6 },
-    wdLabel: { fontSize: 11, color: c.muted, marginTop: 6, fontWeight: '600' },
+    periodBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft },
+    periodText: { fontSize: 12, fontWeight: '700', color: c.faint },
+    periodTextSel: { color: c.primary },
+    periodCurrent: { fontSize: 16, fontWeight: '800', color: c.text },
 
     // — Seri geçmişi listesi —
     streakRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

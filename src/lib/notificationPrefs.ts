@@ -9,6 +9,7 @@ export interface NotificationPrefs {
   enabled: boolean;          // ana anahtar — kapalıyken hiçbir bildirim kurulmaz
   habitReminders: boolean;   // alışkanlık hatırlatmaları
   taskReminders: boolean;    // görev hatırlatmaları
+  goalReminders: boolean;    // hedef "giriş yapmayı unutma" hatırlatmaları
   timerDone: boolean;        // zamanlayıcı "süre doldu" bildirimi
   sound: boolean;            // bildirim sesi + titreşimi (ikisi birlikte, bkz. notifications.ts soundContent)
 }
@@ -17,6 +18,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   enabled: true,
   habitReminders: true,
   taskReminders: true,
+  goalReminders: true,
   timerDone: true,
   sound: true,
 };
@@ -25,6 +27,7 @@ const KEYS: Record<keyof NotificationPrefs, string> = {
   enabled: 'notif:enabled',
   habitReminders: 'notif:habitReminders',
   taskReminders: 'notif:taskReminders',
+  goalReminders: 'notif:goalReminders',
   timerDone: 'notif:timerDone',
   sound: 'notif:sound',
 };

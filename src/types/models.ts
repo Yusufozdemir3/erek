@@ -12,14 +12,29 @@ export type GoalType = 'numeric' | 'milestone';
 // 'timer' = geri sayım (target_amount hedef saniye, amount biriken saniye).
 export type HabitKind = 'binary' | 'numeric' | 'timer';
 
-// Tekrar kuralı. Hem görevler hem (ileride) alışkanlıklar kullanır.
-// Basit tutuldu: günlük / haftanın belli günleri / aylık belli gün.
+// Tekrar kuralı. Hem görevler hem alışkanlıklar kullanır (JSON TEXT kolonu —
+// yeni alanlar migration gerektirmez). Türler:
+//   daily    → her gün
+//   weekly   → weekdays doluysa haftanın belirli günleri;
+//              weekdays boş + timesPerWeek>0 ise ESNEK KOTA ("haftada X kez",
+//              hangi gün olduğu serbest — bkz. helpers.isQuotaSchedule)
+//   monthly  → ayın belirli günü
+//   interval → her X günde bir (anchor referans günü, o gün planlıdır)
+//   yearly   → her yıl belirli tarihler
 export interface Recurrence {
-  freq: 'daily' | 'weekly' | 'monthly';
+  freq: 'daily' | 'weekly' | 'monthly' | 'interval' | 'yearly';
   // weekly için: [1,3,5] = Pzt, Çar, Cum (0=Pazar ... 6=Cumartesi)
   weekdays?: number[];
+  // weekly ESNEK KOTA için: haftada kaç kez (weekdays boşken anlamlı)
+  timesPerWeek?: number;
   // monthly için: ayın günü (1-31)
   monthDay?: number;
+  // interval için: kaç günde bir (>=1)
+  every?: number;
+  // interval için: referans günü "YYYY-MM-DD" — bu gün ve her `every` gün sonrası planlı
+  anchor?: string;
+  // yearly için: ["MM-DD", ...] (yıl bileşeni yok)
+  dates?: string[];
 }
 
 // Tüm kayıtların paylaştığı senkron alanları.
@@ -57,15 +72,24 @@ export interface Goal extends SyncFields {
   // yazılır. 'numeric' hedefte hep NULL — tamamlanma current_value>=target_value'dan
   // türetilir (bkz. goalRepo.isCompleted).
   completed_at: string | null;
+  remind_at: string | null;      // "08:30" gibi, günlük giriş hatırlatma saati
 }
 
-// Bir hedefin adımı/parçası (goal_type='milestone' için basit checklist maddesi).
-// Subtask ile birebir aynı desen: kendi tarihi/önceliği yok, yalnızca başlık + durum.
+// Bir hedefin adımı/parçası. İki kullanım biçimi var:
+//   'milestone' hedefte → basit checklist maddesi (subtask deseni): elle
+//     işaretlenir, amount hep NULL.
+//   'numeric' hedefte + amount doluysa → ARA EŞİK: adımın yüzdesi hedefin
+//     current_value'sundan KÜMÜLATİF türetilir (adımlar position sırasıyla
+//     dolar), elle İŞARETLENMEZ; completed kolonu bu kipte kullanılmaz.
+//     (bkz. goalMilestoneRepo.milestoneViews)
+// due_date her iki kipte de opsiyonel adım son tarihidir.
 export interface GoalMilestone extends SyncFields {
   goal_id: string;
   title: string;
   completed: 0 | 1;
   position: number; // oluşturma sırası; liste bu sırayla gösterilir
+  amount: number | null;   // yalnız numeric hedefte anlamlı ara-eşik miktarı
+  due_date: string | null; // "YYYY-MM-DD" opsiyonel adım son tarihi
 }
 
 // Hedefin 'Genel' sekmesinde serbest miktar girişiyle ("Ekle") eklenen bir kayıt.

@@ -18,7 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
-import { hmToDate, todayDate, toHm, toYmd } from '@/lib/helpers';
+import { hmToDate, isQuotaSchedule, todayDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
@@ -69,6 +69,8 @@ interface Props {
 }
 
 type WizardStep = 'kind' | 'identity' | 'schedule' | 'tracking' | 'reminder';
+// Sıklık kipi (UI durumu; Recurrence'a submit'te çevrilir — bkz. submit).
+type FreqMode = 'daily' | 'days' | 'interval' | 'quota';
 
 // Takip tipi seçimi — sihirbazın ilk adımı (yalnız oluşturmada, tip sabit
 // verilmemişse). Emoji yerine ikon setiyle aynı çizgi vektör dili (Feather).
@@ -99,13 +101,32 @@ export function HabitForm({
   const [kind, setKind] = useState<HabitKind | null>(fixedKind ?? initial?.kind ?? null);
   const initWeekly =
     !!initSchedule && initSchedule.freq === 'weekly' && (initSchedule.weekdays?.length ?? 0) > 0;
+  // Dört sıklık kipi: her gün / haftanın belirli günleri / her X günde bir /
+  // haftada X kez (esnek kota — gün seçilmez, haftalık sayı tutturulur).
+  const initFreqMode: FreqMode = !initSchedule
+    ? 'daily'
+    : initSchedule.freq === 'interval'
+      ? 'interval'
+      : isQuotaSchedule(initSchedule)
+        ? 'quota'
+        : initWeekly
+          ? 'days'
+          : 'daily';
 
   const [title, setTitle] = useState(initial?.title ?? '');
   const [remindAt, setRemindAt] = useState<string | null>(initial?.remind_at ?? null);
   const [icon, setIcon] = useState<string | null>(initial?.icon ?? null);
   const [color, setColor] = useState<string | null>(initial?.color ?? null);
-  const [everyDay, setEveryDay] = useState(!initWeekly);
+  const [freqMode, setFreqMode] = useState<FreqMode>(initFreqMode);
   const [weekdays, setWeekdays] = useState<number[]>(initWeekly ? initSchedule!.weekdays! : []);
+  // interval: kaç günde bir (metin; >=2 geçerli, aksi halde "her gün"e düşer).
+  const [everyNText, setEveryNText] = useState(
+    initSchedule?.freq === 'interval' ? String(initSchedule.every ?? 2) : '2'
+  );
+  // quota: haftada kaç kez (1-7).
+  const [quotaText, setQuotaText] = useState(
+    isQuotaSchedule(initSchedule) ? String(initSchedule!.timesPerWeek) : '3'
+  );
   // Nicel: miktar (ör. 8). Zamanlayıcı: hedef DAKİKA (saniyeye çevrilir). Metin olarak tutulur.
   const [targetText, setTargetText] = useState(
     initial?.target_amount == null
@@ -192,11 +213,29 @@ export function HabitForm({
     if (!kind) return; // tip seçilmeden gönderilemez (sihirbazda canProceed zaten engeller)
     const t = title.trim();
     if (!t) return;
-    // "Belirli günler" seçili ama hiç gün yoksa "her gün" (null) kabul edilir.
-    const schedule: Recurrence | null =
-      everyDay || weekdays.length === 0
-        ? null
-        : { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) };
+    // Sıklık kipini Recurrence'a çevir. Geçersiz/boş girdiler güvenli tarafa,
+    // "her gün"e (null) düşer: belirli günlerde hiç gün seçilmemişse, aralıkta
+    // sayı <2 ise, kotada sayı 1-7 dışındaysa.
+    let schedule: Recurrence | null = null;
+    if (freqMode === 'days' && weekdays.length > 0) {
+      schedule = { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) };
+    } else if (freqMode === 'interval') {
+      const n = parseInt(everyNText, 10);
+      if (Number.isFinite(n) && n >= 2) {
+        // Çapa (referans günü): düzenlemede mevcut çapa korunur ki planlı günler
+        // kaymasın; oluşturmada başlangıç tarihi (yoksa bugün) çapadır.
+        const anchor =
+          initSchedule?.freq === 'interval' && initSchedule.anchor
+            ? initSchedule.anchor
+            : startDate ?? todayDate();
+        schedule = { freq: 'interval', every: n, anchor };
+      }
+    } else if (freqMode === 'quota') {
+      const n = parseInt(quotaText, 10);
+      if (Number.isFinite(n) && n >= 1 && n <= 7) {
+        schedule = { freq: 'weekly', timesPerWeek: n };
+      }
+    }
     // Hedef/birim tipe göre: numeric = miktar+birim, timer = dakika→saniye,
     // binary = ikisi de null.
     const parsed = parseFloat(targetText.replace(',', '.'));
@@ -421,34 +460,40 @@ export function HabitForm({
         </>
       )}
 
-      {/* Sıklık — her gün ya da haftanın belirli günleri, + tarih aralığı */}
+      {/* Sıklık — her gün / belirli günler / her X günde bir / haftada X kez,
+          + tarih aralığı */}
       {show('schedule') && (
         <>
           <Text style={styles.label}>{t('habit.frequency')}</Text>
           <View style={styles.freqRow}>
-            <Pressable
-              style={[styles.freqBtn, everyDay && styles.freqBtnSel]}
-              onPress={() => setEveryDay(true)}
-            >
-              <Text style={[styles.freqBtnText, everyDay && styles.freqBtnTextSel]}>
-                {t('habit.everyDay')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.freqBtn, !everyDay && styles.freqBtnSel]}
-              onPress={() => {
-                setEveryDay(false);
-                // Boşsa yardımcı olsun diye bugünün gününü seçili getir.
-                if (weekdays.length === 0) setWeekdays([new Date().getDay()]);
-              }}
-            >
-              <Text style={[styles.freqBtnText, !everyDay && styles.freqBtnTextSel]}>
-                {t('habit.specificDays')}
-              </Text>
-            </Pressable>
+            {(
+              [
+                { mode: 'daily', labelKey: 'habit.everyDay' },
+                { mode: 'days', labelKey: 'habit.specificDays' },
+                { mode: 'interval', labelKey: 'habit.freqInterval' },
+                { mode: 'quota', labelKey: 'habit.freqQuota' },
+              ] as { mode: FreqMode; labelKey: string }[]
+            ).map(({ mode, labelKey }) => {
+              const sel = freqMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  style={[styles.freqBtn, sel && styles.freqBtnSel]}
+                  onPress={() => {
+                    setFreqMode(mode);
+                    // Boşsa yardımcı olsun diye bugünün gününü seçili getir.
+                    if (mode === 'days' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
+                  }}
+                >
+                  <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>
+                    {t(labelKey)}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
-          {!everyDay && (
+          {freqMode === 'days' && (
             <View style={styles.dayRow}>
               {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
                 const sel = weekdays.includes(wd);
@@ -462,6 +507,34 @@ export function HabitForm({
                   </Pressable>
                 );
               })}
+            </View>
+          )}
+
+          {freqMode === 'interval' && (
+            <View style={styles.freqNumRow}>
+              <Text style={styles.freqNumLabel}>{t('habit.everyNPrompt')}</Text>
+              <TextInput
+                style={styles.freqNumInput}
+                value={everyNText}
+                onChangeText={setEveryNText}
+                keyboardType="number-pad"
+                maxLength={SHORT_NUMBER_MAX_LEN}
+              />
+              <Text style={styles.freqNumHint}>{t('habit.everyNHint')}</Text>
+            </View>
+          )}
+
+          {freqMode === 'quota' && (
+            <View style={styles.freqNumRow}>
+              <Text style={styles.freqNumLabel}>{t('habit.quotaPrompt')}</Text>
+              <TextInput
+                style={styles.freqNumInput}
+                value={quotaText}
+                onChangeText={setQuotaText}
+                keyboardType="number-pad"
+                maxLength={1}
+              />
+              <Text style={styles.freqNumHint}>{t('habit.quotaHint')}</Text>
             </View>
           )}
 
@@ -742,7 +815,23 @@ const makeStyles = (c: Colors) =>
     },
     swatchSel: { borderWidth: 3, borderColor: c.text },
     swatchCheck: { color: c.onAccent, fontSize: 14, fontWeight: '800' },
-    freqRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+    freqRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+    // "Kaç günde bir? / Haftada kaç kez?" satırı (interval + kota kipleri).
+    freqNumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+    freqNumLabel: { fontSize: 14, fontWeight: '600', color: c.text },
+    freqNumInput: {
+      width: 64,
+      textAlign: 'center',
+      backgroundColor: c.inputBg,
+      borderRadius: 10,
+      paddingVertical: 8,
+      fontSize: 15,
+      fontWeight: '700',
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
     freqBtn: {
       flex: 1,
       alignItems: 'center',

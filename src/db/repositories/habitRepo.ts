@@ -3,7 +3,39 @@
 // Sebebi: türetilmiş veriyi saklamak senkronda tutarsızlık yaratır. Tek doğru kaynak loglar.
 
 import { getDb } from '../database';
-import { isScheduledOn, isWithinHabitDates, newId, nowIso, parseJson, todayDate, toJson } from '../../lib/helpers';
+import {
+  isQuotaSchedule,
+  isScheduledOn,
+  isWithinHabitDates,
+  newId,
+  nowIso,
+  parseJson,
+  todayDate,
+  toJson,
+  toYmd,
+  weekStartOf,
+} from '../../lib/helpers';
+
+// — KOTA ("haftada X kez") seri yardımcıları —
+// Kota kuralında hiçbir gün tek başına vadeli olmadığından seriler GÜN değil
+// HAFTA bazında sayılır: bir hafta, içindeki tamamlanan gün sayısı kotaya
+// ulaştıysa "yapıldı"dır. Haftalar Pazartesi başlangıçlıdır (weekStartOf).
+
+// Tamamlanan log tarihlerini hafta-başlangıcı anahtarına göre sayar.
+function weekCompletionCounts(dates: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const d of dates) {
+    const ws = weekStartOf(d);
+    counts.set(ws, (counts.get(ws) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function shiftWeek(weekStart: string, weeks: number): string {
+  const d = new Date(`${weekStart}T00:00:00`);
+  d.setDate(d.getDate() + weeks * 7);
+  return toYmd(d);
+}
 import type { GoalContribution, Habit, HabitKind, HabitLog, Recurrence } from '../../types/models';
 import { goalRepo } from './goalRepo';
 
@@ -263,6 +295,9 @@ export const habitRepo = {
   // (ör. Pzt/Çar/Cum alışkanlığında Salı önemsiz; bitişten sonraki günler de).
   // Bugün planlıysa ve henüz işaretlenmemişse seriyi bozmaz (bir önceki planlı
   // günden devam eder). İlk kaçırılan planlı günde durur.
+  // KOTA (haftada X kez) kuralında sonuç GÜN değil HAFTA sayısıdır: kotası dolan
+  // ardışık haftalar; içinde bulunulan hafta dolmadıysa seriyi bozmaz (hafta
+  // bitmedi), dolduysa sayılır.
   currentStreak(habitId: string): number {
     const db = getDb();
     const habit = this.getById(habitId);
@@ -276,6 +311,21 @@ export const habitRepo = {
       [habitId]
     );
     if (rows.length === 0) return 0;
+
+    if (isQuotaSchedule(habit?.schedule ?? null)) {
+      const quota = habit!.schedule!.timesPerWeek!;
+      const counts = weekCompletionCounts(rows.map((r) => r.log_date));
+      let cursor = weekStartOf(todayDate());
+      let streak = 0;
+      if ((counts.get(cursor) ?? 0) >= quota) streak++;
+      // Bu hafta henüz dolmadıysa bozmaz — önceki haftalardan devam.
+      cursor = shiftWeek(cursor, -1);
+      while ((counts.get(cursor) ?? 0) >= quota) {
+        streak++;
+        cursor = shiftWeek(cursor, -1);
+      }
+      return streak;
+    }
 
     const completed = new Set<string>(rows.map((r) => r.log_date));
     const today = todayDate();
@@ -341,6 +391,21 @@ export const habitRepo = {
     return rows as HabitLog[];
   },
 
+  // KOTA (haftada X kez) alışkanlığında verilen günün haftasında tamamlanan gün
+  // sayısı — "Bugün" ekranındaki "2/3 bu hafta" göstergesi için.
+  completionsInWeek(habitId: string, dateYmd: string): number {
+    const db = getDb();
+    const start = weekStartOf(dateYmd);
+    const endD = new Date(`${start}T00:00:00`);
+    endD.setDate(endD.getDate() + 6);
+    const rows = db.getAllSync<any>(
+      `SELECT COUNT(*) AS n FROM habit_logs
+       WHERE habit_id = ? AND completed = 1 AND log_date >= ? AND log_date <= ?`,
+      [habitId, start, toYmd(endD)]
+    );
+    return rows[0]?.n ?? 0;
+  },
+
   // İki tarih arasındaki (dahil) loglar — takvim ay görünümü için. logsInRange'den
   // farkı: açık uçlu "bugüne kadar" değil, KAPALI bir aralık (geçmiş ayları gezerken).
   logsBetween(habitId: string, startYmd: string, endYmd: string): HabitLog[] {
@@ -356,6 +421,8 @@ export const habitRepo = {
   // tamamlanan günden bugüne kadar tüm geçmişi baştan sona tarayıp gördüğü en
   // uzun ardışık planlı-gün serisini döner. Aynı planlı-gün kuralını kullanır
   // (plansız/aralık dışı gün boşluğu seriyi bozmaz).
+  // KOTA kuralında sonuç HAFTA sayısıdır; içinde bulunulan (bitmemiş) hafta
+  // dolmadıysa seri BOZULMAZ ama sayılmaz da (currentStreak ile tutarlı).
   longestStreak(habitId: string): number {
     const db = getDb();
     const habit = this.getById(habitId);
@@ -369,6 +436,25 @@ export const habitRepo = {
       [habitId]
     );
     if (rows.length === 0) return 0;
+
+    if (isQuotaSchedule(habit?.schedule ?? null)) {
+      const quota = habit!.schedule!.timesPerWeek!;
+      const counts = weekCompletionCounts(rows.map((r) => r.log_date));
+      const currentWeek = weekStartOf(todayDate());
+      let cursor = weekStartOf(rows[0].log_date);
+      let run = 0;
+      let best = 0;
+      while (cursor <= currentWeek) {
+        if ((counts.get(cursor) ?? 0) >= quota) {
+          run++;
+          if (run > best) best = run;
+        } else if (cursor !== currentWeek) {
+          run = 0;
+        }
+        cursor = shiftWeek(cursor, 1);
+      }
+      return best;
+    }
 
     const completed = new Set<string>(rows.map((r) => r.log_date));
     const today = todayDate();
@@ -401,6 +487,8 @@ export const habitRepo = {
   // bitiş tarihi) toplar — istatistik ekranındaki "seri geçmişi" listesi için.
   // Bilinçli tutarlılık: longestStreak'in bugünü-tolerans göstermeyen kuralıyla
   // birebir aynı sonucu üretir (ayrı bir "current" özel durumu YOK).
+  // KOTA kuralında girdiler hafta bazındadır (length = hafta sayısı, start/end =
+  // serinin ilk haftasının pazartesisi / son haftasının pazarı).
   allStreaks(habitId: string): { length: number; start: string; end: string }[] {
     const db = getDb();
     const habit = this.getById(habitId);
@@ -412,6 +500,39 @@ export const habitRepo = {
       [habitId]
     );
     if (rows.length === 0) return [];
+
+    if (isQuotaSchedule(habit?.schedule ?? null)) {
+      const quota = habit!.schedule!.timesPerWeek!;
+      const counts = weekCompletionCounts(rows.map((r) => r.log_date));
+      const currentWeek = weekStartOf(todayDate());
+      const streaks: { length: number; start: string; end: string }[] = [];
+      let cursor = weekStartOf(rows[0].log_date);
+      let run = 0;
+      let runStart: string | null = null;
+      let runEnd: string | null = null;
+      const flush = () => {
+        if (run > 0 && runStart && runEnd) {
+          const d = new Date(`${runEnd}T00:00:00`);
+          d.setDate(d.getDate() + 6); // haftanın pazarı
+          streaks.push({ length: run, start: runStart, end: toYmd(d) });
+        }
+        run = 0;
+        runStart = null;
+        runEnd = null;
+      };
+      while (cursor <= currentWeek) {
+        if ((counts.get(cursor) ?? 0) >= quota) {
+          if (run === 0) runStart = cursor;
+          run++;
+          runEnd = cursor;
+        } else if (cursor !== currentWeek) {
+          flush(); // bitmemiş mevcut hafta seriyi bozmaz (longestStreak ile tutarlı)
+        }
+        cursor = shiftWeek(cursor, 1);
+      }
+      flush();
+      return streaks.sort((a, b) => b.length - a.length);
+    }
 
     const completed = new Set<string>(rows.map((r) => r.log_date));
     const today = todayDate();
@@ -449,50 +570,5 @@ export const habitRepo = {
     flush(); // döngü biterken açık kalan seriyi de ekle
 
     return streaks.sort((a, b) => b.length - a.length);
-  },
-
-  // SKOR GEÇMİŞİ (Loop Habit Tracker'daki "güç puanı" fikrinden esinlenir):
-  // her PLANLI günde üstel hareketli ortalama (EMA) güncellenir — yarı ömür ~7
-  // planlı tekrar (takvim günü değil; haftada birkaç kez planlı alışkanlıkta da
-  // "yakın geçmiş" anlamlı bir pencere olsun diye). Plansız günlerde skor
-  // DEĞİŞMEZ (bir önceki değeriyle taşınır) ki grafik günlük takvimle hizalı,
-  // kesiksiz bir çizgi olsun. Yakınsama için hesap ilk logdan başlar; yalnızca
-  // istenen son `days` gün döndürülür.
-  scoreHistory(habitId: string, days: number): { date: string; score: number }[] {
-    const db = getDb();
-    const habit = this.getById(habitId);
-    if (!habit) return [];
-    const rows = db.getAllSync<any>(
-      `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1 ORDER BY log_date ASC`,
-      [habitId]
-    );
-    if (rows.length === 0) return [];
-
-    const completed = new Set<string>(rows.map((r) => r.log_date));
-    const isDue = (d: string) =>
-      isScheduledOn(habit.schedule, d) && isWithinHabitDates(habit.start_date, habit.end_date, d);
-
-    const firstLogDate = rows[0].log_date as string;
-    const firstDate = habit.start_date && habit.start_date < firstLogDate ? habit.start_date : firstLogDate;
-    const today = todayDate();
-    const cursor = new Date(`${firstDate}T00:00:00`);
-    const end = new Date(`${today}T00:00:00`);
-    const DECAY = Math.pow(0.5, 1 / 7);
-
-    let score = 0;
-    const all: { date: string; score: number }[] = [];
-    while (cursor <= end) {
-      const y = cursor.getFullYear();
-      const m = String(cursor.getMonth() + 1).padStart(2, '0');
-      const d = String(cursor.getDate()).padStart(2, '0');
-      const dateStr = `${y}-${m}-${d}`;
-      if (isDue(dateStr)) {
-        const hit = completed.has(dateStr) ? 1 : 0;
-        score = score * DECAY + hit * (1 - DECAY);
-      }
-      all.push({ date: dateStr, score });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return all.slice(-days);
   },
 };

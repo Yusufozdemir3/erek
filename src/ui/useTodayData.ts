@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo, subtaskRepo, taskRepo } from '@/db';
 import type { HabitKind, Task } from '@/db';
-import { isScheduledOn, isWithinHabitDates } from '@/lib/helpers';
+import { isQuotaSchedule, isScheduledOn, isWithinHabitDates } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 
 export interface HabitView {
@@ -20,6 +20,9 @@ export interface HabitView {
   amount: number;        // seçilen günde yapılan miktar
   completed: boolean;    // seçilen günde tamamlandı mı
   streak: number;
+  // KOTA (haftada X kez) alışkanlığında o haftanın ilerlemesi ("2/3 bu hafta");
+  // diğer kurallar için null.
+  weekQuota: { done: number; target: number } | null;
 }
 
 export function useTodayData(userId: string, selectedDate: string, today: string) {
@@ -74,6 +77,12 @@ export function useTodayData(userId: string, selectedDate: string, today: string
           amount: state?.amount ?? 0,
           completed: state?.completed ?? false,
           streak: habitRepo.currentStreak(h.id),
+          weekQuota: isQuotaSchedule(h.schedule)
+            ? {
+                done: habitRepo.completionsInWeek(h.id, selectedDate),
+                target: h.schedule!.timesPerWeek!,
+              }
+            : null,
         };
       })
     );

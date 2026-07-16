@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { goalMilestoneRepo, goalRepo, habitRepo, subtaskRepo, taskRepo } from '@/db';
-import { scheduleHabitReminder, scheduleTaskReminder } from '@/lib/notifications';
+import { scheduleGoalReminder, scheduleHabitReminder, scheduleTaskReminder } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
@@ -106,8 +106,11 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       target_value: values.target_value,
       unit: values.unit,
       deadline: values.deadline,
+      remind_at: values.remind_at,
     });
     values.milestones?.forEach((m) => goalMilestoneRepo.create(created.id, m));
+    // Günlük giriş hatırlatması (remind_at yoksa scheduleGoalReminder no-op'tur).
+    scheduleGoalReminder(created).catch(() => {});
     finish('/(tabs)/goals');
   };
 

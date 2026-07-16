@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
+import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
 import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
@@ -31,7 +31,7 @@ import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Lang } from '@/i18n/translations';
-import { DATE_LOCALE, fullDateLabel, PRIORITY_COLOR, type Colors } from '@/ui/theme';
+import { DATE_LOCALE, fullDateLabel, PRIORITY_COLOR, shortDate, type Colors } from '@/ui/theme';
 
 // Liste kartları tamamlanınca yeniden sıralanır (tamamlanan alta iner); her kart
 // bu layout geçişiyle sarıldığından konum değişimi yumuşakça animasyonlanır.
@@ -87,12 +87,9 @@ export default function TodayScreen() {
   const habitsDone = habits.filter((h) => h.completed).length;
   const tasksDone = tasks.filter((t) => t.completed_at !== null).length;
 
-  // Tekrarlayan görev kartındaki "🔁 Her gün / Pzt·Çar·Cum" rozeti için gün
-  // etiketleri (JS getDay sırasıyla, 0=Pazar) — scheduleLabel ile birleştirilir.
-  const dayLabels = [
-    tr('weekday.sun'), tr('weekday.mon'), tr('weekday.tue'), tr('weekday.wed'),
-    tr('weekday.thu'), tr('weekday.fri'), tr('weekday.sat'),
-  ];
+  // Tekrarlayan görev kartındaki "🔁 Her gün / Pzt·Çar·Cum / 3 günde bir ..."
+  // rozeti için etiket seti (bkz. helpers.buildScheduleLabels).
+  const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
   const toggleTask = (t: Task) => {
     const completing = t.completed_at === null;
@@ -253,7 +250,7 @@ export default function TodayScreen() {
                         <Text style={styles.subCount}>
                           {[
                             t.recurrence
-                              ? `🔁 ${scheduleLabel(t.recurrence, tr('habit.everyDay'), dayLabels)}`
+                              ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
                               : null,
                             subtaskCounts[t.id]
                               ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix')}`
@@ -326,9 +323,16 @@ export default function TodayScreen() {
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
                     </Text>
+                    {/* Kota alışkanlığı: haftalık ilerleme ("2/3"). Seri hafta
+                        bazında olduğundan madalya eşiği hafta×7 ile ölçeklenir. */}
+                    {h.weekQuota && (
+                      <Text style={styles.quotaChip}>
+                        {h.weekQuota.done}/{h.weekQuota.target}
+                      </Text>
+                    )}
                     {h.streak > 0 && (
                       <Text style={shared.streak}>
-                        {highestMilestone(h.streak)?.emoji ?? '🔥'} {h.streak}
+                        {highestMilestone(h.weekQuota ? h.streak * 7 : h.streak)?.emoji ?? '🔥'} {h.streak}
                       </Text>
                     )}
                   </AnimatedPressable>
@@ -365,4 +369,16 @@ const makeStyles = (c: Colors) =>
     filterChipTextActive: { color: c.onAccent },
     list: { marginTop: 16 },
     subCount: { fontSize: 12, color: c.muted, marginTop: 3 },
+    // Kota alışkanlığının "2/3" haftalık ilerleme göstergesi (kartın sağında).
+    quotaChip: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: c.primary,
+      backgroundColor: c.primarySoft,
+      borderRadius: 10,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      marginRight: 8,
+      overflow: 'hidden',
+    },
   });

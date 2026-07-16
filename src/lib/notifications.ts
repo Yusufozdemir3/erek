@@ -10,8 +10,9 @@
 
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import type { Habit, Task } from '@/db';
-import { todayDate } from '@/lib/helpers';
+import { goalRepo } from '@/db';
+import type { Goal, Habit, Task } from '@/db';
+import { isScheduledOn, isWithinHabitDates, todayDate, toYmd } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
 import { getNotificationPrefs, soundContent } from '@/lib/notificationPrefs';
@@ -93,7 +94,29 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   const sched = habit.schedule;
   const weekdays = sched && sched.freq === 'weekly' ? sched.weekdays ?? [] : [];
 
-  if (weekdays.length > 0) {
+  if (sched?.freq === 'interval') {
+    // Expo'da "her N günde bir" tekrarlayan tetikleyici yok; sıradaki 8 planlı
+    // gün tek seferlik DATE tetikleyicisiyle kurulur (id#i0..i7). Her açılışta
+    // rescheduleAllReminders baştan kurduğu için pencere sürekli ileri kayar.
+    const cursor = new Date(`${todayDate()}T00:00:00`);
+    let scheduledCount = 0;
+    for (let i = 0; scheduledCount < 8 && i < 1462; i++) {
+      const ymd = toYmd(cursor);
+      if (isScheduledOn(sched, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
+        const when = new Date(`${ymd}T00:00:00`);
+        when.setHours(time.hour, time.minute, 0, 0);
+        if (when.getTime() > Date.now()) {
+          await Notifications.scheduleNotificationAsync({
+            identifier: `${habit.id}#i${scheduledCount}`,
+            content,
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
+          });
+          scheduledCount++;
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  } else if (weekdays.length > 0) {
     // Belirli günler: her seçili gün için ayrı haftalık tetikleyici.
     for (const wd of weekdays) {
       await Notifications.scheduleNotificationAsync({
@@ -122,10 +145,14 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   return true;
 }
 
-// Bir alışkanlığın hatırlatmasını iptal eder. Günlük (id) ve olası tüm haftalık
-// (id#0 .. id#6) tetikleyicileri kapsar. Zaten yoksa sessizce geçer.
+// Bir alışkanlığın hatırlatmasını iptal eder. Günlük (id), haftalık (id#0..#6)
+// ve aralıklı (id#i0..#i7) tetikleyicilerin tümünü kapsar. Zaten yoksa sessizce geçer.
 export async function cancelHabitReminder(habitId: string): Promise<void> {
-  const ids = [habitId, ...Array.from({ length: 7 }, (_, wd) => `${habitId}#${wd}`)];
+  const ids = [
+    habitId,
+    ...Array.from({ length: 7 }, (_, wd) => `${habitId}#${wd}`),
+    ...Array.from({ length: 8 }, (_, k) => `${habitId}#i${k}`),
+  ];
   for (const id of ids) {
     try {
       await Notifications.cancelScheduledNotificationAsync(id);
@@ -221,6 +248,64 @@ export async function cancelTaskReminder(taskId: string): Promise<void> {
     await Notifications.cancelScheduledNotificationAsync(`task:${taskId}`);
   } catch {
     // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+  }
+}
+
+// HEDEF hatırlatması: goals.remind_at doluysa her gün o saatte "hedefe giriş
+// yapmayı unutma" bildirimi (identifier: `goal:${id}` — habit/task/timer
+// id'leriyle çakışmaz). Tamamlanan ya da son tarihi geçen hedefte kurulmaz,
+// varsa eskisi iptal edilir.
+export async function scheduleGoalReminder(goal: Goal): Promise<boolean> {
+  await cancelGoalReminder(goal.id);
+
+  if (!goal.remind_at) return true;
+  if (goalRepo.isCompleted(goal)) return true; // bitmiş hedefe hatırlatma kurulmaz
+  if (goal.deadline && goal.deadline < todayDate()) return true; // süresi geçmiş
+
+  const time = parseHm(goal.remind_at);
+  if (!time) return true; // bozuk saat — sessizce atla
+
+  const prefs = await getNotificationPrefs();
+  if (!prefs.enabled || !prefs.goalReminders) return true; // kullanıcı bu türü kapatmış
+
+  const granted = await ensurePermission();
+  if (!granted) return false;
+
+  const lang = await getStoredLang();
+  await Notifications.scheduleNotificationAsync({
+    identifier: `goal:${goal.id}`,
+    content: {
+      title: translate(lang, 'notif.goalReminderTitle'),
+      body: translate(lang, 'notif.goalReminderBody', { title: goal.title }),
+      ...soundContent(prefs),
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour: time.hour,
+      minute: time.minute,
+    },
+  });
+  return true;
+}
+
+export async function cancelGoalReminder(goalId: string): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`goal:${goalId}`);
+  } catch {
+    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+  }
+}
+
+// Açılışta tüm hedef hatırlatmalarını yeniden kurar (bkz. rescheduleAllReminders).
+export async function rescheduleAllGoalReminders(goals: Goal[]): Promise<void> {
+  const withReminder = goals.filter((g) => g.remind_at);
+  if (withReminder.length === 0) return;
+
+  const perm = await Notifications.getPermissionsAsync();
+  if (!perm.granted) return;
+
+  for (const g of withReminder) {
+    await scheduleGoalReminder(g);
   }
 }
 

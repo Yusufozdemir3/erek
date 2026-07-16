@@ -16,7 +16,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
-import { isScheduledOn, isWithinHabitDates, todayDate, WEEKDAY_DISPLAY_ORDER } from '@/lib/helpers';
+import { isQuotaSchedule, isScheduledOn, isWithinHabitDates, todayDate } from '@/lib/helpers';
 
 const MAX_MONTHS_BACK = 24;
 
@@ -76,15 +76,22 @@ export function useHabitCalendar(habitId: string): HabitCalendar {
     const logs = habitRepo.logsBetween(habitId, firstDate, lastDate);
     const completedDates = new Set(logs.filter((l) => l.completed === 1).map((l) => l.log_date));
 
+    // KOTA (haftada X kez) kuralında hiçbir gün tek başına vadeli değildir:
+    // tamamlanmayan gün "kaçırılmış" (kırmızı) boyanmamalı. Bu yüzden kota
+    // alışkanlığında scheduled yalnız TAMAMLANAN günlerde true olur — takvimde
+    // yapılan günler renkli, kalan günler nötr görünür.
+    const quota = isQuotaSchedule(h.schedule);
     const cells: CalendarDay[] = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const date = ymd(year, month, day);
-      const scheduled =
-        isScheduledOn(h.schedule, date) && isWithinHabitDates(h.start_date, h.end_date, date);
+      const completed = completedDates.has(date);
+      const scheduled = quota
+        ? completed
+        : isScheduledOn(h.schedule, date) && isWithinHabitDates(h.start_date, h.end_date, date);
       cells.push({
         date,
         scheduled,
-        completed: completedDates.has(date),
+        completed,
         future: date > today,
       });
     }

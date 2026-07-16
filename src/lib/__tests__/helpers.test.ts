@@ -2,16 +2,20 @@
 // Sabit tarihler kullanılır: 2026-06-29 Pazartesi, 2026-07-01 Çarşamba.
 
 import {
+  diffDays,
   extractTime,
   hmToDate,
+  isQuotaSchedule,
   isScheduledOn,
   isWithinHabitDates,
   lastDays,
   nextTaskOccurrence,
   parseJson,
   scheduleLabel,
+  type ScheduleLabels,
   toHm,
   toJson,
+  weekStartOf,
 } from '../helpers';
 import type { Recurrence } from '../../types/models';
 
@@ -68,6 +72,58 @@ describe('isScheduledOn', () => {
     const s: Recurrence = { freq: 'monthly', monthDay: 15 };
     expect(isScheduledOn(s, '2026-07-15')).toBe(true);
     expect(isScheduledOn(s, '2026-07-14')).toBe(false);
+  });
+
+  it('interval çapadan itibaren her N günde bir planlıdır (çapadan öncesi değil)', () => {
+    const s: Recurrence = { freq: 'interval', every: 3, anchor: '2026-07-01' };
+    expect(isScheduledOn(s, '2026-07-01')).toBe(true); // çapa günü
+    expect(isScheduledOn(s, '2026-07-04')).toBe(true);
+    expect(isScheduledOn(s, '2026-07-07')).toBe(true);
+    expect(isScheduledOn(s, '2026-07-02')).toBe(false);
+    expect(isScheduledOn(s, '2026-07-03')).toBe(false);
+    expect(isScheduledOn(s, '2026-06-28')).toBe(false); // çapadan önce
+  });
+
+  it('interval çapa/adım eksikse güvenli tarafa düşer: her gün', () => {
+    expect(isScheduledOn({ freq: 'interval', every: 3 }, '2026-07-02')).toBe(true);
+    expect(isScheduledOn({ freq: 'interval', anchor: '2026-07-01' }, '2026-07-02')).toBe(true);
+  });
+
+  it('weekly kota (timesPerWeek, gün seçilmemiş) her gün müsaittir', () => {
+    const s: Recurrence = { freq: 'weekly', timesPerWeek: 3 };
+    expect(isScheduledOn(s, '2026-07-01')).toBe(true);
+    expect(isScheduledOn(s, '2026-07-05')).toBe(true);
+  });
+
+  it('yearly yalnızca seçili ay-gün tarihlerinde planlıdır', () => {
+    const s: Recurrence = { freq: 'yearly', dates: ['07-15', '01-01'] };
+    expect(isScheduledOn(s, '2026-07-15')).toBe(true);
+    expect(isScheduledOn(s, '2027-01-01')).toBe(true);
+    expect(isScheduledOn(s, '2026-07-14')).toBe(false);
+  });
+});
+
+describe('isQuotaSchedule', () => {
+  it('yalnızca weekdays boş + timesPerWeek>0 kota sayılır', () => {
+    expect(isQuotaSchedule({ freq: 'weekly', timesPerWeek: 3 })).toBe(true);
+    expect(isQuotaSchedule({ freq: 'weekly', weekdays: [1], timesPerWeek: 3 })).toBe(false);
+    expect(isQuotaSchedule({ freq: 'weekly', weekdays: [1, 3] })).toBe(false);
+    expect(isQuotaSchedule({ freq: 'daily' })).toBe(false);
+    expect(isQuotaSchedule(null)).toBe(false);
+  });
+});
+
+describe('diffDays / weekStartOf', () => {
+  it('diffDays iki tarih arası gün farkını verir (b - a)', () => {
+    expect(diffDays('2026-07-01', '2026-07-04')).toBe(3);
+    expect(diffDays('2026-07-04', '2026-07-01')).toBe(-3);
+    expect(diffDays('2026-07-01', '2026-07-01')).toBe(0);
+  });
+
+  it('weekStartOf günün pazartesisini verir (Pazar da aynı haftaya aittir)', () => {
+    expect(weekStartOf('2026-07-15')).toBe('2026-07-13'); // Çarşamba → Pazartesi
+    expect(weekStartOf('2026-07-13')).toBe('2026-07-13'); // Pazartesi → kendisi
+    expect(weekStartOf('2026-07-19')).toBe('2026-07-13'); // Pazar → önceki Pazartesi
   });
 });
 
@@ -126,27 +182,64 @@ describe('nextTaskOccurrence', () => {
     // Vade 20'si, bugün 15'i → base 20, günlük sonraki = 21.
     expect(nextTaskOccurrence(daily, '2026-07-20', '2026-07-15')).toBe('2026-07-21');
   });
+
+  it('interval: vadeden N gün sonrasına sarılır', () => {
+    const rec: Recurrence = { freq: 'interval', every: 3, anchor: '2026-07-15' };
+    expect(nextTaskOccurrence(rec, '2026-07-15', '2026-07-15')).toBe('2026-07-18');
+  });
+
+  it('monthly: bir sonraki ayın aynı gününe sarılır; 31 kısa ayı atlar', () => {
+    expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 15 }, '2026-07-15', '2026-07-15')).toBe(
+      '2026-08-15'
+    );
+    // 31 çekmeyen aylar atlanır: 31 Tem → (Eylül 31 yok) → 31 Ağu zaten var; 31 Ağu'dan sonraki 31 Eki.
+    expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 31 }, '2026-08-31', '2026-08-31')).toBe(
+      '2026-10-31'
+    );
+  });
+
+  it('yearly: bir sonraki yılın seçili tarihine sarılır (birden çok tarihte en yakını)', () => {
+    const rec: Recurrence = { freq: 'yearly', dates: ['07-15', '12-01'] };
+    expect(nextTaskOccurrence(rec, '2026-07-15', '2026-07-15')).toBe('2026-12-01');
+    expect(nextTaskOccurrence(rec, '2026-12-01', '2026-12-01')).toBe('2027-07-15');
+  });
 });
 
 describe('scheduleLabel', () => {
-  // Fonksiyon artık dile bağımlı metin barındırmıyor; çağıran (t()) verir.
-  const EVERY_DAY = 'Her gün';
-  const DAY_LABELS = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt']; // 0=Pazar...6=Cumartesi
+  // Fonksiyon dile bağımlı metin barındırmıyor; etiket seti çağırandan gelir
+  // (bkz. buildScheduleLabels — burada sade bir sahte set kullanılır).
+  const LABELS: ScheduleLabels = {
+    everyDay: 'Her gün',
+    dayNames: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'], // 0=Pazar...6=Cumartesi
+    everyNDays: (n) => `${n} günde bir`,
+    timesPerWeek: (n) => `Haftada ${n} kez`,
+    monthDay: (d) => `Her ayın ${d}. günü`,
+    yearly: (dates) => `Her yıl: ${dates}`,
+    formatMonthDay: (md) => md.split('-').reverse().join('.'),
+  };
 
   it('null ve daily için "Her gün"', () => {
-    expect(scheduleLabel(null, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
-    expect(scheduleLabel({ freq: 'daily' }, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
+    expect(scheduleLabel(null, LABELS)).toBe('Her gün');
+    expect(scheduleLabel({ freq: 'daily' }, LABELS)).toBe('Her gün');
   });
 
   it('weekly seçili günleri Pazartesi başlangıçlı sırayla listeler', () => {
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [1, 3, 5] }, EVERY_DAY, DAY_LABELS)).toBe('Pzt·Çar·Cum');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [1, 3, 5] }, LABELS)).toBe('Pzt·Çar·Cum');
     // Görüntü sırası Pzt..Paz olduğundan Pazar (0) en sona düşer.
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1] }, EVERY_DAY, DAY_LABELS)).toBe('Pzt·Paz');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1] }, LABELS)).toBe('Pzt·Paz');
   });
 
   it('weekly boş ya da 7 gün seçiliyse "Her gün"', () => {
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [] }, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
-    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1, 2, 3, 4, 5, 6] }, EVERY_DAY, DAY_LABELS)).toBe('Her gün');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [] }, LABELS)).toBe('Her gün');
+    expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1, 2, 3, 4, 5, 6] }, LABELS)).toBe('Her gün');
+  });
+
+  it('kota, aralık, aylık ve yıllık kurallar kendi etiketlerini üretir', () => {
+    expect(scheduleLabel({ freq: 'weekly', timesPerWeek: 3 }, LABELS)).toBe('Haftada 3 kez');
+    expect(scheduleLabel({ freq: 'interval', every: 3, anchor: '2026-07-01' }, LABELS)).toBe('3 günde bir');
+    expect(scheduleLabel({ freq: 'monthly', monthDay: 15 }, LABELS)).toBe('Her ayın 15. günü');
+    // Tarihler sıralanır: 01-01, 07-15 → "01.01, 15.07".
+    expect(scheduleLabel({ freq: 'yearly', dates: ['07-15', '01-01'] }, LABELS)).toBe('Her yıl: 01.01, 15.07');
   });
 });
 

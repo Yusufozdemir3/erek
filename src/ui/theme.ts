@@ -71,6 +71,28 @@ export const darkColors: Colors = {
   onAccent: '#ffffff',
 };
 
+// TAM SİYAH (AMOLED) koyu stil: saf siyah zemin + nötr koyu griler. OLED
+// ekranlarda piksel kapatır (pil + kontrast). Sıcak koyudan farklı olarak
+// kahve tonu yok — kullanıcı Profil > Görünüm'den "Koyu tema stili" ile seçer
+// (bkz. ThemeProvider.darkStyle). Vurgu yine ACCENT_THEMES'in dark paletinden gelir.
+export const blackColors: Colors = {
+  bg: '#000000',
+  card: '#101010',
+  border: '#262626',
+  line: '#3a3a3a',
+  text: '#f2f2f2',
+  muted: '#9c9c9c',
+  faint: '#6e6e6e',
+  primary: '#818cf8',
+  primarySoft: '#26264a',
+  done: '#34d399',
+  streak: '#fb923c',
+  danger: '#f87171',
+  track: '#1e1e1e',
+  inputBg: '#0b0b0b',
+  onAccent: '#ffffff',
+};
+
 // Geriye uyumlu varsayılan (açık). Taşınmış bileşenler useTheme().colors kullanır.
 export const colors: Colors = lightColors;
 
@@ -78,7 +100,17 @@ export const colors: Colors = lightColors;
 // (bkz. ThemeProvider). Yalnızca primary/primarySoft'u geçersiz kılar; done/danger/
 // streak gibi anlamlı renkler ve zemin/metin tonları temadan (açık/koyu) gelmeye
 // devam eder — vurgu rengi yalnızca "marka" anlamına gelir.
-export type AccentKey = 'pine' | 'terracotta' | 'ink' | 'indigo' | 'wine' | 'mustard';
+export type AccentKey =
+  | 'pine'
+  | 'terracotta'
+  | 'ink'
+  | 'indigo'
+  | 'wine'
+  | 'mustard'
+  | 'ocean'
+  | 'plum'
+  | 'rose'
+  | 'slate';
 
 interface AccentPalette {
   primary: string;
@@ -110,10 +142,29 @@ export const ACCENT_THEMES: Record<AccentKey, { light: AccentPalette; dark: Acce
     light: { primary: '#96591A', primarySoft: '#F0DFC0' },
     dark: { primary: '#D9A24B', primarySoft: '#402E10' },
   },
+  ocean: {
+    light: { primary: '#0E7490', primarySoft: '#D3EAF0' },
+    dark: { primary: '#5EC5D9', primarySoft: '#0F3A44' },
+  },
+  plum: {
+    light: { primary: '#6D28D9', primarySoft: '#E6DCF7' },
+    dark: { primary: '#B79AF0', primarySoft: '#2E1F55' },
+  },
+  rose: {
+    light: { primary: '#BE185D', primarySoft: '#F7D9E6' },
+    dark: { primary: '#E58AB3', primarySoft: '#4A1230' },
+  },
+  slate: {
+    light: { primary: '#475569', primarySoft: '#E1E6EC' },
+    dark: { primary: '#9FB0C3', primarySoft: '#26303C' },
+  },
 };
 
 // Profil ekranındaki seçici sırası; ilk eleman varsayılan vurgu rengidir.
-export const ACCENT_ORDER: AccentKey[] = ['pine', 'terracotta', 'ink', 'indigo', 'wine', 'mustard'];
+export const ACCENT_ORDER: AccentKey[] = [
+  'pine', 'terracotta', 'ink', 'indigo', 'wine', 'mustard',
+  'ocean', 'plum', 'rose', 'slate',
+];
 export const DEFAULT_ACCENT: AccentKey = 'pine';
 
 // Öncelik ve alışkanlık renkleri iki modda da aynı (canlı vurgular; koyuda da okunur).
@@ -128,9 +179,12 @@ export const PRIORITY_ORDER: Priority[] = ['low', 'medium', 'high'];
 
 // Alışkanlık renk paleti (ikon seti için bkz. src/ui/habitIcons.tsx — eskiden
 // burada ham emoji listesi vardı, çizgi vektör ikon setine geçildi).
+// 16 renk — hepsi iki temada da okunur canlı orta tonlar.
 export const HABIT_COLORS = [
   '#4f46e5', '#0ea5e9', '#10b981', '#f59e0b',
   '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6',
+  '#f97316', '#84cc16', '#06b6d4', '#3b82f6',
+  '#a855f7', '#e11d48', '#a16207', '#64748b',
 ];
 
 // Alışkanlığın rengi yoksa kullanılacak varsayılan.

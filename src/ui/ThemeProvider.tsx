@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ACCENT_THEMES,
   type AccentKey,
+  blackColors,
   type Colors,
   DEFAULT_ACCENT,
   darkColors,
@@ -18,8 +19,12 @@ import {
 } from '@/ui/theme';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+// Koyu temanın stili: 'warm' = sıcak mürekkep (varsayılan), 'black' = tam siyah
+// (AMOLED). Yalnız koyu tema aktifken görünür bir fark yaratır.
+export type DarkStyle = 'warm' | 'black';
 const MODE_KEY = 'theme:mode';
 const ACCENT_KEY = 'theme:accent';
+const DARK_STYLE_KEY = 'theme:darkStyle';
 
 interface ThemeApi {
   colors: Colors;
@@ -29,6 +34,8 @@ interface ThemeApi {
   setMode: (m: ThemeMode) => void;
   accent: AccentKey;        // vurgu (marka) rengi tercihi
   setAccent: (a: AccentKey) => void;
+  darkStyle: DarkStyle;     // koyu temanın stili (sıcak / tam siyah)
+  setDarkStyle: (s: DarkStyle) => void;
 }
 
 const ThemeContext = createContext<ThemeApi | null>(null);
@@ -43,6 +50,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme(); // 'light' | 'dark' | null
   const [mode, setModeState] = useState<ThemeMode>('system');
   const [accent, setAccentState] = useState<AccentKey>(DEFAULT_ACCENT);
+  const [darkStyle, setDarkStyleState] = useState<DarkStyle>('warm');
 
   // Kayıtlı tercihleri bir kez yükle.
   useEffect(() => {
@@ -51,6 +59,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     });
     AsyncStorage.getItem(ACCENT_KEY).then((v) => {
       if (v && v in ACCENT_THEMES) setAccentState(v as AccentKey);
+    });
+    AsyncStorage.getItem(DARK_STYLE_KEY).then((v) => {
+      if (v === 'warm' || v === 'black') setDarkStyleState(v);
     });
   }, []);
 
@@ -64,9 +75,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(ACCENT_KEY, a).catch(() => {});
   };
 
+  const setDarkStyle = (s: DarkStyle) => {
+    setDarkStyleState(s);
+    AsyncStorage.setItem(DARK_STYLE_KEY, s).catch(() => {});
+  };
+
   const scheme: 'light' | 'dark' =
     mode === 'system' ? (system === 'dark' ? 'dark' : 'light') : mode;
-  const base = scheme === 'dark' ? darkColors : lightColors;
+  const base = scheme === 'dark' ? (darkStyle === 'black' ? blackColors : darkColors) : lightColors;
   // Vurgu rengi yalnızca primary/primarySoft'u geçersiz kılar; geri kalan tüm
   // tonlar (zemin/metin/done/danger vb.) aktif açık/koyu temadan gelir.
   const accentPalette = ACCENT_THEMES[accent][scheme];
@@ -77,8 +93,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const shared = useMemo(() => makeShared(colors), [colors]);
 
   const value = useMemo<ThemeApi>(
-    () => ({ colors, shared, scheme, mode, setMode, accent, setAccent }),
-    [colors, shared, scheme, mode, accent]
+    () => ({ colors, shared, scheme, mode, setMode, accent, setAccent, darkStyle, setDarkStyle }),
+    [colors, shared, scheme, mode, accent, darkStyle]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
