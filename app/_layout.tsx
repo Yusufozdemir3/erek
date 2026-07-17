@@ -5,6 +5,8 @@ import { useEffect } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import {
   ThemeProvider as NavThemeProvider,
   DarkTheme,
@@ -75,6 +77,13 @@ function ThemedStack() {
 }
 
 function RootLayout() {
+  // İKON FONTLARI: @expo/vector-icons ikonları (Feather/Ionicons) glif fontlarını
+  // expo-asset üzerinden yükler; bunlar hazır olana dek ikon boş <Text/> çizer.
+  // Fontları açılışta bir kez ön-yükleyip ilk render'daki "ikonsuz" anı önlüyoruz.
+  // (Asıl kritik bağımlılık expo-file-system'dir — o olmadan expo-asset RELEASE
+  // build'de indirmeyi yapamaz ve TÜM ikonlar boş çıkardı; bkz. package.json.)
+  useFonts({ ...Feather.font, ...Ionicons.font });
+
   // Bildirim handler'ı ve Android kanalı bir kez kurulur (izin istemez).
   useEffect(() => {
     setNotificationHandler();
