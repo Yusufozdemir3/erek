@@ -20,6 +20,7 @@
     },
     "android": {
       "package": "com.erek",
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F4F1EA"
@@ -48,6 +49,7 @@
       ],
       "expo-localization",
       "expo-font",
+      "./plugins/withForceDarkDisabled",
       [
         "react-native-android-widget",
         {
