@@ -100,4 +100,33 @@ describe('TaskForm', () => {
       expect.objectContaining({ title: 'Var olan', priority: 'high', due_date: '2026-03-10' })
     );
   });
+
+  // Altı tekrar seçeneği formu kalabalıklaştırdığı için kapalı duruyor: düğme
+  // yalnız seçili kipi gösterir, dokununca liste açılır, seçince tekrar kapanır.
+  describe('tekrar seçici', () => {
+    it('seçenekler kapalı başlar, düğme seçili kipi gösterir', async () => {
+      const { getByText, queryByText } = await renderUI(
+        <TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />
+      );
+      expect(getByText('Tekrar yok')).toBeTruthy(); // özet düğmesi
+      expect(queryByText('Her gün')).toBeNull(); // liste kapalı
+    });
+
+    it('düğmeye basınca açılır, kip seçilince kapanır ve özet güncellenir', async () => {
+      const onSubmit = jest.fn();
+      const { getByText, queryByText, getByPlaceholderText } = await renderUI(
+        <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
+      );
+      fireEvent.press(getByText('Tekrar yok'));
+      fireEvent.press(getByText('Her gün')); // artık görünür → seç
+      expect(queryByText('Tekrar yok')).toBeNull(); // liste kapandı, özet değişti
+      expect(getByText('Her gün')).toBeTruthy(); // özet düğmesi
+
+      fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Su iç');
+      fireEvent.press(getByText('Ekle'));
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ recurrence: expect.objectContaining({ freq: 'daily' }) })
+      );
+    });
+  });
 });

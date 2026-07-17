@@ -9,6 +9,7 @@
 import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Feather } from '@expo/vector-icons';
 import type { Priority, Recurrence } from '@/db';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
@@ -33,6 +34,17 @@ const WEEKDAY_OPTIONS = [
 // 'weekly' = haftanın belirli günleri, 'interval' = her X günde bir,
 // 'monthly' = her ayın belirli günü, 'yearly' = her yıl belirli tarihler.
 type RepeatMode = 'none' | 'daily' | 'weekly' | 'interval' | 'monthly' | 'yearly';
+
+// Tekrar seçenekleri — hem açılan listeyi hem kapalıyken özet düğmesinin
+// etiketini besler (tek kaynak).
+const REPEAT_OPTIONS: { mode: RepeatMode; labelKey: string }[] = [
+  { mode: 'none', labelKey: 'task.repeatNone' },
+  { mode: 'daily', labelKey: 'habit.everyDay' },
+  { mode: 'weekly', labelKey: 'habit.specificDays' },
+  { mode: 'interval', labelKey: 'habit.freqInterval' },
+  { mode: 'monthly', labelKey: 'task.freqMonthly' },
+  { mode: 'yearly', labelKey: 'task.freqYearly' },
+];
 
 // taskRepo.create/update'in beklediği alanlarla örtüşür (due_date saat gömülü).
 export interface TaskFormValues {
@@ -90,6 +102,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             ? 'weekly'
             : 'daily';
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(initRepeatMode);
+  // Tekrar listesi kapalı başlar; düzenlemede bile seçili kip düğmede yazdığı
+  // için kullanıcı açmadan ne olduğunu görür.
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const repeatLabel = t(REPEAT_OPTIONS.find((o) => o.mode === repeatMode)!.labelKey);
   const [weekdays, setWeekdays] = useState<number[]>(
     initRec?.freq === 'weekly' ? initRec.weekdays ?? [] : []
   );
@@ -305,38 +321,52 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
 
       {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler /
           her X günde bir / her ay / her yıl. Tekrarlayan bir görev tamamlanınca
-          bir sonraki tekrar tarihine ileri sarılır (aynı görev; kopya yok). */}
+          bir sonraki tekrar tarihine ileri sarılır (aynı görev; kopya yok).
+          Altı seçenek yan yana durunca form kalabalıklaşıyordu: kapalıyken
+          yalnız SEÇİLİ kipi gösteren bir düğme var, dokununca liste açılıyor.
+          Kip seçilince kendiliğinden kapanır — kipe özel ayrıntı denetimleri
+          (gün rozetleri, "kaç günde bir" vb.) zaten aşağıda görünmeye devam eder. */}
       <Text style={styles.label}>{t('task.repeat')}</Text>
-      <View style={styles.repeatRow}>
-        {(
-          [
-            { mode: 'none', labelKey: 'task.repeatNone' },
-            { mode: 'daily', labelKey: 'habit.everyDay' },
-            { mode: 'weekly', labelKey: 'habit.specificDays' },
-            { mode: 'interval', labelKey: 'habit.freqInterval' },
-            { mode: 'monthly', labelKey: 'task.freqMonthly' },
-            { mode: 'yearly', labelKey: 'task.freqYearly' },
-          ] as { mode: RepeatMode; labelKey: string }[]
-        ).map(({ mode, labelKey }) => {
-          const sel = repeatMode === mode;
-          return (
-            <Pressable
-              key={mode}
-              style={[styles.freqBtn, sel && styles.freqBtnSel]}
-              onPress={() => {
-                setRepeatMode(mode);
-                // "Belirli günler" seçilince boşsa yardımcı olsun diye bugünün
-                // gününü seçili getir (HabitForm deseni). Yıllıkta da son tarih
-                // ilk tarih olarak gelir.
-                if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
-                if (mode === 'yearly' && yearDates.length === 0) setYearDates([dueDate.slice(5, 10)]);
-              }}
-            >
-              <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>{t(labelKey)}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <Pressable
+        style={styles.repeatBtn}
+        onPress={() => setRepeatOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: repeatOpen }}
+        accessibilityLabel={`${t('task.repeat')}: ${repeatLabel}`}
+      >
+        <Text style={[styles.repeatBtnText, repeatMode !== 'none' && styles.repeatBtnTextOn]}>
+          {repeatLabel}
+        </Text>
+        <Feather
+          name={repeatOpen ? 'chevron-up' : 'chevron-down'}
+          size={18}
+          color={repeatMode !== 'none' ? colors.primary : colors.muted}
+        />
+      </Pressable>
+      {repeatOpen && (
+        <View style={styles.repeatRow}>
+          {REPEAT_OPTIONS.map(({ mode, labelKey }) => {
+            const sel = repeatMode === mode;
+            return (
+              <Pressable
+                key={mode}
+                style={[styles.freqBtn, sel && styles.freqBtnSel]}
+                onPress={() => {
+                  setRepeatMode(mode);
+                  // "Belirli günler" seçilince boşsa yardımcı olsun diye bugünün
+                  // gününü seçili getir (HabitForm deseni). Yıllıkta da son tarih
+                  // ilk tarih olarak gelir.
+                  if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
+                  if (mode === 'yearly' && yearDates.length === 0) setYearDates([dueDate.slice(5, 10)]);
+                  setRepeatOpen(false);
+                }}
+              >
+                <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>{t(labelKey)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       {repeatMode === 'weekly' && (
         <View style={styles.dayRow}>
@@ -505,6 +535,21 @@ const makeStyles = (c: Colors) =>
     hint: { fontSize: 12, color: c.danger, marginTop: -6, marginBottom: 10 },
     // Tekrar seçici (HabitForm sıklık seçicisiyle aynı görünüm). 6 seçenek
     // olduğundan satır sarar; flexBasis üçlü sıraya oturtur.
+    // Kapalıyken seçili kipi gösteren özet düğmesi; tekrar varsa vurgu renginde.
+    repeatBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+      marginBottom: 12,
+    },
+    repeatBtnText: { fontSize: 15, fontWeight: '700', color: c.muted },
+    repeatBtnTextOn: { color: c.primary },
     repeatRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
     freqBtn: {
       flexGrow: 1,

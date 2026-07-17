@@ -7,6 +7,10 @@
 //   / `.time(...)` çağırarak simüle eder.
 // - @/lib/haptics: dokunsal geri bildirim (expo-haptics) — testte sessiz no-op.
 // - expo-localization: cihaz dili sabitlenir (tr) ki i18n deterministik olsun.
+// - @expo/vector-icons: glif fontunu expo-font ile yükler; jest ortamında native
+//   modül olmadığı için patlar ("loadedNativeFonts.forEach is not a function").
+//   İkonlar salt görsel (erişilebilirlik etiketleri onları saran Pressable'da),
+//   o yüzden hiçbir şey çizmeyen dublörle değiştirilir.
 
 import '@testing-library/react-native/extend-expect';
 
@@ -27,6 +31,12 @@ jest.mock('@/lib/haptics', () => ({
   tapMedium: jest.fn(),
   notifySuccess: jest.fn(),
 }));
+
+// Vektör ikonlar: hiçbir şey çizmeyen dublör (bkz. dosya başı).
+jest.mock('@expo/vector-icons', () => {
+  const Icon = () => null;
+  return { Feather: Icon, Ionicons: Icon };
+});
 
 // Cihaz dilini sabitle (tr) — i18n varsayılanı deterministik olsun.
 jest.mock('expo-localization', () => ({

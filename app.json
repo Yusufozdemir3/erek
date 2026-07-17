@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.erek",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F4F1EA"
