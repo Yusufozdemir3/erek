@@ -4,6 +4,7 @@
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
+import { goalEntryRepo } from './goalEntryRepo';
 import type { Goal, GoalType } from '../../types/models';
 
 function rowToGoal(row: any): Goal {
@@ -110,19 +111,36 @@ export const goalRepo = {
   // Yalnızca 'numeric' hedeflerde anlamlı: 'milestone' hedefte current_value
   // kullanılmadığından sessizce yok sayılır (bağlı alışkanlık geçişi de buraya
   // düşer; milestone hedefe bağlansa bile sayaç bozulmaz).
-  addProgress(id: string, amount: number): void {
+  // İlerlemeyi değiştirir VE değişikliği girdi geçmişine (goal_entries) yazar.
+  // Dönüş: GERÇEKTEN uygulanan fark (0..target kırpması istenen delta'yı kısabilir;
+  // ör. hedef doluyken +1 → 0). Kayda istenen değil, gerçekleşen fark düşer ki
+  // geçmiş ve ondan hesaplanan tempo/projeksiyon current_value ile tutarlı kalsın.
+  // Fark 0 ise (kırpıldı / numeric değil) hiçbir şey yazılmaz.
+  //
+  // Girdi kaydı BİLEREK burada: eskiden her çağıranın ayrıca goalEntryRepo.create
+  // çağırması gerekiyordu ve bağlı alışkanlık katkıları (habitRepo) bunu ATLIYORDU
+  // → hedefin geçmişinde görünmüyor, tempo/projeksiyon yalnız elle "Ekle"lenenden
+  // hesaplanıyordu. Tek yerde toplanınca bir daha unutulamaz.
+  //
+  // NOT: `update` ile "Mevcut değer"i ELLE set etmek hâlâ girdi yazmaz — o bir
+  // ilerleme değil DÜZELTME'dir (bir günün emeği gibi sayılıp tempoyu şişirmemeli).
+  addProgress(id: string, amount: number): number {
     const db = getDb();
     const goal = this.getById(id);
-    if (!goal || goal.goal_type !== 'numeric') return;
+    if (!goal || goal.goal_type !== 'numeric') return 0;
     let next = goal.current_value + amount;
     if (goal.target_value != null && next > goal.target_value) {
       next = goal.target_value;
     }
     if (next < 0) next = 0;
+    const applied = next - goal.current_value;
+    if (applied === 0) return 0;
     db.runSync(
       `UPDATE goals SET current_value = ?, updated_at = ?, synced = 0 WHERE id = ?`,
       [next, nowIso(), id]
     );
+    goalEntryRepo.create(id, applied);
+    return applied;
   },
 
   // 0-1 arası ilerleme oranı. UI yüzde göstergesi için.

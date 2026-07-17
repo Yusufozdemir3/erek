@@ -2,6 +2,7 @@
 // update'teki current_value clamp'i, progressRatio, parçalı (milestone)
 // hedeflerde sayaç mantığının sessizce yok sayılması ve isCompleted/setCompleted.
 
+import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
@@ -116,6 +117,55 @@ describe('update', () => {
     const goal = numericGoal();
     goalRepo.update(goal.id, {});
     expect(goalRepo.getById(goal.id)).toEqual(goal);
+  });
+});
+
+// addProgress artık girdi geçmişini de yazar (eskiden her çağıranın ayrıca
+// goalEntryRepo.create çağırması gerekiyordu ve alışkanlık katkıları unutuyordu).
+// Kayda İSTENEN değil GERÇEKLEŞEN fark düşmeli — yoksa geçmiş current_value ile
+// çelişir ve ondan hesaplanan tempo/projeksiyon şişer.
+describe('addProgress girdi geçmişi', () => {
+  it('uygulanan farkı girdi olarak yazar ve döndürür', () => {
+    const goal = numericGoal({ target_value: 100 });
+    expect(goalRepo.addProgress(goal.id, 40)).toBe(40);
+    const entries = goalEntryRepo.listByGoal(goal.id);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].amount).toBe(40);
+  });
+
+  it('kırpılınca girdiye istenen değil GERÇEKLEŞEN fark yazılır', () => {
+    const goal = numericGoal({ target_value: 100 });
+    goalRepo.addProgress(goal.id, 90);
+    // 90 + 30 = 120 ama tavan 100 → gerçekte yalnız +10 uygulanır.
+    expect(goalRepo.addProgress(goal.id, 30)).toBe(10);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
+    const amounts = goalEntryRepo.listByGoal(goal.id).map((e) => e.amount);
+    expect(amounts).toContain(10);
+    expect(amounts).not.toContain(30);
+  });
+
+  it('negatif ilerleme (geri alma) negatif girdi yazar', () => {
+    const goal = numericGoal({ target_value: 100 });
+    goalRepo.addProgress(goal.id, 10);
+    expect(goalRepo.addProgress(goal.id, -4)).toBe(-4);
+    expect(goalEntryRepo.listByGoal(goal.id).map((e) => e.amount)).toContain(-4);
+  });
+
+  it('hiçbir şey değişmezse girdi yazmaz', () => {
+    const goal = numericGoal({ target_value: 100 });
+    goalRepo.addProgress(goal.id, 100); // tavana oturdu
+    expect(goalRepo.addProgress(goal.id, 5)).toBe(0); // tamamen kırpıldı
+    expect(goalEntryRepo.listByGoal(goal.id)).toHaveLength(1);
+  });
+
+  it('sayısal olmayan hedefte girdi yazmaz', () => {
+    const goal = goalRepo.create({
+      user_id: userId,
+      title: 'Adımlı hedef',
+      goal_type: 'milestone',
+    });
+    expect(goalRepo.addProgress(goal.id, 5)).toBe(0);
+    expect(goalEntryRepo.listByGoal(goal.id)).toEqual([]);
   });
 });
 

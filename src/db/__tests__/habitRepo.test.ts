@@ -7,6 +7,7 @@
 
 import { getDb } from '../database';
 import { habitRepo } from '../repositories/habitRepo';
+import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
@@ -483,6 +484,29 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
   }
   const currentValue = (goalId: string) => goalRepo.getById(goalId)!.current_value;
 
+  // Katkı hedefin GİRDİ GEÇMİŞİNE de düşer: eskiden yalnız current_value
+  // değişiyor, geçmişte iz kalmıyordu → hedefin tempo/projeksiyonu (yalnız elle
+  // "Ekle"lenenden hesaplanıyor) bağlı alışkanlığı hiç görmüyordu.
+  it('tamamlanma katkısı hedefin girdi geçmişine yazılır (+1 / −1)', () => {
+    const goal = createNumericGoal();
+    const habit = createHabit({ goal_id: goal.id });
+
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(goalEntryRepo.listByGoal(goal.id).map((e) => e.amount)).toEqual([1]);
+
+    habitRepo.toggleLog(habit.id, TODAY, false);
+    expect(goalEntryRepo.listByGoal(goal.id).map((e) => e.amount).sort()).toEqual([-1, 1]);
+  });
+
+  it('aynı durumu tekrar yazmak girdi geçmişine bir şey eklemez', () => {
+    const goal = createNumericGoal();
+    const habit = createHabit({ goal_id: goal.id });
+
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    habitRepo.toggleLog(habit.id, TODAY, true); // geçiş yok → katkı da yok
+    expect(goalEntryRepo.listByGoal(goal.id)).toHaveLength(1);
+  });
+
   it('ikili alışkanlık tamamlanınca hedefe +1, geri alınınca −1', () => {
     const goal = createNumericGoal();
     const habit = createHabit({ goal_id: goal.id });
@@ -573,6 +597,22 @@ describe('hedefe bağlı ilerleme — "amount" katkı modu', () => {
     });
   }
   const currentValue = (goalId: string) => goalRepo.getById(goalId)!.current_value;
+
+  it('miktar katkısı hedefin girdi geçmişine yazılır (fark × çarpan)', () => {
+    const goal = createNumericGoal(10);
+    const habit = createHabit({
+      goal_id: goal.id,
+      target_amount: 5,
+      unit: 'bardak',
+      goal_contribution: 'amount',
+      goal_factor: 0.2, // 1 bardak = 0.2 litre
+    });
+
+    habitRepo.incrementAmount(habit.id, TODAY, 3, 5);
+    const entries = goalEntryRepo.listByGoal(goal.id);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].amount).toBeCloseTo(0.6); // 3 bardak × 0.2
+  });
 
   it('tamamlanma beklemeden, her artışta fark × çarpan hedefe eklenir', () => {
     const goal = createNumericGoal(10);

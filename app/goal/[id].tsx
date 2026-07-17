@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { goalEntryRepo, goalMilestoneRepo, goalRepo } from '@/db';
+import { goalMilestoneRepo, goalRepo } from '@/db';
 import type { GoalMilestone } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { diffDays, todayDate, toYmd } from '@/lib/helpers';
@@ -159,10 +159,9 @@ export default function GoalDetailScreen() {
 
   // — Genel sekmesi: veri girişi ("entry") — kullanıcı istediği miktarı yazar,
   // "Ekle" ile o an biriken ilerlemeye eklenir (goalRepo.addProgress bir DELTA'dır,
-  // mutlak değer değil — negatif yazarak düzeltme de yapılabilir). Ayrıca
-  // goalEntryRepo'ya tarihiyle bir günlük kaydı düşülür ki kullanıcı Genel
-  // sekmesinde "ne zaman ne kadar eklediğini" görebilsin (current_value'nun
-  // kaynağı yine addProgress'tir, bu kayıt salt görüntüleme içindir).
+  // mutlak değer değil — negatif yazarak düzeltme de yapılabilir). Günlük kaydını
+  // addProgress'in kendisi düşer (bağlı alışkanlık katkıları da böylece geçmişe
+  // girer; bkz. goalRepo.addProgress).
   // Tamamlanma durumu değişmiş olabilecek her mutasyondan sonra hatırlatmayı
   // güncel duruma göre yeniden kur: scheduleGoalReminder tamamlanan/remind_at'sız
   // hedefte kendiliğinden yalnız iptal eder (cancel-then-maybe-schedule deseni).
@@ -175,8 +174,9 @@ export default function GoalDetailScreen() {
     if (!goal) return;
     const parsed = parseFloat(entryText.replace(',', '.'));
     if (!Number.isFinite(parsed) || parsed === 0) return;
+    // Girdi kaydını addProgress'in kendisi yazar (gerçekleşen farkla) — burada
+    // ayrıca goalEntryRepo.create çağırmak ÇİFT kayıt olurdu.
     goalRepo.addProgress(goal.id, parsed);
-    goalEntryRepo.create(goal.id, parsed);
     const g = goalRepo.getById(goal.id);
     g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
     setEntryText('');
