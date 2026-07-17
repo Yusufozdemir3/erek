@@ -832,17 +832,24 @@ const makeStyles = (c: Colors) =>
       borderColor: c.border,
     },
     freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
+    // Çipler İKİŞERLİ sarar (flexBasis ~yarım satır + flexGrow ile satırı doldurur).
+    // Eskiden `flex: 1` idi: 4 sıklık çipi tek satıra sıkışıp her biri ¼ genişlik
+    // alıyor, "Haftada X kez" iki satıra kırılıp satır yüksekliğini bozuyordu.
+    // İki çipli kullanımda (katkı biçimi) görünüm aynı kalır — tek satırda ikisi.
     freqBtn: {
-      flex: 1,
+      flexBasis: '47%',
+      flexGrow: 1,
       alignItems: 'center',
+      justifyContent: 'center',
       paddingVertical: 10,
+      paddingHorizontal: 8,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: c.border,
       backgroundColor: c.inputBg,
     },
     freqBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
-    freqBtnText: { fontSize: 14, fontWeight: '600', color: c.muted },
+    freqBtnText: { fontSize: 14, fontWeight: '600', color: c.muted, textAlign: 'center' },
     freqBtnTextSel: { color: c.primary },
     dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
     dayChip: {
