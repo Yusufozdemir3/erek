@@ -288,6 +288,10 @@ const tr: Dict = {
   'profile.notifTimerDone': 'Zamanlayıcı bildirimi',
   'profile.notifSound': 'Ses ve titreşim',
   'profile.notifSoundHint': 'Kapatırsan bildirimler sessiz ve titreşimsiz gelir.',
+  'profile.haptics': 'Titreşim',
+  'profile.hapticsEnabled': 'Dokunsal geri bildirim',
+  'profile.hapticsHint':
+    'İşaretleme, +/− ve zamanlayıcı gibi dokunuşlarda hafif titreşim. Bildirim titreşiminden ayrıdır.',
 
   // Erişilebilirlik etiketleri (accessibilityLabel) — ekranda görünmez ama
   // ekran okuyucular için çevrilmeleri gerekir.
@@ -719,6 +723,10 @@ const en: Dict = {
   'profile.notifTimerDone': 'Timer notification',
   'profile.notifSound': 'Sound and vibration',
   'profile.notifSoundHint': 'Turn off to receive notifications silently, without vibration.',
+  'profile.haptics': 'Vibration',
+  'profile.hapticsEnabled': 'Haptic feedback',
+  'profile.hapticsHint':
+    'A light buzz when you check things off, tap +/− or use the timer. Separate from notification vibration.',
 
   'common.editA11y': '{title}, edit',
   'common.deleteA11y': '{title}, delete',
@@ -1141,6 +1149,10 @@ const de: Dict = {
   'profile.notifTimerDone': 'Timer-Benachrichtigung',
   'profile.notifSound': 'Ton und Vibration',
   'profile.notifSoundHint': 'Ausschalten, um Benachrichtigungen lautlos und ohne Vibration zu erhalten.',
+  'profile.haptics': 'Vibration',
+  'profile.hapticsEnabled': 'Haptisches Feedback',
+  'profile.hapticsHint':
+    'Ein leichtes Vibrieren beim Abhaken, bei +/− und beim Timer. Unabhängig von der Benachrichtigungsvibration.',
 
   'common.editA11y': '{title}, bearbeiten',
   'common.deleteA11y': '{title}, löschen',

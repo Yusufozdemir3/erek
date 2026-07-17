@@ -37,6 +37,7 @@ import {
   setNotificationPref,
   type NotificationPrefs,
 } from '@/lib/notificationPrefs';
+import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -62,11 +63,20 @@ export default function ProfileScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  // Titreşim tercihi; cache açılışta yüklendiği için (bkz. _layout) ilk değer doğru.
+  const [haptics, setHaptics] = useState(isHapticsEnabled);
 
   // Kayıtlı bildirim tercihlerini bir kez yükle.
   useEffect(() => {
     getNotificationPrefs().then(setNotifPrefs);
   }, []);
+
+  // Titreşimi aç/kapa — kapatınca dokunuşlar anında sessizleşir (cache önce yazılır).
+  const toggleHaptics = (value: boolean) => {
+    setHaptics(value);
+    setHapticsEnabled(value).catch(() => {});
+    if (value) tapLight(); // açarken tek örnek titreşim: kullanıcı ne açtığını hisseder
+  };
 
   // Bir tercihi değiştir + kalıcılaştır + tüm alışkanlık/görev hatırlatmalarını
   // DB'yi baz alarak hemen yeniden kur (kapatma anında iptal, açma anında kurulum
@@ -260,6 +270,22 @@ export default function ProfileScreen() {
           />
         </View>
         <Text style={styles.hint}>{t('profile.hideCompletedHint')}</Text>
+      </View>
+
+      {/* Titreşim (uygulama içi dokunsal geri bildirim) — bildirim titreşiminden
+          AYRI: bu, işaretleme/+−/zamanlayıcı gibi dokunuşlarda hissedilen tepki. */}
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.cardTitle}>{t('profile.haptics')}</Text>
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>{t('profile.hapticsEnabled')}</Text>
+          <Switch
+            value={haptics}
+            onValueChange={toggleHaptics}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.card}
+          />
+        </View>
+        <Text style={styles.hint}>{t('profile.hapticsHint')}</Text>
       </View>
 
       {/* Bildirim tercihleri */}

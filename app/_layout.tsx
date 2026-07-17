@@ -19,6 +19,7 @@ import { TimerProvider } from '@/ui/TimerProvider';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
 import { I18nProvider, useI18n } from '@/i18n/I18nProvider';
 import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notifications';
+import { loadHapticsPref } from '@/lib/haptics';
 import { Sentry } from '@/lib/sentry';
 
 // Expo Go'da expo-notifications, push (remote) bildirimlerinin desteklenmediğine
@@ -85,9 +86,11 @@ function RootLayout() {
   useFonts({ ...Feather.font, ...Ionicons.font });
 
   // Bildirim handler'ı ve Android kanalı bir kez kurulur (izin istemez).
+  // Titreşim tercihi de burada cache'e alınır (haptics.ts React dışı olduğu için).
   useEffect(() => {
     setNotificationHandler();
     ensureAndroidChannel();
+    loadHapticsPref().catch(() => {});
   }, []);
 
   return (
