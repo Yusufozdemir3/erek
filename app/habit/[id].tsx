@@ -9,8 +9,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fmtClock, isQuotaSchedule } from '@/lib/helpers';
+import type { Habit } from '@/db';
 import { STREAK_MILESTONES } from '@/lib/milestones';
-import { useHabitStats, type ChartBucket, type HabitChartSeries, type StreakEntry } from '@/ui/useHabitStats';
+import {
+  useHabitStats,
+  type ChartBucket,
+  type GoalPeriodStat,
+  type HabitChartSeries,
+  type StreakEntry,
+} from '@/ui/useHabitStats';
+import type { HabitInsight } from '@/lib/habitInsights';
 import { useHabitCalendar, type CalendarDay } from '@/ui/useHabitCalendar';
 import { BarChart } from '@/ui/BarChart';
 import { HabitIconGlyph } from '@/ui/habitIcons';
@@ -26,11 +34,126 @@ function fmtAmount(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
 
+// Büyük miktarları kısaltır (24500 -> "24.5k", 1_600_000 -> "1.6M") — Hafta/Ay/Yıl
+// hedef toplamları hızla binlere/milyonlara çıkabildiği için (adım sayısı vb.).
+function fmtCompact(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return fmtAmount(n);
+}
+
+// Hedef dönemi kartındaki bir değeri (done/goal) alışkanlık türüne göre biçimler:
+// zamanlayıcıda saat, nicelde miktar+birim, ikilide düz gün sayısı.
+function fmtGoalValue(habit: Habit, n: number): string {
+  if (habit.target_amount == null) return String(Math.round(n));
+  if (habit.kind === 'timer') return fmtClock(n);
+  return `${fmtCompact(n)}${habit.unit ? ` ${habit.unit}` : ''}`;
+}
+
 function StatCard({ label, value, styles }: { label: string; value: string; styles: Styles }) {
   return (
     <View style={styles.statCard}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+// Haftanın günü içgörülerinde JS getDay() (0=Pazar) sırasıyla çeviri anahtarı.
+const WEEKDAY_KEY_BY_JS_INDEX = [
+  'weekday.sun', 'weekday.mon', 'weekday.tue', 'weekday.wed',
+  'weekday.thu', 'weekday.fri', 'weekday.sat',
+];
+
+const INSIGHT_ICON: Record<HabitInsight['kind'], keyof typeof Feather.glyphMap> = {
+  trendUp: 'trending-up',
+  trendDown: 'trending-down',
+  bestWeekday: 'thumbs-up',
+  worstWeekday: 'alert-circle',
+  streakRecord: 'award',
+  streakActive: 'zap',
+};
+
+// İçgörü metni — kural tabanlı, ağa çıkmayan basit gözlemler (bkz. habitInsights.ts).
+function insightText(insight: HabitInsight, t: (key: string, params?: Record<string, string | number>) => string): string {
+  switch (insight.kind) {
+    case 'trendUp':
+      return t('insights.trendUp', { prior: Math.round(insight.priorRate * 100), recent: Math.round(insight.recentRate * 100) });
+    case 'trendDown':
+      return t('insights.trendDown', { prior: Math.round(insight.priorRate * 100), recent: Math.round(insight.recentRate * 100) });
+    case 'bestWeekday':
+      return t('insights.bestWeekday', { day: t(WEEKDAY_KEY_BY_JS_INDEX[insight.weekday]), rate: Math.round(insight.rate * 100) });
+    case 'worstWeekday':
+      return t('insights.worstWeekday', { day: t(WEEKDAY_KEY_BY_JS_INDEX[insight.weekday]), rate: Math.round(insight.rate * 100) });
+    case 'streakRecord':
+      return t('insights.streakRecord', { days: insight.days });
+    case 'streakActive':
+      return t('insights.streakActive', { days: insight.days });
+  }
+}
+
+function InsightsCard({
+  insights,
+  color,
+  t,
+  styles,
+}: {
+  insights: HabitInsight[];
+  color: string;
+  t: (key: string, params?: Record<string, string | number>) => string;
+  styles: Styles;
+}) {
+  return (
+    <View style={{ gap: 10 }}>
+      {insights.map((insight, i) => (
+        <View key={i} style={styles.insightRow}>
+          <Feather name={INSIGHT_ICON[insight.kind]} size={16} color={color} />
+          <Text style={styles.insightText}>{insightText(insight, t)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// "Hedef" karşılaştırması: Bugün/Hafta/Ay/Yıl için TAM dönem hedefi (gelecek
+// günler dahil, "bu dönemi hep yapsaydın") ile bugüne kadar biriken miktar.
+// Kotalı alışkanlıkta "Bugün" satırı yok (tek günlük hedef anlamsız).
+function GoalPeriodsCard({
+  periods,
+  habit,
+  color,
+  t,
+  styles,
+}: {
+  periods: GoalPeriodStat[];
+  habit: Habit;
+  color: string;
+  t: (key: string) => string;
+  styles: Styles;
+}) {
+  const LABEL_KEY: Record<GoalPeriodStat['key'], string> = {
+    today: 'stats.goalToday',
+    week: 'stats.goalWeek',
+    month: 'stats.goalMonth',
+    year: 'stats.goalYear',
+  };
+  return (
+    <View style={{ gap: 10 }}>
+      {periods.map((p) => {
+        const pct = p.goal > 0 ? Math.min(100, (p.done / p.goal) * 100) : 0;
+        return (
+          <View key={p.key} style={styles.goalRow}>
+            <Text style={styles.goalLabel}>{t(LABEL_KEY[p.key])}</Text>
+            <View style={styles.goalBarTrack}>
+              <View style={[styles.goalBarFill, { width: `${pct}%`, backgroundColor: color }]} />
+            </View>
+            <Text style={styles.goalValue}>
+              {fmtGoalValue(habit, p.done)} / {fmtGoalValue(habit, p.goal)}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -247,6 +370,32 @@ export default function HabitStatsScreen() {
               />
             </View>
 
+            {/* İçgörüler — kural tabanlı, ağa çıkmayan basit gözlemler. */}
+            {stats.insights.length > 0 && (
+              <View style={[styles.card, { marginTop: 12 }]}>
+                <Text style={styles.cardLabel}>{t('insights.title')}</Text>
+                <View style={{ marginTop: 12 }}>
+                  <InsightsCard insights={stats.insights} color={habitColor} t={t} styles={styles} />
+                </View>
+              </View>
+            )}
+
+            {/* Hedef karşılaştırması — Bugün/Hafta/Ay/Yıl. */}
+            {stats.goalPeriods.length > 0 && (
+              <View style={[styles.card, { marginTop: 12 }]}>
+                <Text style={styles.cardLabel}>{t('stats.goalTitle')}</Text>
+                <View style={{ marginTop: 12 }}>
+                  <GoalPeriodsCard
+                    periods={stats.goalPeriods}
+                    habit={stats.habit}
+                    color={habitColor}
+                    t={t}
+                    styles={styles}
+                  />
+                </View>
+              </View>
+            )}
+
             {stats.totalAmount != null && (
               <View style={[styles.card, { marginTop: 12 }]}>
                 <Text style={styles.cardLabel}>{t('stats.totalLast90')}</Text>
@@ -411,6 +560,23 @@ const makeStyles = (c: Colors) =>
     // kalıyordu).
     cellMissed: { backgroundColor: '#f87171' },
     cellUnscheduled: { backgroundColor: c.border },
+
+    // — İçgörüler —
+    insightRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+    insightText: { flex: 1, fontSize: 13, color: c.text, lineHeight: 18 },
+
+    // — Hedef karşılaştırması (Bugün/Hafta/Ay/Yıl) —
+    goalRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    goalLabel: { width: 48, fontSize: 12, fontWeight: '700', color: c.text },
+    goalBarTrack: {
+      flex: 1,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: c.track,
+      overflow: 'hidden',
+    },
+    goalBarFill: { height: '100%', borderRadius: 5 },
+    goalValue: { fontSize: 11, fontWeight: '600', color: c.muted, minWidth: 92, textAlign: 'right' },
 
     // — Tamamlama grafiği (Gün/Hafta/Ay) —
     periodRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, marginBottom: 14 },

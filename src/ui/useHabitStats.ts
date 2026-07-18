@@ -7,7 +7,17 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { habitRepo } from '@/db';
 import type { Habit, HabitLog } from '@/db';
-import { isQuotaSchedule, isScheduledOn, isWithinHabitDates, lastDays, todayDate, toYmd } from '@/lib/helpers';
+import {
+  diffDays,
+  isQuotaSchedule,
+  isScheduledOn,
+  isWithinHabitDates,
+  lastDays,
+  todayDate,
+  toYmd,
+  weekStartOf,
+} from '@/lib/helpers';
+import { buildHabitInsights, type HabitInsight } from '@/lib/habitInsights';
 
 const WINDOW_DAYS = 90;
 const DAY_BUCKETS = 30;
@@ -34,6 +44,16 @@ export interface HabitChartSeries {
   month: ChartBucket[];
 }
 
+// "Hedef" karşılaştırması: içinde bulunulan gün/hafta/ay/yıl için TAM dönem
+// hedefi (gelecek günler dahil, "bu dönemi hep yapsaydın ne olurdu") ile
+// bugüne kadar biriken miktar. Kota alışkanlıkta 'today' satırı anlamsız
+// (tek günlük hedef yok) — buildGoalPeriods onu eler.
+export interface GoalPeriodStat {
+  key: 'today' | 'week' | 'month' | 'year';
+  done: number;
+  goal: number;
+}
+
 export interface HabitStats {
   habit: Habit | null;
   currentStreak: number;
@@ -44,6 +64,8 @@ export interface HabitStats {
   totalAmount: number | null;  // nicel değilse (target_amount yoksa) null
   streaks: StreakEntry[];       // büyükten küçüğe geçmiş seriler
   series: HabitChartSeries | null; // hiç log yoksa null (grafik gizlenir)
+  goalPeriods: GoalPeriodStat[]; // Bugün/Hafta/Ay/Yıl hedef karşılaştırması
+  insights: HabitInsight[]; // kural tabanlı gözlemler (bkz. habitInsights.ts) — en fazla 2
 }
 
 const EMPTY: HabitStats = {
@@ -56,6 +78,8 @@ const EMPTY: HabitStats = {
   totalAmount: null,
   streaks: [],
   series: null,
+  goalPeriods: [],
+  insights: [],
 };
 
 // Bir günün 0..1 tamamlama oranı: ikili alışkanlıkta 0/1; nicel/zamanlayıcıda
@@ -173,6 +197,65 @@ function buildSeries(habit: Habit, allLogs: HabitLog[]): HabitChartSeries | null
   };
 }
 
+// Dönemin TAM (gelecek dahil) başlangıç/bitiş günü — bugünün içinde bulunduğu
+// gün/hafta/ay/yıl. Kota alışkanlıkta 'today' zaten üretilmez (bkz. çağıran).
+function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: string; end: string }[] {
+  const weekStart = weekStartOf(today);
+  const weekEndD = new Date(`${weekStart}T00:00:00`);
+  weekEndD.setDate(weekEndD.getDate() + 6);
+  const t = new Date(`${today}T00:00:00`);
+  const monthStart = toYmd(new Date(t.getFullYear(), t.getMonth(), 1));
+  const monthEnd = toYmd(new Date(t.getFullYear(), t.getMonth() + 1, 0));
+  return [
+    { key: 'today', start: today, end: today },
+    { key: 'week', start: weekStart, end: toYmd(weekEndD) },
+    { key: 'month', start: monthStart, end: monthEnd },
+    { key: 'year', start: `${t.getFullYear()}-01-01`, end: `${t.getFullYear()}-12-31` },
+  ];
+}
+
+// Her dönem için: goal = dönemin TÜM planlı günlerinin hedefi (gelecek dahil,
+// "bu dönemi hep yapsaydın"), done = bugüne kadar biriken gerçek miktar.
+// Kota (haftada X kez) her gün "müsait" sayıldığından planlı-gün filtresi
+// uygulanmaz, hedef haftalık kotadan dönem uzunluğuna oranlanır.
+function buildGoalPeriods(habit: Habit, allLogs: HabitLog[], today: string): GoalPeriodStat[] {
+  const logByDate = new Map(allLogs.map((l) => [l.log_date, l]));
+  const perDayTarget = habit.target_amount ?? 1;
+  const quota = isQuotaSchedule(habit.schedule) ? habit.schedule!.timesPerWeek! : null;
+  const amountOf = (ymd: string): number => {
+    const log = logByDate.get(ymd);
+    if (!log) return 0;
+    return habit.target_amount != null ? log.amount ?? 0 : log.completed === 1 ? 1 : 0;
+  };
+
+  return goalPeriodBounds(today)
+    .filter((b) => !(quota && b.key === 'today'))
+    .map(({ key, start, end }) => {
+      let done = 0;
+      let goal = 0;
+      const doneEnd = end < today ? end : today;
+      if (quota) {
+        goal = ((quota * (diffDays(start, end) + 1)) / 7) * perDayTarget;
+      }
+      if (start <= doneEnd) {
+        const cursor = new Date(`${start}T00:00:00`);
+        const endD = new Date(`${end}T00:00:00`);
+        const doneEndD = new Date(`${doneEnd}T00:00:00`);
+        while (cursor <= endD) {
+          const ymd = toYmd(cursor);
+          if (quota) {
+            if (cursor <= doneEndD) done += amountOf(ymd);
+          } else if (isScheduledOn(habit.schedule, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
+            goal += perDayTarget;
+            if (cursor <= doneEndD) done += amountOf(ymd);
+          }
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+      return { key, done, goal };
+    });
+}
+
 export function useHabitStats(habitId: string): HabitStats {
   const [stats, setStats] = useState<HabitStats>(EMPTY);
 
@@ -210,17 +293,21 @@ export function useHabitStats(habitId: string): HabitStats {
       habit.target_amount != null ? logs.reduce((sum, l) => sum + (l.amount ?? 0), 0) : null;
 
     const allLogs = habitRepo.allLogs(habitId);
+    const currentStreak = habitRepo.currentStreak(habitId);
+    const longestStreak = habitRepo.longestStreak(habitId);
 
     setStats({
       habit,
-      currentStreak: habitRepo.currentStreak(habitId),
-      longestStreak: habitRepo.longestStreak(habitId),
+      currentStreak,
+      longestStreak,
       completionRate: quotaRate ?? (scheduledCount > 0 ? completedCount / scheduledCount : 0),
       scheduledCount,
       completedCount,
       totalAmount,
       streaks: habitRepo.allStreaks(habitId),
       series: buildSeries(habit, allLogs),
+      goalPeriods: buildGoalPeriods(habit, allLogs, todayDate()),
+      insights: buildHabitInsights(habit, allLogs, todayDate(), currentStreak, longestStreak),
     });
   }, [habitId]);
 
