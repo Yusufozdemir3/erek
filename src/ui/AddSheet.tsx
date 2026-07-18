@@ -223,6 +223,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       unit: values.unit,
       deadline: values.deadline,
       remind_at: values.remind_at,
+      start_date: values.start_date,
     });
     values.milestones?.forEach((m) => goalMilestoneRepo.create(created.id, m));
     // Günlük giriş hatırlatması (remind_at yoksa scheduleGoalReminder no-op'tur).

@@ -110,29 +110,33 @@ describe('milestoneViews — ara-eşik türetme (saf fonksiyon)', () => {
     synced: 0 as const,
   });
 
-  it('miktarlı adımlar sırayla kümülatif dolar', () => {
-    // Eşikler: A=300 (0..300), B=400 (300..700), C=300 (700..1000).
-    const views = milestoneViews([ms('A', 300), ms('B', 400), ms('C', 300)], 450);
-    expect(views[0].reached).toBe(true);   // 450 >= 300
+  it('miktarlı adımlar KENDİ BAĞIMSIZ hedefine göre dolar (sıfırdan, birbirinin payını paylaşmaz)', () => {
+    // Koşu örneği: "ilk 5km", "ilk 20km", "ilk 50km" — üçü de aynı current_value'dan.
+    const views = milestoneViews([ms('5km', 5), ms('20km', 20), ms('50km', 50)], 8);
+    expect(views[0].reached).toBe(true);  // 8 >= 5
     expect(views[0].ratio).toBe(1);
-    expect(views[1].reached).toBe(false);  // 450 < 700
-    expect(views[1].ratio).toBeCloseTo((450 - 300) / 400);
-    expect(views[2].reached).toBe(false);
-    expect(views[2].ratio).toBe(0);
+    expect(views[1].reached).toBe(false); // 8 < 20
+    expect(views[1].ratio).toBeCloseTo(8 / 20);
+    expect(views[2].reached).toBe(false); // 8 < 50
+    expect(views[2].ratio).toBeCloseTo(8 / 50);
   });
 
-  it('current 0 iken hepsi boş, hedefin tamamında hepsi dolu', () => {
+  it('current 0 iken hepsi boş, her adımın kendi hedefinde o adım dolu', () => {
     const list = [ms('A', 300), ms('B', 400)];
     expect(milestoneViews(list, 0).every((v) => !v.reached && v.ratio === 0)).toBe(true);
-    expect(milestoneViews(list, 700).every((v) => v.reached && v.ratio === 1)).toBe(true);
+    const views = milestoneViews(list, 300);
+    expect(views[0].reached).toBe(true);
+    expect(views[0].ratio).toBe(1);
+    expect(views[1].reached).toBe(false);
+    expect(views[1].ratio).toBeCloseTo(300 / 400);
   });
 
-  it('miktarsız (checklist) adım completed kolonundan okunur, kümülatife karışmaz', () => {
-    const views = milestoneViews([ms('A', 300), ms('Not', null, 1), ms('B', 200)], 350);
+  it('miktarsız (checklist) adım completed kolonundan okunur, miktarlı adımları etkilemez', () => {
+    const views = milestoneViews([ms('A', 300), ms('Not', null, 1), ms('B', 200)], 250);
     expect(views[1].reached).toBe(true); // completed=1
     expect(views[1].ratio).toBe(1);
-    // B'nin eşiği 300..500 — 'Not' araya girse de kümülatif bozulmaz.
-    expect(views[2].ratio).toBeCloseTo((350 - 300) / 200);
-    expect(views[2].reached).toBe(false);
+    expect(views[0].ratio).toBeCloseTo(250 / 300);
+    expect(views[2].reached).toBe(true); // 250 >= 200, B kendi hedefine göre bağımsız dolar
+    expect(views[2].ratio).toBe(1);
   });
 });

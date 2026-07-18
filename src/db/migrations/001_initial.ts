@@ -236,6 +236,23 @@ UPDATE tasks SET remind_at = substr(due_date, 12, 5)
   WHERE due_date IS NOT NULL AND length(due_date) > 10;
 `;
 
+// Migration 015: hedeflere AÇIK başlangıç tarihi (goals.start_date "YYYY-MM-DD").
+// Eskiden "kaç gün oldu" (daysElapsed, goalProjection.ts) İLK GİRDİNİN tarihinden
+// türetiliyordu — hedefi bugün açıp bugün 3 girdi eklersen daysElapsed=0/1 çıkar,
+// ama avgDaily hep last7Total/7'ye bölündüğü için (henüz yaşanmamış günler de
+// paydaya girer) günlük hızın yanlışlıkla küçük görünürdü (3 girdi/gün yerine
+// 3/7≈0.4). Artık start_date açık bir alan: yeni hedefler oluşturulduğunda
+// bugünle doldurulur (goalRepo.create), avgDaily'nin penceresi GERÇEK yaşanan
+// gün sayısıyla sınırlanır (bkz. goalProjection.ts). Mevcut hedefler NULL
+// başlar — varsa en eski girdisinin tarihiyle geriye dönük doldurulur (yoksa
+// NULL kalır, goalProjection zaten girdisiz hedefte hiçbir şey üretmiyor).
+export const migration015 = `
+ALTER TABLE goals ADD COLUMN start_date TEXT;
+UPDATE goals SET start_date = (
+  SELECT MIN(substr(updated_at, 1, 10)) FROM goal_entries WHERE goal_entries.goal_id = goals.id
+) WHERE start_date IS NULL;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -252,4 +269,5 @@ export const migrations = [
   { version: 12, sql: migration012 },
   { version: 13, sql: migration013 },
   { version: 14, sql: migration014 },
+  { version: 15, sql: migration015 },
 ];

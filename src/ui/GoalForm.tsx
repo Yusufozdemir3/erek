@@ -34,6 +34,9 @@ export interface GoalFormValues {
   current_value: number | null;
   deadline: string;
   remind_at: string | null; // "08:30" günlük giriş hatırlatması; null = yok
+  // Yalnız numeric'te anlamlı (tempo/projeksiyon sıfır günü — goalProjection.ts);
+  // milestone hedefte null (o tipte tempo hesabı yok).
+  start_date: string | null;
   milestones?: string[]; // yalnız enableMilestoneDraft'ta doldurulur
 }
 
@@ -46,6 +49,7 @@ interface Props {
     current_value: number;
     deadline: string | null;
     remind_at: string | null;
+    start_date: string | null;
   }>;
   submitLabel: string;
   onSubmit: (values: GoalFormValues) => void;
@@ -85,7 +89,12 @@ export function GoalForm({
   const [deadline, setDeadline] = useState(initial?.deadline ?? todayDate());
   // Günlük giriş hatırlatma saati ("08:30") — HabitForm'daki remind_at deseni.
   const [remindAt, setRemindAt] = useState<string | null>(initial?.remind_at ?? null);
+  // Tempo/projeksiyon hesabının sıfır günü (bkz. goalProjection.ts) — yalnız
+  // numeric'te anlamlı. Oluşturmada bugün varsayılan (tam da tasarım kararı:
+  // "bugün açtığım hedefin ilk günü bugün").
+  const [startDate, setStartDate] = useState(initial?.start_date ?? todayDate());
   const [showPicker, setShowPicker] = useState(false);
+  const [showStartPicker, setShowStartPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [draftMilestones, setDraftMilestones] = useState<string[]>([]);
   const [newMilestone, setNewMilestone] = useState('');
@@ -113,6 +122,7 @@ export function GoalForm({
       current_value: numeric && isEditing && Number.isFinite(currentNum) ? currentNum : null,
       deadline,
       remind_at: remindAt,
+      start_date: numeric ? startDate : null,
       milestones: enableMilestoneDraft ? draftMilestones : undefined,
     });
   };
@@ -120,6 +130,11 @@ export function GoalForm({
   const onPickDate = (_event: unknown, picked?: Date) => {
     setShowPicker(Platform.OS === 'ios');
     if (picked) setDeadline(toYmd(picked));
+  };
+
+  const onPickStartDate = (_event: unknown, picked?: Date) => {
+    setShowStartPicker(Platform.OS === 'ios');
+    if (picked) setStartDate(toYmd(picked));
   };
 
   return (
@@ -206,6 +221,25 @@ export function GoalForm({
                 maxLength={NUMBER_MAX_LEN}
               />
             </>
+          )}
+
+          {/* Tempo/projeksiyon hesabının sıfır günü — "Son 7 gün" ortalaması vb.
+              bu tarihten bugüne geçen gerçek gün sayısıyla sınırlanır (bkz.
+              goalProjection.ts). Bugünden ileri bir tarih seçilemez. */}
+          <Text style={styles.label}>{t('goal.startDateLabel')}</Text>
+          <View style={styles.row}>
+            <Pressable style={styles.dateBtn} onPress={() => setShowStartPicker(true)}>
+              <Text style={styles.dateBtnText}>{longDateLabel(startDate, lang, t('date.noDate'))}</Text>
+            </Pressable>
+          </View>
+          {showStartPicker && (
+            <DateTimePicker
+              value={new Date(`${startDate}T00:00:00`)}
+              mode="date"
+              maximumDate={new Date(`${todayDate()}T00:00:00`)}
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              onChange={onPickStartDate}
+            />
           )}
         </>
       )}

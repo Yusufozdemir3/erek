@@ -184,6 +184,7 @@ export function useGoalStats(goalId: string): GoalStats {
             daysLeft,
             completed,
             today: todayDate(),
+            startDate: goal.start_date,
           })
         : {
             avgDaily: null,

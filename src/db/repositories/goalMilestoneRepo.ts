@@ -29,21 +29,21 @@ export interface MilestoneView {
   reached: boolean; // kümülatif eşik aşıldı mı (checklist kipinde completed)
 }
 
-// SAYISAL hedefin adım görünümleri: miktarı olan adımlar position sırasıyla
-// KÜMÜLATİF eşikler oluşturur ve hedefin current_value'sundan sırayla dolar —
-// elle işaretlenmez, yalnız girişlere bağlı değişir. Miktarı olmayan (eski/
-// checklist) adımlar kendi completed durumunu korur. Saf fonksiyon (SQL yok) —
-// hem UI hem test doğrudan çağırır.
+// SAYISAL hedefin adım görünümleri: miktarı olan her adım KENDİ BAĞIMSIZ
+// hedefidir (ör. "ilk 5km", "ilk 20km", "ilk 50km" — üçü de SIFIRDAN sayılır,
+// biri diğerinin payını paylaşmaz). Hedefin current_value'su TEK giriş noktası:
+// bir giriş yapılınca hedefi aşan/aşmayan HER adım aynı anda güncellenir (5km
+// girince ilk adım biter, 20km ve 50km'lik adımlar da 5/20 ve 5/50 ilerler) —
+// "birini bitir, diğerine geç" sırası YOKTUR. Elle işaretlenmez. Miktarı olmayan
+// (eski/checklist) adımlar kendi completed durumunu korur. Saf fonksiyon (SQL
+// yok) — hem UI hem test doğrudan çağırır.
 export function milestoneViews(milestones: GoalMilestone[], currentValue: number): MilestoneView[] {
-  let cumulative = 0;
   return milestones.map((m) => {
     if (m.amount == null || m.amount <= 0) {
       return { milestone: m, ratio: m.completed === 1 ? 1 : 0, reached: m.completed === 1 };
     }
-    const start = cumulative;
-    cumulative += m.amount;
-    const ratio = Math.max(0, Math.min(1, (currentValue - start) / m.amount));
-    return { milestone: m, ratio, reached: currentValue >= cumulative };
+    const ratio = Math.max(0, Math.min(1, currentValue / m.amount));
+    return { milestone: m, ratio, reached: currentValue >= m.amount };
   });
 }
 

@@ -3,7 +3,7 @@
 // görev/alt görev mantığıyla aynı). Her iki tipte de artık bir deadline olabilir.
 
 import { getDb } from '../database';
-import { newId, nowIso } from '../../lib/helpers';
+import { newId, nowIso, todayDate } from '../../lib/helpers';
 import { goalEntryRepo } from './goalEntryRepo';
 import type { Goal, GoalType } from '../../types/models';
 
@@ -19,6 +19,7 @@ function rowToGoal(row: any): Goal {
     deadline: row.deadline,
     completed_at: row.completed_at,
     remind_at: row.remind_at,
+    start_date: row.start_date,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -33,6 +34,7 @@ export interface CreateGoalInput {
   unit?: string | null;
   deadline?: string | null;
   remind_at?: string | null;
+  start_date?: string | null; // verilmezse bugün (tempo hesabının sıfır günü)
 }
 
 export const goalRepo = {
@@ -42,11 +44,11 @@ export const goalRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO goals
-       (id, user_id, title, goal_type, target_value, current_value, unit, deadline, remind_at, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL, 0)`,
+       (id, user_id, title, goal_type, target_value, current_value, unit, deadline, remind_at, start_date, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, NULL, 0)`,
       [id, input.user_id, input.title, input.goal_type,
        input.target_value ?? null, input.unit ?? null, input.deadline ?? null,
-       input.remind_at ?? null, now]
+       input.remind_at ?? null, input.start_date ?? todayDate(), now]
     );
     return this.getById(id)!;
   },
@@ -79,6 +81,7 @@ export const goalRepo = {
       unit: string | null;
       deadline: string | null;
       remind_at: string | null;
+      start_date: string | null;
       current_value: number;
     }>
   ): void {
@@ -90,6 +93,7 @@ export const goalRepo = {
     if (fields.unit !== undefined) { sets.push('unit = ?'); vals.push(fields.unit); }
     if (fields.deadline !== undefined) { sets.push('deadline = ?'); vals.push(fields.deadline); }
     if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
+    if (fields.start_date !== undefined) { sets.push('start_date = ?'); vals.push(fields.start_date); }
     if (fields.current_value !== undefined) {
       // Hedef belirliyse aşmasın; negatif olmasın. Hedef bu çağrıda da değişebilir.
       const cap = fields.target_value !== undefined

@@ -74,6 +74,7 @@ export interface Goal extends SyncFields {
   // türetilir (bkz. goalRepo.isCompleted).
   completed_at: string | null;
   remind_at: string | null;      // "08:30" gibi, günlük giriş hatırlatma saati
+  start_date: string | null;     // "YYYY-MM-DD"; tempo/projeksiyon hesaplarının sıfır günü (bkz. goalProjection.ts). Eski hedeflerde NULL olabilir.
 }
 
 // Bir hedefin adımı/parçası. İki kullanım biçimi var:

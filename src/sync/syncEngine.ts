@@ -35,7 +35,7 @@ interface TableCfg {
 const TABLES: TableCfg[] = [
   {
     table: 'goals',
-    cols: ['id', 'user_id', 'title', 'goal_type', 'target_value', 'current_value', 'unit', 'deadline', 'completed_at', 'remind_at', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'title', 'goal_type', 'target_value', 'current_value', 'unit', 'deadline', 'completed_at', 'remind_at', 'start_date', 'updated_at', 'deleted_at'],
     hasUserId: true,
   },
   {

@@ -105,6 +105,8 @@ create table if not exists public.goal_milestones (
 alter table public.goal_milestones add column if not exists amount double precision;
 alter table public.goal_milestones add column if not exists due_date text;
 alter table public.goals add column if not exists remind_at text;
+-- Tempo/projeksiyon hesabının sıfır günü — yerel migration015'in karşılığı.
+alter table public.goals add column if not exists start_date text;
 
 -- Hedefin 'Genel' sekmesinde serbest miktar girişiyle ("Ekle") eklenen kayıtların
 -- günlüğü. Yalnızca görüntüleme içindir — goals.current_value tek doğru kaynak

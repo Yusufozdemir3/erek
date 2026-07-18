@@ -217,8 +217,8 @@ export default function GoalDetailScreen() {
   const addMilestone = () => {
     const v = newMilestone.trim();
     if (!v || !goal) return;
-    // Miktar yalnız sayısal hedefte anlamlı; doluysa adım ara-eşik olur
-    // (girişlerle dolar, işaretlenmez), boşsa sıradan checklist maddesi.
+    // Miktar yalnız sayısal hedefte anlamlı; doluysa adım kendi bağımsız
+    // hedefi olur (girişlerle dolar, işaretlenmez), boşsa sıradan checklist maddesi.
     const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
     const amount =
       goal.goal_type === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
@@ -250,6 +250,7 @@ export default function GoalDetailScreen() {
       unit: values.unit,
       deadline: values.deadline,
       remind_at: values.remind_at,
+      start_date: values.start_date,
       ...(values.current_value != null ? { current_value: values.current_value } : {}),
     });
     refreshReminder();
@@ -555,9 +556,11 @@ export default function GoalDetailScreen() {
               </View>
             )}
 
-            {/* — ADIMLAR — iki kip: sayısal hedefte miktarlı adım = ara-eşik
-                (girişlerle kümülatif dolar, İŞARETLENEMEZ, yüzde barı gösterir);
-                miktarsız adım = elle işaretlenen checklist (subtask deseni). */}
+            {/* — ADIMLAR — iki kip: sayısal hedefte miktarlı adım = KENDİ
+                BAĞIMSIZ hedefi (ör. "ilk 5km"/"ilk 20km"/"ilk 50km" — hepsi
+                current_value'dan aynı anda dolar, İŞARETLENEMEZ, yüzde barı
+                gösterir); miktarsız adım = elle işaretlenen checklist (subtask
+                deseni). Bkz. goalMilestoneRepo.milestoneViews. */}
             {activeTab === 'milestones' && (
               <View>
                 {stats.milestoneViews.map((v) => {
