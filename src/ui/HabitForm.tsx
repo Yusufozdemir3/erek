@@ -13,13 +13,14 @@
 // mantığı değişmez, edit akışı davranışsal olarak birebir korunur.
 
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { goalRepo } from '@/db';
 import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
 import { hmToDate, isQuotaSchedule, todayDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { DatePickerModal } from '@/ui/DatePickerModal';
+import { TimePickerModal } from '@/ui/TimePickerModal';
 import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -275,20 +276,12 @@ export function HabitForm({
     });
   };
 
-  // Android'de seçici tek seferlik bir dialog; iOS'ta satır içi kalır.
-  const onPickTime = (_event: unknown, picked?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (picked) setRemindAt(toHm(picked));
-  };
+  const onPickTime = (picked: Date) => setRemindAt(toHm(picked));
 
-  const onPickDate = (_event: unknown, picked?: Date) => {
-    const which = datePicker;
-    setDatePicker(Platform.OS === 'ios' ? which : null);
-    if (picked && which) {
-      const ymd = toYmd(picked);
-      if (which === 'start') setStartDate(ymd);
-      else setEndDate(ymd);
-    }
+  const onPickDate = (picked: Date) => {
+    const ymd = toYmd(picked);
+    if (datePicker === 'start') setStartDate(ymd);
+    else if (datePicker === 'end') setEndDate(ymd);
   };
 
   // "Kaç {birim} bir {hedef birimi} eder?" sorusunda kullanılan iki etiket.
@@ -400,15 +393,12 @@ export function HabitForm({
             )}
           </View>
 
-          {showPicker && (
-            <DateTimePicker
-              value={hmToDate(remindAt)}
-              mode="time"
-              is24Hour
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onPickTime}
-            />
-          )}
+          <TimePickerModal
+            visible={showPicker}
+            value={hmToDate(remindAt)}
+            onClose={() => setShowPicker(false)}
+            onConfirm={onPickTime}
+          />
         </>
       )}
 
@@ -568,22 +558,21 @@ export function HabitForm({
             )}
           </View>
 
-          {datePicker && (
-            <DateTimePicker
-              value={
-                (datePicker === 'start' ? startDate : endDate)
-                  ? new Date(`${datePicker === 'start' ? startDate : endDate}T00:00:00`)
-                  : new Date()
-              }
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              // Bitiş, başlangıçtan önce seçilemesin (submit'te ayrıca güvence var).
-              minimumDate={
-                datePicker === 'end' && startDate ? new Date(`${startDate}T00:00:00`) : undefined
-              }
-              onChange={onPickDate}
-            />
-          )}
+          <DatePickerModal
+            visible={!!datePicker}
+            value={
+              (datePicker === 'start' ? startDate : endDate)
+                ? new Date(`${datePicker === 'start' ? startDate : endDate}T00:00:00`)
+                : new Date()
+            }
+            // Bitiş, başlangıçtan önce seçilemesin (submit'te ayrıca güvence var).
+            minimumDate={datePicker === 'end' && startDate ? new Date(`${startDate}T00:00:00`) : undefined}
+            onClose={() => setDatePicker(null)}
+            onConfirm={(picked) => {
+              onPickDate(picked);
+              setDatePicker(null);
+            }}
+          />
         </>
       )}
 

@@ -1,20 +1,20 @@
 // TaskForm bileşen testi — bu oturumun iki özelliğini kapsar:
 //  (1) Son tarih ZORUNLU: oluşturmada varsayılan bugün, "Temizle" ile kaldırılamaz.
 //  (2) Saat isteğe bağlı: seçilince due_date'e gömülür; bitiş saati başlangıçtan
-//      SONRA ise geçerli. Tarih/saat seçici (DateTimePicker) setup-ui'de dublörlenir;
-//      seçim `global.__pickers.date/time(...)` ile simüle edilir.
+//      SONRA ise geçerli. Tarih/saat seçici (DatePickerModal/TimePickerModal)
+//      setup-ui'de dublörlenir; seçim `global.__pickers.date/time(date)` ile simüle edilir.
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { TaskForm } from '@/ui/TaskForm';
 import { todayDate } from '@/lib/helpers';
 import { renderUI } from '@/test/renderWithProviders';
 
-// Dublör seçicinin onChange'ini çağırıp bekleyen state'i boşaltır.
+// Dublör seçicinin onConfirm'ini çağırıp bekleyen state'i boşaltır.
 async function pick(mode: 'date' | 'time', date: Date) {
   const cb = (globalThis as any).__pickers?.[mode];
   if (!cb) throw new Error(`"${mode}" seçici monte değil`);
   await act(async () => {
-    cb({ type: 'set' }, date);
+    cb(date);
   });
 }
 

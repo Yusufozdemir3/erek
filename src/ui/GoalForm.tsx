@@ -15,11 +15,12 @@
 // Mimari kural: SQL yok — yalnızca çağıran repo yazar.
 
 import { useState, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GoalType } from '@/db';
 import { hmToDate, todayDate, toHm, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { DatePickerModal } from '@/ui/DatePickerModal';
+import { TimePickerModal } from '@/ui/TimePickerModal';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -127,15 +128,8 @@ export function GoalForm({
     });
   };
 
-  const onPickDate = (_event: unknown, picked?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (picked) setDeadline(toYmd(picked));
-  };
-
-  const onPickStartDate = (_event: unknown, picked?: Date) => {
-    setShowStartPicker(Platform.OS === 'ios');
-    if (picked) setStartDate(toYmd(picked));
-  };
+  const onPickDate = (picked: Date) => setDeadline(toYmd(picked));
+  const onPickStartDate = (picked: Date) => setStartDate(toYmd(picked));
 
   return (
     <>
@@ -232,15 +226,13 @@ export function GoalForm({
               <Text style={styles.dateBtnText}>{longDateLabel(startDate, lang, t('date.noDate'))}</Text>
             </Pressable>
           </View>
-          {showStartPicker && (
-            <DateTimePicker
-              value={new Date(`${startDate}T00:00:00`)}
-              mode="date"
-              maximumDate={new Date(`${todayDate()}T00:00:00`)}
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onChange={onPickStartDate}
-            />
-          )}
+          <DatePickerModal
+            visible={showStartPicker}
+            value={new Date(`${startDate}T00:00:00`)}
+            maximumDate={new Date(`${todayDate()}T00:00:00`)}
+            onClose={() => setShowStartPicker(false)}
+            onConfirm={onPickStartDate}
+          />
         </>
       )}
 
@@ -252,14 +244,12 @@ export function GoalForm({
         </Pressable>
       </View>
 
-      {showPicker && (
-        <DateTimePicker
-          value={new Date(`${deadline}T00:00:00`)}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          onChange={onPickDate}
-        />
-      )}
+      <DatePickerModal
+        visible={showPicker}
+        value={new Date(`${deadline}T00:00:00`)}
+        onClose={() => setShowPicker(false)}
+        onConfirm={onPickDate}
+      />
 
       {/* Günlük giriş hatırlatması — isteğe bağlı ("şu hedefe giriş yapmayı
           unutma" bildirimi her gün bu saatte gelir; bkz. scheduleGoalReminder). */}
@@ -275,18 +265,12 @@ export function GoalForm({
         )}
       </View>
 
-      {showTimePicker && (
-        <DateTimePicker
-          value={hmToDate(remindAt)}
-          mode="time"
-          is24Hour
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(_e: unknown, picked?: Date) => {
-            setShowTimePicker(Platform.OS === 'ios');
-            if (picked) setRemindAt(toHm(picked));
-          }}
-        />
-      )}
+      <TimePickerModal
+        visible={showTimePicker}
+        value={hmToDate(remindAt)}
+        onClose={() => setShowTimePicker(false)}
+        onConfirm={(picked) => setRemindAt(toHm(picked))}
+      />
 
       {/* Düzenlemede milestone checklist (anında yazılır, parent sağlar) — artık kullanılmıyor:
           adımlar app/goal/[id].tsx'te ayrı bir 'Adımlar' sekmesinde yönetiliyor. */}

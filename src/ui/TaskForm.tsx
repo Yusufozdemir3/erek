@@ -7,12 +7,13 @@
 // Mimari kural: SQL yok — yalnızca çağıran repo yazar.
 
 import { useState, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Priority, Recurrence } from '@/db';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
+import { DatePickerModal } from '@/ui/DatePickerModal';
+import { TimePickerModal } from '@/ui/TimePickerModal';
 import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -196,26 +197,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     });
   };
 
-  // Android'de seçici tek seferlik bir dialog; iOS'ta satır içi kalır.
-  const onPickDate = (_event: unknown, picked?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (picked) setDueDate(toYmd(picked));
-  };
-
-  const onPickTime = (_event: unknown, picked?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
-    if (picked) setDueTime(toHm(picked));
-  };
-
-  const onPickEndTime = (_event: unknown, picked?: Date) => {
-    setShowEndPicker(Platform.OS === 'ios');
-    if (picked) setEndTime(toHm(picked));
-  };
-
-  const onPickRemind = (_event: unknown, picked?: Date) => {
-    setShowRemindPicker(Platform.OS === 'ios');
-    if (picked) setRemindAt(toHm(picked));
-  };
+  const onPickDate = (picked: Date) => setDueDate(toYmd(picked));
+  const onPickTime = (picked: Date) => setDueTime(toHm(picked));
+  const onPickEndTime = (picked: Date) => setEndTime(toHm(picked));
+  const onPickRemind = (picked: Date) => setRemindAt(toHm(picked));
 
   return (
     <>
@@ -262,14 +247,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </Pressable>
       </View>
 
-      {showPicker && (
-        <DateTimePicker
-          value={new Date(`${dueDate}T00:00:00`)}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          onChange={onPickDate}
-        />
-      )}
+      <DatePickerModal
+        visible={showPicker}
+        value={new Date(`${dueDate}T00:00:00`)}
+        onClose={() => setShowPicker(false)}
+        onConfirm={onPickDate}
+      />
 
       {/* Saat — isteğe bağlı */}
       <Text style={styles.label}>{t('task.timeOptional')}</Text>
@@ -290,15 +273,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         )}
       </View>
 
-      {showTimePicker && (
-        <DateTimePicker
-          value={hmToDate(dueTime)}
-          mode="time"
-          is24Hour
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={onPickTime}
-        />
-      )}
+      <TimePickerModal
+        visible={showTimePicker}
+        value={hmToDate(dueTime)}
+        onClose={() => setShowTimePicker(false)}
+        onConfirm={onPickTime}
+      />
 
       {/* Bitiş saati — yalnız bir başlangıç saati seçilmişken anlamlı */}
       {dueTime && (
@@ -318,15 +298,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             <Text style={styles.hint}>{t('task.endAfterStart')}</Text>
           )}
 
-          {showEndPicker && (
-            <DateTimePicker
-              value={hmToDate(endTime ?? dueTime)}
-              mode="time"
-              is24Hour
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onPickEndTime}
-            />
-          )}
+          <TimePickerModal
+            visible={showEndPicker}
+            value={hmToDate(endTime ?? dueTime)}
+            onClose={() => setShowEndPicker(false)}
+            onConfirm={onPickEndTime}
+          />
         </>
       )}
 
@@ -344,15 +321,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
           </Pressable>
         )}
       </View>
-      {showRemindPicker && (
-        <DateTimePicker
-          value={hmToDate(remindAt)}
-          mode="time"
-          is24Hour
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={onPickRemind}
-        />
-      )}
+      <TimePickerModal
+        visible={showRemindPicker}
+        value={hmToDate(remindAt)}
+        onClose={() => setShowRemindPicker(false)}
+        onConfirm={onPickRemind}
+      />
 
       {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler /
           her X günde bir / her ay / her yıl. Tekrarlayan bir görev tamamlanınca
@@ -465,20 +439,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
               <Text style={styles.dayChipText}>{t('task.addDate')}</Text>
             </Pressable>
           </View>
-          {showYearDatePicker && (
-            <DateTimePicker
-              value={new Date(`${dueDate}T00:00:00`)}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onChange={(_e: unknown, picked?: Date) => {
-                setShowYearDatePicker(Platform.OS === 'ios');
-                if (picked) {
-                  const md = toYmd(picked).slice(5, 10); // yıl bileşeni atılır
-                  setYearDates((prev) => (prev.includes(md) ? prev : [...prev, md].sort()));
-                }
-              }}
-            />
-          )}
+          <DatePickerModal
+            visible={showYearDatePicker}
+            value={new Date(`${dueDate}T00:00:00`)}
+            onClose={() => setShowYearDatePicker(false)}
+            onConfirm={(picked) => {
+              const md = toYmd(picked).slice(5, 10); // yıl bileşeni atılır
+              setYearDates((prev) => (prev.includes(md) ? prev : [...prev, md].sort()));
+            }}
+          />
         </>
       )}
 
