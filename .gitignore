@@ -7,10 +7,17 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native derleme çıktıları
-ios/
-android/
+# Native derleme çıktıları (prebuild üretir) — KÖK dizinle sınırlı: bare
+# "android/" modules/*/android/ gibi elle yazılmış native modül kaynaklarını da
+# eşleştirip sessizce git'ten dışlıyordu (bir kez böyle bir modül kaybolmuştu).
+/ios/
+/android/
 *.orig.*
+
+# Yerel Expo modüllerinin (modules/*) kendi Gradle derleme çıktıları.
+modules/*/android/build/
+modules/*/android/.cxx/
+modules/*/android/.gradle/
 
 # Metro
 .metro-health-check*

@@ -1,7 +1,7 @@
 # Gizlilik Politikası / Privacy Policy
 
 **Erek** ("Uygulama")
-Yürürlük tarihi / Effective date: **10 Temmuz 2026 / July 10, 2026**
+Yürürlük tarihi / Effective date: **18 Temmuz 2026 / July 18, 2026**
 
 ---
 
@@ -9,7 +9,9 @@ Yürürlük tarihi / Effective date: **10 Temmuz 2026 / July 10, 2026**
 
 **Kısaca:** Erek verilerinizi yalnızca cihazınızda saklar. Hesap gerektirmez,
 internet gerektirmez, reklam ve takip içermez. **Hiçbir veriniz toplanmaz,
-sunucuya gönderilmez veya üçüncü taraflarla paylaşılmaz.**
+sunucuya gönderilmez veya üçüncü taraflarla paylaşılmaz** — TEK istisna,
+isteğe bağlı "AI ile hızlı ekleme" özelliğidir (bkz. Bölüm 3), o özellik
+varsayılan olarak KAPALIDIR.
 
 ### 1. Toplanan veriler
 
@@ -27,22 +29,36 @@ Kurduğunuz hatırlatmalar **cihazınızda yerel olarak** planlanır; içerikler
 hiçbir sunucuya gönderilmez. Bildirim izni istendiğinde reddedebilir veya sistem
 ayarlarından dilediğiniz zaman kapatabilirsiniz.
 
-### 3. Verilerin silinmesi
+### 3. AI ile hızlı ekleme (isteğe bağlı)
+
+Profil ekranından **isteğe bağlı olarak** açabileceğiniz bir özellik: görev
+eklerken serbest metin yazıp yapay zekanın görev bilgilerine (başlık, tarih,
+saat, öncelik) ayrıştırmasını isteyebilirsiniz. Bu özellik **varsayılan olarak
+KAPALIDIR.**
+
+Açtığınızda, yalnızca siz "Ayrıştır" düğmesine bastığınızda yazdığınız metin
+**Google'ın Gemini API'sine** işlenmek üzere gönderilir (aracı olarak kendi
+sunucumuzdan geçer, metin bizde saklanmaz). Ayrıştırma sonucu doğrudan
+kaydedilmez; formu önceden doldurur, siz gözden geçirip düzenler veya
+reddedersiniz. Bu özelliği hiç kullanmazsanız veya kapalı tutarsanız hiçbir
+metin cihazınızdan çıkmaz.
+
+### 4. Verilerin silinmesi
 
 Tüm veriniz cihazınızda olduğundan, **uygulamayı kaldırdığınızda** verileriniz de
 silinir. Ayrıca uygulama içinden istediğiniz kaydı tek tek silebilirsiniz.
 
-### 4. Çocuklar
+### 5. Çocuklar
 
 Uygulama 13 yaş altı çocuklara yönelik değildir ve bilerek onlardan veri
-toplamaz. (Zaten hiç kimseden veri toplamaz.)
+toplamaz.
 
-### 5. Değişiklikler
+### 6. Değişiklikler
 
 Bu politika güncellenirse yeni sürüm bu sayfada yayınlanır ve yürürlük tarihi
 güncellenir.
 
-### 6. İletişim
+### 7. İletişim
 
 Sorularınız için: **yazgandev@gmail.com**
 
@@ -52,7 +68,8 @@ Sorularınız için: **yazgandev@gmail.com**
 
 **In short:** Erek stores your data only on your device. It requires no account,
 no internet, and contains no ads or tracking. **We do not collect, transmit, or
-share any of your data.**
+share any of your data** — the ONE exception is the optional "AI quick add"
+feature (see Section 3), which is OFF by default.
 
 ### 1. Data we collect
 
@@ -70,21 +87,33 @@ Reminders you set are scheduled **locally on your device**; their content is not
 sent to any server. You may decline the notification permission or disable it in
 system settings at any time.
 
-### 3. Deleting your data
+### 3. AI quick add (optional)
+
+An **optional** feature you can turn on from the Profile screen: while adding a
+task, you can type free text and have AI parse it into task details (title,
+date, time, priority). This feature is **OFF by default.**
+
+When enabled, the text you type is sent to **Google's Gemini API** for
+processing only when you tap "Parse" (it passes through our own server as a
+relay; we do not store the text). The parsed result is never saved directly —
+it pre-fills the form for you to review, edit, or discard. If you never enable
+or use this feature, no text ever leaves your device.
+
+### 4. Deleting your data
 
 Because all your data lives on your device, uninstalling the app **deletes your
 data.** You can also delete individual records from within the app.
 
-### 4. Children
+### 5. Children
 
 The app is not directed at children under 13 and does not knowingly collect data
-from them (it collects no data from anyone).
+from them.
 
-### 5. Changes
+### 6. Changes
 
 Updates to this policy will be published on this page with a revised effective
 date.
 
-### 6. Contact
+### 7. Contact
 
 Questions: **yazgandev@gmail.com**

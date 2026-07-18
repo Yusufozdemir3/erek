@@ -101,6 +101,31 @@ describe('TaskForm', () => {
     );
   });
 
+  // Hatırlatma saati son tarihin kendi saatinden AYRI: kendi seçicisiyle set
+  // edilir, remind_at olarak gönderilir. Boşken "Hatırlatma yok" der (son tarih
+  // saatinin "Saat yok"undan ayrı etiket).
+  it('hatırlatma saati seçilince remind_at olarak gönderilir', async () => {
+    const onSubmit = jest.fn();
+    const { getByText, getByPlaceholderText } = await renderUI(
+      <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
+    );
+    fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'İlaç al');
+    fireEvent.press(getByText('Hatırlatma yok')); // hatırlatma seçicisini aç
+    await pick('time', new Date(2026, 0, 1, 8, 0));
+    fireEvent.press(getByText('Ekle'));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ remind_at: '08:00' }));
+  });
+
+  it('hatırlatma seçilmezse remind_at null gönderilir', async () => {
+    const onSubmit = jest.fn();
+    const { getByText, getByPlaceholderText } = await renderUI(
+      <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
+    );
+    fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Basit görev');
+    fireEvent.press(getByText('Ekle'));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ remind_at: null }));
+  });
+
   // Altı tekrar seçeneği formu kalabalıklaştırdığı için kapalı duruyor: düğme
   // yalnız seçili kipi gösterir, dokununca liste açılır, seçince tekrar kapanır.
   describe('tekrar seçici', () => {

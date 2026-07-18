@@ -31,6 +31,7 @@ function rowToTask(row: any): Task {
     end_time: row.end_time,
     priority: row.priority as Priority,
     recurrence: parseJson<Recurrence>(row.recurrence),
+    remind_at: row.remind_at,
     completed_at: row.completed_at,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
@@ -45,6 +46,7 @@ export interface CreateTaskInput {
   end_time?: string | null;
   priority?: Priority;
   recurrence?: Recurrence | null;
+  remind_at?: string | null;
 }
 
 export const taskRepo = {
@@ -55,8 +57,8 @@ export const taskRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO tasks
-       (id, user_id, title, due_date, end_time, priority, recurrence, completed_at, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0)`,
+       (id, user_id, title, due_date, end_time, priority, recurrence, remind_at, completed_at, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0)`,
       [
         id,
         input.user_id,
@@ -65,6 +67,7 @@ export const taskRepo = {
         input.end_time ?? null,
         input.priority ?? 'medium',
         toJson(input.recurrence ?? null),
+        input.remind_at ?? null,
         now,
       ]
     );
@@ -185,6 +188,7 @@ export const taskRepo = {
     if (fields.end_time !== undefined) { sets.push('end_time = ?'); vals.push(fields.end_time); }
     if (fields.priority !== undefined) { sets.push('priority = ?'); vals.push(fields.priority); }
     if (fields.recurrence !== undefined) { sets.push('recurrence = ?'); vals.push(toJson(fields.recurrence)); }
+    if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
     if (sets.length === 0) return;
     sets.push('updated_at = ?'); vals.push(nowIso());
     sets.push('synced = 0');

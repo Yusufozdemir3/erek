@@ -23,6 +23,16 @@ describe('create / getById / softDelete', () => {
     expect(taskRepo.getById(task.id)).toEqual(task);
     expect(task.priority).toBe('medium');
     expect(task.due_date).toBeNull();
+    expect(task.remind_at).toBeNull(); // varsayılan hatırlatma yok
+  });
+
+  it('remind_at oluşturmada yazılır ve güncellemede değişir/temizlenir', () => {
+    const task = createTask({ due_date: '2026-07-20', remind_at: '09:00' });
+    expect(taskRepo.getById(task.id)!.remind_at).toBe('09:00');
+    taskRepo.update(task.id, { remind_at: '18:30' });
+    expect(taskRepo.getById(task.id)!.remind_at).toBe('18:30');
+    taskRepo.update(task.id, { remind_at: null });
+    expect(taskRepo.getById(task.id)!.remind_at).toBeNull();
   });
 
   it('softDelete kaydı gizler', () => {

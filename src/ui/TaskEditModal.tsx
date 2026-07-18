@@ -104,8 +104,9 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       due_date: values.due_date,
       end_time: values.end_time,
       recurrence: values.recurrence,
+      remind_at: values.remind_at,
     });
-    // Tarih/saat değişmiş olabilir — hatırlatma güncel değere göre yeniden kurulur.
+    // Tarih/saat/hatırlatma değişmiş olabilir — hatırlatma güncel değere göre yeniden kurulur.
     const updated = taskRepo.getById(task.id);
     if (updated) {
       scheduleTaskReminder(updated).then((ok) => {
@@ -129,7 +130,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       {/* key: farklı göreve geçince form taze başlangıç değerleriyle kurulur */}
       <TaskForm
         key={task.id}
-        initial={{ title: task.title, priority: task.priority, due_date: task.due_date, end_time: task.end_time, recurrence: task.recurrence }}
+        initial={{ title: task.title, priority: task.priority, due_date: task.due_date, end_time: task.end_time, recurrence: task.recurrence, remind_at: task.remind_at }}
         submitLabel={tr('common.save')}
         onSubmit={handleSave}
         onDelete={handleDelete}

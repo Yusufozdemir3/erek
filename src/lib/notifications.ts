@@ -15,7 +15,9 @@ import type { Goal, Habit, Task } from '@/db';
 import { isScheduledOn, isWithinHabitDates, todayDate, toYmd } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
-import { getNotificationPrefs, soundContent } from '@/lib/notificationPrefs';
+import { getNotificationPrefs, soundContent, type NotificationPrefs } from '@/lib/notificationPrefs';
+import { ensureCustomSoundChannel } from '@/lib/customNotificationChannel';
+import type { Lang } from '@/i18n/translations';
 
 // Uygulama ön plandayken de bildirimin görünmesini sağlar. Bir kez kurulur.
 // Ses tercihi burada da (ön plan bildirimi) uygulanır; ana anahtar kapalıysa
@@ -34,14 +36,76 @@ export function setNotificationHandler(): void {
   });
 }
 
-// Android'de bildirimlerin gösterilebilmesi için bir kanal şarttır. Açılışta kurulur.
+// KANAL MİMARİSİ (Android): API 26+'ta ses ve titreşim bildirimin değil KANALIN
+// özelliğidir ve kanal bir kez oluşturulduktan sonra kod ile değiştirilemez
+// (yalnız kullanıcı sistem ayarından). Bu yüzden ses×titreşim'in dört
+// kombinasyonu için dört ayrı kanal tutuyoruz; her bildirim tercihe göre
+// channelIdFor ile doğru kanala yönlendirilir. Tercih değişince yeni kurulan
+// bildirimler yeni kanala gider (mevcut zamanlanmışlar reschedule ile taşınır).
+// (Silinip aynı id ile yeniden oluşturmak Android'de kullanıcının eski ayarını
+// GERİ getirir — bu yüzden dört kanal kalıcı, seçim schedule anında yapılır.)
+const REMINDER_CHANNELS = {
+  soundVibration: 'reminders-sv',
+  soundOnly: 'reminders-s',
+  vibrationOnly: 'reminders-v',
+  silent: 'reminders-silent',
+} as const;
+
+const VIBRATION_PATTERN = [0, 250, 250, 250];
+
+// Tercihe göre hangi kanala yönlendirileceği (yalnız Android'de anlamlı).
+// Özel ses seçiliyse (ve ses açıksa) native modülle (bkz. customNotificationChannel.ts)
+// o URI'ye bağlı bir kanal oluşturulur/doğrulanır; native modül yoksa (Expo Go /
+// henüz derlenmemiş build) sabit kanallara düşülür.
+function channelIdFor(prefs: NotificationPrefs, lang: Lang): string {
+  if (prefs.sound && prefs.customSoundUri) {
+    const name = translate(lang, prefs.vibration ? 'notif.channelCustomSoundVibration' : 'notif.channelCustomSound');
+    const id = ensureCustomSoundChannel(prefs.customSoundUri, prefs.vibration, name);
+    if (id) return id;
+  }
+  if (prefs.sound && prefs.vibration) return REMINDER_CHANNELS.soundVibration;
+  if (prefs.sound) return REMINDER_CHANNELS.soundOnly;
+  if (prefs.vibration) return REMINDER_CHANNELS.vibrationOnly;
+  return REMINDER_CHANNELS.silent;
+}
+
+// Android'de bildirimlerin gösterilebilmesi için kanal şarttır. Açılışta dört
+// kombinasyon kanalı da kurulur (idempotent). Eski tekil 'habit-reminders'
+// kanalı temizlenir (artık kullanılmıyor; sistem ayarında kalıntı görünmesin).
 export async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   const lang = await getStoredLang();
-  await Notifications.setNotificationChannelAsync('habit-reminders', {
+  const base = {
     name: translate(lang, 'notif.channelName'),
     importance: Notifications.AndroidImportance.DEFAULT,
+  };
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNELS.soundVibration, {
+    ...base,
+    name: translate(lang, 'notif.channelSoundVibration'),
+    sound: 'default',
+    enableVibrate: true,
+    vibrationPattern: VIBRATION_PATTERN,
   });
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNELS.soundOnly, {
+    ...base,
+    name: translate(lang, 'notif.channelSoundOnly'),
+    sound: 'default',
+    enableVibrate: false,
+  });
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNELS.vibrationOnly, {
+    ...base,
+    name: translate(lang, 'notif.channelVibrationOnly'),
+    sound: null,
+    enableVibrate: true,
+    vibrationPattern: VIBRATION_PATTERN,
+  });
+  await Notifications.setNotificationChannelAsync(REMINDER_CHANNELS.silent, {
+    ...base,
+    name: translate(lang, 'notif.channelSilent'),
+    sound: null,
+    enableVibrate: false,
+  });
+  await Notifications.deleteNotificationChannelAsync('habit-reminders').catch(() => {});
 }
 
 // İzin ister (zaten verilmişse tekrar sormaz). Verildiyse true döner.
@@ -86,6 +150,7 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   if (!granted) return false;
 
   const lang = await getStoredLang();
+  const channelId = channelIdFor(prefs, lang);
   const content = {
     title: translate(lang, 'notif.reminderTitle'),
     body: habit.title,
@@ -109,7 +174,7 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
           await Notifications.scheduleNotificationAsync({
             identifier: `${habit.id}#i${scheduledCount}`,
             content,
-            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId },
           });
           scheduledCount++;
         }
@@ -127,6 +192,7 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
           weekday: wd + 1, // expo: 1=Pazar ... 7=Cumartesi (JS getDay 0=Pazar)
           hour: time.hour,
           minute: time.minute,
+          channelId,
         },
       });
     }
@@ -139,6 +205,7 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: time.hour,
         minute: time.minute,
+        channelId,
       },
     });
   }
@@ -184,6 +251,7 @@ export async function scheduleTimerDone(habit: Habit, secondsFromNow: number): P
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: Math.max(1, Math.ceil(secondsFromNow)),
+      channelId: channelIdFor(prefs, lang),
     },
   });
 }
@@ -212,17 +280,22 @@ export async function rescheduleAllReminders(habits: Habit[]): Promise<void> {
   }
 }
 
-// GÖREV hatırlatması: yalnızca son tarihte SAAT de seçilmişse anlamlıdır — o
-// saatte tek seferlik bildirim kurar (identifier: `task:${id}`, habit/timer
-// id'leriyle çakışmaz). Saatsiz, tamamlanmış ya da vadesi geçmiş görevlerde
+// GÖREV hatırlatması: görevin remind_at'i (ayrı hatırlatma saati) doluysa, son
+// tarihin GÜNÜNDE o saatte tek seferlik bildirim kurar (identifier: `task:${id}`,
+// habit/timer id'leriyle çakışmaz). Saat son tarihin kendi saatinden BAĞIMSIZDIR.
+// Hatırlatmasız, son tarihsiz, tamamlanmış ya da hatırlatma anı geçmiş görevlerde
 // mevcut bildirim iptal edilir, yeni kurulmaz.
 export async function scheduleTaskReminder(task: Task): Promise<boolean> {
   await cancelTaskReminder(task.id);
 
   if (task.completed_at) return true;
-  if (!task.due_date || task.due_date.length <= 10) return true; // saatsiz görev
-  const when = new Date(task.due_date);
-  if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) return true; // geçmiş
+  if (!task.remind_at || !task.due_date) return true; // hatırlatma ya da son tarih yok
+  const time = parseHm(task.remind_at);
+  if (!time) return true; // bozuk saat — sessizce atla
+  const when = new Date(`${task.due_date.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(when.getTime())) return true;
+  when.setHours(time.hour, time.minute, 0, 0);
+  if (when.getTime() <= Date.now()) return true; // hatırlatma anı geçmiş
 
   const prefs = await getNotificationPrefs();
   if (!prefs.enabled || !prefs.taskReminders) return true; // kullanıcı bu türü kapatmış
@@ -238,7 +311,11 @@ export async function scheduleTaskReminder(task: Task): Promise<boolean> {
       body: task.title,
       ...soundContent(prefs),
     },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: when,
+      channelId: channelIdFor(prefs, lang),
+    },
   });
   return true;
 }
@@ -283,6 +360,7 @@ export async function scheduleGoalReminder(goal: Goal): Promise<boolean> {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour: time.hour,
       minute: time.minute,
+      channelId: channelIdFor(prefs, lang),
     },
   });
   return true;
@@ -313,7 +391,7 @@ export async function rescheduleAllGoalReminders(goals: Goal[]): Promise<void> {
 // yeniden kurar (bkz. rescheduleAllReminders — aynı gerekçe: cihaz/uygulama
 // yeniden başlaması programlanmış bildirimleri temizleyebilir).
 export async function rescheduleAllTaskReminders(tasks: Task[]): Promise<void> {
-  const withTime = tasks.filter((t) => !t.completed_at && t.due_date && t.due_date.length > 10);
+  const withTime = tasks.filter((t) => !t.completed_at && t.remind_at && t.due_date);
   if (withTime.length === 0) return;
 
   const perm = await Notifications.getPermissionsAsync();

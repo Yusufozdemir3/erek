@@ -15,7 +15,8 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { goalRepo, habitRepo, taskRepo, userRepo } from '@/db';
+import { userRepo } from '@/db';
+import { Feather } from '@expo/vector-icons';
 import {
   currentAuthUser,
   currentUid,
@@ -26,18 +27,8 @@ import {
   type AuthUser,
   type SyncResult,
 } from '@/sync';
-import {
-  rescheduleAllGoalReminders,
-  rescheduleAllReminders,
-  rescheduleAllTaskReminders,
-} from '@/lib/notifications';
-import {
-  DEFAULT_NOTIFICATION_PREFS,
-  getNotificationPrefs,
-  setNotificationPref,
-  type NotificationPrefs,
-} from '@/lib/notificationPrefs';
 import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
+import { isAiQuickAddEnabled, setAiQuickAddEnabled } from '@/lib/aiPrefs';
 import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -62,14 +53,8 @@ export default function ProfileScreen() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
   // Titreşim tercihi; cache açılışta yüklendiği için (bkz. _layout) ilk değer doğru.
   const [haptics, setHaptics] = useState(isHapticsEnabled);
-
-  // Kayıtlı bildirim tercihlerini bir kez yükle.
-  useEffect(() => {
-    getNotificationPrefs().then(setNotifPrefs);
-  }, []);
 
   // Titreşimi aç/kapa — kapatınca dokunuşlar anında sessizleşir (cache önce yazılır).
   const toggleHaptics = (value: boolean) => {
@@ -78,24 +63,15 @@ export default function ProfileScreen() {
     if (value) tapLight(); // açarken tek örnek titreşim: kullanıcı ne açtığını hisseder
   };
 
-  // Bir tercihi değiştir + kalıcılaştır + tüm alışkanlık/görev hatırlatmalarını
-  // DB'yi baz alarak hemen yeniden kur (kapatma anında iptal, açma anında kurulum
-  // scheduleHabitReminder/scheduleTaskReminder'ın kendi cancel-then-maybe-schedule
-  // mantığıyla otomatik olur). Aktif bir zamanlayıcının "süre doldu" bildirimi bu
-  // yeniden kurulumun dışındadır — TimerProvider ayrı bir bağlamda yaşar.
-  const toggleNotifPref = (key: keyof NotificationPrefs, value: boolean) => {
-    const next = { ...notifPrefs, [key]: value };
-    setNotifPrefs(next);
-    setNotificationPref(key, value).catch(() => {});
-    rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
-      console.warn('[Bildirim] Tercih sonrası yeniden kurulum başarısız:', e)
-    );
-    rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
-      console.warn('[Bildirim] Tercih sonrası görev yeniden kurulumu başarısız:', e)
-    );
-    rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
-      console.warn('[Bildirim] Tercih sonrası hedef yeniden kurulumu başarısız:', e)
-    );
+  // AI ile hızlı ekleme — varsayılan KAPALI, AsyncStorage'dan async okunur
+  // (haptics'teki gibi senkron cache gerekmez; bu ekran açıldığında bir kere yeter).
+  const [aiQuickAdd, setAiQuickAdd] = useState(false);
+  useEffect(() => {
+    isAiQuickAddEnabled().then(setAiQuickAdd);
+  }, []);
+  const toggleAiQuickAdd = (value: boolean) => {
+    setAiQuickAdd(value);
+    setAiQuickAddEnabled(value).catch(() => {});
   };
 
   // E-posta hesabıyla bağlı mı? (anonim oturum "bağlı" sayılmaz)
@@ -288,48 +264,34 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>{t('profile.hapticsHint')}</Text>
       </View>
 
-      {/* Bildirim tercihleri */}
+      {/* Yapay zeka — görev eklerken doğal dil ayrıştırma. Varsayılan KAPALI:
+          açıkken yazdığın metin bu özelliği kullandığında Google Gemini'ye gider
+          (bkz. aiPrefs.ts + aiTaskParser.ts + gizlilik politikası). */}
       <View style={[styles.card, { marginTop: 16 }]}>
-        <Text style={styles.cardTitle}>{t('profile.notifications')}</Text>
+        <Text style={styles.cardTitle}>{t('profile.aiQuickAdd')}</Text>
         <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>{t('profile.notifEnabled')}</Text>
+          <Text style={styles.switchLabel}>{t('profile.aiQuickAddEnabled')}</Text>
           <Switch
-            value={notifPrefs.enabled}
-            onValueChange={(v) => toggleNotifPref('enabled', v)}
+            value={aiQuickAdd}
+            onValueChange={toggleAiQuickAdd}
             trackColor={{ false: colors.border, true: colors.primary }}
             thumbColor={colors.card}
           />
         </View>
-
-        {(['habitReminders', 'taskReminders', 'goalReminders', 'timerDone', 'sound'] as const).map((key) => (
-          <View
-            key={key}
-            style={[styles.switchRow, styles.switchRowSpaced, !notifPrefs.enabled && styles.rowDisabled]}
-          >
-            <Text style={styles.switchLabel}>
-              {t(
-                key === 'habitReminders'
-                  ? 'profile.notifHabitReminders'
-                  : key === 'taskReminders'
-                    ? 'profile.notifTaskReminders'
-                    : key === 'goalReminders'
-                      ? 'profile.notifGoalReminders'
-                      : key === 'timerDone'
-                        ? 'profile.notifTimerDone'
-                        : 'profile.notifSound'
-              )}
-            </Text>
-            <Switch
-              value={notifPrefs[key]}
-              onValueChange={(v) => toggleNotifPref(key, v)}
-              disabled={!notifPrefs.enabled}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.card}
-            />
-          </View>
-        ))}
-        <Text style={styles.hint}>{t('profile.notifSoundHint')}</Text>
+        <Text style={styles.hint}>{t('profile.aiQuickAddHint')}</Text>
       </View>
+
+      {/* Bildirimler — içerik kendi sayfasında (ses/titreşim ayrı denetimlerle
+          büyüdü). Ok'lu satıra dokununca açılır. */}
+      <Pressable
+        style={[styles.card, styles.navRow, { marginTop: 16 }]}
+        onPress={() => router.push('/notifications')}
+        accessibilityRole="button"
+        accessibilityLabel={t('profile.notifications')}
+      >
+        <Text style={[styles.cardTitle, { marginBottom: 0 }]}>{t('profile.notifications')}</Text>
+        <Feather name="chevron-right" size={20} color={colors.faint} />
+      </Pressable>
 
       {/* Hesap + Bulut senkron — kapalı test (MVP) sürümünde gizli.
           Parola sıfırlama eklenince ACCOUNTS_ENABLED true yapılacak. */}
@@ -446,6 +408,9 @@ const makeStyles = (c: Colors) =>
       padding: 16,
     },
     cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12 },
+    // Başka sayfaya götüren ok'lu satır (ör. Bildirimler). cardTitle'ın alt
+    // boşluğunu satır içinde sıfırlarız ki başlık dikey ortalı dursun.
+    navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     // Kart içi ikinci başlık (ör. Görünüm kartındaki "Koyu tema stili").
     subCardTitle: { fontSize: 13, fontWeight: '700', color: c.muted, marginTop: 16, marginBottom: 10 },
     muted: { fontSize: 14, color: c.muted, lineHeight: 20 },

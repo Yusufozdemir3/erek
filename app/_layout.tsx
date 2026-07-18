@@ -68,6 +68,7 @@ function ThemedStack() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="account" options={{ headerShown: true, title: 'Hesap', presentation: 'modal' }} />
         <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
+        <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
         <Stack.Screen name="habit/[id]" />
         <Stack.Screen name="goal/[id]" />
       </Stack>

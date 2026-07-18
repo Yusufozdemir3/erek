@@ -5,6 +5,10 @@
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { subtaskRepo, taskRepo, userRepo } from '@/db';
+
+// Bu suite gerçek SQLite + tam render yapıyor; jest paralel yükü altında
+// varsayılan 5sn timeout ara sıra sıyrılıyordu (mantık hatası değil, yavaşlık).
+jest.setTimeout(20000);
 import { todayDate } from '@/lib/helpers';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { renderUI } from '@/test/renderWithProviders';

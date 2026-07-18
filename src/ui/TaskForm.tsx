@@ -53,6 +53,7 @@ export interface TaskFormValues {
   due_date: string | null; // "YYYY-MM-DD" | "YYYY-MM-DDTHH:MM:SS" | null
   end_time: string | null;  // "HH:MM" | null — yalnız başlangıç saati varken anlamlı
   recurrence: Recurrence | null; // null = tek seferlik; tamamlanınca ileri sarılır
+  remind_at: string | null; // "HH:MM" | null — son tarih gününde hatırlatma saati
   // Yalnız oluşturmada (enableSubtaskDraft): görevle birlikte yazılacak alt
   // görev başlıkları. Düzenlemede alt görevler anında yazıldığı için buradan
   // gelmez (undefined).
@@ -60,7 +61,7 @@ export interface TaskFormValues {
 }
 
 interface Props {
-  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null }>;
+  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_at: string | null }>;
   submitLabel: string;                  // "Kaydet" | "Ekle"
   onSubmit: (values: TaskFormValues) => void;
   onDelete?: () => void;                // yalnız düzenlemede: Sil düğmesi
@@ -88,6 +89,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
+  // Hatırlatma saati — son tarihin GÜNÜNDE bu saatte bildirim (due_date'in kendi
+  // saatinden bağımsız; alışkanlık remind_at deseni). null = hatırlatma yok.
+  const [remindAt, setRemindAt] = useState<string | null>(initial?.remind_at ?? null);
   // Tekrar: kuraldan başlangıç modunu çıkar.
   const initRec = initial?.recurrence ?? null;
   const initRepeatMode: RepeatMode = !initRec
@@ -126,6 +130,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [showPicker, setShowPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showRemindPicker, setShowRemindPicker] = useState(false);
   const [showYearDatePicker, setShowYearDatePicker] = useState(false);
   // Oluşturmada taslak alt görevler (henüz görev yok → string listesi).
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
@@ -186,6 +191,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       due_date,
       end_time,
       recurrence,
+      remind_at: remindAt,
       subtasks: enableSubtaskDraft ? draftSubs : undefined,
     });
   };
@@ -204,6 +210,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const onPickEndTime = (_event: unknown, picked?: Date) => {
     setShowEndPicker(Platform.OS === 'ios');
     if (picked) setEndTime(toHm(picked));
+  };
+
+  const onPickRemind = (_event: unknown, picked?: Date) => {
+    setShowRemindPicker(Platform.OS === 'ios');
+    if (picked) setRemindAt(toHm(picked));
   };
 
   return (
@@ -317,6 +328,30 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             />
           )}
         </>
+      )}
+
+      {/* Hatırlatma — son tarihin GÜNÜNDE seçilen saatte bildirim (son tarihin
+          kendi saatinden bağımsız; alışkanlık hatırlatması deseni). Boşsa bildirim
+          kurulmaz. Tekrarlayan görevde her tekrarın gününde çalar. */}
+      <Text style={styles.label}>{t('task.reminder')}</Text>
+      <View style={styles.row}>
+        <Pressable style={styles.dateBtn} onPress={() => setShowRemindPicker(true)}>
+          <Text style={styles.dateBtnText}>{remindAt ? remindAt : t('task.noReminder')}</Text>
+        </Pressable>
+        {remindAt && (
+          <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
+            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
+          </Pressable>
+        )}
+      </View>
+      {showRemindPicker && (
+        <DateTimePicker
+          value={hmToDate(remindAt)}
+          mode="time"
+          is24Hour
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onPickRemind}
+        />
       )}
 
       {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler /

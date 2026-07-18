@@ -57,6 +57,7 @@ export interface Task extends SyncFields {
   end_time: string | null;       // "HH:MM"; aynı günün bitiş saati, null = yok
   priority: Priority;
   recurrence: Recurrence | null; // null = tek seferlik
+  remind_at: string | null;      // "09:00"; son tarih GÜNÜNDE bu saatte hatırlat (null = hatırlatma yok). due_date saatinden bağımsız.
   completed_at: string | null;   // null = tamamlanmadı
 }
 

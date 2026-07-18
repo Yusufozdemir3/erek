@@ -61,12 +61,14 @@ create table if not exists public.tasks (
   end_time     text,
   priority     text not null default 'medium',
   recurrence   text,
+  remind_at    text,                       -- "HH:MM"; son tarih gününde hatırlatma (due_date saatinden bağımsız)
   completed_at text,
   updated_at   timestamptz not null,
   deleted_at   timestamptz
 );
--- Mevcut kurulumlar için idempotent kolon eklemesi (bitiş saati).
+-- Mevcut kurulumlar için idempotent kolon eklemesi (bitiş saati + hatırlatma saati).
 alter table public.tasks add column if not exists end_time text;
+alter table public.tasks add column if not exists remind_at text;
 
 create table if not exists public.habit_logs (
   id         uuid primary key,

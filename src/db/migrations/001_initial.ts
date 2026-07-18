@@ -222,6 +222,20 @@ ALTER TABLE goal_milestones ADD COLUMN due_date TEXT;
 ALTER TABLE goals ADD COLUMN remind_at TEXT;
 `;
 
+// Migration 014: görevlere AYRI hatırlatma saati (tasks.remind_at "HH:MM").
+// Eskiden görev hatırlatması örtüktü: due_date'e SAAT gömülüyse o saatte bildirim
+// kurulurdu, ayrı bir kontrol yoktu. Artık hatırlatma açıkça remind_at ile
+// belirlenir (habits.remind_at deseni) ve son tarihin kendi saatinden BAĞIMSIZDIR
+// (görev 14:00'te vadeli olup 09:00'da hatırlatabilir). due_date'in saati yalnız
+// görüntü/sıralama içindir (TimeBadge, DUE_ORDER_SQL); bildirimi artık o belirlemez.
+// GERİYE UYUM: saatli mevcut görevler eskiden gömülü saatte bildirim aldığı için
+// remind_at o saatle doldurulur — hatırlatmaları kesilmesin.
+export const migration014 = `
+ALTER TABLE tasks ADD COLUMN remind_at TEXT;
+UPDATE tasks SET remind_at = substr(due_date, 12, 5)
+  WHERE due_date IS NOT NULL AND length(due_date) > 10;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -237,4 +251,5 @@ export const migrations = [
   { version: 11, sql: migration011 },
   { version: 12, sql: migration012 },
   { version: 13, sql: migration013 },
+  { version: 14, sql: migration014 },
 ];
