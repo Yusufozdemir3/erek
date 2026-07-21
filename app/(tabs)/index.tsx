@@ -6,20 +6,20 @@
 // Mimari kural: SQL yok; yalnızca taskRepo / habitRepo çağrılır.
 
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { habitRepo, taskRepo } from '@/db';
+import { habitRepo, reminderRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
-import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
+import { cancelTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
+import { DatePickerModal } from '@/ui/DatePickerModal';
 import { DailySummary } from '@/ui/DailySummary';
 import { EmptyState } from '@/ui/EmptyState';
 import { HabitToggle } from '@/ui/HabitToggle';
@@ -100,8 +100,11 @@ export default function TodayScreen() {
     // yüzden güncel duruma bakarız: tamamlanmamışsa (geri açıldı ya da ileri
     // sardı) hatırlatmayı yeni değere göre kur, tamamlandıysa iptal et.
     const after = taskRepo.getById(t.id);
-    if (after && after.completed_at === null) scheduleTaskReminder(after);
-    else cancelTaskReminder(t.id);
+    if (after && after.completed_at === null) {
+      scheduleTaskReminders(after, reminderRepo.listByEntity('task', after.id));
+    } else {
+      cancelTaskReminders(t.id);
+    }
     reload();
   };
 
@@ -133,10 +136,7 @@ export default function TodayScreen() {
     refreshWidget(user.id);
   };
 
-  const onPickDate = (_e: unknown, picked?: Date) => {
-    setShowPicker(Platform.OS === 'ios');
-    if (picked) setSelectedDate(toYmd(picked));
-  };
+  const onPickDate = (picked: Date) => setSelectedDate(toYmd(picked));
 
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
@@ -160,14 +160,12 @@ export default function TodayScreen() {
           </Text>
         </Pressable>
 
-        {showPicker && (
-          <DateTimePicker
-            value={new Date(`${selectedDate}T00:00:00`)}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            onChange={onPickDate}
-          />
-        )}
+        <DatePickerModal
+          visible={showPicker}
+          value={new Date(`${selectedDate}T00:00:00`)}
+          onClose={() => setShowPicker(false)}
+          onConfirm={onPickDate}
+        />
 
         {/* Günün ilerleme özeti — yalnızca bugün için anlamlı. */}
         {isToday && (

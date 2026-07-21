@@ -102,7 +102,13 @@ export function TimePickerModal({ visible, value, onClose, onConfirm, title, min
       <View style={styles.header}>
         <View style={styles.headerSpacer} />
         <Text style={styles.title}>{title ?? t('time.pickTitle')}</Text>
-        <Pressable style={styles.modeBtn} onPress={toggleMode} hitSlop={8}>
+        <Pressable
+          style={styles.modeBtn}
+          onPress={toggleMode}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t(mode === 'wheel' ? 'time.switchToManual' : 'time.switchToWheel')}
+        >
           <Feather name={mode === 'wheel' ? 'edit-2' : 'clock'} size={16} color={colors.primary} />
         </Pressable>
       </View>
@@ -159,10 +165,20 @@ export function TimePickerModal({ visible, value, onClose, onConfirm, title, min
       )}
 
       <View style={styles.footer}>
-        <Pressable style={styles.cancelBtn} onPress={onClose}>
+        <Pressable
+          style={styles.cancelBtn}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.cancel')}
+        >
           <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
         </Pressable>
-        <Pressable style={styles.confirmBtn} onPress={confirm}>
+        <Pressable
+          style={styles.confirmBtn}
+          onPress={confirm}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.done')}
+        >
           <Text style={styles.confirmBtnText}>{t('common.done')}</Text>
         </Pressable>
       </View>

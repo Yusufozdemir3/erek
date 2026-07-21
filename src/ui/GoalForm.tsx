@@ -17,10 +17,10 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { GoalType } from '@/db';
-import { hmToDate, todayDate, toHm, toYmd } from '@/lib/helpers';
+import { isTimeUnit, TIME_UNIT, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
-import { TimePickerModal } from '@/ui/TimePickerModal';
+import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -34,11 +34,15 @@ export interface GoalFormValues {
   // Yalnız düzenleme + numeric'te anlamlı; oluşturmada null (repo 0 varsayar).
   current_value: number | null;
   deadline: string;
-  remind_at: string | null; // "08:30" günlük giriş hatırlatması; null = yok
+  remind_times: string[]; // günlük giriş hatırlatma saatleri (0 ya da daha fazla)
   // Yalnız numeric'te anlamlı (tempo/projeksiyon sıfır günü — goalProjection.ts);
   // milestone hedefte null (o tipte tempo hesabı yok).
   start_date: string | null;
   milestones?: string[]; // yalnız enableMilestoneDraft'ta doldurulur
+  // Yalnız düzenleme + numeric'te anlamlı: "Mevcut değer" elle değiştirilirse
+  // farkı goal_entries'e de yazıp tempo/projeksiyona dahil et mi? Varsayılan
+  // false (salt düzeltme — bkz. GoalForm'daki checkbox açıklaması).
+  log_manual_change?: boolean;
 }
 
 interface Props {
@@ -49,7 +53,7 @@ interface Props {
     unit: string | null;
     current_value: number;
     deadline: string | null;
-    remind_at: string | null;
+    remind_times: string[];
     start_date: string | null;
   }>;
   submitLabel: string;
@@ -82,21 +86,38 @@ export function GoalForm({
 
   const [title, setTitle] = useState(initial?.title ?? '');
   const [goalType, setGoalType] = useState<GoalType>(fixedType ?? 'numeric');
-  const [target, setTarget] = useState(initial?.target_value != null ? String(initial.target_value) : '');
-  const [unit, setUnit] = useState(initial?.unit ?? '');
-  const [current, setCurrent] = useState(initial?.current_value != null ? String(initial.current_value) : '');
+  // Sayısal hedefte birim türü: 'amount' (serbest birim metni) | 'time' (süre —
+  // target/current_value SANİYE saklanır, giriş dakika olarak yapılır; bkz.
+  // helpers.TIME_UNIT). Yalnız OLUŞTURMADA seçilir (goalType'ın kendisi gibi) —
+  // düzenlemede değiştirmek mevcut current_value'nun birimini kaydırırdı.
+  const initialIsTime = isTimeUnit(initial?.unit);
+  const [unitMode, setUnitMode] = useState<'amount' | 'time'>(initialIsTime ? 'time' : 'amount');
+  const [target, setTarget] = useState(
+    initial?.target_value != null
+      ? String(initialIsTime ? initial.target_value / 60 : initial.target_value)
+      : ''
+  );
+  const [unit, setUnit] = useState(initialIsTime ? '' : initial?.unit ?? '');
+  const [current, setCurrent] = useState(
+    initial?.current_value != null
+      ? String(initialIsTime ? initial.current_value / 60 : initial.current_value)
+      : ''
+  );
+  // "Mevcut değer"i elle değiştirmek varsayılan olarak salt DÜZELTMEdir (tempo/
+  // projeksiyonu etkilemez); kullanıcı geriye dönük gerçek ilerleme giriyorsa
+  // bunu işaretleyip farkı girdi geçmişine de yazdırabilir (bkz. dosya sonu handleEditSubmit).
+  const [logManualChange, setLogManualChange] = useState(false);
   // Her hedefte artık zorunlu bir son tarih var — oluşturmada bugün varsayılan
   // (TaskForm'daki due date kararının aynısı), düzenlemede mevcut değer.
   const [deadline, setDeadline] = useState(initial?.deadline ?? todayDate());
-  // Günlük giriş hatırlatma saati ("08:30") — HabitForm'daki remind_at deseni.
-  const [remindAt, setRemindAt] = useState<string | null>(initial?.remind_at ?? null);
+  // Günlük giriş hatırlatma saatleri — HabitForm'daki çoklu hatırlatma deseni.
+  const [remindTimes, setRemindTimes] = useState<string[]>(initial?.remind_times ?? []);
   // Tempo/projeksiyon hesabının sıfır günü (bkz. goalProjection.ts) — yalnız
   // numeric'te anlamlı. Oluşturmada bugün varsayılan (tam da tasarım kararı:
   // "bugün açtığım hedefin ilk günü bugün").
   const [startDate, setStartDate] = useState(initial?.start_date ?? todayDate());
   const [showPicker, setShowPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [draftMilestones, setDraftMilestones] = useState<string[]>([]);
   const [newMilestone, setNewMilestone] = useState('');
 
@@ -109,22 +130,38 @@ export function GoalForm({
   const removeDraftMilestone = (i: number) =>
     setDraftMilestones((prev) => prev.filter((_, idx) => idx !== i));
 
+  // Sayısal hedefte miktar+birim zorunlu — aksi halde target_value/unit null
+  // kalıp ilerleme çubuğu hiç anlamlı olmayan, "hedefsiz" bir hedef oluşurdu
+  // (HabitForm'daki nicel alışkanlık kuralıyla aynı, bkz. trackingTargetValid).
+  const isTime = goalType === 'numeric' && unitMode === 'time';
+  const targetNumPreview = parseFloat(target.replace(',', '.'));
+  const canSubmit =
+    goalType !== 'numeric' ||
+    (isTime
+      ? Number.isFinite(targetNumPreview) && targetNumPreview > 0
+      : Number.isFinite(targetNumPreview) && targetNumPreview > 0 && unit.trim().length > 0);
+
   const submit = () => {
     const tt = title.trim();
-    if (!tt || !deadline) return;
+    if (!tt || !deadline || !canSubmit) return;
     const numeric = goalType === 'numeric';
     const targetNum = parseFloat(target.replace(',', '.'));
     const currentNum = parseFloat(current.replace(',', '.'));
+    // Süre modunda dakika olarak girilir, saniyeye çevrilip saklanır (habit
+    // timer'daki aynı desen).
+    const targetVal = Number.isFinite(targetNum) ? (isTime ? Math.round(targetNum * 60) : targetNum) : null;
+    const currentVal = Number.isFinite(currentNum) ? (isTime ? Math.round(currentNum * 60) : currentNum) : null;
     onSubmit({
       title: tt,
       goal_type: goalType,
-      target_value: numeric && Number.isFinite(targetNum) ? targetNum : null,
-      unit: numeric && unit.trim() ? unit.trim() : null,
-      current_value: numeric && isEditing && Number.isFinite(currentNum) ? currentNum : null,
+      target_value: numeric ? targetVal : null,
+      unit: numeric ? (isTime ? TIME_UNIT : unit.trim() ? unit.trim() : null) : null,
+      current_value: numeric && isEditing ? currentVal : null,
       deadline,
-      remind_at: remindAt,
+      remind_times: remindTimes,
       start_date: numeric ? startDate : null,
       milestones: enableMilestoneDraft ? draftMilestones : undefined,
+      log_manual_change: numeric && isEditing ? logManualChange : undefined,
     });
   };
 
@@ -164,6 +201,8 @@ export function GoalForm({
                   key={opt.value}
                   style={[styles.chip, sel && styles.chipSelected]}
                   onPress={() => setGoalType(opt.value)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: sel }}
                 >
                   <Text style={[styles.chipText, sel && styles.chipTextSelected]}>{t(opt.labelKey)}</Text>
                 </Pressable>
@@ -176,44 +215,109 @@ export function GoalForm({
       {/* Sayısal alanlar */}
       {goalType === 'numeric' && (
         <>
-          <View style={styles.row}>
-            <View style={styles.col}>
-              <Text style={styles.label}>{t('goal.targetValue')}</Text>
+          {/* Birim türü — yalnız oluşturmada seçilir (goalType gibi SABİT olur;
+              düzenlemede değiştirmek mevcut current_value'nun birimini kaydırırdı). */}
+          {!isEditing && (
+            <>
+              <Text style={styles.label}>{t('goal.unitTypeLabel')}</Text>
+              <View style={styles.row}>
+                <Pressable
+                  style={[styles.chip, unitMode === 'amount' && styles.chipSelected]}
+                  onPress={() => setUnitMode('amount')}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: unitMode === 'amount' }}
+                >
+                  <Text style={[styles.chipText, unitMode === 'amount' && styles.chipTextSelected]}>
+                    {t('goal.unitTypeAmount')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.chip, unitMode === 'time' && styles.chipSelected]}
+                  onPress={() => setUnitMode('time')}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: unitMode === 'time' }}
+                >
+                  <Text style={[styles.chipText, unitMode === 'time' && styles.chipTextSelected]}>
+                    {t('goal.unitTypeTime')}
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
+
+          {isTime ? (
+            <>
+              <Text style={styles.label}>{t('goal.durationTargetLabel')}</Text>
               <TextInput
                 style={styles.input}
                 value={target}
                 onChangeText={setTarget}
                 keyboardType="numeric"
-                placeholder={t('goal.targetExample')}
+                placeholder={t('habit.durationPlaceholder')}
                 placeholderTextColor={colors.faint}
                 maxLength={NUMBER_MAX_LEN}
               />
+              <Text style={styles.hint}>{t('goal.durationHint')}</Text>
+            </>
+          ) : (
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>{t('goal.targetValue')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={target}
+                  onChangeText={setTarget}
+                  keyboardType="numeric"
+                  placeholder={t('goal.targetExample')}
+                  placeholderTextColor={colors.faint}
+                  maxLength={NUMBER_MAX_LEN}
+                />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>{t('goal.unit')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={unit}
+                  onChangeText={setUnit}
+                  placeholder={t('goal.unitExample')}
+                  placeholderTextColor={colors.faint}
+                  maxLength={UNIT_MAX_LEN}
+                />
+              </View>
             </View>
-            <View style={styles.col}>
-              <Text style={styles.label}>{t('goal.unit')}</Text>
-              <TextInput
-                style={styles.input}
-                value={unit}
-                onChangeText={setUnit}
-                placeholder={t('goal.unitExample')}
-                placeholderTextColor={colors.faint}
-                maxLength={UNIT_MAX_LEN}
-              />
-            </View>
-          </View>
+          )}
 
           {isEditing && (
             <>
-              <Text style={styles.label}>{t('goal.currentValue')}</Text>
+              <Text style={styles.label}>
+                {isTime ? t('goal.durationCurrentLabel') : t('goal.currentValue')}
+              </Text>
               <TextInput
                 style={styles.input}
                 value={current}
                 onChangeText={setCurrent}
                 keyboardType="numeric"
-                placeholder={t('goal.currentExample')}
+                placeholder={isTime ? t('habit.durationPlaceholder') : t('goal.currentExample')}
                 placeholderTextColor={colors.faint}
                 maxLength={NUMBER_MAX_LEN}
               />
+              {/* Varsayılan: bu alan salt DÜZELTMEdir, tempo/projeksiyonu etkilemez
+                  (bkz. GoalFormValues.log_manual_change yorumu). İşaretlenirse fark
+                  girdi geçmişine de yazılır — geriye dönük gerçek ilerleme girme
+                  senaryosu için (ör. birkaç gündür loglanmamış okuma). */}
+              <Pressable
+                style={styles.checkRow}
+                onPress={() => setLogManualChange((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: logManualChange }}
+                accessibilityLabel={t('goal.logManualChange')}
+              >
+                <View style={[styles.checkBox, logManualChange && styles.checkBoxOn]}>
+                  {logManualChange && <Text style={styles.checkMark}>✓</Text>}
+                </View>
+                <Text style={styles.checkLabel}>{t('goal.logManualChange')}</Text>
+              </Pressable>
+              <Text style={styles.hint}>{t('goal.logManualChangeHint')}</Text>
             </>
           )}
 
@@ -222,7 +326,12 @@ export function GoalForm({
               goalProjection.ts). Bugünden ileri bir tarih seçilemez. */}
           <Text style={styles.label}>{t('goal.startDateLabel')}</Text>
           <View style={styles.row}>
-            <Pressable style={styles.dateBtn} onPress={() => setShowStartPicker(true)}>
+            <Pressable
+              style={styles.dateBtn}
+              onPress={() => setShowStartPicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('goal.startDateLabel')}
+            >
               <Text style={styles.dateBtnText}>{longDateLabel(startDate, lang, t('date.noDate'))}</Text>
             </Pressable>
           </View>
@@ -239,7 +348,12 @@ export function GoalForm({
       {/* Son tarih — artık her iki tipte de zorunlu, kaldırılamaz */}
       <Text style={styles.label}>{t('goal.deadlineLabel')}</Text>
       <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
+        <Pressable
+          style={styles.dateBtn}
+          onPress={() => setShowPicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('goal.deadlineLabel')}
+        >
           <Text style={styles.dateBtnText}>{longDateLabel(deadline, lang, t('date.noDate'))}</Text>
         </Pressable>
       </View>
@@ -251,26 +365,9 @@ export function GoalForm({
         onConfirm={onPickDate}
       />
 
-      {/* Günlük giriş hatırlatması — isteğe bağlı ("şu hedefe giriş yapmayı
-          unutma" bildirimi her gün bu saatte gelir; bkz. scheduleGoalReminder). */}
-      <Text style={styles.label}>{t('goal.remindLabel')}</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
-          <Text style={styles.dateBtnText}>{remindAt ?? t('habit.noReminder')}</Text>
-        </Pressable>
-        {remindAt && (
-          <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
-            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <TimePickerModal
-        visible={showTimePicker}
-        value={hmToDate(remindAt)}
-        onClose={() => setShowTimePicker(false)}
-        onConfirm={(picked) => setRemindAt(toHm(picked))}
-      />
+      {/* Günlük giriş hatırlatmaları — isteğe bağlı, birden fazla eklenebilir
+          ("şu hedefe giriş yapmayı unutma" bildirimi bu saatlerde gelir). */}
+      <ReminderListEditor label={t('goal.remindLabel')} times={remindTimes} onChange={setRemindTimes} />
 
       {/* Düzenlemede milestone checklist (anında yazılır, parent sağlar) — artık kullanılmıyor:
           adımlar app/goal/[id].tsx'te ayrı bir 'Adımlar' sekmesinde yönetiliyor. */}
@@ -284,7 +381,12 @@ export function GoalForm({
             <View key={`${m}-${i}`} style={styles.subRow}>
               <View style={styles.subBullet} />
               <Text style={styles.subTitle}>{m}</Text>
-              <Pressable onPress={() => removeDraftMilestone(i)} hitSlop={10}>
+              <Pressable
+                onPress={() => removeDraftMilestone(i)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t('goal.removeMilestoneA11y', { title: m })}
+              >
                 <Text style={styles.subDelete}>×</Text>
               </Pressable>
             </View>
@@ -301,7 +403,12 @@ export function GoalForm({
               returnKeyType="done"
               maxLength={TITLE_MAX_LEN}
             />
-            <Pressable style={styles.subAddBtn} onPress={addDraftMilestone}>
+            <Pressable
+              style={styles.subAddBtn}
+              onPress={addDraftMilestone}
+              accessibilityRole="button"
+              accessibilityLabel={t('goal.addMilestone')}
+            >
               <Text style={styles.subAddText}>＋</Text>
             </Pressable>
           </View>
@@ -311,7 +418,13 @@ export function GoalForm({
       {/* Eylemler — Sil yalnız düzenlemede (onDelete varsa) */}
       <View style={styles.actions}>
         {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
-        <Pressable style={styles.saveBtn} onPress={submit}>
+        <Pressable
+          style={[styles.saveBtn, !canSubmit && styles.saveBtnDisabled]}
+          onPress={submit}
+          disabled={!canSubmit}
+          accessibilityRole="button"
+          accessibilityLabel={submitLabel}
+        >
           <Text style={styles.saveBtnText}>{submitLabel}</Text>
         </Pressable>
       </View>
@@ -348,6 +461,20 @@ const makeStyles = (c: Colors) =>
     },
     row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
     col: { flex: 1 },
+    hint: { fontSize: 12, color: c.faint, marginTop: -6, marginBottom: 12 },
+    checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+    checkBox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: c.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkBoxOn: { backgroundColor: c.primary, borderColor: c.primary },
+    checkMark: { color: c.onAccent, fontSize: 12, fontWeight: '800' },
+    checkLabel: { flex: 1, fontSize: 13, color: c.text },
     chip: {
       flex: 1,
       alignItems: 'center',
@@ -373,6 +500,7 @@ const makeStyles = (c: Colors) =>
     clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
     clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
     actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+    saveBtnDisabled: { opacity: 0.4 },
     saveBtn: {
       flex: 1,
       alignItems: 'center',

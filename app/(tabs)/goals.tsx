@@ -18,7 +18,8 @@ import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { goalMilestoneRepo, goalRepo, milestoneViews } from '@/db';
 import type { Goal } from '@/db';
-import { cancelGoalReminder } from '@/lib/notifications';
+import { fmtClock, isTimeUnit } from '@/lib/helpers';
+import { cancelGoalReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { ProfileButton } from '@/ui/ProfileButton';
@@ -67,7 +68,7 @@ export default function GoalsScreen() {
   // (sağa açılan panel) — burada doğrudan siliniyor.
   const remove = (id: string) => {
     goalRepo.softDelete(id);
-    cancelGoalReminder(id).catch(() => {});
+    cancelGoalReminders(id).catch(() => {});
     reload();
   };
 
@@ -138,9 +139,13 @@ export default function GoalsScreen() {
                       <View style={[styles.progressFill, { width: `${Math.round(ratio * 100)}%` }]} />
                     </View>
                     <Text style={[styles.goalMeta, styles.standaloneMeta]}>
-                      {goal.current_value}
-                      {goal.target_value != null ? ` / ${goal.target_value}` : ''}
-                      {goal.unit ? ` ${goal.unit}` : ''}
+                      {isTimeUnit(goal.unit)
+                        ? `${fmtClock(goal.current_value)}${
+                            goal.target_value != null ? ` / ${fmtClock(goal.target_value)}` : ''
+                          }`
+                        : `${goal.current_value}${
+                            goal.target_value != null ? ` / ${goal.target_value}` : ''
+                          }${goal.unit ? ` ${goal.unit}` : ''}`}
                     </Text>
                   </>
                 )}

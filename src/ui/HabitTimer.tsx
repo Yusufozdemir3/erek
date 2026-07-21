@@ -34,9 +34,9 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const timer = useTimer();
-  const running = timer.isRunning(habitId);
+  const running = timer.isRunning('habit', habitId);
   // Çalışıyorsa canlı değer; değilse DB'deki birikmiş miktar.
-  const live = running ? timer.liveSeconds(habitId) ?? amount : amount;
+  const live = running ? timer.liveSeconds('habit', habitId) ?? amount : amount;
   const reached = target > 0 && live >= target;
 
   const [editing, setEditing] = useState(false);
@@ -93,7 +93,7 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
               timer.pause();
             } else {
               tapMedium();
-              timer.start(habitId);
+              timer.start('habit', habitId);
             }
           }}
           hitSlop={6}
@@ -110,7 +110,7 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
         <Pressable
           onPress={() => {
             tapLight();
-            timer.reset(habitId);
+            timer.reset('habit', habitId);
           }}
           hitSlop={10}
           accessibilityRole="button"

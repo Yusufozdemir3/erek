@@ -8,7 +8,8 @@ const T0 = 1_750_000_000_000; // sabit başlangıç anı (epoch ms)
 
 function timer(over: Partial<ActiveTimer> = {}): ActiveTimer {
   return {
-    habitId: 'h1',
+    kind: 'habit',
+    targetId: 'h1',
     date: '2026-07-08',
     startedAt: T0,
     baseSeconds: 0,

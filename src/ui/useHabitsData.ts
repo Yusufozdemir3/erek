@@ -4,7 +4,7 @@
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { goalRepo, habitRepo } from '@/db';
+import { goalRepo, habitRepo, reminderRepo } from '@/db';
 import type { HabitKind } from '@/db';
 import { buildScheduleLabels, isQuotaSchedule, lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
@@ -22,7 +22,7 @@ export interface HabitListItem {
   id: string;
   title: string;
   kind: HabitKind;
-  remindAt: string | null; // "HH:MM" hatırlatma saati
+  reminderTimes: string[]; // "HH:MM" hatırlatma saatleri (0 ya da daha fazla)
   icon: string | null;
   color: string | null;
   days: string | null;     // "Pzt·Çar·Cum" (belirli günlerse), her günse null
@@ -48,6 +48,8 @@ export function useHabitsData(userId: string) {
     const labels = buildScheduleLabels(t, (md) => shortDate(`2000-${md}`, lang));
     // Bağlı hedef başlıklarını tek sorguda map'le (alışkanlık başına ayrı sorgu yok).
     const goalTitles = new Map(goalRepo.listByUser(userId).map((g) => [g.id, g.title]));
+    // Hatırlatma saatlerini tek sorguda topla (alışkanlık başına ayrı sorgu yok).
+    const reminderMap = reminderRepo.mapByType('habit');
     setHabits(
       habitRepo.listByUser(userId).map((h) => {
         // Son 60 günün tamamlanan tarihlerini tek sorguda topla, haftayı ondan üret.
@@ -61,7 +63,7 @@ export function useHabitsData(userId: string) {
           id: h.id,
           title: h.title,
           kind: h.kind,
-          remindAt: h.remind_at,
+          reminderTimes: (reminderMap.get(h.id) ?? []).map((r) => r.time),
           icon: h.icon,
           color: h.color,
           days: h.schedule ? scheduleLabel(h.schedule, labels) : null,

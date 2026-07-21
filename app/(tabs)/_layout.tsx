@@ -13,6 +13,8 @@ import { Tabs } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { AddFab, AddFabButton } from '@/ui/AddFab';
 import { AddSheet, type Step } from '@/ui/AddSheet';
+import { TimerPicker } from '@/ui/TimerPicker';
+import { TimerStrip } from '@/ui/TimerStrip';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 
@@ -22,6 +24,9 @@ export default function TabsLayout() {
   // Kare ＋ butonunun "swing" menüsü (fan) ve seçilince açılan ekleme formu.
   const [fanOpen, setFanOpen] = useState(false);
   const [sheetStep, setSheetStep] = useState<Step | null>(null);
+  // Aynı butona UZUN BASINCA açılan bağımsız sayaç seçici (bkz. TimerPicker) —
+  // kısa dokunuşun Görev·Alışkanlık·Hedef menüsüyle çakışmaması için ayrı state.
+  const [timerPickerOpen, setTimerPickerOpen] = useState(false);
 
   return (
     <>
@@ -53,7 +58,11 @@ export default function TabsLayout() {
           options={{
             title: '',
             tabBarButton: () => (
-              <AddFabButton open={fanOpen} onPress={() => setFanOpen((o) => !o)} />
+              <AddFabButton
+                open={fanOpen}
+                onPress={() => setFanOpen((o) => !o)}
+                onLongPress={() => setTimerPickerOpen(true)}
+              />
             ),
           }}
         />
@@ -91,6 +100,11 @@ export default function TabsLayout() {
         initialStep={sheetStep ?? 'menu'}
         onClose={() => setSheetStep(null)}
       />
+
+      <TimerPicker visible={timerPickerOpen} onClose={() => setTimerPickerOpen(false)} />
+
+      {/* Yalnız bir zamanlayıcı çalışırken görünür — bkz. TimerStrip. */}
+      <TimerStrip />
     </>
   );
 }

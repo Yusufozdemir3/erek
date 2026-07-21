@@ -1,34 +1,42 @@
-// Zamanlayıcı alışkanlıkların CANLI sayaç motoru (Aşama B).
-// Aynı anda tek bir zamanlayıcı çalışır. Çalışan durum AsyncStorage'da tutulur;
-// böylece uygulama kapansa/arka plana atılsa da süre gerçek duvar-saatiyle işler
-// (startedAt damgasından hesaplanır). Duraklat/bitir'de biriken saniye
-// habit_logs.amount'a yazılır (habitRepo.incrementAmount). Hedefe ulaşınca
-// completed=1 olur AMA zamanlayıcı DURMAZ — kullanıcı isterse hedefi aşarak
-// çalışmaya devam edebilir (celebratedRef, oturum başına tek seferlik
-// commit+haptik+bildirim-iptali sağlar). Bildirim hedef anına kurulur.
+// Zamanlayıcı motoru — hem alışkanlık (kind='timer') hem süre-ölçümlü sayısal
+// hedef (unit=TIME_UNIT, bkz. helpers.ts) için ORTAK (Aşama C: bağımsız sayaç).
+// Aynı anda tek bir zamanlayıcı çalışır — türü/hedefi ne olursa olsun. Çalışan
+// durum AsyncStorage'da tutulur; böylece uygulama kapansa/arka plana atılsa da
+// süre gerçek duvar-saatiyle işler (startedAt damgasından hesaplanır).
+// Duraklat/bitir'de biriken saniye ilgili yere yazılır: habit → habitRepo.
+// incrementAmount (habit_logs.amount), goal → goalRepo.addProgress (current_value
+// + goal_entries, tempo/projeksiyon otomatik faydalanır). Hedefe ulaşınca
+// completed=1/current_value=target olur AMA zamanlayıcı DURMAZ — kullanıcı
+// isterse hedefi aşarak çalışmaya devam edebilir (celebratedRef, oturum başına
+// tek seferlik commit+haptik+bildirim-iptali sağlar). Bildirim hedef anına kurulur.
 //
 // Tek doğru kaynak yine SQLite: bu modül yalnızca "şu an ne kadar süre geçti"nin
 // geçici (çalışan) durumunu ve tik'i yönetir; kalıcı toplam DB'dedir.
 
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { habitRepo } from '@/db';
-import { todayDate } from '@/lib/helpers';
+import { goalRepo, habitRepo } from '@/db';
+import { isTimeUnit, todayDate } from '@/lib/helpers';
 import { notifySuccess } from '@/lib/haptics';
 import { cancelTimerDone, scheduleTimerDone } from '@/lib/notifications';
 // Saf zaman matematiği ayrı modülde (test edilebilir); gece yarısı kararı da orada.
-import { commitDelta, elapsedOf, isFinished, type ActiveTimer } from '@/lib/timerLogic';
+import { commitDelta, elapsedOf, isFinished, type ActiveTimer, type TimerKind } from '@/lib/timerLogic';
 import { useAppData } from '@/ui/AppData';
 
 const ACTIVE_KEY = 'timer:active';
 
 interface TimerApi {
-  isRunning: (habitId: string) => boolean;
-  // Aktif alışkanlık için canlı saniye (base + geçen, hedefi aşabilir); değilse null.
-  liveSeconds: (habitId: string) => number | null;
-  start: (habitId: string) => void;
+  isRunning: (kind: TimerKind, id: string) => boolean;
+  // Aktif hedef için canlı saniye (base + geçen, hedefi aşabilir); değilse null.
+  liveSeconds: (kind: TimerKind, id: string) => number | null;
+  // Şu an çalışan zamanlayıcının türü/id'si — mini durum şeridi için (bkz. TimerStrip).
+  active: () => { kind: TimerKind; id: string } | null;
+  start: (kind: TimerKind, id: string) => void;
   pause: () => void;
-  reset: (habitId: string) => void;
+  // Yalnızca 'habit' için anlamlı (bugünkü birikimi sıfırlar); 'goal' hedefler
+  // toplam/kalıcı ilerleme tuttuğundan (günlük değil) sıfırlama desteklenmez —
+  // bilinçli kısıtlama, yanlışlıkla ay/yıllık ilerlemeyi silmeyi önler.
+  reset: (kind: TimerKind, id: string) => void;
 }
 
 const TimerContext = createContext<TimerApi | null>(null);
@@ -55,11 +63,14 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     else AsyncStorage.removeItem(ACTIVE_KEY);
   };
 
-  // Aktif süreyi kalıcılaştır: geçen saniyeyi DB'ye ekle, bildirimi iptal et.
+  // Aktif süreyi kalıcılaştır: geçen saniyeyi ilgili yere ekle, bildirimi iptal et.
   const commit = useCallback((a: ActiveTimer) => {
     const delta = commitDelta(a);
-    if (delta > 0) habitRepo.incrementAmount(a.habitId, a.date, delta, a.targetSeconds);
-    cancelTimerDone(a.habitId);
+    if (delta > 0) {
+      if (a.kind === 'habit') habitRepo.incrementAmount(a.targetId, a.date, delta, a.targetSeconds);
+      else goalRepo.addTimeProgress(a.targetId, delta);
+    }
+    cancelTimerDone(a.targetId);
   }, []);
 
   const stopActive = useCallback(() => {
@@ -76,8 +87,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [commit, notifyDataChanged]);
 
   // Açılışta kalıcı durumu geri yükle. Kapalıyken hedef dolduysa ilerlemeyi
-  // hemen DB'ye yaz (tamamlandı sayılsın, bağlı hedefe +1 işlensin) ama
-  // zamanlayıcıyı DURDURMA — kullanıcı isterse çalışmaya devam etsin.
+  // hemen DB'ye yaz (tamamlandı sayılsın) ama zamanlayıcıyı DURDURMA —
+  // kullanıcı isterse çalışmaya devam etsin.
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(ACTIVE_KEY);
@@ -127,30 +138,45 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [active, commit, notifyDataChanged]);
 
   const start = useCallback(
-    (habitId: string) => {
-      const habit = habitRepo.getById(habitId);
-      if (!habit || habit.kind !== 'timer' || !habit.target_amount) return;
-      const target = habit.target_amount;
-      const date = todayDate();
-      const base = habitRepo.getAmountOn(habitId, date);
+    (kind: TimerKind, targetId: string) => {
+      let base: number;
+      let target: number;
+      let title: string;
+      if (kind === 'habit') {
+        const habit = habitRepo.getById(targetId);
+        if (!habit || habit.kind !== 'timer' || !habit.target_amount) return;
+        target = habit.target_amount;
+        base = habitRepo.getAmountOn(targetId, todayDate());
+        title = habit.title;
+      } else {
+        const goal = goalRepo.getById(targetId);
+        if (!goal || goal.goal_type !== 'numeric' || !isTimeUnit(goal.unit) || !goal.target_value) return;
+        target = goal.target_value;
+        base = goal.current_value;
+        title = goal.title;
+      }
       // Not: hedefe zaten ulaşılmış olsa bile başlatılabilir — kullanıcı hedefi
       // aştıktan sonra da devam edebilir (bkz. celebratedRef).
       // Tek aktif zamanlayıcı: başkası çalışıyorsa önce onu kaydet.
-      if (activeRef.current && activeRef.current.habitId !== habitId) {
+      if (
+        activeRef.current &&
+        (activeRef.current.kind !== kind || activeRef.current.targetId !== targetId)
+      ) {
         commit(activeRef.current);
         notifyDataChanged();
       }
       celebratedRef.current = base >= target; // zaten tamamlanmışsa yeniden kutlama.
       const a: ActiveTimer = {
-        habitId,
-        date,
+        kind,
+        targetId,
+        date: todayDate(),
         startedAt: Date.now(),
         baseSeconds: base,
         targetSeconds: target,
       };
       setActive(a);
       persist(a);
-      if (base < target) scheduleTimerDone(habit, target - base);
+      if (base < target) scheduleTimerDone(targetId, title, target - base);
     },
     [commit, notifyDataChanged]
   );
@@ -158,30 +184,32 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const pause = useCallback(() => stopActive(), [stopActive]);
 
   const reset = useCallback(
-    (habitId: string) => {
+    (kind: TimerKind, targetId: string) => {
+      if (kind !== 'habit') return; // bkz. TimerApi.reset yorumu — hedeflerde desteklenmez
       const date = todayDate();
       // Çalışıyorsa kaydetmeden durdur (sıfırlayacağız).
-      if (activeRef.current?.habitId === habitId) {
-        cancelTimerDone(habitId);
+      if (activeRef.current?.kind === 'habit' && activeRef.current.targetId === targetId) {
+        cancelTimerDone(targetId);
         setActive(null);
         persist(null);
       }
-      const current = habitRepo.getAmountOn(habitId, date);
+      const current = habitRepo.getAmountOn(targetId, date);
       if (current > 0) {
-        const habit = habitRepo.getById(habitId);
-        habitRepo.incrementAmount(habitId, date, -current, habit?.target_amount ?? null);
+        const habit = habitRepo.getById(targetId);
+        habitRepo.incrementAmount(targetId, date, -current, habit?.target_amount ?? null);
       }
       notifyDataChanged();
     },
     [notifyDataChanged]
   );
 
-  const isRunning = (habitId: string) => active?.habitId === habitId;
-  const liveSeconds = (habitId: string) =>
-    active?.habitId === habitId ? elapsedOf(active) : null;
+  const isRunning = (kind: TimerKind, id: string) => active?.kind === kind && active?.targetId === id;
+  const liveSeconds = (kind: TimerKind, id: string) =>
+    isRunning(kind, id) ? elapsedOf(active!) : null;
+  const activeFn = () => (active ? { kind: active.kind, id: active.targetId } : null);
 
   return (
-    <TimerContext.Provider value={{ isRunning, liveSeconds, start, pause, reset }}>
+    <TimerContext.Provider value={{ isRunning, liveSeconds, active: activeFn, start, pause, reset }}>
       {children}
     </TimerContext.Provider>
   );

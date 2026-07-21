@@ -162,13 +162,27 @@ export default function NotificationsScreen() {
             </Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {prefs.customSoundUri && (
-                <Pressable disabled={off} onPress={removeCustomSound} hitSlop={8}>
+                <Pressable
+                  disabled={off}
+                  onPress={removeCustomSound}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('notifications.customSoundRemove')}
+                >
                   <Text style={[styles.linkBtn, { color: colors.danger }]}>
                     {t('notifications.customSoundRemove')}
                   </Text>
                 </Pressable>
               )}
-              <Pressable disabled={off} onPress={choosePickedSound} hitSlop={8}>
+              <Pressable
+                disabled={off}
+                onPress={choosePickedSound}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t(
+                  prefs.customSoundUri ? 'notifications.customSoundChange' : 'notifications.customSoundChoose'
+                )}
+              >
                 <Text style={styles.linkBtn}>
                   {t(prefs.customSoundUri ? 'notifications.customSoundChange' : 'notifications.customSoundChoose')}
                 </Text>

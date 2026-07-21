@@ -253,6 +253,38 @@ UPDATE goals SET start_date = (
 ) WHERE start_date IS NULL;
 `;
 
+// Migration 016: çoklu hatırlatma. habits/tasks/goals.remind_at (tekil "HH:MM")
+// yerine bir varlığın SIFIR ya da DAHA FAZLA hatırlatma saati olabilsin diye
+// ayrı bir reminders tablosu (subtasks/goal_milestones ile aynı desen; sahiplik
+// entity_type+entity_id üzerinden, RLS ebeveyn tablo gibi değil kendi başına —
+// bkz. supabase/schema.sql). Eski remind_at değeri olan her kayıt için TEK bir
+// satır geriye dönük eklenir (veri kaybı yok); remind_at kolonları DB'de kalır
+// ama artık hiçbir kod tarafından okunmaz/yazılmaz (bkz. notifications.ts).
+export const migration016 = `
+CREATE TABLE IF NOT EXISTS reminders (
+  id          TEXT PRIMARY KEY NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id   TEXT NOT NULL,
+  time        TEXT NOT NULL,
+  updated_at  TEXT NOT NULL,
+  deleted_at  TEXT,
+  synced      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_reminders_entity ON reminders(entity_type, entity_id);
+
+INSERT INTO reminders (id, entity_type, entity_id, time, updated_at, deleted_at, synced)
+SELECT lower(hex(randomblob(16))), 'habit', id, remind_at, updated_at, NULL, 0
+FROM habits WHERE remind_at IS NOT NULL;
+
+INSERT INTO reminders (id, entity_type, entity_id, time, updated_at, deleted_at, synced)
+SELECT lower(hex(randomblob(16))), 'task', id, remind_at, updated_at, NULL, 0
+FROM tasks WHERE remind_at IS NOT NULL;
+
+INSERT INTO reminders (id, entity_type, entity_id, time, updated_at, deleted_at, synced)
+SELECT lower(hex(randomblob(16))), 'goal', id, remind_at, updated_at, NULL, 0
+FROM goals WHERE remind_at IS NOT NULL;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -270,4 +302,5 @@ export const migrations = [
   { version: 13, sql: migration013 },
   { version: 14, sql: migration014 },
   { version: 15, sql: migration015 },
+  { version: 16, sql: migration016 },
 ];

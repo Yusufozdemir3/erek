@@ -59,6 +59,11 @@ const TABLES: TableCfg[] = [
     hasUserId: true,
   },
   {
+    table: 'reminders',
+    cols: ['id', 'entity_type', 'entity_id', 'time', 'updated_at', 'deleted_at'],
+    hasUserId: false, // sahiplik entity_type'a bağlı ebeveyn (habit/task/goal) üzerinden (RLS de öyle)
+  },
+  {
     table: 'habit_logs',
     cols: ['id', 'habit_id', 'log_date', 'completed', 'amount', 'updated_at'],
     hasUserId: false,

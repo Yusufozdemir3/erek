@@ -10,8 +10,9 @@ import { habitRepo } from './repositories/habitRepo';
 import { goalRepo } from './repositories/goalRepo';
 import { goalMilestoneRepo, milestoneViews } from './repositories/goalMilestoneRepo';
 import { goalEntryRepo } from './repositories/goalEntryRepo';
+import { reminderRepo } from './repositories/reminderRepo';
 
-export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews };
+export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews, reminderRepo };
 export type { MilestoneView } from './repositories/goalMilestoneRepo';
 export type {
   User,
@@ -27,6 +28,8 @@ export type {
   GoalType,
   HabitKind,
   GoalContribution,
+  Reminder,
+  ReminderEntityType,
 } from '../types/models';
 
 // Uygulama açılışında bir kez çağrılır. Şemayı kurar, anonim kullanıcıyı garantiler.

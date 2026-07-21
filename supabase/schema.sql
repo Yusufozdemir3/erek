@@ -121,6 +121,20 @@ create table if not exists public.goal_entries (
 
 alter table public.habit_logs add column if not exists amount double precision not null default 0;
 
+-- Çoklu hatırlatma. Bir alışkanlık/görev/hedefin (entity_type ayrımı) SIFIR ya
+-- da DAHA FAZLA hatırlatma saati olabilir — yerel migration016'nın karşılığı.
+-- Eski tekil remind_at kolonları (goals/habits/tasks) yukarıda dokunulmadan
+-- kalır (artık okunmuyor); bu tablo tek doğru kaynak.
+create table if not exists public.reminders (
+  id          uuid primary key,
+  entity_type text not null,       -- 'habit' | 'task' | 'goal'
+  entity_id   uuid not null,
+  time        text not null,       -- "HH:MM"
+  updated_at  timestamptz not null,
+  deleted_at  timestamptz
+);
+create index if not exists idx_reminders_entity on public.reminders(entity_type, entity_id);
+
 -- Senkron pull'u updated_at'e göre filtreler; indeksle.
 create index if not exists idx_goals_updated  on public.goals(updated_at);
 create index if not exists idx_habits_updated on public.habits(updated_at);
@@ -129,6 +143,7 @@ create index if not exists idx_logs_updated   on public.habit_logs(updated_at);
 create index if not exists idx_subtasks_updated on public.subtasks(updated_at);
 create index if not exists idx_goal_milestones_updated on public.goal_milestones(updated_at);
 create index if not exists idx_goal_entries_updated on public.goal_entries(updated_at);
+create index if not exists idx_reminders_updated on public.reminders(updated_at);
 
 -- ROW LEVEL SECURITY -------------------------------------------------------
 alter table public.goals      enable row level security;
@@ -138,6 +153,7 @@ alter table public.habit_logs enable row level security;
 alter table public.subtasks   enable row level security;
 alter table public.goal_milestones enable row level security;
 alter table public.goal_entries enable row level security;
+alter table public.reminders   enable row level security;
 
 -- Policy'ler idempotent: önce varsa düşür, sonra yeniden kur. Böylece bu dosya
 -- güvenle yeniden çalıştırılabilir ("already exists" hatası vermez, yarım kalmaz).
@@ -207,6 +223,22 @@ create policy "own goal_entries" on public.goal_entries
     where g.id = goal_entries.goal_id and g.user_id = auth.uid()
   ));
 
+-- reminders'ın user_id'si yok; sahiplik entity_type'a göre bağlı olduğu
+-- alışkanlık/görev/hedef üzerinden (üç olası ebeveynden biri).
+drop policy if exists "own reminders" on public.reminders;
+create policy "own reminders" on public.reminders
+  for all
+  using (
+    (entity_type = 'habit' and exists (select 1 from public.habits h where h.id = reminders.entity_id and h.user_id = auth.uid()))
+    or (entity_type = 'task' and exists (select 1 from public.tasks t where t.id = reminders.entity_id and t.user_id = auth.uid()))
+    or (entity_type = 'goal' and exists (select 1 from public.goals g where g.id = reminders.entity_id and g.user_id = auth.uid()))
+  )
+  with check (
+    (entity_type = 'habit' and exists (select 1 from public.habits h where h.id = reminders.entity_id and h.user_id = auth.uid()))
+    or (entity_type = 'task' and exists (select 1 from public.tasks t where t.id = reminders.entity_id and t.user_id = auth.uid()))
+    or (entity_type = 'goal' and exists (select 1 from public.goals g where g.id = reminders.entity_id and g.user_id = auth.uid()))
+  );
+
 -- HESAP SİLME ---------------------------------------------------------------
 -- Uygulama içi "Hesabı sil" (Google Play hesap-silme zorunluluğu). İstemci
 -- kendi auth kullanıcısını doğrudan silemez (admin API service_role ister ve
@@ -227,6 +259,10 @@ begin
     raise exception 'delete_account: oturum yok';
   end if;
   -- Çocuk tablolar önce (bulut şemasında FK kısıtı yok ama sıra temiz olsun).
+  delete from public.reminders where
+    (entity_type = 'habit' and entity_id in (select id from public.habits where user_id = uid))
+    or (entity_type = 'task' and entity_id in (select id from public.tasks where user_id = uid))
+    or (entity_type = 'goal' and entity_id in (select id from public.goals where user_id = uid));
   delete from public.habit_logs where habit_id in (select id from public.habits where user_id = uid);
   delete from public.subtasks   where task_id  in (select id from public.tasks  where user_id = uid);
   delete from public.goal_milestones where goal_id in (select id from public.goals where user_id = uid);

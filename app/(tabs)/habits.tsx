@@ -11,7 +11,7 @@ import { habitRepo } from '@/db';
 import type { Habit } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
-import { cancelHabitReminder } from '@/lib/notifications';
+import { cancelHabitReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
 import { EmptyState } from '@/ui/EmptyState';
@@ -60,7 +60,7 @@ export default function HabitsScreen() {
 
   const removeHabit = (h: HabitListItem) => {
     habitRepo.softDelete(h.id);
-    cancelHabitReminder(h.id);
+    cancelHabitReminders(h.id);
     reload();
   };
 
@@ -118,12 +118,12 @@ export default function HabitsScreen() {
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
                     {h.title}
                   </Text>
-                  {(h.days || h.remindAt || h.period || h.goalTitle) && (
+                  {(h.days || h.reminderTimes.length > 0 || h.period || h.goalTitle) && (
                     <Text style={styles.remind}>
                       {[
                         h.days,
                         h.period,
-                        h.remindAt ? `🔔 ${h.remindAt}` : null,
+                        h.reminderTimes.length > 0 ? `🔔 ${h.reminderTimes.join(', ')}` : null,
                         h.goalTitle ? `🎯 ${h.goalTitle}` : null,
                       ]
                         .filter(Boolean)

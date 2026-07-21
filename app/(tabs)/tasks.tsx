@@ -9,11 +9,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
-import { subtaskRepo, taskRepo } from '@/db';
+import { reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
+import { cancelTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { PriorityMark } from '@/ui/PriorityMark';
@@ -68,8 +68,11 @@ export default function TasksScreen() {
     // sarabilir (hâlâ tamamlanmamış, yeni tarihli). Güncel duruma göre karar
     // ver: tamamlanmamışsa hatırlatmayı yeni değere göre kur, tamamlandıysa iptal.
     const after = taskRepo.getById(t.id);
-    if (after && after.completed_at === null) scheduleTaskReminder(after);
-    else cancelTaskReminder(t.id);
+    if (after && after.completed_at === null) {
+      scheduleTaskReminders(after, reminderRepo.listByEntity('task', after.id));
+    } else {
+      cancelTaskReminders(t.id);
+    }
     // Yeniden sırala (tamamlanan alta iner); her kart Animated.View + LinearTransition
     // olduğu için konum değişimi yumuşakça animasyonlanır (Fabric'te de çalışır).
     reload();
@@ -77,7 +80,7 @@ export default function TasksScreen() {
 
   const removeTask = (t: Task) => {
     taskRepo.softDelete(t.id);
-    cancelTaskReminder(t.id);
+    cancelTaskReminders(t.id);
     reload();
   };
 

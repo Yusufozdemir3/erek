@@ -19,6 +19,12 @@ modules/*/android/build/
 modules/*/android/.cxx/
 modules/*/android/.gradle/
 
+# Test kapsam raporu (jest --coverage üretir; makineye özel, sürümlenmez)
+coverage/
+
+# Supabase CLI'nin yerel bağlantı durumu (proje ref'i — makineye özel)
+supabase/.temp/
+
 # Metro
 .metro-health-check*
 

@@ -10,6 +10,7 @@ import { goalRepo, habitRepo, initDataLayer, taskRepo, userRepo } from '@/db';
 import type { User } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import {
+  migrateToMultiReminderIfNeeded,
   rescheduleAllGoalReminders,
   rescheduleAllReminders,
   rescheduleAllTaskReminders,
@@ -83,16 +84,23 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         setUser(user);
         // Açılışta mevcut hatırlatmaları DB'yi baz alarak yeniden programla
         // (cihaz reboot'u / uygulama güncellemesi onları temizlemiş olabilir).
-        // İzin yoksa sessizce çıkar; hata uygulamayı bloklamasın.
-        rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
-          console.warn('[Bildirim] Açılışta hatırlatmalar programlanamadı:', e)
-        );
-        rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
-          console.warn('[Bildirim] Açılışta görev hatırlatmaları programlanamadı:', e)
-        );
-        rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
-          console.warn('[Bildirim] Açılışta hedef hatırlatmaları programlanamadı:', e)
-        );
+        // Eski tekil-hatırlatma şemasından çoklu hatırlatmaya geçişte, ilk
+        // açılışta bir kerelik OS bildirim kuyruğu nuke edilir (bkz. dosya başı
+        // yorumu) — hemen ardından aşağıdaki reschedule* güncel DB durumundan
+        // yeni şemayla baştan kurar. İzin yoksa sessizce çıkar.
+        migrateToMultiReminderIfNeeded()
+          .catch(() => {})
+          .finally(() => {
+            rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
+              console.warn('[Bildirim] Açılışta hatırlatmalar programlanamadı:', e)
+            );
+            rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
+              console.warn('[Bildirim] Açılışta görev hatırlatmaları programlanamadı:', e)
+            );
+            rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
+              console.warn('[Bildirim] Açılışta hedef hatırlatmaları programlanamadı:', e)
+            );
+          });
         // Açılışta arka planda bir kez senkronla (yapılandırılmamışsa sessiz geçer).
         // Hesap özelliği kapalıyken (MVP) senkron hiç başlamaz — hiçbir veri
         // cihazdan çıkmaz (anonim oturum bile açılmaz). Bkz. src/config.ts.

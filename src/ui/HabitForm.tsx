@@ -17,10 +17,10 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { goalRepo } from '@/db';
 import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
-import { hmToDate, isQuotaSchedule, todayDate, toHm, toYmd } from '@/lib/helpers';
+import { isQuotaSchedule, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
-import { TimePickerModal } from '@/ui/TimePickerModal';
+import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -43,7 +43,7 @@ const WEEKDAY_OPTIONS = [
 export interface HabitFormValues {
   title: string;
   kind: HabitKind;
-  remind_at: string | null;
+  remind_times: string[];
   icon: string | null;
   color: string | null;
   schedule: Recurrence | null;
@@ -94,8 +94,6 @@ export function HabitForm({
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeStyles(colors);
-  // "08:30" -> okunaklı etiket; null ise "Hatırlatma yok".
-  const timeLabel = (hm: string | null) => (hm ? hm : t('habit.noReminder'));
   const initSchedule = initial?.schedule ?? null;
   // Tip: sabit verilmişse (düzenleme) ondan; yoksa (oluşturma) kullanıcı sihirbazın
   // ilk adımında seçer (null = henüz seçilmedi).
@@ -115,7 +113,7 @@ export function HabitForm({
           : 'daily';
 
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [remindAt, setRemindAt] = useState<string | null>(initial?.remind_at ?? null);
+  const [remindTimes, setRemindTimes] = useState<string[]>(initial?.remind_times ?? []);
   const [icon, setIcon] = useState<string | null>(initial?.icon ?? null);
   const [color, setColor] = useState<string | null>(initial?.color ?? null);
   const [freqMode, setFreqMode] = useState<FreqMode>(initFreqMode);
@@ -160,7 +158,6 @@ export function HabitForm({
     initial?.goal_factor && initial.goal_factor > 0 ? String(1 / initial.goal_factor) : '1'
   );
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [showPicker, setShowPicker] = useState(false);
   // Hangi tarih seçici açık: başlangıç mı bitiş mi (null = kapalı).
   const [datePicker, setDatePicker] = useState<'start' | 'end' | null>(null);
 
@@ -200,8 +197,21 @@ export function HabitForm({
   // düzenlemede (stepped=false) bu bölüm hiç gösterilmez.
   const show = (s: WizardStep) => (s === 'kind' ? stepped === true && currentStep === s : !stepped || currentStep === s);
 
+  // Nicel/zamanlayıcı alışkanlıkta hedef girilmeden geçilemez — aksi halde
+  // target_amount/unit null kalıp ikili alışkanlıktan farksız, anlamsız bir
+  // "nicel" alışkanlık oluşurdu. Nicelde birim de zorunlu (hedefin ne
+  // olduğunu göstermek için); zamanlayıcıda birim hep dakika, ayrıca istemez.
+  const trackingTargetValid = (() => {
+    if (kind !== 'numeric' && kind !== 'timer') return true;
+    const parsed = parseFloat(targetText.replace(',', '.'));
+    if (!Number.isFinite(parsed) || parsed <= 0) return false;
+    return kind !== 'numeric' || unit.trim().length > 0;
+  })();
+
   const canProceed =
-    (currentStep !== 'kind' || kind != null) && (currentStep !== 'identity' || title.trim().length > 0);
+    (currentStep !== 'kind' || kind != null) &&
+    (currentStep !== 'identity' || title.trim().length > 0) &&
+    (currentStep !== 'tracking' || trackingTargetValid);
   const isLastStep = !stepped || stepIndex >= steps.length - 1;
 
   const goNext = () => {
@@ -214,6 +224,10 @@ export function HabitForm({
     if (!kind) return; // tip seçilmeden gönderilemez (sihirbazda canProceed zaten engeller)
     const t = title.trim();
     if (!t) return;
+    // Düzenleme modunda (stepped=false) sihirbazın canProceed engeli devrede
+    // değil — kaydet butonu doğrudan burayı çağırır, bu yüzden aynı kural
+    // burada da uygulanır (bkz. trackingTargetValid).
+    if (!trackingTargetValid) return;
     // Sıklık kipini Recurrence'a çevir. Geçersiz/boş girdiler güvenli tarafa,
     // "her gün"e (null) düşer: belirli günlerde hiç gün seçilmemişse, aralıkta
     // sayı <2 ise, kotada sayı 1-7 dışındaysa.
@@ -262,7 +276,7 @@ export function HabitForm({
     onSubmit({
       title: t,
       kind,
-      remind_at: remindAt,
+      remind_times: remindTimes,
       icon,
       color,
       schedule,
@@ -275,8 +289,6 @@ export function HabitForm({
       goal_factor,
     });
   };
-
-  const onPickTime = (picked: Date) => setRemindAt(toHm(picked));
 
   const onPickDate = (picked: Date) => {
     const ymd = toYmd(picked);
@@ -362,6 +374,7 @@ export function HabitForm({
       {/* Başlık */}
       {show('identity') && (
         <>
+          <Text style={styles.sectionHeader}>{t('habit.sectionIdentity')}</Text>
           <Text style={styles.label}>{t('habit.title')}</Text>
           <TextInput
             style={styles.input}
@@ -375,30 +388,6 @@ export function HabitForm({
           <Text style={styles.counter}>
             {title.length}/{TITLE_MAX_LEN}
           </Text>
-        </>
-      )}
-
-      {/* Hatırlatma saati */}
-      {show('reminder') && (
-        <>
-          <Text style={styles.label}>{t('habit.reminder')}</Text>
-          <View style={styles.row}>
-            <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
-              <Text style={styles.dateBtnText}>{timeLabel(remindAt)}</Text>
-            </Pressable>
-            {remindAt && (
-              <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
-                <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-              </Pressable>
-            )}
-          </View>
-
-          <TimePickerModal
-            visible={showPicker}
-            value={hmToDate(remindAt)}
-            onClose={() => setShowPicker(false)}
-            onConfirm={onPickTime}
-          />
         </>
       )}
 
@@ -434,13 +423,16 @@ export function HabitForm({
 
           <Text style={styles.label}>{t('habit.color')}</Text>
           <View style={styles.colorRow}>
-            {HABIT_COLORS.map((c) => {
+            {HABIT_COLORS.map((c, i) => {
               const sel = color === c;
               return (
                 <Pressable
                   key={c}
                   style={[styles.swatch, { backgroundColor: c }, sel && styles.swatchSel]}
                   onPress={() => setColor(sel ? null : c)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: sel }}
+                  accessibilityLabel={t('habit.colorOptionA11y', { n: i + 1 })}
                 >
                   {sel && <Text style={styles.swatchCheck}>✓</Text>}
                 </Pressable>
@@ -454,6 +446,7 @@ export function HabitForm({
           + tarih aralığı */}
       {show('schedule') && (
         <>
+          <Text style={styles.sectionHeader}>{t('habit.sectionSchedule')}</Text>
           <Text style={styles.label}>{t('habit.frequency')}</Text>
           <View style={styles.freqRow}>
             {(
@@ -580,6 +573,7 @@ export function HabitForm({
           süre dakika; binary'de hedef alanı yok) + hedefe bağla. */}
       {show('tracking') && (
         <>
+      <Text style={styles.sectionHeader}>{t('habit.sectionTracking')}</Text>
       {kind === 'numeric' && (
         <>
           <Text style={styles.label}>{t('habit.dailyTarget')}</Text>
@@ -719,6 +713,16 @@ export function HabitForm({
       )}
       {/* ↑ 'tracking' adımını kapatır (numeric/timer hedef + hedefe bağla + katkı biçimi) */}
 
+      {/* Hatırlatma saatleri — birden fazla eklenebilir. Sihirbazdaki son adımla
+          aynı mantıksal sırayı korumak için burada, Takip'ten sonra gösterilir
+          (düzenlemede tüm bölümler tek scrollda aynı sırayla akar). */}
+      {show('reminder') && (
+        <>
+          <Text style={styles.sectionHeader}>{t('habit.sectionReminder')}</Text>
+          <ReminderListEditor label={t('habit.reminder')} times={remindTimes} onChange={setRemindTimes} />
+        </>
+      )}
+
       {/* Eylemler: sihirbazda alt gezinme (nokta göstergesi + Geri/İleri),
           düzenlemede eskisi gibi Sil + Kaydet. */}
       {stepped ? (
@@ -752,7 +756,11 @@ export function HabitForm({
       ) : (
         <View style={styles.actions}>
           {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
-          <Pressable style={styles.saveBtn} onPress={submit}>
+          <Pressable
+            style={[styles.saveBtn, !trackingTargetValid && styles.saveBtnDisabled]}
+            onPress={submit}
+            disabled={!trackingTargetValid}
+          >
             <Text style={styles.saveBtnText}>{submitLabel}</Text>
           </Pressable>
         </View>
@@ -763,6 +771,20 @@ export function HabitForm({
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
+    // Bölüm başlığı — düzenlemede (stepped=false) tüm alan grupları tek scrollda
+    // art arda geldiği için hangi grubun nerede bittiğini/başladığını gösterir
+    // (Kimlik/Sıklık/Hedef/Hatırlatma). Sihirbazda (stepped) her adımda tek bir
+    // başlık görünür — o adımın bağlamını netleştirir, zarar vermez.
+    sectionHeader: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: c.text,
+      marginTop: 22,
+      marginBottom: 12,
+      paddingTop: 18,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+    },
     label: {
       fontSize: 13,
       fontWeight: '600',

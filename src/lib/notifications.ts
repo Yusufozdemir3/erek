@@ -9,9 +9,10 @@
 // ayrı olarak çağırır. Veri için tek doğru kaynak yine SQLite (habitRepo).
 
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { goalRepo } from '@/db';
-import type { Goal, Habit, Task } from '@/db';
+import { goalRepo, reminderRepo } from '@/db';
+import type { Goal, Habit, Reminder, Task } from '@/db';
 import { isScheduledOn, isWithinHabitDates, todayDate, toYmd } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
@@ -127,21 +128,40 @@ function parseHm(hm: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
-// Bir alışkanlık için hatırlatmayı kurar. remind_at yoksa varsa olanı iptal eder.
-// Sıklığa göre: her gün ise tek DAILY tetikleyici (id); belirli günler ise her
-// gün için ayrı WEEKLY tetikleyici (id#weekday). İzin yoksa false döner.
-export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
-  // Önce tüm eski tetikleyicileri temizle (saat/gün değişmiş ya da kaldırılmış olabilir).
-  await cancelHabitReminder(habit.id);
+// Tüm zamanlanmış bildirimleri tarayıp identifier'ı verilen önekle başlayanları
+// iptal eder. ÇOKLU hatırlatmada her hatırlatmanın kendi id'si (ve haftalık/
+// aralıklı sıklıkta ek son ekler) olduğundan, "hangi id'ler kurulu olabilir"
+// listesini önceden bilmek imkansız — Expo'nun kendi kayıtlarını sorup önekle
+// eşleşenleri silmek tek güvenilir yol (subtask/milestone silmede id üretmenin
+// simetriği: burada da "ne varsa temizle, yeniden kur" deseni).
+async function cancelByPrefix(prefix: string): Promise<void> {
+  const all = await Notifications.getAllScheduledNotificationsAsync();
+  for (const n of all) {
+    if (!n.identifier.startsWith(prefix)) continue;
+    try {
+      await Notifications.cancelScheduledNotificationAsync(n.identifier);
+    } catch {
+      // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+    }
+  }
+}
 
-  if (!habit.remind_at) return true; // hatırlatma yok — yapılacak bir şey yok
+// Bir alışkanlık için TÜM hatırlatmalarını kurar (0 ya da daha fazla saat).
+// Sıklığa göre: her gün ise her hatırlatma için tek DAILY tetikleyici; belirli
+// günler ise her hatırlatma × her seçili gün için ayrı WEEKLY tetikleyici;
+// "her X günde bir" ise her hatırlatma için sıradaki planlı günlere tek seferlik
+// DATE tetikleyicileri. İzin yoksa (ve en az bir hatırlatma kurulacaksa) false döner.
+export async function scheduleHabitReminders(habit: Habit, reminders: Reminder[]): Promise<boolean> {
+  // Önce bu alışkanlığa ait TÜM eski tetikleyicileri temizle (saat/gün/liste
+  // değişmiş ya da tamamen kaldırılmış olabilir).
+  await cancelHabitReminders(habit.id);
+
+  if (reminders.length === 0) return true;
 
   // Bitiş tarihi geçmişse hatırlatma kurulmaz (yukarıdaki cancel eskisini de
   // temizledi). Yerel bildirim tetikleyicileri bitiş tarihi bilmediğinden bu
   // kontrol her programlamada (kaydet + her açılıştaki reschedule) yapılır.
   if (habit.end_date && habit.end_date < todayDate()) return true;
-  const time = parseHm(habit.remind_at);
-  if (!time) return true; // bozuk saat — sessizce atla
 
   const prefs = await getNotificationPrefs();
   if (!prefs.enabled || !prefs.habitReminders) return true; // kullanıcı bu türü kapatmış
@@ -159,48 +179,202 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   const sched = habit.schedule;
   const weekdays = sched && sched.freq === 'weekly' ? sched.weekdays ?? [] : [];
 
-  if (sched?.freq === 'interval') {
-    // Expo'da "her N günde bir" tekrarlayan tetikleyici yok; sıradaki 8 planlı
-    // gün tek seferlik DATE tetikleyicisiyle kurulur (id#i0..i7). Her açılışta
-    // rescheduleAllReminders baştan kurduğu için pencere sürekli ileri kayar.
-    const cursor = new Date(`${todayDate()}T00:00:00`);
-    let scheduledCount = 0;
-    for (let i = 0; scheduledCount < 8 && i < 1462; i++) {
-      const ymd = toYmd(cursor);
-      if (isScheduledOn(sched, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
-        const when = new Date(`${ymd}T00:00:00`);
-        when.setHours(time.hour, time.minute, 0, 0);
-        if (when.getTime() > Date.now()) {
-          await Notifications.scheduleNotificationAsync({
-            identifier: `${habit.id}#i${scheduledCount}`,
-            content,
-            trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId },
-          });
-          scheduledCount++;
+  for (const reminder of reminders) {
+    const time = parseHm(reminder.time);
+    if (!time) continue; // bozuk saat — sessizce atla
+    const base = `habit:${habit.id}:${reminder.id}`;
+
+    if (sched?.freq === 'interval') {
+      // Expo'da "her N günde bir" tekrarlayan tetikleyici yok; sıradaki 8 planlı
+      // gün tek seferlik DATE tetikleyicisiyle kurulur (base#i0..i7). Her açılışta
+      // rescheduleAllReminders baştan kurduğu için pencere sürekli ileri kayar.
+      const cursor = new Date(`${todayDate()}T00:00:00`);
+      let scheduledCount = 0;
+      for (let i = 0; scheduledCount < 8 && i < 1462; i++) {
+        const ymd = toYmd(cursor);
+        if (isScheduledOn(sched, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
+          const when = new Date(`${ymd}T00:00:00`);
+          when.setHours(time.hour, time.minute, 0, 0);
+          if (when.getTime() > Date.now()) {
+            await Notifications.scheduleNotificationAsync({
+              identifier: `${base}#i${scheduledCount}`,
+              content,
+              trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId },
+            });
+            scheduledCount++;
+          }
         }
+        cursor.setDate(cursor.getDate() + 1);
       }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  } else if (weekdays.length > 0) {
-    // Belirli günler: her seçili gün için ayrı haftalık tetikleyici.
-    for (const wd of weekdays) {
+    } else if (weekdays.length > 0) {
+      // Belirli günler: her seçili gün için ayrı haftalık tetikleyici.
+      for (const wd of weekdays) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: `${base}#${wd}`,
+          content,
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+            weekday: wd + 1, // expo: 1=Pazar ... 7=Cumartesi (JS getDay 0=Pazar)
+            hour: time.hour,
+            minute: time.minute,
+            channelId,
+          },
+        });
+      }
+    } else {
+      // Her gün (schedule yok ya da daily).
       await Notifications.scheduleNotificationAsync({
-        identifier: `${habit.id}#${wd}`,
+        identifier: base,
         content,
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-          weekday: wd + 1, // expo: 1=Pazar ... 7=Cumartesi (JS getDay 0=Pazar)
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
           hour: time.hour,
           minute: time.minute,
           channelId,
         },
       });
     }
-  } else {
-    // Her gün (schedule yok ya da daily).
+  }
+  return true;
+}
+
+// Bir alışkanlığın TÜM hatırlatmalarını iptal eder (kaç tane olursa olsun,
+// hangi sıklık son ekiyle kurulmuş olursa olsun — bkz. cancelByPrefix).
+export async function cancelHabitReminders(habitId: string): Promise<void> {
+  await cancelByPrefix(`habit:${habitId}:`);
+}
+
+// ZAMANLAYICI (alışkanlık kind='timer' ya da süre-ölçümlü hedef): hedef süreye
+// ulaşınca haber veren tek seferlik yerel bildirim. identifier = `timer:${id}`
+// (habit/goal id'leri UUID olduğundan aynı ad alanını paylaşmaları çakışma
+// yaratmaz; günlük hatırlatma id'leriyle de çakışmaz). Süre başlarken kurulur;
+// duraklat/bitir/sıfırla'da iptal edilir. İzin yoksa sessizce geçer (zamanlayıcı
+// yine çalışır, sadece bildirim olmaz).
+export async function scheduleTimerDone(id: string, title: string, secondsFromNow: number): Promise<void> {
+  await cancelTimerDone(id);
+  if (secondsFromNow <= 0) return;
+  const prefs = await getNotificationPrefs();
+  if (!prefs.enabled || !prefs.timerDone) return; // kullanıcı bu türü kapatmış
+  const granted = await ensurePermission();
+  if (!granted) return;
+  const lang = await getStoredLang();
+  await Notifications.scheduleNotificationAsync({
+    identifier: `timer:${id}`,
+    content: {
+      title: translate(lang, 'notif.timerDoneTitle'),
+      body: translate(lang, 'notif.timerDoneBody', { title }),
+      ...soundContent(prefs),
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: Math.max(1, Math.ceil(secondsFromNow)),
+      channelId: channelIdFor(prefs, lang),
+    },
+  });
+}
+
+export async function cancelTimerDone(id: string): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`timer:${id}`);
+  } catch {
+    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+  }
+}
+
+// Açılışta tüm aktif hatırlatmaları yeniden programlar.
+// Cihaz yeniden başlatma / uygulama güncellemesi programlanmış bildirimleri
+// temizleyebildiği için tek doğru kaynak (DB) baz alınarak yeniden kurulur.
+// İzin akışını açılışta tetiklememek için izin YOKSA sessizce çıkar.
+export async function rescheduleAllReminders(habits: Habit[]): Promise<void> {
+  const map = reminderRepo.mapByType('habit');
+  const withReminder = habits.filter((h) => (map.get(h.id)?.length ?? 0) > 0);
+  if (withReminder.length === 0) return;
+
+  const perm = await Notifications.getPermissionsAsync();
+  if (!perm.granted) return; // açılışta izin istemeyiz; kullanıcı saat kurunca istenir
+
+  for (const h of withReminder) {
+    await scheduleHabitReminders(h, map.get(h.id) ?? []);
+  }
+}
+
+// GÖREV hatırlatması: TÜM hatırlatma saatleri, son tarihin GÜNÜNDE o saatte
+// tek seferlik bildirim kurar (identifier: `task:${id}:${reminderId}`, habit/
+// timer id'leriyle çakışmaz). Saat son tarihin kendi saatinden BAĞIMSIZDIR.
+// Hatırlatmasız, son tarihsiz, tamamlanmış ya da hatırlatma anı geçmiş görevlerde
+// mevcut bildirimler iptal edilir, yeni kurulmaz.
+export async function scheduleTaskReminders(task: Task, reminders: Reminder[]): Promise<boolean> {
+  await cancelTaskReminders(task.id);
+
+  if (task.completed_at) return true;
+  if (reminders.length === 0 || !task.due_date) return true; // hatırlatma ya da son tarih yok
+
+  const prefs = await getNotificationPrefs();
+  if (!prefs.enabled || !prefs.taskReminders) return true; // kullanıcı bu türü kapatmış
+
+  const granted = await ensurePermission();
+  if (!granted) return false;
+
+  const lang = await getStoredLang();
+  const channelId = channelIdFor(prefs, lang);
+  for (const reminder of reminders) {
+    const time = parseHm(reminder.time);
+    if (!time) continue; // bozuk saat — sessizce atla
+    const when = new Date(`${task.due_date.slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(when.getTime())) continue;
+    when.setHours(time.hour, time.minute, 0, 0);
+    if (when.getTime() <= Date.now()) continue; // hatırlatma anı geçmiş
+
     await Notifications.scheduleNotificationAsync({
-      identifier: habit.id,
-      content,
+      identifier: `task:${task.id}:${reminder.id}`,
+      content: {
+        title: translate(lang, 'notif.taskReminderTitle'),
+        body: task.title,
+        ...soundContent(prefs),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: when,
+        channelId,
+      },
+    });
+  }
+  return true;
+}
+
+export async function cancelTaskReminders(taskId: string): Promise<void> {
+  await cancelByPrefix(`task:${taskId}:`);
+}
+
+// HEDEF hatırlatması: TÜM hatırlatma saatleri her gün "hedefe giriş yapmayı
+// unutma" bildirimi kurar (identifier: `goal:${id}:${reminderId}` — habit/task/
+// timer id'leriyle çakışmaz). Tamamlanan ya da son tarihi geçen hedefte
+// kurulmaz, varsa eskiler iptal edilir.
+export async function scheduleGoalReminders(goal: Goal, reminders: Reminder[]): Promise<boolean> {
+  await cancelGoalReminders(goal.id);
+
+  if (reminders.length === 0) return true;
+  if (goalRepo.isCompleted(goal)) return true; // bitmiş hedefe hatırlatma kurulmaz
+  if (goal.deadline && goal.deadline < todayDate()) return true; // süresi geçmiş
+
+  const prefs = await getNotificationPrefs();
+  if (!prefs.enabled || !prefs.goalReminders) return true; // kullanıcı bu türü kapatmış
+
+  const granted = await ensurePermission();
+  if (!granted) return false;
+
+  const lang = await getStoredLang();
+  const channelId = channelIdFor(prefs, lang);
+  for (const reminder of reminders) {
+    const time = parseHm(reminder.time);
+    if (!time) continue; // bozuk saat — sessizce atla
+    await Notifications.scheduleNotificationAsync({
+      identifier: `goal:${goal.id}:${reminder.id}`,
+      content: {
+        title: translate(lang, 'notif.goalReminderTitle'),
+        body: translate(lang, 'notif.goalReminderBody', { title: goal.title }),
+        ...soundContent(prefs),
+      },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: time.hour,
@@ -212,178 +386,21 @@ export async function scheduleHabitReminder(habit: Habit): Promise<boolean> {
   return true;
 }
 
-// Bir alışkanlığın hatırlatmasını iptal eder. Günlük (id), haftalık (id#0..#6)
-// ve aralıklı (id#i0..#i7) tetikleyicilerin tümünü kapsar. Zaten yoksa sessizce geçer.
-export async function cancelHabitReminder(habitId: string): Promise<void> {
-  const ids = [
-    habitId,
-    ...Array.from({ length: 7 }, (_, wd) => `${habitId}#${wd}`),
-    ...Array.from({ length: 8 }, (_, k) => `${habitId}#i${k}`),
-  ];
-  for (const id of ids) {
-    try {
-      await Notifications.cancelScheduledNotificationAsync(id);
-    } catch {
-      // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
-    }
-  }
-}
-
-// ZAMANLAYICI alışkanlığı: hedef süreye ulaşınca haber veren tek seferlik yerel
-// bildirim. identifier = `timer:${habitId}` (günlük hatırlatma id'leriyle
-// çakışmaz). Süre başlarken kurulur; duraklat/bitir/sıfırla'da iptal edilir.
-// İzin yoksa sessizce geçer (zamanlayıcı yine çalışır, sadece bildirim olmaz).
-export async function scheduleTimerDone(habit: Habit, secondsFromNow: number): Promise<void> {
-  await cancelTimerDone(habit.id);
-  if (secondsFromNow <= 0) return;
-  const prefs = await getNotificationPrefs();
-  if (!prefs.enabled || !prefs.timerDone) return; // kullanıcı bu türü kapatmış
-  const granted = await ensurePermission();
-  if (!granted) return;
-  const lang = await getStoredLang();
-  await Notifications.scheduleNotificationAsync({
-    identifier: `timer:${habit.id}`,
-    content: {
-      title: translate(lang, 'notif.timerDoneTitle'),
-      body: translate(lang, 'notif.timerDoneBody', { title: habit.title }),
-      ...soundContent(prefs),
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds: Math.max(1, Math.ceil(secondsFromNow)),
-      channelId: channelIdFor(prefs, lang),
-    },
-  });
-}
-
-export async function cancelTimerDone(habitId: string): Promise<void> {
-  try {
-    await Notifications.cancelScheduledNotificationAsync(`timer:${habitId}`);
-  } catch {
-    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
-  }
-}
-
-// Açılışta tüm aktif hatırlatmaları yeniden programlar.
-// Cihaz yeniden başlatma / uygulama güncellemesi programlanmış bildirimleri
-// temizleyebildiği için tek doğru kaynak (DB) baz alınarak yeniden kurulur.
-// İzin akışını açılışta tetiklememek için izin YOKSA sessizce çıkar.
-export async function rescheduleAllReminders(habits: Habit[]): Promise<void> {
-  const withReminder = habits.filter((h) => h.remind_at);
-  if (withReminder.length === 0) return;
-
-  const perm = await Notifications.getPermissionsAsync();
-  if (!perm.granted) return; // açılışta izin istemeyiz; kullanıcı saat kurunca istenir
-
-  for (const h of withReminder) {
-    await scheduleHabitReminder(h);
-  }
-}
-
-// GÖREV hatırlatması: görevin remind_at'i (ayrı hatırlatma saati) doluysa, son
-// tarihin GÜNÜNDE o saatte tek seferlik bildirim kurar (identifier: `task:${id}`,
-// habit/timer id'leriyle çakışmaz). Saat son tarihin kendi saatinden BAĞIMSIZDIR.
-// Hatırlatmasız, son tarihsiz, tamamlanmış ya da hatırlatma anı geçmiş görevlerde
-// mevcut bildirim iptal edilir, yeni kurulmaz.
-export async function scheduleTaskReminder(task: Task): Promise<boolean> {
-  await cancelTaskReminder(task.id);
-
-  if (task.completed_at) return true;
-  if (!task.remind_at || !task.due_date) return true; // hatırlatma ya da son tarih yok
-  const time = parseHm(task.remind_at);
-  if (!time) return true; // bozuk saat — sessizce atla
-  const when = new Date(`${task.due_date.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(when.getTime())) return true;
-  when.setHours(time.hour, time.minute, 0, 0);
-  if (when.getTime() <= Date.now()) return true; // hatırlatma anı geçmiş
-
-  const prefs = await getNotificationPrefs();
-  if (!prefs.enabled || !prefs.taskReminders) return true; // kullanıcı bu türü kapatmış
-
-  const granted = await ensurePermission();
-  if (!granted) return false;
-
-  const lang = await getStoredLang();
-  await Notifications.scheduleNotificationAsync({
-    identifier: `task:${task.id}`,
-    content: {
-      title: translate(lang, 'notif.taskReminderTitle'),
-      body: task.title,
-      ...soundContent(prefs),
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: when,
-      channelId: channelIdFor(prefs, lang),
-    },
-  });
-  return true;
-}
-
-export async function cancelTaskReminder(taskId: string): Promise<void> {
-  try {
-    await Notifications.cancelScheduledNotificationAsync(`task:${taskId}`);
-  } catch {
-    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
-  }
-}
-
-// HEDEF hatırlatması: goals.remind_at doluysa her gün o saatte "hedefe giriş
-// yapmayı unutma" bildirimi (identifier: `goal:${id}` — habit/task/timer
-// id'leriyle çakışmaz). Tamamlanan ya da son tarihi geçen hedefte kurulmaz,
-// varsa eskisi iptal edilir.
-export async function scheduleGoalReminder(goal: Goal): Promise<boolean> {
-  await cancelGoalReminder(goal.id);
-
-  if (!goal.remind_at) return true;
-  if (goalRepo.isCompleted(goal)) return true; // bitmiş hedefe hatırlatma kurulmaz
-  if (goal.deadline && goal.deadline < todayDate()) return true; // süresi geçmiş
-
-  const time = parseHm(goal.remind_at);
-  if (!time) return true; // bozuk saat — sessizce atla
-
-  const prefs = await getNotificationPrefs();
-  if (!prefs.enabled || !prefs.goalReminders) return true; // kullanıcı bu türü kapatmış
-
-  const granted = await ensurePermission();
-  if (!granted) return false;
-
-  const lang = await getStoredLang();
-  await Notifications.scheduleNotificationAsync({
-    identifier: `goal:${goal.id}`,
-    content: {
-      title: translate(lang, 'notif.goalReminderTitle'),
-      body: translate(lang, 'notif.goalReminderBody', { title: goal.title }),
-      ...soundContent(prefs),
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: time.hour,
-      minute: time.minute,
-      channelId: channelIdFor(prefs, lang),
-    },
-  });
-  return true;
-}
-
-export async function cancelGoalReminder(goalId: string): Promise<void> {
-  try {
-    await Notifications.cancelScheduledNotificationAsync(`goal:${goalId}`);
-  } catch {
-    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
-  }
+export async function cancelGoalReminders(goalId: string): Promise<void> {
+  await cancelByPrefix(`goal:${goalId}:`);
 }
 
 // Açılışta tüm hedef hatırlatmalarını yeniden kurar (bkz. rescheduleAllReminders).
 export async function rescheduleAllGoalReminders(goals: Goal[]): Promise<void> {
-  const withReminder = goals.filter((g) => g.remind_at);
+  const map = reminderRepo.mapByType('goal');
+  const withReminder = goals.filter((g) => (map.get(g.id)?.length ?? 0) > 0);
   if (withReminder.length === 0) return;
 
   const perm = await Notifications.getPermissionsAsync();
   if (!perm.granted) return;
 
   for (const g of withReminder) {
-    await scheduleGoalReminder(g);
+    await scheduleGoalReminders(g, map.get(g.id) ?? []);
   }
 }
 
@@ -391,13 +408,34 @@ export async function rescheduleAllGoalReminders(goals: Goal[]): Promise<void> {
 // yeniden kurar (bkz. rescheduleAllReminders — aynı gerekçe: cihaz/uygulama
 // yeniden başlaması programlanmış bildirimleri temizleyebilir).
 export async function rescheduleAllTaskReminders(tasks: Task[]): Promise<void> {
-  const withTime = tasks.filter((t) => !t.completed_at && t.remind_at && t.due_date);
+  const map = reminderRepo.mapByType('task');
+  const withTime = tasks.filter((t) => !t.completed_at && t.due_date && (map.get(t.id)?.length ?? 0) > 0);
   if (withTime.length === 0) return;
 
   const perm = await Notifications.getPermissionsAsync();
   if (!perm.granted) return;
 
   for (const t of withTime) {
-    await scheduleTaskReminder(t);
+    await scheduleTaskReminders(t, map.get(t.id) ?? []);
   }
+}
+
+// TEK SEFERLİK GEÇİŞ: eski tekil remind_at şeması (identifier = bare habitId /
+// `task:${id}` / `goal:${id}`, olası #weekday / #i{n} son ekleriyle) yeni çoklu
+// hatırlatma önekiyle (`habit:${id}:${reminderId}` vb.) UYUŞMUYOR — yeni
+// cancelByPrefix eskileri asla bulamaz, sessizce kalıcı yetim kalırlardı (eski
+// içerikle sonsuza dek çalmaya devam ederler). Bu yüzden bir kerelik: tüm
+// zamanlanmış bildirimler nuke edilir; hemen ardından çağrılan rescheduleAll*
+// güncel DB durumundan yeni şemayla baştan kurar (veri kaybı yok, yalnız OS'un
+// bildirim kuyruğu temizlenir).
+const MIGRATED_KEY = 'notif:migratedMultiReminder';
+export async function migrateToMultiReminderIfNeeded(): Promise<void> {
+  const done = await AsyncStorage.getItem(MIGRATED_KEY);
+  if (done) return;
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch {
+    // hiç izin/kayıt yoksa hata verebilir — önemsiz, devam.
+  }
+  await AsyncStorage.setItem(MIGRATED_KEY, '1');
 }

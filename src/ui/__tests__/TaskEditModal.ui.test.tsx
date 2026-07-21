@@ -16,8 +16,8 @@ import { TaskEditModal } from '@/ui/TaskEditModal';
 
 // Bildirim yan etkisi bu testin konusu değil — sessiz dublör.
 jest.mock('@/lib/notifications', () => ({
-  scheduleTaskReminder: jest.fn(() => Promise.resolve(true)),
-  cancelTaskReminder: jest.fn(() => Promise.resolve()),
+  scheduleTaskReminders: jest.fn(() => Promise.resolve(true)),
+  cancelTaskReminders: jest.fn(() => Promise.resolve()),
 }));
 
 let userId: string;

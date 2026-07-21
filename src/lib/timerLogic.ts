@@ -8,11 +8,16 @@
 // 30 dk, başlangıç gününün kaydına gider — alışkanlık seansı "o akşamın işi"dir;
 // gece yarısında bölmek kullanıcı sezgisine katkısız karmaşıklık olurdu.
 
+// Zamanlayıcı bir alışkanlığa (kind='timer') ya da süre-ölçümlü sayısal bir
+// hedefe (unit=TIME_UNIT) bağlı olabilir — bkz. TimerProvider.
+export type TimerKind = 'habit' | 'goal';
+
 export interface ActiveTimer {
-  habitId: string;
-  date: string;          // "YYYY-MM-DD" (başladığı gün — yukarıdaki karara bak)
+  kind: TimerKind;
+  targetId: string;
+  date: string;          // "YYYY-MM-DD" (başladığı gün — yukarıdaki karara bak; yalnız habit'te kullanılır)
   startedAt: number;     // epoch ms
-  baseSeconds: number;   // başlarken o gün birikmiş saniye
+  baseSeconds: number;   // başlarken birikmiş saniye
   targetSeconds: number; // hedef saniye
 }
 

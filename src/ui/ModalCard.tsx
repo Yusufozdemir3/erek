@@ -3,8 +3,9 @@
 // Uzun içerik ScrollView'da kaydırılır; klavye açılınca kart yukarı kalkar.
 // Arka fona dokununca kapanır. Mimari kural: yalnız görsel kabuk, veri yok.
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -14,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
+import { useI18n } from '@/i18n/I18nProvider';
 
 interface Props {
   visible: boolean;
@@ -25,15 +27,48 @@ interface Props {
 
 export function ModalCard({ visible, onClose, children, scroll = true }: Props) {
   const { colors } = useTheme();
+  const { t } = useI18n();
+
+  // Android'de donanım geri tuşu doğrudan Modal'ın onRequestClose'unu tetikler.
+  // Klavye açıkken bu, kullanıcının "geri tuşuyla klavyeyi kapat" refleksiyle
+  // tüm formu kapatıp yazdığını kaybettiriyordu. Klavye açıkken geri tuşu artık
+  // önce yalnızca klavyeyi kapatır; modal ancak klavye kapalıyken kapanır.
+  const keyboardVisible = useRef(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+      keyboardVisible.current = true;
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardVisible.current = false;
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const handleRequestClose = () => {
+    if (keyboardVisible.current) {
+      Keyboard.dismiss();
+      return;
+    }
+    onClose();
+  };
+
   if (!visible) return null;
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent animationType="fade" onRequestClose={handleRequestClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kav}
       >
         <View style={styles.overlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+          />
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {/* Narin tutamaç çizgisi — premium his için üstte ortalanmış */}
             <View style={[styles.handle, { backgroundColor: colors.border }]} />

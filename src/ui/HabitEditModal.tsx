@@ -5,9 +5,9 @@
 // Mimari kural: SQL yok - yalnızca habitRepo çağrılır.
 
 import { Alert, StyleSheet, Text } from 'react-native';
-import { habitRepo } from '@/db';
+import { habitRepo, reminderRepo } from '@/db';
 import type { Habit } from '@/db';
-import { cancelHabitReminder, scheduleHabitReminder } from '@/lib/notifications';
+import { cancelHabitReminders, scheduleHabitReminders } from '@/lib/notifications';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -26,13 +26,14 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 
   const handleSubmit = (values: HabitFormValues) => {
     habitRepo.update(habit.id, values);
+    const reminders = reminderRepo.replaceAll('habit', habit.id, values.remind_times);
     onChanged();
     onClose();
-    // Veriyi yazdıktan sonra bildirimi güncelle (saat değiştiyse yeniden kurar,
-    // kaldırıldıysa iptal eder). Güncel hali DB'den alınır.
+    // Veriyi yazdıktan sonra bildirimleri güncelle (liste değiştiyse yeniden
+    // kurar, boşaldıysa iptal eder). Güncel hali DB'den alınır.
     const updated = habitRepo.getById(habit.id);
     if (updated) {
-      scheduleHabitReminder(updated).then((ok) => {
+      scheduleHabitReminders(updated, reminders).then((ok) => {
         if (!ok) {
           Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
         }
@@ -42,7 +43,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 
   const handleDelete = () => {
     habitRepo.softDelete(habit.id);
-    cancelHabitReminder(habit.id);
+    cancelHabitReminders(habit.id);
     onChanged();
     onClose();
   };
@@ -55,7 +56,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
         key={habit.id}
         userId={habit.user_id}
         kind={habit.kind}
-        initial={habit}
+        initial={{ ...habit, remind_times: reminderRepo.listByEntity('habit', habit.id).map((r) => r.time) }}
         submitLabel={t('common.save')}
         onSubmit={handleSubmit}
         onDelete={handleDelete}

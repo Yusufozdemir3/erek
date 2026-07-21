@@ -59,6 +59,9 @@ export function WheelColumn({ values, selected, onSelect, format, textColor, fad
                 listRef.current?.scrollToOffset({ offset: idx * ITEM_HEIGHT, animated: true });
                 onSelect(item);
               }}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={format(item)}
             >
               <Text
                 style={[

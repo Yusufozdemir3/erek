@@ -13,6 +13,7 @@ import type { Priority, Recurrence } from '@/db';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
+import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { TimePickerModal } from '@/ui/TimePickerModal';
 import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -54,7 +55,7 @@ export interface TaskFormValues {
   due_date: string | null; // "YYYY-MM-DD" | "YYYY-MM-DDTHH:MM:SS" | null
   end_time: string | null;  // "HH:MM" | null — yalnız başlangıç saati varken anlamlı
   recurrence: Recurrence | null; // null = tek seferlik; tamamlanınca ileri sarılır
-  remind_at: string | null; // "HH:MM" | null — son tarih gününde hatırlatma saati
+  remind_times: string[]; // son tarih gününde hatırlatma saatleri (0 ya da daha fazla)
   // Yalnız oluşturmada (enableSubtaskDraft): görevle birlikte yazılacak alt
   // görev başlıkları. Düzenlemede alt görevler anında yazıldığı için buradan
   // gelmez (undefined).
@@ -62,7 +63,7 @@ export interface TaskFormValues {
 }
 
 interface Props {
-  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_at: string | null }>;
+  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[] }>;
   submitLabel: string;                  // "Kaydet" | "Ekle"
   onSubmit: (values: TaskFormValues) => void;
   onDelete?: () => void;                // yalnız düzenlemede: Sil düğmesi
@@ -90,9 +91,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
-  // Hatırlatma saati — son tarihin GÜNÜNDE bu saatte bildirim (due_date'in kendi
-  // saatinden bağımsız; alışkanlık remind_at deseni). null = hatırlatma yok.
-  const [remindAt, setRemindAt] = useState<string | null>(initial?.remind_at ?? null);
+  // Hatırlatma saatleri — son tarihin GÜNÜNDE bu saatlerde bildirim (due_date'in
+  // kendi saatinden bağımsız; alışkanlık hatırlatması deseni). Boş liste = hatırlatma yok.
+  const [remindTimes, setRemindTimes] = useState<string[]>(initial?.remind_times ?? []);
   // Tekrar: kuraldan başlangıç modunu çıkar.
   const initRec = initial?.recurrence ?? null;
   const initRepeatMode: RepeatMode = !initRec
@@ -131,7 +132,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [showPicker, setShowPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-  const [showRemindPicker, setShowRemindPicker] = useState(false);
   const [showYearDatePicker, setShowYearDatePicker] = useState(false);
   // Oluşturmada taslak alt görevler (henüz görev yok → string listesi).
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
@@ -192,7 +192,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       due_date,
       end_time,
       recurrence,
-      remind_at: remindAt,
+      remind_times: remindTimes,
       subtasks: enableSubtaskDraft ? draftSubs : undefined,
     });
   };
@@ -200,7 +200,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const onPickDate = (picked: Date) => setDueDate(toYmd(picked));
   const onPickTime = (picked: Date) => setDueTime(toHm(picked));
   const onPickEndTime = (picked: Date) => setEndTime(toHm(picked));
-  const onPickRemind = (picked: Date) => setRemindAt(toHm(picked));
 
   return (
     <>
@@ -307,26 +306,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Hatırlatma — son tarihin GÜNÜNDE seçilen saatte bildirim (son tarihin
+      {/* Hatırlatma — son tarihin GÜNÜNDE seçilen saatlerde bildirim (son tarihin
           kendi saatinden bağımsız; alışkanlık hatırlatması deseni). Boşsa bildirim
           kurulmaz. Tekrarlayan görevde her tekrarın gününde çalar. */}
-      <Text style={styles.label}>{t('task.reminder')}</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setShowRemindPicker(true)}>
-          <Text style={styles.dateBtnText}>{remindAt ? remindAt : t('task.noReminder')}</Text>
-        </Pressable>
-        {remindAt && (
-          <Pressable style={styles.clearBtn} onPress={() => setRemindAt(null)}>
-            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-          </Pressable>
-        )}
-      </View>
-      <TimePickerModal
-        visible={showRemindPicker}
-        value={hmToDate(remindAt)}
-        onClose={() => setShowRemindPicker(false)}
-        onConfirm={onPickRemind}
-      />
+      <ReminderListEditor label={t('task.reminder')} times={remindTimes} onChange={setRemindTimes} />
 
       {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler /
           her X günde bir / her ay / her yıl. Tekrarlayan bir görev tamamlanınca
@@ -462,7 +445,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             <View key={`${s}-${i}`} style={styles.subRow}>
               <View style={styles.subBullet} />
               <Text style={styles.subTitle}>{s}</Text>
-              <Pressable onPress={() => removeDraftSub(i)} hitSlop={10}>
+              <Pressable
+                onPress={() => removeDraftSub(i)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t('task.removeSubtaskA11y', { title: s })}
+              >
                 <Text style={styles.subDelete}>×</Text>
               </Pressable>
             </View>
@@ -479,7 +467,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
               returnKeyType="done"
               maxLength={TITLE_MAX_LEN}
             />
-            <Pressable style={styles.subAddBtn} onPress={addDraftSub}>
+            <Pressable
+              style={styles.subAddBtn}
+              onPress={addDraftSub}
+              accessibilityRole="button"
+              accessibilityLabel={t('task.addSubtask')}
+            >
               <Text style={styles.subAddText}>＋</Text>
             </Pressable>
           </View>
@@ -489,7 +482,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       {/* Eylemler — Sil yalnız düzenlemede (onDelete varsa) */}
       <View style={styles.actions}>
         {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
-        <Pressable style={styles.saveBtn} onPress={submit}>
+        <Pressable style={styles.saveBtn} onPress={submit} accessibilityRole="button" accessibilityLabel={submitLabel}>
           <Text style={styles.saveBtnText}>{submitLabel}</Text>
         </Pressable>
       </View>

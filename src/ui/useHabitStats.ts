@@ -23,6 +23,26 @@ const WINDOW_DAYS = 90;
 const DAY_BUCKETS = 30;
 const WEEK_BUCKETS = 12;
 const MONTH_BUCKETS = 12;
+// Puan (EMA) ISINMA penceresi — gösterilecek aralıktan ÖNCE, yalnızca EMA'yı
+// beslemek için ekstra kova. Bunlar ekranda görünmez, yalnız ilk görünür
+// noktanın da öncesindeki birikimi yansıtmasını sağlar (bkz. attachScores).
+const DAY_WARMUP = 60;
+const WEEK_WARMUP = 12;
+const MONTH_WARMUP = 12;
+// EMA (üstel hareketli ortalama) katsayısı — her kova hedefe ulaşınca puan
+// biraz YÜKSELİR, ıskalanınca biraz DÜŞER; tek kötü/iyi kova grafiği sıçratmaz.
+// 0.2 tek günün etkisini fazla hissettiriyordu (kullanıcı geri bildirimi) —
+// 0.07'ye düşürüldü.
+const SCORE_EMA_ALPHA = 0.07;
+function emaScores(ratios: number[], alpha = SCORE_EMA_ALPHA): number[] {
+  const out: number[] = [];
+  let prev = 0;
+  ratios.forEach((r, i) => {
+    prev = i === 0 ? r : prev * (1 - alpha) + r * alpha;
+    out.push(prev);
+  });
+  return out;
+}
 
 // Seri geçmişi (habitRepo.allStreaks'in aynısı — burada yalnız tip takma adı).
 export interface StreakEntry {
@@ -31,10 +51,15 @@ export interface StreakEntry {
   end: string;
 }
 
-// Grafik kovası: date = kovanın başlangıç günü ("YYYY-MM-DD"), ratio = 0..1.
+// Grafik kovası: date = kovanın başlangıç günü ("YYYY-MM-DD"), ratio = 0..1
+// (o kovanın HAM tamamlanma oranı), score = aynı kovanın EMA'lı (yumuşatılmış)
+// puanı — Puan grafiği bunu çizer. partial=true ise kova henüz BİTMEDİ
+// (bugün / süren hafta-ay) — grafikte soluk gösterilir (bkz. ScoreLineChart).
 export interface ChartBucket {
   date: string;
   ratio: number;
+  score: number;
+  partial: boolean;
 }
 
 // Gün/hafta/ay serileri — istatistik ekranındaki çubuk grafiğin üç görünümü.
@@ -49,9 +74,28 @@ export interface HabitChartSeries {
 // bugüne kadar biriken miktar. Kota alışkanlıkta 'today' satırı anlamsız
 // (tek günlük hedef yok) — buildGoalPeriods onu eler.
 export interface GoalPeriodStat {
-  key: 'today' | 'week' | 'month' | 'year';
+  key: 'today' | 'week' | 'month' | 'quarter' | 'year';
   done: number;
   goal: number;
+}
+
+// "Geçmiş" kartındaki bir kova (gün/hafta/ay) toplamı — yalnız nicel/zamanlayıcı
+// (target_amount'lı) alışkanlıkta anlamlı (ikilide "toplam miktar" kavramı yok).
+// partial=true ise kova ya bugünden/bu aydan önce hiç veri yokken başlıyor
+// (alışkanlığın ilk kovası) ya da hâlâ devam ediyor (henüz bitmedi) — UI bunu
+// soluk gösterir.
+export interface BucketTotal {
+  bucketStart: string;
+  total: number;
+  partial: boolean;
+}
+
+// "Geçmiş" kartının Gün/Hafta/Ay seçenekleri — CompletionChart'taki aynı üçlü
+// periyot deseni, ama oran değil GERÇEK TOPLAM miktar taşır.
+export interface HistoryTotals {
+  day: BucketTotal[];
+  week: BucketTotal[];
+  month: BucketTotal[];
 }
 
 export interface HabitStats {
@@ -64,8 +108,9 @@ export interface HabitStats {
   totalAmount: number | null;  // nicel değilse (target_amount yoksa) null
   streaks: StreakEntry[];       // büyükten küçüğe geçmiş seriler
   series: HabitChartSeries | null; // hiç log yoksa null (grafik gizlenir)
-  goalPeriods: GoalPeriodStat[]; // Bugün/Hafta/Ay/Yıl hedef karşılaştırması
+  goalPeriods: GoalPeriodStat[]; // Bugün/Hafta/Ay/3 Ay/Yıl hedef karşılaştırması
   insights: HabitInsight[]; // kural tabanlı gözlemler (bkz. habitInsights.ts) — en fazla 2
+  historyTotals: HistoryTotals | null; // "Geçmiş" kartı — yalnız nicel/zamanlayıcıda dolu
 }
 
 const EMPTY: HabitStats = {
@@ -80,7 +125,74 @@ const EMPTY: HabitStats = {
   series: null,
   goalPeriods: [],
   insights: [],
+  historyTotals: null,
 };
+
+// Grafikler artık yatayda kaydırılabilir (bkz. habit/[id].tsx) — ekrana sığan
+// sayı azaldı ama kaydırarak ulaşılabilen aralık genişledi.
+const HISTORY_BUCKETS = 30;
+
+// "Geçmiş" kartının Gün/Hafta/Ay toplamları — yalnız target_amount'lı (nicel/
+// zamanlayıcı) alışkanlıkta anlamlı. Her periyotta son 5 kova (kalabalık
+// olmasın, değer etiketleri sığsın diye — bkz. habit/[id].tsx HabitDarkStatsCard).
+function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): HistoryTotals | null {
+  if (habit.target_amount == null || allLogs.length === 0) return null;
+  const amountByDate = new Map(allLogs.map((l) => [l.log_date, l.amount ?? 0]));
+  const firstLogDate = allLogs[0].log_date;
+
+  const sumRange = (startYmd: string, endYmd: string): number => {
+    let total = 0;
+    const cursor = new Date(`${startYmd}T00:00:00`);
+    const end = new Date(`${endYmd}T00:00:00`);
+    while (cursor <= end) {
+      total += amountByDate.get(toYmd(cursor)) ?? 0;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return total;
+  };
+
+  // — Gün: son 5 gün —
+  const day: BucketTotal[] = lastDays(HISTORY_BUCKETS).map((ymd) => ({
+    bucketStart: ymd,
+    total: amountByDate.get(ymd) ?? 0,
+    partial: ymd === today || ymd < firstLogDate,
+  }));
+
+  // — Hafta: son 5 hafta (Pazartesi başlangıçlı) —
+  const monday = new Date(`${today}T00:00:00`);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // bu haftanın pazartesisi
+  const week: BucketTotal[] = [];
+  for (let i = HISTORY_BUCKETS - 1; i >= 0; i--) {
+    const start = new Date(monday);
+    start.setDate(monday.getDate() - i * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    const startYmd = toYmd(start);
+    const endYmd = toYmd(end);
+    week.push({
+      bucketStart: startYmd,
+      total: sumRange(startYmd, endYmd),
+      partial: endYmd > today || startYmd < firstLogDate,
+    });
+  }
+
+  // — Ay: son 5 takvim ayı —
+  const now = new Date(`${today}T00:00:00`);
+  const month: BucketTotal[] = [];
+  for (let i = HISTORY_BUCKETS - 1; i >= 0; i--) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const startYmd = toYmd(start);
+    const endYmd = toYmd(end);
+    month.push({
+      bucketStart: startYmd,
+      total: sumRange(startYmd, endYmd),
+      partial: endYmd > today || startYmd < firstLogDate,
+    });
+  }
+
+  return { day, week, month };
+}
 
 // Bir günün 0..1 tamamlama oranı: ikili alışkanlıkta 0/1; nicel/zamanlayıcıda
 // yapılan miktarın hedefe oranı (1'de kırpılır — hedefi aşmak grafiği taşırmaz).
@@ -141,43 +253,71 @@ function buildSeries(habit: Habit, allLogs: HabitLog[]): HabitChartSeries | null
   const completedSet = new Set(allLogs.filter((l) => l.completed === 1).map((l) => l.log_date));
   const firstLogDate = allLogs[0].log_date;
   const firstDate = habit.start_date && habit.start_date < firstLogDate ? habit.start_date : firstLogDate;
+  const quota = isQuotaSchedule(habit.schedule) ? habit.schedule!.timesPerWeek! : null;
 
-  // — Gün: son 30 gün, kova = tek gün —
-  const day: ChartBucket[] = lastDays(DAY_BUCKETS).map((date) => ({
-    date,
-    ratio:
-      isScheduledOn(habit.schedule, date) && isWithinHabitDates(habit.start_date, habit.end_date, date)
+  // — Gün: kova = tek gün. KOTA (haftada X kez) alışkanlıkta günün HAM 0/1
+  // durumu yerine "bu haftanın bugüne kadarki oranı" kullanılır — aksi halde
+  // haftalık kotasını tutturan bir alışkanlık bile Gün sekmesinde sürekli
+  // düşük puanlı görünürdü (Hafta/Ay sekmeleriyle çelişen, yanıltıcı bir
+  // görünüm — kullanıcı geri bildirimi).
+  const dayDates = lastDays(DAY_BUCKETS + DAY_WARMUP);
+  const dayRaw: ChartBucket[] = dayDates.map((date) => {
+    const ratio = quota
+      ? rangeRatio(habit, completedSet, weekStartOf(date), date, today)
+      : isScheduledOn(habit.schedule, date) && isWithinHabitDates(habit.start_date, habit.end_date, date)
         ? dayRatio(habit, logByDate.get(date))
-        : 0,
-  }));
+        : 0;
+    return { date, ratio, score: 0, partial: date === today };
+  });
 
-  // — Hafta: son 12 hafta (Pazartesi başlangıçlı), kova = hafta —
-  const week: ChartBucket[] = [];
+  // — Hafta: kova = hafta (Pazartesi başlangıçlı) —
+  const weekRaw: ChartBucket[] = [];
   const monday = new Date(`${today}T00:00:00`);
   const jsDay = monday.getDay(); // 0=Pazar
   monday.setDate(monday.getDate() - ((jsDay + 6) % 7)); // bu haftanın pazartesisi
-  for (let i = WEEK_BUCKETS - 1; i >= 0; i--) {
+  for (let i = WEEK_BUCKETS + WEEK_WARMUP - 1; i >= 0; i--) {
     const start = new Date(monday);
     start.setDate(monday.getDate() - i * 7);
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
-    week.push({
-      date: toYmd(start),
-      ratio: rangeRatio(habit, completedSet, toYmd(start), toYmd(end), today),
+    const startYmd = toYmd(start);
+    const endYmd = toYmd(end);
+    weekRaw.push({
+      date: startYmd,
+      ratio: rangeRatio(habit, completedSet, startYmd, endYmd, today),
+      score: 0,
+      partial: endYmd > today,
     });
   }
 
-  // — Ay: son 12 takvim ayı, kova = ay —
-  const month: ChartBucket[] = [];
+  // — Ay: kova = takvim ayı —
+  const monthRaw: ChartBucket[] = [];
   const now = new Date(`${today}T00:00:00`);
-  for (let i = MONTH_BUCKETS - 1; i >= 0; i--) {
+  for (let i = MONTH_BUCKETS + MONTH_WARMUP - 1; i >= 0; i--) {
     const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0); // ayın son günü
-    month.push({
-      date: toYmd(start),
-      ratio: rangeRatio(habit, completedSet, toYmd(start), toYmd(end), today),
+    const startYmd = toYmd(start);
+    const endYmd = toYmd(end);
+    monthRaw.push({
+      date: startYmd,
+      ratio: rangeRatio(habit, completedSet, startYmd, endYmd, today),
+      score: 0,
+      partial: endYmd > today,
     });
   }
+
+  // EMA, ISINMA penceresi dahil TÜM ham diziler üzerinden hesaplanır, sonra
+  // yalnızca gösterilecek son kısım kesilir — grafiğin ilk görünür noktası da
+  // öncesindeki birikimi yansıtır, Gün/Hafta/Ay sekmeleri arasında puan
+  // "sıfırlanmış" gibi görünmez (kullanıcı geri bildirimi).
+  const attachScores = (raw: ChartBucket[]): ChartBucket[] => {
+    const scores = emaScores(raw.map((b) => b.ratio));
+    return raw.map((b, i) => ({ ...b, score: scores[i] }));
+  };
+
+  const day = attachScores(dayRaw).slice(-DAY_BUCKETS);
+  const week = attachScores(weekRaw).slice(-WEEK_BUCKETS);
+  const month = attachScores(monthRaw).slice(-MONTH_BUCKETS);
 
   const endOfDay = (b: ChartBucket) => b.date;
   const endOfWeek = (b: ChartBucket) => {
@@ -206,10 +346,16 @@ function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: s
   const t = new Date(`${today}T00:00:00`);
   const monthStart = toYmd(new Date(t.getFullYear(), t.getMonth(), 1));
   const monthEnd = toYmd(new Date(t.getFullYear(), t.getMonth() + 1, 0));
+  // "3 Ay": içinde bulunulan takvim çeyreği (Oca-Mar/Nis-Haz/Tem-Eyl/Eki-Ara) —
+  // yılın diğer dönemleriyle aynı "sabit takvim aralığı" mantığını korur.
+  const qStartMonth = Math.floor(t.getMonth() / 3) * 3;
+  const quarterStart = toYmd(new Date(t.getFullYear(), qStartMonth, 1));
+  const quarterEnd = toYmd(new Date(t.getFullYear(), qStartMonth + 3, 0));
   return [
     { key: 'today', start: today, end: today },
     { key: 'week', start: weekStart, end: toYmd(weekEndD) },
     { key: 'month', start: monthStart, end: monthEnd },
+    { key: 'quarter', start: quarterStart, end: quarterEnd },
     { key: 'year', start: `${t.getFullYear()}-01-01`, end: `${t.getFullYear()}-12-31` },
   ];
 }
@@ -308,6 +454,7 @@ export function useHabitStats(habitId: string): HabitStats {
       series: buildSeries(habit, allLogs),
       goalPeriods: buildGoalPeriods(habit, allLogs, todayDate()),
       insights: buildHabitInsights(habit, allLogs, todayDate(), currentStreak, longestStreak),
+      historyTotals: buildHistoryTotals(habit, allLogs, todayDate()),
     });
   }, [habitId]);
 

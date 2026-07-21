@@ -135,6 +135,19 @@ export interface Subtask extends SyncFields {
   position: number; // oluşturma sırası; liste bu sırayla gösterilir
 }
 
+// Çoklu hatırlatma. Alışkanlık/görev/hedefin remind_at (tekil "HH:MM") alanı
+// artık kullanılmıyor — her varlık bu tablodan SIFIR ya da DAHA FAZLA hatırlatma
+// saatine sahip olabilir (bkz. reminderRepo, notifications.scheduleHabitReminders
+// vb.). Eski remind_at kolonları migration016'da bu tabloya geriye dönük
+// aktarılır ama DB'de dokunulmadan kalır (veri kaybı yok, artık okunmuyor).
+export type ReminderEntityType = 'habit' | 'task' | 'goal';
+
+export interface Reminder extends SyncFields {
+  entity_type: ReminderEntityType;
+  entity_id: string;
+  time: string; // "HH:MM"
+}
+
 // Her gün bir alışkanlığı işaretlediğinde bir kayıt oluşur.
 // Streak ve istatistikler bu kayıtlardan hesaplanır.
 export interface HabitLog {

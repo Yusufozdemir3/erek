@@ -103,11 +103,23 @@ export function DatePickerModal({
       <Text style={styles.title}>{title ?? t('date.pickTitle')}</Text>
 
       <View style={styles.nav}>
-        <Pressable style={styles.navBtn} onPress={() => goMonth(-1)} hitSlop={8}>
+        <Pressable
+          style={styles.navBtn}
+          onPress={() => goMonth(-1)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('date.prevMonth')}
+        >
           <Feather name="chevron-left" size={20} color={colors.text} />
         </Pressable>
         <Text style={styles.monthLabel}>{monthLabel}</Text>
-        <Pressable style={styles.navBtn} onPress={() => goMonth(1)} hitSlop={8}>
+        <Pressable
+          style={styles.navBtn}
+          onPress={() => goMonth(1)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t('date.nextMonth')}
+        >
           <Feather name="chevron-right" size={20} color={colors.text} />
         </Pressable>
       </View>
@@ -164,11 +176,18 @@ export function DatePickerModal({
           style={[styles.todayBtn, !canGoToday && { opacity: 0.4 }]}
           disabled={!canGoToday}
           onPress={() => pick(new Date())}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.today')}
         >
           <Feather name="calendar" size={15} color={colors.primary} />
           <Text style={styles.todayBtnText}>{t('common.today')}</Text>
         </Pressable>
-        <Pressable style={styles.cancelBtn} onPress={onClose}>
+        <Pressable
+          style={styles.cancelBtn}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.cancel')}
+        >
           <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
         </Pressable>
       </View>

@@ -23,6 +23,8 @@ export function ConfirmDeleteButton({ onConfirm }: Props) {
     <Pressable
       style={[styles.btn, armed && styles.btnArmed]}
       onPress={() => (armed ? onConfirm() : setArmed(true))}
+      accessibilityRole="button"
+      accessibilityLabel={armed ? t('common.deleteConfirm') : t('common.delete')}
     >
       <Text style={[styles.text, armed && styles.textArmed]}>
         {armed ? t('common.deleteConfirm') : t('common.delete')}

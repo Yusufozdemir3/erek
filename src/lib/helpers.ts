@@ -65,6 +65,15 @@ export function fmtClock(totalSeconds: number): string {
   return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
 }
 
+// Süre-ölçümlü sayısal hedef işareti — Goal.unit alanına yazılır (gerçek bir
+// birim metni değil, "bu hedefin target/current_value'su SANİYE cinsinden"
+// demek — habit.kind='timer'in dakika→saniye deseninin hedeflere taşınmış
+// hali). Migration/yeni kolon GEREKMEDİ: unit zaten serbest metin TEXT.
+export const TIME_UNIT = '__time__';
+export function isTimeUnit(unit: string | null | undefined): boolean {
+  return unit === TIME_UNIT;
+}
+
 // Bugün dahil son `count` günün "YYYY-MM-DD" listesi (en eskiden bugüne).
 // Haftalık geçmiş şeridi ve istatistik ısı haritası ortak kullanır.
 export function lastDays(count: number): string[] {

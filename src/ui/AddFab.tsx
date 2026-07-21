@@ -15,6 +15,7 @@ import type { Step } from '@/ui/AddSheet';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { EntityIcon, type EntityType } from '@/ui/EntityIcon';
+import { tapMedium } from '@/lib/haptics';
 import type { Colors } from '@/ui/theme';
 
 type AddStep = Exclude<Step, 'menu'>;
@@ -29,8 +30,20 @@ const OPTIONS: { step: AddStep; type: EntityType; labelKey: string; color: strin
 ];
 
 // Sekme çubuğundaki kare ＋ butonu. `open` iken ＋ 45° dönerek × olur.
-export function AddFabButton({ open, onPress }: { open: boolean; onPress: () => void }) {
+// UZUN BASIŞ ayrı bir eylem açar (bağımsız sayaç seçici — bkz. TimerPicker);
+// kısa dokunuşla ÇAKIŞMASIN diye `onLongPress` opsiyonel bırakıldı (verilmezse
+// buton eskisi gibi yalnız kısa dokunuşa tepki verir).
+export function AddFabButton({
+  open,
+  onPress,
+  onLongPress,
+}: {
+  open: boolean;
+  onPress: () => void;
+  onLongPress?: () => void;
+}) {
   const { colors } = useTheme();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const anim = useRef(new Animated.Value(0)).current;
 
@@ -49,9 +62,18 @@ export function AddFabButton({ open, onPress }: { open: boolean; onPress: () => 
     <Pressable
       style={styles.buttonWrap}
       onPress={onPress}
+      onLongPress={
+        onLongPress
+          ? () => {
+              tapMedium();
+              onLongPress();
+            }
+          : undefined
+      }
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={open ? 'Ekleme menüsünü kapat' : 'Ekle'}
+      accessibilityHint={onLongPress ? t('timer.longPressHint') : undefined}
       accessibilityState={{ expanded: open }}
     >
       {/* Kare çerçevenin tamamı döner; içindeki ＋ de onunla dönüp × olur.
@@ -138,6 +160,8 @@ export function AddFab({
               <Pressable
                 style={[styles.optionCircle, { backgroundColor: opt.color }]}
                 onPress={() => onPick(opt.step)}
+                accessibilityRole="button"
+                accessibilityLabel={t(opt.labelKey)}
               >
                 <EntityIcon type={opt.type} size={22} color="#ffffff" />
               </Pressable>

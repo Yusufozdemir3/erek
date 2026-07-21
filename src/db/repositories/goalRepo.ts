@@ -147,6 +147,28 @@ export const goalRepo = {
     return applied;
   },
 
+  // Süre-ölçümlü hedef ZAMANLAYICISI için — addProgress'in aksine target_value'yu
+  // AŞMAYA izin verir (0'ın altına inmez). addProgress hedefte kırpar (manuel
+  // +/- ve alışkanlık-bağlantısı katkıları için doğru davranış); ama zamanlayıcı
+  // hedefe ulaşınca da kullanıcı çalışmaya devam edebilsin istiyoruz — tıpkı
+  // habitRepo.incrementAmount'ın (zamanlayıcı alışkanlıklarda) hiç kırpmaması gibi
+  // (bkz. TimerProvider). Kırpma olsaydı hedef sonrası geçen süre commit'te
+  // sessizce 0 uygulanır, kullanıcının fazladan çalıştığı süre kaybolurdu.
+  addTimeProgress(id: string, amount: number): void {
+    const db = getDb();
+    const goal = this.getById(id);
+    if (!goal || goal.goal_type !== 'numeric') return;
+    const next = Math.max(0, goal.current_value + amount);
+    const applied = next - goal.current_value;
+    if (applied === 0) return;
+    db.runSync(`UPDATE goals SET current_value = ?, updated_at = ?, synced = 0 WHERE id = ?`, [
+      next,
+      nowIso(),
+      id,
+    ]);
+    goalEntryRepo.create(id, applied);
+  },
+
   // 0-1 arası ilerleme oranı. UI yüzde göstergesi için.
   progressRatio(goal: Goal): number {
     if (goal.goal_type === 'numeric' && goal.target_value && goal.target_value > 0) {

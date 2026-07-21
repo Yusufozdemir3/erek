@@ -1,26 +1,27 @@
-// Alışkanlık istatistik ekranı — özet sayılar, Gün/Hafta/Ay tamamlama grafiği,
-// seri geçmişi (ilk 5), aylık takvim + en altta rozetler.
+// Alışkanlık istatistik ekranı — özet sayılar, Hedef/Puan/Geçmiş kartı,
+// seri geçmişi (ilk 3), aylık takvim + en altta rozetler.
 // "Alışkanlıklar" sekmesinde bir kartın haftalık geçmiş şeridine dokununca açılır.
 // Mimari kural: SQL yok; yalnızca useHabitStats (habitRepo üzerinden) çağrılır.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { fmtClock, isQuotaSchedule } from '@/lib/helpers';
 import type { Habit } from '@/db';
 import { STREAK_MILESTONES } from '@/lib/milestones';
 import {
   useHabitStats,
-  type ChartBucket,
+  type BucketTotal,
   type GoalPeriodStat,
   type HabitChartSeries,
+  type HabitStats,
   type StreakEntry,
 } from '@/ui/useHabitStats';
-import type { HabitInsight } from '@/lib/habitInsights';
 import { useHabitCalendar, type CalendarDay } from '@/ui/useHabitCalendar';
-import { BarChart } from '@/ui/BarChart';
+import { ScoreLineChart } from '@/ui/ScoreLineChart';
 import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -51,6 +52,17 @@ function fmtGoalValue(habit: Habit, n: number): string {
   return `${fmtCompact(n)}${habit.unit ? ` ${habit.unit}` : ''}`;
 }
 
+// "Geçmiş" çubuğundaki değeri biçimler — fmtGoalValue ile AYNI tür ayrımı
+// (zamanlayıcıda saat, nicelde miktar) ama birim EKLEMEZ (dar sütunlarda
+// aşırı sıkışık görünüyordu, bkz. HistoryBars yorumu). Önceden zamanlayıcı
+// alışkanlıklarda da fmtCompact kullanılıyordu — saniye toplamı "5.4k" gibi
+// anlamsız bir sayıya dönüşüyordu (kullanıcı geri bildirimi).
+function fmtHistoryValue(habit: Habit, n: number): string {
+  if (habit.target_amount == null) return String(Math.round(n));
+  if (habit.kind === 'timer') return fmtClock(n);
+  return fmtCompact(n);
+}
+
 function StatCard({ label, value, styles }: { label: string; value: string; styles: Styles }) {
   return (
     <View style={styles.statCard}>
@@ -60,173 +72,278 @@ function StatCard({ label, value, styles }: { label: string; value: string; styl
   );
 }
 
-// Haftanın günü içgörülerinde JS getDay() (0=Pazar) sırasıyla çeviri anahtarı.
-const WEEKDAY_KEY_BY_JS_INDEX = [
-  'weekday.sun', 'weekday.mon', 'weekday.tue', 'weekday.wed',
-  'weekday.thu', 'weekday.fri', 'weekday.sat',
-];
+// Gün/Hafta/Ay periyodu — Puan ve Geçmiş bölümlerinin ikisi de kullanır
+// (dayRatio tabanlı seri hazır olduğundan, bkz. useHabitStats.HabitChartSeries).
+type ChartPeriod = 'day' | 'week' | 'month';
 
-const INSIGHT_ICON: Record<HabitInsight['kind'], keyof typeof Feather.glyphMap> = {
-  trendUp: 'trending-up',
-  trendDown: 'trending-down',
-  bestWeekday: 'thumbs-up',
-  worstWeekday: 'alert-circle',
-  streakRecord: 'award',
-  streakActive: 'zap',
+// Gün/Hafta/Ay seçici — Puan + Geçmiş kartlarının ikisi de aynı üçlü periyot
+// desenini kullanır (tek kaynak, tutarlı metin/sıra).
+const PERIOD_OPTIONS: { key: ChartPeriod; labelKey: string }[] = [
+  { key: 'day', labelKey: 'stats.periodDay' },
+  { key: 'week', labelKey: 'stats.periodWeek' },
+  { key: 'month', labelKey: 'stats.periodMonth' },
+];
+const PERIOD_UNIT_KEY: Record<ChartPeriod, string> = {
+  day: 'stats.unitDay',
+  week: 'stats.unitWeek',
+  month: 'stats.unitMonth',
 };
 
-// İçgörü metni — kural tabanlı, ağa çıkmayan basit gözlemler (bkz. habitInsights.ts).
-function insightText(insight: HabitInsight, t: (key: string, params?: Record<string, string | number>) => string): string {
-  switch (insight.kind) {
-    case 'trendUp':
-      return t('insights.trendUp', { prior: Math.round(insight.priorRate * 100), recent: Math.round(insight.recentRate * 100) });
-    case 'trendDown':
-      return t('insights.trendDown', { prior: Math.round(insight.priorRate * 100), recent: Math.round(insight.recentRate * 100) });
-    case 'bestWeekday':
-      return t('insights.bestWeekday', { day: t(WEEKDAY_KEY_BY_JS_INDEX[insight.weekday]), rate: Math.round(insight.rate * 100) });
-    case 'worstWeekday':
-      return t('insights.worstWeekday', { day: t(WEEKDAY_KEY_BY_JS_INDEX[insight.weekday]), rate: Math.round(insight.rate * 100) });
-    case 'streakRecord':
-      return t('insights.streakRecord', { days: insight.days });
-    case 'streakActive':
-      return t('insights.streakActive', { days: insight.days });
+// "Hedef + Puan + Geçmiş" — Claude Design'da onaylanan mockup'ın (Tur 9, kart
+// 9a) BİREBİR portu: tek koyu kart, bölümler arasında ince ayraç. Renkler
+// mockup'ın kendi paleti (zemin #0a0a0a, kenarlık #262626, ikincil metin #666/
+// #999) — TEK bilinçli fark: mockup'ta sabit teal (#5eead4) olan vurgu rengi
+// burada `color` (alışkanlığın kendi rengi) — uygulamanın geri kalanıyla
+// (ikon, diğer grafikler) tutarlı kalsın diye dinamik bırakıldı.
+// "Puan" — EMA (üstel hareketli ortalama) skoru; hesaplama artık ISINMA
+// penceresi dahil useHabitStats.buildSeries içinde yapılıyor (bkz. o
+// dosyadaki emaScores/attachScores) — burada yalnız hazır b.score okunur.
+
+// "Geçmiş" bar etiketi: periyoda göre — ay kovasında hep ay adı, hafta
+// kovasında yeni bir aya geçen ilk çubukta ay adı (mockup'taki "HAZ·22·29·TEM·13"
+// deseni), gün kovasında kısa tarih.
+function historyBarLabel(
+  period: ChartPeriod,
+  bucketStart: string,
+  prevBucketStart: string | null,
+  lang: Lang
+): string {
+  const d = new Date(`${bucketStart}T00:00:00`);
+  if (period === 'month') {
+    return d.toLocaleDateString(DATE_LOCALE[lang], { month: 'short' }).toUpperCase();
   }
+  // 'day' ve 'week': sadece gün numarası, ay değiştiğinde bir kez ay adı da
+  // eklenir. ('day' eskiden shortDate ile HER etikette ayı tekrarlıyordu —
+  // kullanıcı ekran görüntüsünde yakaladı, bu düzeltme onun için.)
+  if (!prevBucketStart || d.getMonth() !== new Date(`${prevBucketStart}T00:00:00`).getMonth()) {
+    return d.toLocaleDateString(DATE_LOCALE[lang], { month: 'short' }).toUpperCase();
+  }
+  return String(d.getDate());
 }
 
-function InsightsCard({
-  insights,
-  color,
+// Küçük Gün/Hafta/Ay sekme seçici — Puan ve Geçmiş bölümlerinin ikisi de
+// kullanır (periodRow/periodBtn stilleri Tamamlama grafiğiyle PAYLAŞILIR).
+function PeriodTabs({
+  period,
+  onChange,
   t,
   styles,
 }: {
-  insights: HabitInsight[];
-  color: string;
-  t: (key: string, params?: Record<string, string | number>) => string;
-  styles: Styles;
-}) {
-  return (
-    <View style={{ gap: 10 }}>
-      {insights.map((insight, i) => (
-        <View key={i} style={styles.insightRow}>
-          <Feather name={INSIGHT_ICON[insight.kind]} size={16} color={color} />
-          <Text style={styles.insightText}>{insightText(insight, t)}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-// "Hedef" karşılaştırması: Bugün/Hafta/Ay/Yıl için TAM dönem hedefi (gelecek
-// günler dahil, "bu dönemi hep yapsaydın") ile bugüne kadar biriken miktar.
-// Kotalı alışkanlıkta "Bugün" satırı yok (tek günlük hedef anlamsız).
-function GoalPeriodsCard({
-  periods,
-  habit,
-  color,
-  t,
-  styles,
-}: {
-  periods: GoalPeriodStat[];
-  habit: Habit;
-  color: string;
+  period: ChartPeriod;
+  onChange: (p: ChartPeriod) => void;
   t: (key: string) => string;
   styles: Styles;
 }) {
-  const LABEL_KEY: Record<GoalPeriodStat['key'], string> = {
-    today: 'stats.goalToday',
-    week: 'stats.goalWeek',
-    month: 'stats.goalMonth',
-    year: 'stats.goalYear',
-  };
   return (
-    <View style={{ gap: 10 }}>
-      {periods.map((p) => {
-        const pct = p.goal > 0 ? Math.min(100, (p.done / p.goal) * 100) : 0;
+    <View style={styles.statsPeriodRow}>
+      {PERIOD_OPTIONS.map((p) => {
+        const sel = period === p.key;
         return (
-          <View key={p.key} style={styles.goalRow}>
-            <Text style={styles.goalLabel}>{t(LABEL_KEY[p.key])}</Text>
-            <View style={styles.goalBarTrack}>
-              <View style={[styles.goalBarFill, { width: `${pct}%`, backgroundColor: color }]} />
-            </View>
-            <Text style={styles.goalValue}>
-              {fmtGoalValue(habit, p.done)} / {fmtGoalValue(habit, p.goal)}
-            </Text>
-          </View>
+          <Pressable
+            key={p.key}
+            style={[styles.periodBtn, styles.statsPeriodBtn, sel && styles.periodBtnSel]}
+            onPress={() => onChange(p.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: sel }}
+          >
+            <Text style={[styles.periodText, sel && styles.periodTextSel]}>{t(p.labelKey)}</Text>
+          </Pressable>
         );
       })}
     </View>
   );
 }
 
-// Tamamlama grafiği kartının içi: Gün/Hafta/Ay segment seçici + çubuk grafik.
-// Gün görünümünde her çubuk o günün oranı (nicel/zamanlayıcıda miktar/hedef,
-// ikilide 0/1); hafta/ay görünümünde kovanın planlı-gün tamamlanma oranı.
-// Seyrek eksen etiketleri (ilk/orta/son kova) çağıranın verdiği biçimleyiciyle
-// üretilir (yerel ay/gün adları için).
-type ChartPeriod = 'day' | 'week' | 'month';
+// "Geçmiş" çubukları — yatayda KAYDIRILABİLİR (Puan grafiğiyle aynı prensip):
+// sabit genişlikli sütunlar, açılışta en güncel kovaya (sağ uca) otomatik
+// kayar. Değer etiketinde birim YOK (yalnızca kısaltılmış sayı, ör. "11.4k")
+// — dar sütunlarda birim eklemek aşırı sıkışık görünüyordu (kullanıcı geri
+// bildirimi); birim zaten başlıkta/"Hedef" bölümünde okunabiliyor.
+const HISTORY_COL_WIDTH_MIN = 20; // sütun başına ASGARİ piksel
 
-function CompletionChart({
-  series,
+function HistoryBars({
+  buckets,
+  period,
+  habit,
   color,
-  t,
-  formatLabel,
+  lang,
   styles,
-  trackColor,
-  labelColor,
 }: {
-  series: HabitChartSeries;
+  buckets: BucketTotal[];
+  period: ChartPeriod;
+  habit: Habit;
   color: string;
-  t: (key: string) => string;
-  formatLabel: (period: ChartPeriod, bucket: ChartBucket) => string;
+  lang: Lang;
   styles: Styles;
-  trackColor: string;
-  labelColor: string;
 }) {
-  const [period, setPeriod] = useState<ChartPeriod>('day');
-  const buckets = series[period];
-  const ratios = buckets.map((b) => b.ratio);
-  // İlk/orta/son kovadan seyrek etiketler (2 kovada ilk+son, tek kovada yalnız o).
-  const labelIdx =
-    buckets.length >= 3
-      ? [0, Math.floor((buckets.length - 1) / 2), buckets.length - 1]
-      : buckets.map((_, i) => i);
-  const labels = [...new Set(labelIdx)].map((i) => formatLabel(period, buckets[i]));
-  const current = buckets.length > 0 ? buckets[buckets.length - 1].ratio : 0;
-
-  const PERIODS: { key: ChartPeriod; labelKey: string }[] = [
-    { key: 'day', labelKey: 'stats.periodDay' },
-    { key: 'week', labelKey: 'stats.periodWeek' },
-    { key: 'month', labelKey: 'stats.periodMonth' },
-  ];
+  const scrollRef = useRef<ScrollView>(null);
+  const didAutoScroll = useRef(false);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const max = Math.max(1, ...buckets.map((b) => b.total));
+  // Az kova varken (ör. sadece 4 hafta) sütun genişliği KONTEYNERİ doldursun —
+  // aksi halde çubuklar sol kenara yapışıp sağda çirkin bir boşluk bırakıyordu
+  // (Puan grafiğindeki aynı düzeltme, bkz. ScoreLineChart).
+  const colWidth =
+    containerWidth > 0 ? Math.max(HISTORY_COL_WIDTH_MIN, containerWidth / buckets.length) : HISTORY_COL_WIDTH_MIN;
 
   return (
-    <>
-      <View style={styles.periodRow}>
-        {PERIODS.map((p) => {
-          const sel = period === p.key;
-          return (
-            <Pressable
-              key={p.key}
-              style={[styles.periodBtn, sel && styles.periodBtnSel]}
-              onPress={() => setPeriod(p.key)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: sel }}
-            >
-              <Text style={[styles.periodText, sel && styles.periodTextSel]}>{t(p.labelKey)}</Text>
-            </Pressable>
+    <View onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+      {containerWidth > 0 && (
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          onContentSizeChange={() => {
+            if (didAutoScroll.current) return;
+            didAutoScroll.current = true;
+            scrollRef.current?.scrollToEnd({ animated: false });
+          }}
+        >
+          <View style={styles.statsHistoryRow}>
+            {buckets.map((b, i) => {
+              const pct = b.total > 0 ? Math.max(6, Math.round((b.total / max) * 100)) : 0;
+              return (
+                <View key={b.bucketStart} style={[styles.statsHistoryCol, { width: colWidth }]}>
+              <Text style={[styles.statsHistoryValue, { color, width: colWidth }]} numberOfLines={1}>
+                {fmtHistoryValue(habit, b.total)}
+              </Text>
+              <View style={styles.statsHistoryBarTrack}>
+                {pct > 0 &&
+                  (b.partial ? (
+                    <View style={[styles.statsHistoryBar, { height: `${pct}%`, backgroundColor: color + '33' }]} />
+                  ) : (
+                    <LinearGradient
+                      colors={[color, color + '66']}
+                      style={[styles.statsHistoryBar, { height: `${pct}%` }]}
+                    />
+                  ))}
+              </View>
+              <Text style={styles.statsHistoryLabel}>
+                {historyBarLabel(period, b.bucketStart, i > 0 ? buckets[i - 1].bucketStart : null, lang)}
+              </Text>
+            </View>
           );
-        })}
-        <View style={{ flex: 1 }} />
-        <Text style={styles.periodCurrent}>%{Math.round(current * 100)}</Text>
-      </View>
-      <BarChart
-        ratios={ratios}
-        color={color}
-        trackColor={trackColor}
-        labels={labels}
-        labelColor={labelColor}
-      />
-    </>
+            })}
+          </View>
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+function HabitDarkStatsCard({
+  stats,
+  habit,
+  color,
+  themeColors,
+  lang,
+  t,
+  styles,
+}: {
+  stats: HabitStats;
+  habit: Habit;
+  color: string;
+  themeColors: Colors;
+  lang: Lang;
+  t: (key: string, params?: Record<string, string | number>) => string;
+  styles: Styles;
+}) {
+  const GOAL_LABEL_KEY: Record<GoalPeriodStat['key'], string> = {
+    today: 'stats.goalToday',
+    week: 'stats.goalWeek',
+    month: 'stats.goalMonth',
+    quarter: 'stats.goalQuarter',
+    year: 'stats.goalYear',
+  };
+
+  const [scorePeriod, setScorePeriod] = useState<ChartPeriod>('day');
+  const [historyPeriod, setHistoryPeriod] = useState<ChartPeriod>('week');
+
+  // Grafik artık yatayda kaydırılabilir (bkz. ScoreLineChart) — mevcut TÜM
+  // kova gösterilir, ekrana sığmayan kısım kaydırarak görülür; ayrı bir
+  // pencere kırpması gerekmiyor.
+  const scoreBuckets = stats.series ? stats.series[scorePeriod] : [];
+  const scoreUnit = t(PERIOD_UNIT_KEY[scorePeriod]);
+  // Etiket: sadece gün numarası, ay değiştiğinde bir kez ay adı da eklenir
+  // (historyBarLabel ile AYNI mantık — "Geçmiş" çubuklarındaki desenin aynısı,
+  // kullanıcı isteği: her noktada ayı tekrar etmesin, kalabalık olmasın).
+  const scorePoints = scoreBuckets.map((b, i) => ({
+    value: b.score,
+    label: historyBarLabel(scorePeriod, b.date, i > 0 ? scoreBuckets[i - 1].date : null, lang),
+    partial: b.partial,
+  }));
+
+  const historyBuckets = stats.historyTotals ? stats.historyTotals[historyPeriod] : [];
+
+  if (stats.goalPeriods.length === 0 && !stats.series && !stats.historyTotals) return null;
+
+  return (
+    <View style={styles.statsCard}>
+      {stats.goalPeriods.length > 0 && (
+        <View style={styles.statsSection}>
+          <Text style={styles.statsEyebrow}>{t('stats.goalTitle')}</Text>
+          <View style={{ gap: 14, marginTop: 4 }}>
+            {stats.goalPeriods.map((p) => {
+              const pct = p.goal > 0 ? Math.min(100, (p.done / p.goal) * 100) : 0;
+              return (
+                <View key={p.key}>
+                  <View style={styles.statsGoalHeadRow}>
+                    <Text style={styles.statsGoalLabel}>{t(GOAL_LABEL_KEY[p.key])}</Text>
+                    <Text style={styles.statsGoalValue}>
+                      {fmtGoalValue(habit, p.done)} / {fmtGoalValue(habit, p.goal)}
+                    </Text>
+                  </View>
+                  <View style={styles.statsGoalTrack}>
+                    <View style={[styles.statsGoalFill, { width: `${pct}%` }]} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {stats.series && (
+        <View style={[styles.statsSection, styles.statsSectionBordered]}>
+          <View style={styles.statsHeadRow}>
+            <Text style={styles.statsTitle}>{t('stats.scoreTitle')}</Text>
+            <Text style={styles.statsMeta}>{t('stats.scoreWindow', { n: scoreBuckets.length, unit: scoreUnit })}</Text>
+          </View>
+          <PeriodTabs period={scorePeriod} onChange={setScorePeriod} t={t} styles={styles} />
+          {scoreBuckets.length > 0 && (
+            <View style={{ marginTop: 10 }}>
+              <ScoreLineChart
+                points={scorePoints}
+                color={color}
+                gridColor={themeColors.line}
+                labelColor={themeColors.faint}
+                variant="step"
+              />
+            </View>
+          )}
+        </View>
+      )}
+
+      {stats.historyTotals && (
+        <View style={[styles.statsSection, styles.statsSectionBordered]}>
+          <View style={styles.statsHeadRow}>
+            <Text style={styles.statsTitle}>{t('stats.historyTitle')}</Text>
+          </View>
+          <PeriodTabs period={historyPeriod} onChange={setHistoryPeriod} t={t} styles={styles} />
+          {historyBuckets.length > 0 && (
+            <HistoryBars
+              buckets={historyBuckets}
+              period={historyPeriod}
+              habit={habit}
+              color={color}
+              lang={lang}
+              styles={styles}
+            />
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -272,7 +389,7 @@ function MonthCalendar({
   );
 }
 
-// Seri geçmişi: en uzundan en kısaya İLK 5 seri, her satırda uzunluk + tarih
+// Seri geçmişi: en uzundan en kısaya İLK 3 seri, her satırda uzunluk + tarih
 // aralığı + en uzuna göre oranlı bir çubuk (kabaca karşılaştırma için).
 function StreakList({
   streaks,
@@ -289,7 +406,7 @@ function StreakList({
   suffixKey: string; // kota alışkanlıkta '{n} hafta', diğerlerinde '{n} gün'
   styles: Styles;
 }) {
-  const top = streaks.slice(0, 5);
+  const top = streaks.slice(0, 3);
   const max = top[0]?.length ?? 1;
   return (
     <View style={{ gap: 8 }}>
@@ -327,15 +444,6 @@ export default function HabitStatsScreen() {
     year: 'numeric',
   });
 
-  // Grafiğin seyrek eksen etiketleri: gün/hafta kovasında "28 Haz" gibi kısa
-  // tarih (hafta kovasında haftanın pazartesisi), ay kovasında yalnız ay adı.
-  const formatBucketLabel = (period: ChartPeriod, bucket: ChartBucket): string => {
-    if (period === 'month') {
-      return new Date(`${bucket.date}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], { month: 'short' });
-    }
-    return shortDate(bucket.date, lang);
-  };
-
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
       <ScrollView contentContainerStyle={shared.content}>
@@ -370,135 +478,102 @@ export default function HabitStatsScreen() {
               />
             </View>
 
-            {/* İçgörüler — kural tabanlı, ağa çıkmayan basit gözlemler. */}
-            {stats.insights.length > 0 && (
-              <View style={[styles.card, { marginTop: 12 }]}>
-                <Text style={styles.cardLabel}>{t('insights.title')}</Text>
-                <View style={{ marginTop: 12 }}>
-                  <InsightsCard insights={stats.insights} color={habitColor} t={t} styles={styles} />
-                </View>
-              </View>
-            )}
+            {/* Hedef/Puan/Geçmiş — tek koyu kart (Claude Design mockup'ının portu, bkz. HabitDarkStatsCard). */}
+            <View style={{ marginTop: 12 }}>
+              <HabitDarkStatsCard
+                stats={stats}
+                habit={stats.habit}
+                color={habitColor}
+                themeColors={colors}
+                lang={lang}
+                t={t}
+                styles={styles}
+              />
+            </View>
 
-            {/* Hedef karşılaştırması — Bugün/Hafta/Ay/Yıl. */}
-            {stats.goalPeriods.length > 0 && (
+
+            {/* Seri geçmişi — en uzun 3 seri. Kalan bölümler (bu ve altındakiler)
+                de kendi `styles.card` kutusunda — ekrandaki tüm istatistik
+                blokları artık TUTARLI şekilde kutulu/ayrık (bkz. dosya başı yorumu). */}
+            {stats.streaks.length > 0 && (
               <View style={[styles.card, { marginTop: 12 }]}>
-                <Text style={styles.cardLabel}>{t('stats.goalTitle')}</Text>
+                <Text style={styles.cardLabel}>{t('stats.streakHistory')}</Text>
                 <View style={{ marginTop: 12 }}>
-                  <GoalPeriodsCard
-                    periods={stats.goalPeriods}
-                    habit={stats.habit}
+                  <StreakList
+                    streaks={stats.streaks}
                     color={habitColor}
+                    lang={lang}
                     t={t}
+                    suffixKey={isQuota ? 'stats.weeksSuffix' : 'stats.daysSuffix'}
                     styles={styles}
                   />
                 </View>
               </View>
             )}
 
-            {stats.totalAmount != null && (
-              <View style={[styles.card, { marginTop: 12 }]}>
-                <Text style={styles.cardLabel}>{t('stats.totalLast90')}</Text>
-                <Text style={styles.cardValue}>
-                  {stats.habit.kind === 'timer'
-                    ? fmtClock(stats.totalAmount)
-                    : `${fmtAmount(stats.totalAmount)}${stats.habit.unit ? ` ${stats.habit.unit}` : ''}`}
-                </Text>
-              </View>
-            )}
-
-            {/* Tamamlama grafiği — Gün/Hafta/Ay seçilebilir çubuk görünüm. */}
-            {stats.series && (
-              <View style={[styles.card, { marginTop: 12 }]}>
-                <Text style={styles.cardLabel}>{t('stats.chart')}</Text>
-                <CompletionChart
-                  series={stats.series}
-                  color={habitColor}
-                  t={t}
-                  formatLabel={formatBucketLabel}
-                  styles={styles}
-                  trackColor={colors.track}
-                  labelColor={colors.faint}
-                />
-              </View>
-            )}
-
-            {/* Seri geçmişi — en uzun 5 seri. */}
-            {stats.streaks.length > 0 && (
-              <>
-                <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>
-                  {t('stats.streakHistory')}
-                </Text>
-                <StreakList
-                  streaks={stats.streaks}
-                  color={habitColor}
-                  lang={lang}
-                  t={t}
-                  suffixKey={isQuota ? 'stats.weeksSuffix' : 'stats.daysSuffix'}
-                  styles={styles}
-                />
-              </>
-            )}
-
             {/* Tam takvim — ay ay gezinilebilir. */}
-            <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>{t('stats.calendar')}</Text>
-            <View style={styles.calHead}>
-              <Pressable
-                onPress={calendar.goPrev}
-                disabled={!calendar.canGoPrev}
-                hitSlop={8}
-                style={[styles.calNavBtn, !calendar.canGoPrev && styles.calNavBtnDisabled]}
-                accessibilityRole="button"
-                accessibilityLabel={t('stats.prevMonthA11y')}
-              >
-                <Feather name="chevron-left" size={18} color={calendar.canGoPrev ? colors.text : colors.faint} />
-              </Pressable>
-              <Text style={styles.calMonthLabel}>
-                {monthLabel.charAt(0).toLocaleUpperCase(DATE_LOCALE[lang]) + monthLabel.slice(1)}
-              </Text>
-              <Pressable
-                onPress={calendar.goNext}
-                disabled={!calendar.canGoNext}
-                hitSlop={8}
-                style={[styles.calNavBtn, !calendar.canGoNext && styles.calNavBtnDisabled]}
-                accessibilityRole="button"
-                accessibilityLabel={t('stats.nextMonthA11y')}
-              >
-                <Feather name="chevron-right" size={18} color={calendar.canGoNext ? colors.text : colors.faint} />
-              </Pressable>
+            <View style={[styles.card, { marginTop: 12 }]}>
+              <Text style={styles.cardLabel}>{t('stats.calendar')}</Text>
+              <View style={[styles.calHead, { marginTop: 12 }]}>
+                <Pressable
+                  onPress={calendar.goPrev}
+                  disabled={!calendar.canGoPrev}
+                  hitSlop={8}
+                  style={[styles.calNavBtn, !calendar.canGoPrev && styles.calNavBtnDisabled]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('stats.prevMonthA11y')}
+                >
+                  <Feather name="chevron-left" size={18} color={calendar.canGoPrev ? colors.text : colors.faint} />
+                </Pressable>
+                <Text style={styles.calMonthLabel}>
+                  {monthLabel.charAt(0).toLocaleUpperCase(DATE_LOCALE[lang]) + monthLabel.slice(1)}
+                </Text>
+                <Pressable
+                  onPress={calendar.goNext}
+                  disabled={!calendar.canGoNext}
+                  hitSlop={8}
+                  style={[styles.calNavBtn, !calendar.canGoNext && styles.calNavBtnDisabled]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('stats.nextMonthA11y')}
+                >
+                  <Feather name="chevron-right" size={18} color={calendar.canGoNext ? colors.text : colors.faint} />
+                </Pressable>
+              </View>
+              <View style={styles.calWeekHead}>
+                {['weekday.mon', 'weekday.tue', 'weekday.wed', 'weekday.thu', 'weekday.fri', 'weekday.sat', 'weekday.sun'].map(
+                  (k) => (
+                    <Text key={k} style={styles.calWeekHeadText}>
+                      {t(k)}
+                    </Text>
+                  )
+                )}
+              </View>
+              <MonthCalendar weeks={calendar.weeks} color={habitColor} styles={styles} />
             </View>
-            <View style={styles.calWeekHead}>
-              {['weekday.mon', 'weekday.tue', 'weekday.wed', 'weekday.thu', 'weekday.fri', 'weekday.sat', 'weekday.sun'].map(
-                (k) => (
-                  <Text key={k} style={styles.calWeekHeadText}>
-                    {t(k)}
-                  </Text>
-                )
-              )}
-            </View>
-            <MonthCalendar weeks={calendar.weeks} color={habitColor} styles={styles} />
 
             {/* Rozetler — en uzun seri eşiği geçtiyse kazanılmış sayılır (seri
                 düşse bile madalya kalır). Kilitliler soluk. */}
-            <Text style={[shared.subtitle, { marginTop: 24, marginBottom: 12 }]}>{t('stats.badges')}</Text>
-            <View style={styles.badgeRow}>
-              {STREAK_MILESTONES.map((m) => {
-                const earned = streakDays >= m.days;
-                return (
-                  <View
-                    key={m.days}
-                    style={[styles.badge, earned ? styles.badgeEarned : styles.badgeLocked]}
-                  >
-                    <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>
-                      {m.emoji}
-                    </Text>
-                    <Text style={[styles.badgeDays, earned && styles.badgeDaysEarned]}>
-                      {t('stats.daysSuffix', { n: m.days })}
-                    </Text>
-                    <Text style={styles.badgeLabel}>{t(m.labelKey)}</Text>
-                  </View>
-                );
-              })}
+            <View style={[styles.card, { marginTop: 12 }]}>
+              <Text style={styles.cardLabel}>{t('stats.badges')}</Text>
+              <View style={[styles.badgeRow, { marginTop: 12 }]}>
+                {STREAK_MILESTONES.map((m) => {
+                  const earned = streakDays >= m.days;
+                  return (
+                    <View
+                      key={m.days}
+                      style={[styles.badge, earned ? styles.badgeEarned : styles.badgeLocked]}
+                    >
+                      <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>
+                        {m.emoji}
+                      </Text>
+                      <Text style={[styles.badgeDays, earned && styles.badgeDaysEarned]}>
+                        {t('stats.daysSuffix', { n: m.days })}
+                      </Text>
+                      <Text style={styles.badgeLabel}>{t(m.labelKey)}</Text>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
           </>
         )}
@@ -561,25 +636,7 @@ const makeStyles = (c: Colors) =>
     cellMissed: { backgroundColor: '#f87171' },
     cellUnscheduled: { backgroundColor: c.border },
 
-    // — İçgörüler —
-    insightRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-    insightText: { flex: 1, fontSize: 13, color: c.text, lineHeight: 18 },
-
-    // — Hedef karşılaştırması (Bugün/Hafta/Ay/Yıl) —
-    goalRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    goalLabel: { width: 48, fontSize: 12, fontWeight: '700', color: c.text },
-    goalBarTrack: {
-      flex: 1,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: c.track,
-      overflow: 'hidden',
-    },
-    goalBarFill: { height: '100%', borderRadius: 5 },
-    goalValue: { fontSize: 11, fontWeight: '600', color: c.muted, minWidth: 92, textAlign: 'right' },
-
-    // — Tamamlama grafiği (Gün/Hafta/Ay) —
-    periodRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, marginBottom: 14 },
+    // — Gün/Hafta/Ay sekmeleri (Puan + Geçmiş paylaşır) —
     periodBtn: {
       paddingHorizontal: 12,
       paddingVertical: 6,
@@ -591,7 +648,6 @@ const makeStyles = (c: Colors) =>
     periodBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft },
     periodText: { fontSize: 12, fontWeight: '700', color: c.faint },
     periodTextSel: { color: c.primary },
-    periodCurrent: { fontSize: 16, fontWeight: '800', color: c.text },
 
     // — Seri geçmişi listesi —
     streakRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -625,4 +681,39 @@ const makeStyles = (c: Colors) =>
     calCellFilled: { borderRadius: 8, backgroundColor: c.track },
     calDayText: { fontSize: 12, fontWeight: '600', color: c.muted },
     calDayTextOn: { color: c.onAccent, fontWeight: '800' },
+
+    // — Hedef/Puan/Geçmiş kartı — Claude Design mockup'ının (Tur 9, kart 9a)
+    // DÜZEN/YAPI portu. Renkler İSE mockup'tan sabit kopyalanmadı, uygulamanın
+    // kendi tema tokenlerinden (c.*) gelir — aksi halde bu bölüm açık/koyu tema
+    // değişse de hep aynı donuk siyah kalır, ekrana yapıştırılmış bir görsel
+    // gibi durur (kullanıcı geri bildirimi: "fotoğraf gibi durdu"). Koyu temada
+    // (özellikle "Tam Siyah" stilinde, bkz. theme.ts blackColors) zaten mockup'a
+    // çok yakın bir görünüm veriyor — ama artık GERÇEKTEN kodlanmış, dondurulmuş
+    // bir asset değil.
+    statsCard: {
+      backgroundColor: c.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    statsSection: { padding: 20 },
+    statsSectionBordered: { borderTopWidth: 1, borderTopColor: c.border },
+    statsEyebrow: { color: c.faint, fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 14 },
+    statsGoalHeadRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+    statsGoalLabel: { color: c.muted, fontSize: 11, fontWeight: '600' },
+    statsGoalValue: { color: c.text, fontSize: 11, fontWeight: '600' },
+    statsGoalTrack: { height: 1, backgroundColor: c.border },
+    statsGoalFill: { position: 'absolute', left: 0, top: -1, height: 3, backgroundColor: c.text, borderRadius: 1.5 },
+    statsHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+    statsPeriodRow: { flexDirection: 'row', gap: 6, marginTop: 10, marginBottom: 4 },
+    statsPeriodBtn: { paddingHorizontal: 10, paddingVertical: 5 },
+    statsTitle: { color: c.text, fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+    statsMeta: { color: c.faint, fontSize: 11, fontWeight: '600' },
+    statsHistoryRow: { flexDirection: 'row', alignItems: 'flex-end', height: 120, marginTop: 4 },
+    statsHistoryCol: { height: '100%', alignItems: 'center' },
+    statsHistoryValue: { fontSize: 8, fontWeight: '600', marginBottom: 6 },
+    statsHistoryBarTrack: { flex: 1, width: '65%', justifyContent: 'flex-end' },
+    statsHistoryBar: { width: '100%', borderRadius: 6, minHeight: 4 },
+    statsHistoryLabel: { fontSize: 7, fontWeight: '600', color: c.faint, marginTop: 6 },
   });

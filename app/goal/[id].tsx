@@ -13,16 +13,16 @@
 // Mimari kural: SQL yok; yalnızca useGoalStats + goalRepo/goalMilestoneRepo çağrılır.
 
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
-import { goalMilestoneRepo, goalRepo } from '@/db';
+import { goalEntryRepo, goalMilestoneRepo, goalRepo, reminderRepo } from '@/db';
 import type { GoalMilestone } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { diffDays, todayDate, toYmd } from '@/lib/helpers';
-import { cancelGoalReminder, scheduleGoalReminder } from '@/lib/notifications';
+import { diffDays, fmtClock, isTimeUnit, todayDate, toYmd } from '@/lib/helpers';
+import { cancelGoalReminders, scheduleGoalReminders } from '@/lib/notifications';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
 import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { HabitIconGlyph } from '@/ui/habitIcons';
@@ -37,6 +37,15 @@ type GoalTab = 'overview' | 'stats' | 'milestones' | 'edit';
 // Tam sayıysa ondalık gösterme, değilse 1 ondalık (AmountStepper'daki fmt ile aynı desen).
 function fmtAmount(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
+// Bir hedef değerini birimine göre biçimlendirir — süre-ölçümlü hedefte (bkz.
+// helpers.TIME_UNIT) saniye cinsinden saklanan değeri saat:dakika:saniye olarak
+// gösterir; aksi halde sayı+serbest birim metni (eski davranış). Ham "__time__"
+// işaretinin asla ekranda ham metin olarak sızmaması için TÜM unit gösterimleri
+// buradan geçmeli.
+function fmtGoalValue(n: number, unit: string | null): string {
+  return isTimeUnit(unit) ? fmtClock(n) : `${fmtAmount(n)}${unit ? ` ${unit}` : ''}`;
 }
 
 // Girdi geçmişi satırı için tarih+saat ("15 Tem, 14:32").
@@ -57,11 +66,9 @@ function buildVerdict(
   goal: { goal_type: string; deadline: string | null; unit: string | null },
   stats: GoalStats,
   t: (key: string, params?: Record<string, string | number>) => string,
-  lang: 'tr' | 'en' | 'de',
-  fmt: (n: number) => string
+  lang: 'tr' | 'en' | 'de'
 ): Verdict | null {
   if (goal.goal_type !== 'numeric') return null;
-  const unitSuffix = goal.unit ? ` ${goal.unit}` : '';
   if (stats.completed) return { text: t('goalStats.verdictDone'), tone: 'good' };
 
   // Gerçek tempodan tahmini bitiş var: son tarihle kıyasla.
@@ -75,7 +82,7 @@ function buildVerdict(
         text: t('goalStats.verdictLate', { date: finish, n: -gap }),
         sub:
           stats.dailyPace != null
-            ? t('goalStats.verdictFix', { amount: `${fmt(stats.dailyPace)}${unitSuffix}` })
+            ? t('goalStats.verdictFix', { amount: fmtGoalValue(stats.dailyPace, goal.unit) })
             : undefined,
         tone: 'bad',
       };
@@ -85,7 +92,10 @@ function buildVerdict(
 
   // Henüz girdi yok ama gereken tempo hesaplanabiliyor: yalnız gerekliliği söyle.
   if (stats.dailyPace != null && goal.deadline) {
-    return { text: t('goalStats.verdictNeed', { amount: `${fmt(stats.dailyPace)}${unitSuffix}` }), tone: 'neutral' };
+    return {
+      text: t('goalStats.verdictNeed', { amount: fmtGoalValue(stats.dailyPace, goal.unit) }),
+      tone: 'neutral',
+    };
   }
   return null;
 }
@@ -162,21 +172,33 @@ export default function GoalDetailScreen() {
   // mutlak değer değil — negatif yazarak düzeltme de yapılabilir). Günlük kaydını
   // addProgress'in kendisi düşer (bağlı alışkanlık katkıları da böylece geçmişe
   // girer; bkz. goalRepo.addProgress).
-  // Tamamlanma durumu değişmiş olabilecek her mutasyondan sonra hatırlatmayı
-  // güncel duruma göre yeniden kur: scheduleGoalReminder tamamlanan/remind_at'sız
+  // Tamamlanma durumu değişmiş olabilecek her mutasyondan sonra hatırlatmaları
+  // güncel duruma göre yeniden kur: scheduleGoalReminders tamamlanan/hatırlatmasız
   // hedefte kendiliğinden yalnız iptal eder (cancel-then-maybe-schedule deseni).
-  const refreshReminder = () => {
+  // İzin reddi (ok=false) burada SESSİZCE geçilir (her giriş/adım değişiminde
+  // uyarı göstermek rahatsız edici olurdu) — yalnızca handleEditSubmit (kullanıcı
+  // hatırlatmayı bilerek değiştirdiği an) sonucu kontrol edip uyarı gösterir.
+  // Gerçek bir hata (rejection) en azından console.warn ile görünür kalır —
+  // eskiden tamamen yutuluyordu.
+  const refreshReminder = (): Promise<boolean> => {
     const g = goalRepo.getById(id);
-    if (g) scheduleGoalReminder(g).catch(() => {});
+    if (!g) return Promise.resolve(true);
+    return scheduleGoalReminders(g, reminderRepo.listByEntity('goal', id)).catch((e) => {
+      console.warn('[Bildirim] Hedef hatırlatması güncellenemedi:', e);
+      return true;
+    });
   };
 
   const submitEntry = () => {
     if (!goal) return;
     const parsed = parseFloat(entryText.replace(',', '.'));
     if (!Number.isFinite(parsed) || parsed === 0) return;
+    // Süre-ölçümlü hedefte dakika girilir, saniye saklanır (target/current_value
+    // ile aynı birim — bkz. GoalForm'daki aynı desen).
+    const amount = isTimeUnit(goal.unit) ? Math.round(parsed * 60) : parsed;
     // Girdi kaydını addProgress'in kendisi yazar (gerçekleşen farkla) — burada
     // ayrıca goalEntryRepo.create çağırmak ÇİFT kayıt olurdu.
-    goalRepo.addProgress(goal.id, parsed);
+    goalRepo.addProgress(goal.id, amount);
     const g = goalRepo.getById(goal.id);
     g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
     setEntryText('');
@@ -222,7 +244,9 @@ export default function GoalDetailScreen() {
     const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
     const amount =
       goal.goal_type === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
-        ? parsedAmount
+        ? isTimeUnit(goal.unit)
+          ? Math.round(parsedAmount * 60) // dakika girilir, saniye saklanır
+          : parsedAmount
         : null;
     goalMilestoneRepo.create(goal.id, v, { amount, due_date: newMilestoneDate });
     setNewMilestone('');
@@ -242,25 +266,41 @@ export default function GoalDetailScreen() {
   };
 
   // — Düzenle sekmesi —
+  // "Mevcut değer"i elle değiştirmek VARSAYILAN olarak salt DÜZELTMEdir — tempo/
+  // projeksiyon (goalProjection.ts) yalnızca goal_entries'ten hesaplandığından
+  // bu değişiklik oraya yazılmaz. Kullanıcı GoalForm'daki "İlerleme geçmişine de
+  // ekle" onay kutusunu işaretlerse (log_manual_change), GERÇEKTEN uygulanan farkı
+  // (kırpma sonrası) goalEntryRepo'ya yazarız — addProgress'in yaptığının aynısı,
+  // yalnızca elle düzenleme yolundan.
   const handleEditSubmit = (values: GoalFormValues) => {
     if (!goal) return;
+    const previousValue = goal.current_value;
     goalRepo.update(goal.id, {
       title: values.title,
       target_value: values.target_value,
       unit: values.unit,
       deadline: values.deadline,
-      remind_at: values.remind_at,
       start_date: values.start_date,
       ...(values.current_value != null ? { current_value: values.current_value } : {}),
     });
-    refreshReminder();
+    if (values.log_manual_change && values.current_value != null) {
+      const updated = goalRepo.getById(goal.id);
+      const delta = updated ? updated.current_value - previousValue : 0;
+      if (delta !== 0) goalEntryRepo.create(goal.id, delta);
+    }
+    reminderRepo.replaceAll('goal', goal.id, values.remind_times);
+    // Kullanıcı hatırlatmayı BİLEREK değiştirdiği an — izin reddiyse uyar
+    // (habit/task düzenleme panelleriyle aynı desen).
+    refreshReminder().then((ok) => {
+      if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
+    });
     stats.reload();
     setActiveTab('overview');
   };
   const handleDelete = () => {
     if (!goal) return;
     goalRepo.softDelete(goal.id);
-    cancelGoalReminder(goal.id).catch(() => {});
+    cancelGoalReminders(goal.id).catch(() => {});
     router.back();
   };
 
@@ -325,9 +365,13 @@ export default function GoalDetailScreen() {
                       <View style={[styles.progressFill, { width: `${Math.round(stats.ratio * 100)}%` }]} />
                     </View>
                     <Text style={styles.overviewLine}>
-                      {fmtAmount(goal.current_value)}
-                      {goal.target_value != null ? ` / ${fmtAmount(goal.target_value)}` : ''}
-                      {goal.unit ? ` ${goal.unit}` : ''}
+                      {isTimeUnit(goal.unit)
+                        ? `${fmtClock(goal.current_value)}${
+                            goal.target_value != null ? ` / ${fmtClock(goal.target_value)}` : ''
+                          }`
+                        : `${fmtAmount(goal.current_value)}${
+                            goal.target_value != null ? ` / ${fmtAmount(goal.target_value)}` : ''
+                          }${goal.unit ? ` ${goal.unit}` : ''}`}
                     </Text>
                     {/* Veri girişi burada — kullanıcı istediği miktarı yazıp Ekle'ye basar
                         (bkz. dosya başı yorumu). Negatif yazarak düzeltme de yapılabilir. */}
@@ -336,7 +380,7 @@ export default function GoalDetailScreen() {
                         style={styles.entryInput}
                         value={entryText}
                         onChangeText={setEntryText}
-                        placeholder={t('habit.amountPlaceholder')}
+                        placeholder={isTimeUnit(goal.unit) ? t('habit.durationPlaceholder') : t('habit.amountPlaceholder')}
                         placeholderTextColor={colors.faint}
                         keyboardType="numeric"
                         onSubmitEditing={submitEntry}
@@ -359,9 +403,10 @@ export default function GoalDetailScreen() {
                                 e.amount < 0 && styles.entryHistoryAmountNeg,
                               ]}
                             >
-                              {e.amount >= 0 ? '+' : ''}
-                              {fmtAmount(e.amount)}
-                              {goal.unit ? ` ${goal.unit}` : ''}
+                              {e.amount >= 0 ? '+' : '-'}
+                              {isTimeUnit(goal.unit)
+                                ? fmtClock(Math.abs(e.amount))
+                                : `${fmtAmount(Math.abs(e.amount))}${goal.unit ? ` ${goal.unit}` : ''}`}
                             </Text>
                             <Text style={styles.entryHistoryDate}>{fmtEntryWhen(e.updated_at, lang)}</Text>
                           </View>
@@ -411,7 +456,7 @@ export default function GoalDetailScreen() {
             {activeTab === 'stats' && (
               <View>
                 {(() => {
-                  const verdict = buildVerdict(goal, stats, t, lang, fmtAmount);
+                  const verdict = buildVerdict(goal, stats, t, lang);
                   return verdict ? (
                     <View
                       style={[
@@ -441,11 +486,7 @@ export default function GoalDetailScreen() {
                       <StatCard label={t('goal.statRatio')} value={`%${Math.round(stats.ratio * 100)}`} styles={styles} />
                       <StatCard
                         label={t('goal.statRemaining')}
-                        value={
-                          stats.remaining != null
-                            ? `${fmtAmount(stats.remaining)}${goal.unit ? ` ${goal.unit}` : ''}`
-                            : '–'
-                        }
+                        value={stats.remaining != null ? fmtGoalValue(stats.remaining, goal.unit) : '–'}
                         styles={styles}
                       />
                     </>
@@ -474,13 +515,13 @@ export default function GoalDetailScreen() {
                     <View style={styles.statsGrid}>
                       <StatCard
                         label={t('goalStats.dailyPaceLabel')}
-                        value={`${fmtAmount(stats.dailyPace)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                        value={fmtGoalValue(stats.dailyPace, goal.unit)}
                         accent="primary"
                         styles={styles}
                       />
                       <StatCard
                         label={t('goalStats.weeklyPaceLabel')}
-                        value={`${fmtAmount(stats.weeklyPace!)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                        value={fmtGoalValue(stats.weeklyPace!, goal.unit)}
                         styles={styles}
                       />
                     </View>
@@ -494,20 +535,20 @@ export default function GoalDetailScreen() {
                     <View style={styles.statsGrid}>
                       <StatCard
                         label={t('goalStats.avgDailyLabel')}
-                        value={`${fmtAmount(stats.avgDaily)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                        value={fmtGoalValue(stats.avgDaily, goal.unit)}
                         styles={styles}
                       />
                       {stats.last7Total != null && (
                         <StatCard
                           label={t('goalStats.last7Label')}
-                          value={`${fmtAmount(stats.last7Total)}${goal.unit ? ` ${goal.unit}` : ''}`}
+                          value={fmtGoalValue(stats.last7Total, goal.unit)}
                           styles={styles}
                         />
                       )}
                       {stats.behindAmount != null && Math.abs(stats.behindAmount) >= 0.05 && (
                         <StatCard
                           label={t(stats.behindAmount > 0 ? 'goalStats.behindLabel' : 'goalStats.aheadLabel')}
-                          value={`${fmtAmount(Math.abs(stats.behindAmount))}${goal.unit ? ` ${goal.unit}` : ''}`}
+                          value={fmtGoalValue(Math.abs(stats.behindAmount), goal.unit)}
                           accent={stats.behindAmount > 0 ? 'danger' : undefined}
                           styles={styles}
                         />
@@ -586,10 +627,7 @@ export default function GoalDetailScreen() {
                             />
                           </View>
                           <View style={styles.milestoneMetaRow}>
-                            <Text style={styles.milestoneMeta}>
-                              {fmtAmount(m.amount!)}
-                              {goal.unit ? ` ${goal.unit}` : ''}
-                            </Text>
+                            <Text style={styles.milestoneMeta}>{fmtGoalValue(m.amount!, goal.unit)}</Text>
                             {m.due_date && (
                               <Text style={[styles.milestoneMeta, overdue && styles.milestoneMetaOverdue]}>
                                 {shortDate(m.due_date, lang)}
@@ -622,7 +660,12 @@ export default function GoalDetailScreen() {
                           </View>
                         </>
                       )}
-                      <Pressable onPress={() => removeMilestone(m)} hitSlop={10}>
+                      <Pressable
+                        onPress={() => removeMilestone(m)}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('goal.removeMilestoneA11y', { title: m.title })}
+                      >
                         <Text style={styles.milestoneDelete}>×</Text>
                       </Pressable>
                     </View>
@@ -646,7 +689,11 @@ export default function GoalDetailScreen() {
                       style={styles.milestoneAmountInput}
                       value={newMilestoneAmount}
                       onChangeText={setNewMilestoneAmount}
-                      placeholder={goal.unit ?? t('goal.milestoneAmountPlaceholder')}
+                      placeholder={
+                        isTimeUnit(goal.unit)
+                          ? t('habit.durationPlaceholder')
+                          : goal.unit ?? t('goal.milestoneAmountPlaceholder')
+                      }
                       placeholderTextColor={colors.faint}
                       keyboardType="numeric"
                       maxLength={NUMBER_MAX_LEN}
@@ -657,13 +704,19 @@ export default function GoalDetailScreen() {
                     onPress={() =>
                       newMilestoneDate ? setNewMilestoneDate(null) : setShowMilestoneDatePicker(true)
                     }
+                    accessibilityRole="button"
                     accessibilityLabel={t('goal.milestoneDueA11y')}
                   >
                     <Text style={styles.milestoneDateBtnText}>
                       {newMilestoneDate ? `${shortDate(newMilestoneDate, lang)} ×` : '📅'}
                     </Text>
                   </Pressable>
-                  <Pressable style={styles.milestoneAddBtn} onPress={addMilestone}>
+                  <Pressable
+                    style={styles.milestoneAddBtn}
+                    onPress={addMilestone}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('goal.addMilestone')}
+                  >
                     <Text style={styles.milestoneAddText}>＋</Text>
                   </Pressable>
                 </View>
@@ -689,7 +742,7 @@ export default function GoalDetailScreen() {
               <GoalForm
                 key={goal.id}
                 goalType={goal.goal_type}
-                initial={goal}
+                initial={{ ...goal, remind_times: reminderRepo.listByEntity('goal', goal.id).map((r) => r.time) }}
                 submitLabel={t('common.save')}
                 onSubmit={handleEditSubmit}
                 onDelete={handleDelete}

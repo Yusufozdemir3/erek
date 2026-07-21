@@ -30,6 +30,11 @@ const RESPONSE_SCHEMA = {
           due_date: { type: 'string', nullable: true, description: 'YYYY-MM-DD veya null' },
           due_time: { type: 'string', nullable: true, description: 'HH:MM (24 saat) veya null' },
           priority: { type: 'string', enum: ['low', 'medium', 'high'], nullable: true },
+          remind_times: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Bildirim/hatırlatma istenen saatler, "HH:MM" (24 saat) formatında. İstenmiyorsa boş dizi.',
+          },
         },
         required: ['title'],
       },
@@ -61,6 +66,7 @@ Her görev için kurallar:
 - due_date: metinde bir tarih ifadesi varsa (yarın, gelecek hafta pazartesi, 25 Temmuz gibi) bugünün tarihine (${today}) göre çöz, "YYYY-MM-DD" formatında ver. Tarih ifadesi yoksa null.
 - due_time: metinde bir saat ifadesi varsa "HH:MM" (24 saat) formatında ver. Saat ifadesi yoksa null.
 - priority: "acil", "önemli", "mutlaka", "kritik" gibi aciliyet ifadesi varsa "high". Aksi halde null (varsayılanı zorlama).
+- remind_times: kullanıcı açıkça hatırlatılmak/bildirim istediyse "HH:MM" (24 saat) formatında saat(ler) ver. Belirli bir saat söylediyse ("10:00'da hatırlat") onu aynen kullan. Göreli söylediyse ("yarım saat önce", "1 saat önce hatırlat") ve due_time biliniyorsa, due_time'dan o kadar geriye giderek hesapla. Hatırlatma istenmediyse boş dizi [] ver (null DEĞİL).
 - Emin olmadığın alanları null bırak, TAHMİN YÜRÜTME.
 
 Metin: "${text}"`;

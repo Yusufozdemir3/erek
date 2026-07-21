@@ -10,8 +10,8 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { goalMilestoneRepo, goalRepo, habitRepo, subtaskRepo, taskRepo } from '@/db';
-import { scheduleGoalReminder, scheduleHabitReminder, scheduleTaskReminder } from '@/lib/notifications';
+import { goalMilestoneRepo, goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
+import { scheduleGoalReminders, scheduleHabitReminders, scheduleTaskReminders } from '@/lib/notifications';
 import { isAiQuickAddEnabled } from '@/lib/aiPrefs';
 import { parseTaskText, type ParsedTaskFields } from '@/lib/aiTaskParser';
 import { recognizeSpeech } from '@/lib/voiceInput';
@@ -27,6 +27,10 @@ import { Feather } from '@expo/vector-icons';
 import { shortDate, type Colors } from '@/ui/theme';
 
 export type Step = 'menu' | 'task' | 'habit' | 'goal';
+
+// Sesli girişte, kullanıcı tek dokunuşla art arda kaç cümle söyleyebilir
+// (her cümle sonrası recognizer otomatik yeniden açılır — bkz. runVoiceInput).
+const MAX_VOICE_RESTARTS = 5;
 
 interface Props {
   visible: boolean;
@@ -116,23 +120,38 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const runAiParse = () => doParse(aiText);
 
   // Sesli giriş — Android'in sistem konuşma tanıma ekranını açar (ücretsiz,
-  // ekstra API çağrısı yok). Sonuç gelince otomatik ayrıştırılır (konuşmak zaten
-  // niyetli bir eylem; form yine de kaydetmeden ÖNCE gözden geçirmeyi gerektirir).
-  // 'unavailable' (cihazda tanıma uygulaması yok) ile 'canceled' (kullanıcı geri
-  // bastı) AYRI ele alınır — vazgeçme sessiz kalmalı, cihazda özellik hiç yoksa
-  // sebepsiz "hiçbir şey olmadı" hissi vermemek için açıkça söylenir.
+  // ekstra API çağrısı yok). Recognizer her açılışta TEK bir cümle sonunda
+  // kendini kapatır; birden fazla cümle söyleyebilmek için burada otomatik
+  // yeniden açılır (kullanıcı tekrar dokunmadan) ve metinler birleştirilir.
+  // Zincir, gerçek bir "bitirme" sinyali gelince durur: 'canceled'/'unavailable'
+  // veya boş sonuç (konuşma algılanmadı — kullanıcı susmuş demektir). MAX_VOICE_RESTARTS
+  // sonsuz döngüyü / pil tüketimini sınırlar.
+  // Sonuç gelince otomatik ayrıştırılır (konuşmak zaten niyetli bir eylem; form
+  // yine de kaydetmeden ÖNCE gözden geçirmeyi gerektirir). 'unavailable' (cihazda
+  // tanıma uygulaması yok) yalnızca HİÇ metin toplanamadıysa gösterilir — aksi
+  // halde zaten alınmış bir sonucu "çalışmıyor" gibi göstermiş oluruz.
   const runVoiceInput = async () => {
     if (voiceLoading || aiLoading) return;
     setVoiceLoading(true);
-    const result = await recognizeSpeech(lang, t('add.aiVoicePrompt'));
+    let combinedText = '';
+    let unavailable = false;
+    for (let i = 0; i < MAX_VOICE_RESTARTS; i++) {
+      const result = await recognizeSpeech(lang, t('add.aiVoicePrompt'));
+      if (result.status === 'unavailable') {
+        unavailable = combinedText === '';
+        break;
+      }
+      if (result.status === 'canceled' || !result.text) break;
+      combinedText = combinedText ? `${combinedText} ${result.text}` : result.text;
+      setAiText(combinedText);
+    }
     setVoiceLoading(false);
-    if (result.status === 'unavailable') {
+    if (unavailable) {
       Alert.alert(t('add.voiceUnavailableTitle'), t('add.voiceUnavailableBody'));
       return;
     }
-    if (result.status === 'canceled' || !result.text) return;
-    setAiText(result.text);
-    await doParse(result.text);
+    if (!combinedText) return;
+    await doParse(combinedText);
   };
 
   // Ekleme sonrası: menüyü kapat, listeleri tazele, ilgili sekmeye git.
@@ -153,12 +172,12 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       due_date: values.due_date,
       end_time: values.end_time,
       recurrence: values.recurrence,
-      remind_at: values.remind_at,
     });
     // Taslak alt görevleri, görev yazıldıktan sonra sırayla oluştur.
-    values.subtasks?.forEach((t) => subtaskRepo.create(created.id, t));
-    // Hatırlatma saati seçildiyse o an bildirim kurulur (yoksa no-op).
-    scheduleTaskReminder(created).then((ok) => {
+    values.subtasks?.forEach((sub) => subtaskRepo.create(created.id, sub));
+    // Hatırlatma saatleri seçildiyse o an bildirimler kurulur (yoksa no-op).
+    const reminders = reminderRepo.replaceAll('task', created.id, values.remind_times);
+    scheduleTaskReminders(created, reminders).then((ok) => {
       if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
     });
     return created;
@@ -189,7 +208,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
         due_date,
         end_time: null,
         recurrence: null,
-        remind_at: null,
+        remind_times: r.remind_times ?? [],
       });
     });
     finish('/(tabs)/tasks');
@@ -200,9 +219,10 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   // oluşturma anında ayarlanabilir.
   const addHabit = (values: HabitFormValues) => {
     const created = habitRepo.create({ user_id: user.id, ...values });
-    // Hatırlatma saati seçildiyse bildirimi programla (izin yoksa uyar).
-    if (created.remind_at) {
-      scheduleHabitReminder(created).then((ok) => {
+    // Hatırlatma saatleri seçildiyse bildirimleri programla (izin yoksa uyar).
+    const reminders = reminderRepo.replaceAll('habit', created.id, values.remind_times);
+    if (reminders.length > 0) {
+      scheduleHabitReminders(created, reminders).then((ok) => {
         if (!ok) {
           Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
         }
@@ -222,12 +242,17 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       target_value: values.target_value,
       unit: values.unit,
       deadline: values.deadline,
-      remind_at: values.remind_at,
       start_date: values.start_date,
     });
     values.milestones?.forEach((m) => goalMilestoneRepo.create(created.id, m));
-    // Günlük giriş hatırlatması (remind_at yoksa scheduleGoalReminder no-op'tur).
-    scheduleGoalReminder(created).catch(() => {});
+    // Günlük giriş hatırlatmaları seçildiyse o an kurulur (izin yoksa uyar —
+    // habit/task oluşturmayla aynı desen; eskiden sonuç hiç kontrol edilmiyordu).
+    const reminders = reminderRepo.replaceAll('goal', created.id, values.remind_times);
+    if (reminders.length > 0) {
+      scheduleGoalReminders(created, reminders).then((ok) => {
+        if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
+      });
+    }
     finish('/(tabs)/goals');
   };
 
@@ -392,6 +417,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                                   ? `${aiPrefill.due_date}T${aiPrefill.due_time}:00`
                                   : aiPrefill.due_date
                                 : selectedDate,
+                              remind_times: aiPrefill.remind_times,
                             }
                           : { due_date: selectedDate }
                       }

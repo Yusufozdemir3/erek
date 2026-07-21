@@ -10,10 +10,10 @@
 
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { subtaskRepo, taskRepo } from '@/db';
+import { reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { cancelTaskReminder, scheduleTaskReminder } from '@/lib/notifications';
+import { cancelTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
 import { TITLE_MAX_LEN } from '@/ui/formLimits';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -61,13 +61,17 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       // tarihli) — o durumda hatırlatmayı yeni tarihe göre yeniden kur; aksi
       // halde (gerçekten tamamlandı) sadece iptal et.
       const after = taskRepo.getById(task.id);
-      if (after && after.completed_at === null) scheduleTaskReminder(after);
-      else cancelTaskReminder(task.id);
+      if (after && after.completed_at === null) {
+        scheduleTaskReminders(after, reminderRepo.listByEntity('task', after.id));
+      } else {
+        cancelTaskReminders(task.id);
+      }
     } else if (!shouldBeCompleted && isCompleted) {
       taskRepo.setCompleted(task.id, false);
       tapLight();
       const reopened = taskRepo.getById(task.id);
-      if (reopened) scheduleTaskReminder(reopened); // geri açıldı — vadesi geçmemişse hatırlatma dönsün
+      // geri açıldı — vadesi geçmemişse hatırlatmalar dönsün
+      if (reopened) scheduleTaskReminders(reopened, reminderRepo.listByEntity('task', reopened.id));
     }
   };
 
@@ -104,12 +108,12 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       due_date: values.due_date,
       end_time: values.end_time,
       recurrence: values.recurrence,
-      remind_at: values.remind_at,
     });
-    // Tarih/saat/hatırlatma değişmiş olabilir — hatırlatma güncel değere göre yeniden kurulur.
+    const reminders = reminderRepo.replaceAll('task', task.id, values.remind_times);
+    // Tarih/saat/hatırlatma değişmiş olabilir — hatırlatmalar güncel değere göre yeniden kurulur.
     const updated = taskRepo.getById(task.id);
     if (updated) {
-      scheduleTaskReminder(updated).then((ok) => {
+      scheduleTaskReminders(updated, reminders).then((ok) => {
         if (!ok) Alert.alert(tr('notif.noPermTitle'), tr('notif.noPermBody'));
       });
     }
@@ -119,7 +123,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
   const handleDelete = () => {
     taskRepo.softDelete(task.id);
-    cancelTaskReminder(task.id);
+    cancelTaskReminders(task.id);
     onChanged();
     onClose();
   };
@@ -130,7 +134,14 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       {/* key: farklı göreve geçince form taze başlangıç değerleriyle kurulur */}
       <TaskForm
         key={task.id}
-        initial={{ title: task.title, priority: task.priority, due_date: task.due_date, end_time: task.end_time, recurrence: task.recurrence, remind_at: task.remind_at }}
+        initial={{
+          title: task.title,
+          priority: task.priority,
+          due_date: task.due_date,
+          end_time: task.end_time,
+          recurrence: task.recurrence,
+          remind_times: reminderRepo.listByEntity('task', task.id).map((r) => r.time),
+        }}
         submitLabel={tr('common.save')}
         onSubmit={handleSave}
         onDelete={handleDelete}
@@ -155,7 +166,12 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
                   <Text style={[styles.subtaskTitle, done && styles.subtaskTitleDone]}>
                     {s.title}
                   </Text>
-                  <Pressable onPress={() => removeSubtask(s)} hitSlop={10}>
+                  <Pressable
+                    onPress={() => removeSubtask(s)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={tr('task.removeSubtaskA11y', { title: s.title })}
+                  >
                     <Text style={styles.subtaskDelete}>×</Text>
                   </Pressable>
                 </View>
@@ -173,7 +189,12 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
                 returnKeyType="done"
                 maxLength={TITLE_MAX_LEN}
               />
-              <Pressable style={styles.subtaskAddBtn} onPress={addSubtask}>
+              <Pressable
+                style={styles.subtaskAddBtn}
+                onPress={addSubtask}
+                accessibilityRole="button"
+                accessibilityLabel={tr('task.addSubtask')}
+              >
                 <Text style={styles.subtaskAddText}>＋</Text>
               </Pressable>
             </View>

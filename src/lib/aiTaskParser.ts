@@ -23,9 +23,11 @@ export interface ParsedTaskFields {
   due_date: string | null; // "YYYY-MM-DD"
   due_time: string | null; // "HH:MM"
   priority: Priority | null;
+  remind_times: string[]; // "HH:MM"[]
 }
 
 const PRIORITIES: Priority[] = ['low', 'medium', 'high'];
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function toParsedTask(raw: unknown): ParsedTaskFields | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -36,6 +38,9 @@ function toParsedTask(raw: unknown): ParsedTaskFields | null {
     due_date: typeof r.due_date === 'string' ? r.due_date : null,
     due_time: typeof r.due_time === 'string' ? r.due_time : null,
     priority: PRIORITIES.includes(r.priority as Priority) ? (r.priority as Priority) : null,
+    remind_times: Array.isArray(r.remind_times)
+      ? r.remind_times.filter((v): v is string => typeof v === 'string' && HHMM.test(v))
+      : [],
   };
 }
 

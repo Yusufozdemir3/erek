@@ -154,6 +154,8 @@ export default function ProfileScreen() {
                 key={opt.mode}
                 style={[styles.segBtn, on && styles.segBtnOn]}
                 onPress={() => setMode(opt.mode)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
               >
                 <Text style={[styles.segText, on && styles.segTextOn]}>{t(opt.labelKey)}</Text>
               </Pressable>
@@ -178,6 +180,8 @@ export default function ProfileScreen() {
                 key={opt.style}
                 style={[styles.segBtn, on && styles.segBtnOn]}
                 onPress={() => setDarkStyle(opt.style)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
               >
                 <Text style={[styles.segText, on && styles.segTextOn]}>{t(opt.labelKey)}</Text>
               </Pressable>
@@ -225,6 +229,8 @@ export default function ProfileScreen() {
                 key={l}
                 style={[styles.segBtn, on && styles.segBtnOn]}
                 onPress={() => setLang(l)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
               >
                 <Text style={[styles.segText, on && styles.segTextOn]}>{LANG_LABELS[l]}</Text>
               </Pressable>
@@ -312,6 +318,8 @@ export default function ProfileScreen() {
               style={[styles.outlineBtn, signingOut && styles.syncBtnDisabled]}
               onPress={doSignOut}
               disabled={signingOut || deleting}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.signOut')}
             >
               {signingOut ? (
                 <ActivityIndicator color={colors.primary} />
@@ -323,6 +331,8 @@ export default function ProfileScreen() {
               style={[styles.dangerBtn, deleting && styles.syncBtnDisabled]}
               onPress={confirmDeleteAccount}
               disabled={deleting || signingOut}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.deleteAccount')}
             >
               {deleting ? (
                 <ActivityIndicator color={colors.danger} />
@@ -335,7 +345,12 @@ export default function ProfileScreen() {
         ) : (
           <>
             <Text style={styles.muted}>{t('profile.notLinkedBody')}</Text>
-            <Pressable style={styles.syncBtn} onPress={() => router.push('/account')}>
+            <Pressable
+              style={styles.syncBtn}
+              onPress={() => router.push('/account')}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.linkAccount')}
+            >
               <Text style={styles.syncBtnText}>{t('profile.linkAccount')}</Text>
             </Pressable>
           </>
@@ -376,6 +391,8 @@ export default function ProfileScreen() {
               style={[styles.syncBtn, syncing && styles.syncBtnDisabled]}
               onPress={doSync}
               disabled={syncing}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.syncNow')}
             >
               {syncing ? (
                 <ActivityIndicator color={colors.onAccent} />
