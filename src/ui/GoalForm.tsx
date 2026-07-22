@@ -24,7 +24,19 @@ import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { longDateLabel, type Colors } from '@/ui/theme';
+import { longDateLabel, shortDate, type Colors } from '@/ui/theme';
+
+// Oluşturmada eklenen taslak adım. Eskiden düz `string` (yalnız başlık) idi:
+// hedef DETAY ekranındaki adım editörü miktar ve son tarih de alabildiği için
+// aynı şeyin iki farklı hâli oluşuyordu (kullanıcı geri bildirimi). Alanlar
+// goal_milestones'ın kendi sütunlarıyla birebir; amount SANİYE cinsindendir
+// (zaman birimli hedefte dakika girilir, burada çevrilir — detay ekranındaki
+// addMilestone ile aynı kural).
+export interface DraftMilestone {
+  title: string;
+  amount: number | null;
+  due_date: string | null;
+}
 
 export interface GoalFormValues {
   title: string;
@@ -38,7 +50,7 @@ export interface GoalFormValues {
   // Yalnız numeric'te anlamlı (tempo/projeksiyon sıfır günü — goalProjection.ts);
   // milestone hedefte null (o tipte tempo hesabı yok).
   start_date: string | null;
-  milestones?: string[]; // yalnız enableMilestoneDraft'ta doldurulur
+  milestones?: DraftMilestone[]; // yalnız enableMilestoneDraft'ta doldurulur
   // Yalnız düzenleme + numeric'te anlamlı: "Mevcut değer" elle değiştirilirse
   // farkı goal_entries'e de yazıp tempo/projeksiyona dahil et mi? Varsayılan
   // false (salt düzeltme — bkz. GoalForm'daki checkbox açıklaması).
@@ -118,14 +130,32 @@ export function GoalForm({
   const [startDate, setStartDate] = useState(initial?.start_date ?? todayDate());
   const [showPicker, setShowPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
-  const [draftMilestones, setDraftMilestones] = useState<string[]>([]);
+  const [draftMilestones, setDraftMilestones] = useState<DraftMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState('');
+  // Miktar/tarih, detay ekranındaki (app/goal/[id].tsx) kademeli çiplerin
+  // aynısı: başlık satırı sade kalsın, ekstralar bir dokunuş uzakta olsun.
+  const [newMilestoneAmount, setNewMilestoneAmount] = useState('');
+  const [newMilestoneDate, setNewMilestoneDate] = useState<string | null>(null);
+  const [showMilestoneAmount, setShowMilestoneAmount] = useState(false);
+  const [showMilestoneDatePicker, setShowMilestoneDatePicker] = useState(false);
 
   const addDraftMilestone = () => {
     const m = newMilestone.trim();
     if (!m) return;
-    setDraftMilestones((prev) => [...prev, m]);
+    // Miktar yalnız sayısal hedefte anlamlı (detay ekranındaki addMilestone ile
+    // AYNI kural): doluysa adım kendi bağımsız eşiği olur, boşsa checklist maddesi.
+    const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
+    const amount =
+      goalType === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
+        ? isTime
+          ? Math.round(parsedAmount * 60) // dakika girilir, saniye saklanır
+          : parsedAmount
+        : null;
+    setDraftMilestones((prev) => [...prev, { title: m, amount, due_date: newMilestoneDate }]);
     setNewMilestone('');
+    setNewMilestoneAmount('');
+    setNewMilestoneDate(null);
+    setShowMilestoneAmount(false);
   };
   const removeDraftMilestone = (i: number) =>
     setDraftMilestones((prev) => prev.filter((_, idx) => idx !== i));
@@ -373,19 +403,38 @@ export function GoalForm({
           adımlar app/goal/[id].tsx'te ayrı bir 'Adımlar' sekmesinde yönetiliyor. */}
       {goalType === 'milestone' && children}
 
-      {/* Oluşturmada taslak milestone editörü (hedef yazılınca birlikte oluşur) */}
-      {goalType === 'milestone' && enableMilestoneDraft && (
+      {/* Oluşturmada taslak adım editörü (hedef yazılınca birlikte oluşur).
+          Detay ekranındaki (app/goal/[id].tsx) adım editörüyle EŞİTLENDİ:
+          - artık HER İKİ hedef tipinde de görünür (adımlar ikisinde de geçerli;
+            eskiden yalnız 'milestone' tipte açılıyordu, oysa sayısal hedefe de
+            sonradan adım eklenebiliyordu — aynı şeyin iki farklı hâliydi),
+          - başlık satırı sade, miktar/tarih kademeli çiplerde. */}
+      {enableMilestoneDraft && (
         <>
           <Text style={styles.label}>{t('goal.milestonesOptional')}</Text>
           {draftMilestones.map((m, i) => (
-            <View key={`${m}-${i}`} style={styles.subRow}>
+            <View key={`${m.title}-${i}`} style={styles.subRow}>
               <View style={styles.subBullet} />
-              <Text style={styles.subTitle}>{m}</Text>
+              <Text style={styles.subTitle}>{m.title}</Text>
+              {(m.amount != null || m.due_date != null) && (
+                <Text style={styles.subMeta}>
+                  {[
+                    m.amount != null
+                      ? isTime
+                        ? `${m.amount / 60} ${t('habit.durationPlaceholder')}`
+                        : `${m.amount}${unit.trim() ? ` ${unit.trim()}` : ''}`
+                      : null,
+                    m.due_date != null ? shortDate(m.due_date, lang) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
+              )}
               <Pressable
                 onPress={() => removeDraftMilestone(i)}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityLabel={t('goal.removeMilestoneA11y', { title: m })}
+                accessibilityLabel={t('goal.removeMilestoneA11y', { title: m.title })}
               >
                 <Text style={styles.subDelete}>×</Text>
               </Pressable>
@@ -412,6 +461,56 @@ export function GoalForm({
               <Text style={styles.subAddText}>＋</Text>
             </Pressable>
           </View>
+          {(newMilestone.trim().length > 0 || newMilestoneDate != null || newMilestoneAmount.length > 0) && (
+            <View style={styles.subChipRow}>
+              {goalType === 'numeric' &&
+                (showMilestoneAmount || newMilestoneAmount.length > 0 ? (
+                  <TextInput
+                    style={styles.subAmountInput}
+                    value={newMilestoneAmount}
+                    onChangeText={setNewMilestoneAmount}
+                    placeholder={
+                      isTime ? t('habit.durationPlaceholder') : unit.trim() || t('goal.milestoneAmountPlaceholder')
+                    }
+                    placeholderTextColor={colors.faint}
+                    keyboardType="numeric"
+                    maxLength={NUMBER_MAX_LEN}
+                    autoFocus
+                  />
+                ) : (
+                  <Pressable
+                    style={styles.subChip}
+                    onPress={() => setShowMilestoneAmount(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('goal.milestoneAmountPlaceholder')}
+                  >
+                    <Text style={styles.subChipText}>
+                      #{' '}
+                      {isTime ? t('habit.durationPlaceholder') : unit.trim() || t('goal.milestoneAmountPlaceholder')}
+                    </Text>
+                  </Pressable>
+                ))}
+              <Pressable
+                style={[styles.subChip, newMilestoneDate != null && styles.subChipSet]}
+                onPress={() => (newMilestoneDate ? setNewMilestoneDate(null) : setShowMilestoneDatePicker(true))}
+                accessibilityRole="button"
+                accessibilityLabel={t('goal.milestoneDueA11y')}
+              >
+                <Text style={[styles.subChipText, newMilestoneDate != null && styles.subChipTextSet]}>
+                  {newMilestoneDate
+                    ? `📅 ${shortDate(newMilestoneDate, lang)} ×`
+                    : `📅 ${t('goal.milestoneDateChip')}`}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+          {goalType === 'numeric' && <Text style={styles.subHint}>{t('goal.milestoneThresholdHint')}</Text>}
+          <DatePickerModal
+            visible={showMilestoneDatePicker}
+            value={new Date(`${newMilestoneDate ?? todayDate()}T00:00:00`)}
+            onClose={() => setShowMilestoneDatePicker(false)}
+            onConfirm={(picked) => setNewMilestoneDate(toYmd(picked))}
+          />
         </>
       )}
 
@@ -519,7 +618,33 @@ const makeStyles = (c: Colors) =>
     subRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, gap: 10 },
     subBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.faint },
     subTitle: { flex: 1, fontSize: 14, color: c.text },
+    subMeta: { fontSize: 11, fontWeight: '600', color: c.muted },
     subDelete: { fontSize: 20, color: c.faint, paddingHorizontal: 4 },
+    // — Kademeli çipler (miktar / tarih) — detay ekranındaki milestoneChip* ile aynı dil.
+    subChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
+    subChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    subChipSet: { borderColor: c.primary, backgroundColor: c.primarySoft },
+    subChipText: { fontSize: 12, fontWeight: '700', color: c.muted },
+    subChipTextSet: { color: c.primary },
+    subAmountInput: {
+      width: 96,
+      textAlign: 'center',
+      backgroundColor: c.inputBg,
+      borderRadius: 999,
+      paddingVertical: 7,
+      fontSize: 13,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.primary,
+    },
+    subHint: { fontSize: 11, color: c.faint, marginTop: 8, lineHeight: 15 },
     subAddRow: { flexDirection: 'row', gap: 8, marginBottom: 4, alignItems: 'center' },
     subInput: {
       flex: 1,

@@ -18,6 +18,7 @@ import {
   weekStartOf,
 } from '@/lib/helpers';
 import { buildHabitInsights, type HabitInsight } from '@/lib/habitInsights';
+import { SCORE_MIN_DAYS, emaScores } from '@/lib/habitScore';
 
 const WINDOW_DAYS = 90;
 const DAY_BUCKETS = 30;
@@ -26,30 +27,11 @@ const MONTH_BUCKETS = 12;
 // Puan (EMA) ISINMA penceresi — gösterilecek aralıktan ÖNCE, yalnızca EMA'yı
 // beslemek için ekstra kova. Bunlar ekranda görünmez, yalnız ilk görünür
 // noktanın da öncesindeki birikimi yansıtmasını sağlar (bkz. attachScores).
+// KRİTİK: ısınma yalnızca alışkanlığın YAŞADIĞI kovaları kapsar — doğumundan
+// önceki kovalar EMA'ya HİÇ girmez (bkz. lib/habitScore.ts başlığı, denetim #21).
 const DAY_WARMUP = 60;
 const WEEK_WARMUP = 12;
 const MONTH_WARMUP = 12;
-// EMA (üstel hareketli ortalama) katsayısı — her kova hedefe ulaşınca puan
-// biraz YÜKSELİR, ıskalanınca biraz DÜŞER; tek kötü/iyi kova grafiği sıçratmaz.
-// 0.2 tek günün etkisini fazla hissettiriyordu (kullanıcı geri bildirimi) —
-// 0.07'ye düşürüldü.
-const SCORE_EMA_ALPHA = 0.07;
-function emaScores(ratios: number[], alpha = SCORE_EMA_ALPHA): number[] {
-  const out: number[] = [];
-  let prev = 0;
-  ratios.forEach((r, i) => {
-    prev = i === 0 ? r : prev * (1 - alpha) + r * alpha;
-    out.push(prev);
-  });
-  return out;
-}
-
-// Seri geçmişi (habitRepo.allStreaks'in aynısı — burada yalnız tip takma adı).
-export interface StreakEntry {
-  length: number;
-  start: string;
-  end: string;
-}
 
 // Grafik kovası: date = kovanın başlangıç günü ("YYYY-MM-DD"), ratio = 0..1
 // (o kovanın HAM tamamlanma oranı), score = aynı kovanın EMA'lı (yumuşatılmış)
@@ -102,12 +84,15 @@ export interface HabitStats {
   habit: Habit | null;
   currentStreak: number;
   longestStreak: number;
-  completionRate: number;      // 0..1, yalnızca planlı günler üzerinden
-  scheduledCount: number;
-  completedCount: number;
   totalAmount: number | null;  // nicel değilse (target_amount yoksa) null
-  streaks: StreakEntry[];       // büyükten küçüğe geçmiş seriler
-  series: HabitChartSeries | null; // hiç log yoksa null (grafik gizlenir)
+  // NOT: completionRate/scheduledCount/completedCount ve streaks KALDIRILDI —
+  // ömür boyu tamamlanma oranı Puan kartındaki EMA'nın kör bir kopyasıydı, seri
+  // geçmişi listesi de ekrandan çıktı (bkz. app/habit/[id].tsx). İkisinin de tek
+  // tüketicisi o ekrandı; alan kalsaydı her yüklemede boşa sorgu/döngü olurdu.
+  series: HabitChartSeries | null; // hiç log yoksa VEYA puan henüz kilitliyse null
+  // Puan kartı kilitliyse kaç gün kaldığı; açıksa null. series ile birlikte
+  // okunur: series null + bu doluysa "X gün sonra açılır" kartı gösterilir.
+  scoreUnlockInDays: number | null;
   goalPeriods: GoalPeriodStat[]; // Bugün/Hafta/Ay/3 Ay/Yıl hedef karşılaştırması
   insights: HabitInsight[]; // kural tabanlı gözlemler (bkz. habitInsights.ts) — en fazla 2
   historyTotals: HistoryTotals | null; // "Geçmiş" kartı — yalnız nicel/zamanlayıcıda dolu
@@ -117,12 +102,9 @@ const EMPTY: HabitStats = {
   habit: null,
   currentStreak: 0,
   longestStreak: 0,
-  completionRate: 0,
-  scheduledCount: 0,
-  completedCount: 0,
   totalAmount: null,
-  streaks: [],
   series: null,
+  scoreUnlockInDays: null,
   goalPeriods: [],
   insights: [],
   historyTotals: null,
@@ -133,8 +115,9 @@ const EMPTY: HabitStats = {
 const HISTORY_BUCKETS = 30;
 
 // "Geçmiş" kartının Gün/Hafta/Ay toplamları — yalnız target_amount'lı (nicel/
-// zamanlayıcı) alışkanlıkta anlamlı. Her periyotta son 5 kova (kalabalık
-// olmasın, değer etiketleri sığsın diye — bkz. habit/[id].tsx HabitDarkStatsCard).
+// zamanlayıcı) alışkanlıkta anlamlı. Her periyotta son HISTORY_BUCKETS kova;
+// ekrana sığmayan kısım yatay kaydırmayla görülür (bkz. habit/[id].tsx
+// HistoryBars).
 function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): HistoryTotals | null {
   if (habit.target_amount == null || allLogs.length === 0) return null;
   const amountByDate = new Map(allLogs.map((l) => [l.log_date, l.amount ?? 0]));
@@ -151,14 +134,14 @@ function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): H
     return total;
   };
 
-  // — Gün: son 5 gün —
+  // — Gün: son HISTORY_BUCKETS gün —
   const day: BucketTotal[] = lastDays(HISTORY_BUCKETS).map((ymd) => ({
     bucketStart: ymd,
     total: amountByDate.get(ymd) ?? 0,
     partial: ymd === today || ymd < firstLogDate,
   }));
 
-  // — Hafta: son 5 hafta (Pazartesi başlangıçlı) —
+  // — Hafta: son HISTORY_BUCKETS hafta (Pazartesi başlangıçlı) —
   const monday = new Date(`${today}T00:00:00`);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // bu haftanın pazartesisi
   const week: BucketTotal[] = [];
@@ -176,7 +159,7 @@ function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): H
     });
   }
 
-  // — Ay: son 5 takvim ayı —
+  // — Ay: son HISTORY_BUCKETS takvim ayı —
   const now = new Date(`${today}T00:00:00`);
   const month: BucketTotal[] = [];
   for (let i = HISTORY_BUCKETS - 1; i >= 0; i--) {
@@ -306,19 +289,6 @@ function buildSeries(habit: Habit, allLogs: HabitLog[]): HabitChartSeries | null
     });
   }
 
-  // EMA, ISINMA penceresi dahil TÜM ham diziler üzerinden hesaplanır, sonra
-  // yalnızca gösterilecek son kısım kesilir — grafiğin ilk görünür noktası da
-  // öncesindeki birikimi yansıtır, Gün/Hafta/Ay sekmeleri arasında puan
-  // "sıfırlanmış" gibi görünmez (kullanıcı geri bildirimi).
-  const attachScores = (raw: ChartBucket[]): ChartBucket[] => {
-    const scores = emaScores(raw.map((b) => b.ratio));
-    return raw.map((b, i) => ({ ...b, score: scores[i] }));
-  };
-
-  const day = attachScores(dayRaw).slice(-DAY_BUCKETS);
-  const week = attachScores(weekRaw).slice(-WEEK_BUCKETS);
-  const month = attachScores(monthRaw).slice(-MONTH_BUCKETS);
-
   const endOfDay = (b: ChartBucket) => b.date;
   const endOfWeek = (b: ChartBucket) => {
     const d = new Date(`${b.date}T00:00:00`);
@@ -330,11 +300,41 @@ function buildSeries(habit: Habit, allLogs: HabitLog[]): HabitChartSeries | null
     return toYmd(new Date(d.getFullYear(), d.getMonth() + 1, 0));
   };
 
-  return {
-    day: trimLeading(day, endOfDay, firstDate),
-    week: trimLeading(week, endOfWeek, firstDate),
-    month: trimLeading(month, endOfMonth, firstDate),
+  // SIRA KRİTİK (denetim #21): kesme EMA'dan ÖNCE yapılır.
+  // Eskiden EMA tüm ısınma penceresi üzerinden koşup kesme SONRA geliyordu —
+  // yani alışkanlığın doğumundan önceki kovalar ekrandan silinse bile puanı
+  // çoktan aşağı çekmiş oluyordu ("henüz yoktu" = "yapmadın"). Artık o kovalar
+  // diziye hiç girmiyor; EMA ilk GERÇEK kovadan başlıyor ve yanlılık düzeltmesi
+  // az veriyi doğru ölçeklendiriyor (bkz. lib/habitScore.ts).
+  const attachScores = (raw: ChartBucket[]): ChartBucket[] => {
+    const scores = emaScores(raw.map((b) => b.ratio));
+    return raw.map((b, i) => ({ ...b, score: scores[i] }));
   };
+
+  return {
+    day: attachScores(trimLeading(dayRaw, endOfDay, firstDate)).slice(-DAY_BUCKETS),
+    week: attachScores(trimLeading(weekRaw, endOfWeek, firstDate)).slice(-WEEK_BUCKETS),
+    month: attachScores(trimLeading(monthRaw, endOfMonth, firstDate)).slice(-MONTH_BUCKETS),
+  };
+}
+
+// Alışkanlığın "doğum" günü: açık başlangıç tarihi ya da ilk log (hangisi
+// önceyse). buildSeries ve puan kilidi AYNI tanımı kullanmalı.
+function habitFirstDate(habit: Habit, allLogs: HabitLog[]): string | null {
+  if (allLogs.length === 0) return null;
+  const firstLogDate = allLogs[0].log_date;
+  return habit.start_date && habit.start_date < firstLogDate ? habit.start_date : firstLogDate;
+}
+
+// Puan kartı açılmasına kaç gün kaldı? Açıksa (ya da hiç log yoksa) null.
+// SCORE_MIN_DAYS günden az yaşamış bir alışkanlıkta puan matematiksel olarak
+// doğrudur ama anlamlı değildir — 2 günlük veriden "puan" çıkarmak bugünü
+// tekrar etmekten ibarettir. O yüzden sayı yerine geri sayım gösterilir.
+function scoreUnlockDaysLeft(habit: Habit, allLogs: HabitLog[], today: string): number | null {
+  const first = habitFirstDate(habit, allLogs);
+  if (!first) return null;
+  const lived = diffDays(first, today) + 1; // bugün dahil
+  return lived >= SCORE_MIN_DAYS ? null : SCORE_MIN_DAYS - lived;
 }
 
 // Dönemin TAM (gelecek dahil) başlangıç/bitiş günü — bugünün içinde bulunduğu
@@ -412,28 +412,10 @@ export function useHabitStats(habitId: string): HabitStats {
       return;
     }
 
+    // WINDOW_DAYS'lik pencere yalnız toplam miktar için okunur; planlı/tamamlanan
+    // gün sayımı ve tamamlanma oranı hesabı KALDIRILDI (bkz. HabitStats yorumu).
     const dates = lastDays(WINDOW_DAYS);
     const logs = habitRepo.logsInRange(habitId, dates[0]);
-    const completedDates = new Set(logs.filter((l) => l.completed === 1).map((l) => l.log_date));
-
-    // Planlı gün sayımı (tamamlanma oranı için). Aralık dışı (başlangıçtan önce /
-    // bitişten sonra) günler planlı sayılmaz, orana girmez.
-    let scheduledCount = 0;
-    let completedCount = 0;
-    for (const date of dates) {
-      const scheduled =
-        isScheduledOn(habit.schedule, date) &&
-        isWithinHabitDates(habit.start_date, habit.end_date, date);
-      if (scheduled) {
-        scheduledCount++;
-        if (completedDates.has(date)) completedCount++;
-      }
-    }
-    // KOTA kuralında "her gün müsait" olduğu için gün bazlı payda yanıltır —
-    // oran, pencere üzerindeki oransal kota beklentisine göre hesaplanır.
-    const quotaRate = isQuotaSchedule(habit.schedule)
-      ? Math.min(1, completedCount / Math.max(1, (habit.schedule!.timesPerWeek! * scheduledCount) / 7))
-      : null;
 
     const totalAmount =
       habit.target_amount != null ? logs.reduce((sum, l) => sum + (l.amount ?? 0), 0) : null;
@@ -441,17 +423,16 @@ export function useHabitStats(habitId: string): HabitStats {
     const allLogs = habitRepo.allLogs(habitId);
     const currentStreak = habitRepo.currentStreak(habitId);
     const longestStreak = habitRepo.longestStreak(habitId);
+    const unlockInDays = scoreUnlockDaysLeft(habit, allLogs, todayDate());
 
     setStats({
       habit,
       currentStreak,
       longestStreak,
-      completionRate: quotaRate ?? (scheduledCount > 0 ? completedCount / scheduledCount : 0),
-      scheduledCount,
-      completedCount,
       totalAmount,
-      streaks: habitRepo.allStreaks(habitId),
-      series: buildSeries(habit, allLogs),
+      // Kilitliyken seri HİÇ üretilmez (grafik yerine geri sayım kartı çıkar).
+      series: unlockInDays == null ? buildSeries(habit, allLogs) : null,
+      scoreUnlockInDays: unlockInDays,
       goalPeriods: buildGoalPeriods(habit, allLogs, todayDate()),
       insights: buildHabitInsights(habit, allLogs, todayDate(), currentStreak, longestStreak),
       historyTotals: buildHistoryTotals(habit, allLogs, todayDate()),

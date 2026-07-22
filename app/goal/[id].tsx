@@ -13,10 +13,9 @@
 // Mimari kural: SQL yok; yalnızca useGoalStats + goalRepo/goalMilestoneRepo çağrılır.
 
 import { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { goalEntryRepo, goalMilestoneRepo, goalRepo, reminderRepo } from '@/db';
 import type { GoalMilestone } from '@/db';
@@ -24,6 +23,7 @@ import { notifySuccess, tapLight } from '@/lib/haptics';
 import { diffDays, fmtClock, isTimeUnit, todayDate, toYmd } from '@/lib/helpers';
 import { cancelGoalReminders, scheduleGoalReminders } from '@/lib/notifications';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
+import { DatePickerModal } from '@/ui/DatePickerModal';
 import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useGoalStats, type GoalStats, type LinkedHabit } from '@/ui/useGoalStats';
@@ -162,6 +162,8 @@ export default function GoalDetailScreen() {
   const [newMilestoneAmount, setNewMilestoneAmount] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState<string | null>(null);
   const [showMilestoneDatePicker, setShowMilestoneDatePicker] = useState(false);
+  // Miktar alanı varsayılan olarak KAPALI (çip hâlinde) — çipe basınca açılır.
+  const [showMilestoneAmount, setShowMilestoneAmount] = useState(false);
   // Genel sekmesindeki serbest miktar girişi ("kaç {unit} ekledin?").
   const [entryText, setEntryText] = useState('');
 
@@ -252,6 +254,7 @@ export default function GoalDetailScreen() {
     setNewMilestone('');
     setNewMilestoneAmount('');
     setNewMilestoneDate(null);
+    setShowMilestoneAmount(false);
     refreshMilestones();
   };
   // Yalnız checklist (miktarsız) adımlar elle işaretlenir; ara-eşik adımının
@@ -672,6 +675,13 @@ export default function GoalDetailScreen() {
                   );
                 })}
 
+                {/* Ekleme satırı KADEMELİ: varsayılan hâli yalnız başlık + ＋.
+                    Eskiden miktar kutusu ve tarih düğmesi de aynı satırdaydı ve
+                    sabit genişlikleri (76+~40+44+boşluklar ≈ 184px) yüzünden asıl
+                    alan olan başlığa ~135px kalıyordu — tarih seçilince ~105px
+                    (kullanıcı geri bildirimi: "sade değil"). Artık ikisi de
+                    başlığa yazılmaya başlanınca alttaki çip satırında beliriyor:
+                    yaygın durum (başlık yaz, Enter) tek temiz satır kalıyor. */}
                 <View style={styles.milestoneAddRow}>
                   <TextInput
                     style={styles.milestoneInput}
@@ -684,33 +694,6 @@ export default function GoalDetailScreen() {
                     returnKeyType="done"
                     maxLength={TITLE_MAX_LEN}
                   />
-                  {goal.goal_type === 'numeric' && (
-                    <TextInput
-                      style={styles.milestoneAmountInput}
-                      value={newMilestoneAmount}
-                      onChangeText={setNewMilestoneAmount}
-                      placeholder={
-                        isTimeUnit(goal.unit)
-                          ? t('habit.durationPlaceholder')
-                          : goal.unit ?? t('goal.milestoneAmountPlaceholder')
-                      }
-                      placeholderTextColor={colors.faint}
-                      keyboardType="numeric"
-                      maxLength={NUMBER_MAX_LEN}
-                    />
-                  )}
-                  <Pressable
-                    style={[styles.milestoneDateBtn, newMilestoneDate && styles.milestoneDateBtnSet]}
-                    onPress={() =>
-                      newMilestoneDate ? setNewMilestoneDate(null) : setShowMilestoneDatePicker(true)
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel={t('goal.milestoneDueA11y')}
-                  >
-                    <Text style={styles.milestoneDateBtnText}>
-                      {newMilestoneDate ? `${shortDate(newMilestoneDate, lang)} ×` : '📅'}
-                    </Text>
-                  </Pressable>
                   <Pressable
                     style={styles.milestoneAddBtn}
                     onPress={addMilestone}
@@ -720,17 +703,70 @@ export default function GoalDetailScreen() {
                     <Text style={styles.milestoneAddText}>＋</Text>
                   </Pressable>
                 </View>
-                {showMilestoneDatePicker && (
-                  <DateTimePicker
-                    value={new Date(`${newMilestoneDate ?? todayDate()}T00:00:00`)}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                    onChange={(_e: unknown, picked?: Date) => {
-                      setShowMilestoneDatePicker(Platform.OS === 'ios');
-                      if (picked) setNewMilestoneDate(toYmd(picked));
-                    }}
-                  />
+                {/* Çipler: başlık boşken gizli — AMA doldurulmuş bir miktar/tarih
+                    varsa görünür kalır, yoksa kullanıcı başlığı silince girdiği
+                    değer görünmez şekilde taşınırdı. */}
+                {(newMilestone.trim().length > 0 || newMilestoneDate != null || newMilestoneAmount.length > 0) && (
+                  <View style={styles.milestoneChipRow}>
+                    {goal.goal_type === 'numeric' &&
+                      (showMilestoneAmount || newMilestoneAmount.length > 0 ? (
+                        <TextInput
+                          style={styles.milestoneAmountInput}
+                          value={newMilestoneAmount}
+                          onChangeText={setNewMilestoneAmount}
+                          placeholder={
+                            isTimeUnit(goal.unit)
+                              ? t('habit.durationPlaceholder')
+                              : goal.unit ?? t('goal.milestoneAmountPlaceholder')
+                          }
+                          placeholderTextColor={colors.faint}
+                          keyboardType="numeric"
+                          maxLength={NUMBER_MAX_LEN}
+                          autoFocus
+                        />
+                      ) : (
+                        <Pressable
+                          style={styles.milestoneChip}
+                          onPress={() => setShowMilestoneAmount(true)}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('goal.milestoneAmountPlaceholder')}
+                        >
+                          <Text style={styles.milestoneChipText}>
+                            #{' '}
+                            {isTimeUnit(goal.unit)
+                              ? t('habit.durationPlaceholder')
+                              : goal.unit ?? t('goal.milestoneAmountPlaceholder')}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    <Pressable
+                      style={[styles.milestoneChip, newMilestoneDate != null && styles.milestoneChipSet]}
+                      onPress={() =>
+                        newMilestoneDate ? setNewMilestoneDate(null) : setShowMilestoneDatePicker(true)
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={t('goal.milestoneDueA11y')}
+                    >
+                      <Text
+                        style={[styles.milestoneChipText, newMilestoneDate != null && styles.milestoneChipTextSet]}
+                      >
+                        {newMilestoneDate
+                          ? `📅 ${shortDate(newMilestoneDate, lang)} ×`
+                          : `📅 ${t('goal.milestoneDateChip')}`}
+                      </Text>
+                    </Pressable>
+                  </View>
                 )}
+                {/* Uygulamanın kendi tarih seçicisi — eskiden burada native
+                    DateTimePicker vardı ve aynı iş (adıma son tarih verme)
+                    oluşturma ekranında DatePickerModal, burada sistem takvimiyle
+                    yapılıyordu. Tek seçici: her yerde aynı görünüm/davranış. */}
+                <DatePickerModal
+                  visible={showMilestoneDatePicker}
+                  value={new Date(`${newMilestoneDate ?? todayDate()}T00:00:00`)}
+                  onClose={() => setShowMilestoneDatePicker(false)}
+                  onConfirm={(picked) => setNewMilestoneDate(toYmd(picked))}
+                />
                 {goal.goal_type === 'numeric' && (
                   <Text style={styles.milestoneHint}>{t('goal.milestoneThresholdHint')}</Text>
                 )}
@@ -932,28 +968,30 @@ const makeStyles = (c: Colors) =>
     milestoneMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
     milestoneMeta: { fontSize: 11, color: c.faint, fontWeight: '600' },
     milestoneMetaOverdue: { color: c.danger },
+    // — Ekleme satırının altındaki kademeli çipler (miktar / tarih) —
+    milestoneChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+    milestoneChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    milestoneChipSet: { borderColor: c.primary, backgroundColor: c.primarySoft },
+    milestoneChipText: { fontSize: 12, fontWeight: '700', color: c.muted },
+    milestoneChipTextSet: { color: c.primary },
     milestoneAmountInput: {
-      width: 76,
+      width: 96,
       textAlign: 'center',
       backgroundColor: c.inputBg,
-      borderRadius: 12,
-      paddingVertical: 12,
-      fontSize: 14,
+      borderRadius: 999,
+      paddingVertical: 7,
+      fontSize: 13,
       color: c.text,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.primary,
     },
-    milestoneDateBtn: {
-      alignSelf: 'stretch',
-      justifyContent: 'center',
-      paddingHorizontal: 10,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    milestoneDateBtnSet: { borderColor: c.primary, backgroundColor: c.primarySoft },
-    milestoneDateBtnText: { fontSize: 12, fontWeight: '700', color: c.muted },
     milestoneHint: { fontSize: 11, color: c.faint, marginTop: 10, lineHeight: 15 },
     milestoneBox: {
       width: 20,

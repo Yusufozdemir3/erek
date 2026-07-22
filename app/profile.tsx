@@ -34,7 +34,7 @@ import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { LANG_LABELS, SUPPORTED_LANGS } from '@/i18n/translations';
 import { ACCENT_ORDER, ACCENT_THEMES, type Colors } from '@/ui/theme';
-import { ACCOUNTS_ENABLED } from '@/config';
+import { ACCOUNTS_ENABLED, AI_QUICK_ADD_ENABLED } from '@/config';
 
 const THEME_OPTIONS: { mode: ThemeMode; labelKey: string }[] = [
   { mode: 'light', labelKey: 'profile.themeLight' },
@@ -270,22 +270,25 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>{t('profile.hapticsHint')}</Text>
       </View>
 
-      {/* Yapay zeka — görev eklerken doğal dil ayrıştırma. Varsayılan KAPALI:
-          açıkken yazdığın metin bu özelliği kullandığında Google Gemini'ye gider
-          (bkz. aiPrefs.ts + aiTaskParser.ts + gizlilik politikası). */}
-      <View style={[styles.card, { marginTop: 16 }]}>
-        <Text style={styles.cardTitle}>{t('profile.aiQuickAdd')}</Text>
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>{t('profile.aiQuickAddEnabled')}</Text>
-          <Switch
-            value={aiQuickAdd}
-            onValueChange={toggleAiQuickAdd}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor={colors.card}
-          />
+      {/* Yapay zeka — görev eklerken doğal dil ayrıştırma. Özellik şu an tamamen
+          KAPALI (bkz. config.AI_QUICK_ADD_ENABLED — güvenlik/maliyet gerekçesi
+          orada). Kapalıyken ayarı göstermek anlamsız olurdu: kullanıcı açar ama
+          hiçbir şey değişmezdi. Bayrak true olunca kart geri gelir. */}
+      {AI_QUICK_ADD_ENABLED && (
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <Text style={styles.cardTitle}>{t('profile.aiQuickAdd')}</Text>
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t('profile.aiQuickAddEnabled')}</Text>
+            <Switch
+              value={aiQuickAdd}
+              onValueChange={toggleAiQuickAdd}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.card}
+            />
+          </View>
+          <Text style={styles.hint}>{t('profile.aiQuickAddHint')}</Text>
         </View>
-        <Text style={styles.hint}>{t('profile.aiQuickAddHint')}</Text>
-      </View>
+      )}
 
       {/* Bildirimler — içerik kendi sayfasında (ses/titreşim ayrı denetimlerle
           büyüdü). Ok'lu satıra dokununca açılır. */}
@@ -345,13 +348,16 @@ export default function ProfileScreen() {
         ) : (
           <>
             <Text style={styles.muted}>{t('profile.notLinkedBody')}</Text>
+            {/* Giriş artık YALNIZ Google ile (bkz. ui/LoginScreen.tsx). Açılış
+                kapısını "Şimdilik geç" ile atlayan kullanıcının giriş yolu burası.
+                E-posta+parola ekranı (/account) silinmedi, sadece bağlantısı yok. */}
             <Pressable
               style={styles.syncBtn}
-              onPress={() => router.push('/account')}
+              onPress={() => router.push('/login')}
               accessibilityRole="button"
-              accessibilityLabel={t('profile.linkAccount')}
+              accessibilityLabel={t('login.openA11y')}
             >
-              <Text style={styles.syncBtnText}>{t('profile.linkAccount')}</Text>
+              <Text style={styles.syncBtnText}>{t('login.google')}</Text>
             </Pressable>
           </>
         )}

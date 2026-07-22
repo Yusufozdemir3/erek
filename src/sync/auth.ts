@@ -4,6 +4,11 @@
 // Dönen uid, buluttaki satırların user_id'si olur (RLS: auth.uid() = user_id).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  GoogleSignin,
+  isCancelledResponse,
+  isSuccessResponse,
+} from '@react-native-google-signin/google-signin';
 import { supabase } from './supabase';
 
 // Kullanıcı Ayarlar'dan bilerek çıkış yaptığında set edilir; başarılı bir
@@ -104,6 +109,59 @@ export async function linkEmailToAnonymous(email: string, password: string): Pro
   await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
+// — GOOGLE İLE GİRİŞ —
+// Yerel Google hesap seçici (native SDK) açılır, dönen ID token Supabase'e
+// verilir (signInWithIdToken). Tarayıcı tabanlı OAuth akışına göre tercih
+// edilme sebebi: uygulamadan çıkmadan, sistemdeki hesaplarla tek dokunuşta.
+//
+// YAPILANDIRMA (kod dışı, bkz. app/login ekranındaki not):
+//   1. Google Cloud Console'da OAuth istemcileri: "Web" (Supabase'in kullandığı)
+//      ve "Android" (paket adı com.erek + imzalama anahtarının SHA-1'i).
+//   2. Supabase panelinde Authentication > Providers > Google açılır ve WEB
+//      istemcisinin ID/secret'ı girilir.
+//   3. .env'e EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = o WEB istemcisinin ID'si.
+// KRİTİK: buradaki webClientId ANDROID istemcisi değil WEB istemcisidir —
+// Supabase gelen ID token'ın "audience" alanını kendi yapılandırmasıyla
+// karşılaştırdığı için Android ID'si verilirse giriş sunucuda reddedilir.
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+// Google girişi kullanılabilir mi? (.env dolduruldu mu — UI düğmeyi buna göre
+// gizler; yapılandırma yokken düğme göstermek her dokunuşta hata demek olurdu)
+export const isGoogleSignInConfigured = Boolean(GOOGLE_WEB_CLIENT_ID);
+
+// configure() süreç ömrü boyunca bir kez yeter; her girişte çağırmak zararsız
+// ama gereksiz — bayrakla tek sefere indiriyoruz.
+let googleConfigured = false;
+function configureGoogleSignIn(): void {
+  if (googleConfigured || !GOOGLE_WEB_CLIENT_ID) return;
+  GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+  googleConfigured = true;
+}
+
+// Kullanıcı hesap seçiciyi kapattığında atılır. Çağıran bunu HATA olarak
+// göstermemeli — vazgeçmek hata değil (bkz. LoginScreen).
+export class GoogleSignInCancelled extends Error {
+  constructor() {
+    super('Google girişi iptal edildi');
+    this.name = 'GoogleSignInCancelled';
+  }
+}
+
+export async function signInWithGoogle(): Promise<void> {
+  if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
+  if (!GOOGLE_WEB_CLIENT_ID) throw new Error('Google girişi yapılandırılmadı');
+  configureGoogleSignIn();
+  // Play Services eksik/eskiyse kullanıcıya güncelleme diyaloğunu SDK gösterir.
+  await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+  const res = await GoogleSignin.signIn();
+  if (isCancelledResponse(res)) throw new GoogleSignInCancelled();
+  const idToken = isSuccessResponse(res) ? res.data.idToken : null;
+  if (!idToken) throw new Error('Google kimlik jetonu alınamadı');
+  const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+  if (error) throw error;
+  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
+}
+
 // E-posta + parola ile mevcut hesaba giriş yapar.
 export async function signInWithEmail(email: string, password: string): Promise<void> {
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
@@ -169,6 +227,14 @@ export async function signOutAccount(): Promise<void> {
   // başarısız olur da hesap oturumu sürerse ensureSignedIn bayrağı bayat sayıp
   // kendisi temizler — kalıcı zarar yok.
   await AsyncStorage.setItem(SIGNED_OUT_KEY, '1');
+  // Google oturumu da bırakılır: aksi halde bir sonraki girişte hesap seçici
+  // hiç açılmadan aynı hesapla sessizce dönülür ve kullanıcı hesap değiştiremez.
+  // Hiç Google ile girilmemişse bu çağrı zaten sessizce başarısız olur — yutuyoruz.
+  try {
+    await GoogleSignin.signOut();
+  } catch {
+    // yut — yukarıdaki nota bak
+  }
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }

@@ -12,6 +12,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextIn
 import { router } from 'expo-router';
 import { goalMilestoneRepo, goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import { scheduleGoalReminders, scheduleHabitReminders, scheduleTaskReminders } from '@/lib/notifications';
+import { AI_QUICK_ADD_ENABLED } from '@/config';
 import { isAiQuickAddEnabled } from '@/lib/aiPrefs';
 import { parseTaskText, type ParsedTaskFields } from '@/lib/aiTaskParser';
 import { recognizeSpeech } from '@/lib/voiceInput';
@@ -78,7 +79,10 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       setAiPrefill(null);
       setAiResults(null);
       setAiText('');
-      isAiQuickAddEnabled().then(setAiEnabled);
+      // Özellik bayrağı kapalıysa kullanıcının kayıtlı tercihi ne olursa olsun
+      // AI bölümü hiç açılmaz (bkz. config.AI_QUICK_ADD_ENABLED).
+      if (AI_QUICK_ADD_ENABLED) isAiQuickAddEnabled().then(setAiEnabled);
+      else setAiEnabled(false);
     }
   }, [visible, initialStep]);
 
@@ -244,7 +248,9 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       deadline: values.deadline,
       start_date: values.start_date,
     });
-    values.milestones?.forEach((m) => goalMilestoneRepo.create(created.id, m));
+    values.milestones?.forEach((m) =>
+      goalMilestoneRepo.create(created.id, m.title, { amount: m.amount, due_date: m.due_date })
+    );
     // Günlük giriş hatırlatmaları seçildiyse o an kurulur (izin yoksa uyar —
     // habit/task oluşturmayla aynı desen; eskiden sonuç hiç kontrol edilmiyordu).
     const reminders = reminderRepo.replaceAll('goal', created.id, values.remind_times);

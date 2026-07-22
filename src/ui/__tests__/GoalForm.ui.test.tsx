@@ -68,7 +68,33 @@ describe('GoalForm — oluşturma', () => {
         target_value: null,
         unit: null,
         start_date: null,
-        milestones: ['Kutuları topla'],
+        // Taslak adım artık düz metin değil, {başlık, miktar, son tarih}:
+        // oluşturma ekranı detay ekranındaki adım editörüyle eşitlendi.
+        milestones: [{ title: 'Kutuları topla', amount: null, due_date: null }],
+      })
+    );
+  });
+
+  it('sayısal hedefte taslak adıma miktar çipiyle eşik girilebilir', async () => {
+    const onSubmit = jest.fn();
+    const { getByText, getByLabelText, getByPlaceholderText } = await renderUI(
+      <GoalForm submitLabel="Ekle" onSubmit={onSubmit} enableMilestoneDraft />
+    );
+    fireEvent.changeText(getByPlaceholderText('Hedef başlığı (örn. 100 km koş)'), 'Kitap oku');
+    fireEvent.changeText(getByPlaceholderText('örn. 100'), '100');
+    fireEvent.changeText(getByPlaceholderText('km, kitap'), 'sayfa');
+
+    // Başlık yazılmadan çipler görünmez (kademeli satır).
+    expect(() => getByLabelText('Miktar')).toThrow();
+    fireEvent.changeText(getByPlaceholderText('Adım ekle…'), 'İlk 50 sayfa');
+    fireEvent.press(getByLabelText('Miktar'));
+    fireEvent.changeText(getByPlaceholderText('sayfa'), '50');
+    fireEvent.press(getByText('＋'));
+    fireEvent.press(getByText('Ekle'));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        milestones: [{ title: 'İlk 50 sayfa', amount: 50, due_date: null }],
       })
     );
   });

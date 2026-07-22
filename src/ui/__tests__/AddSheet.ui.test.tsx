@@ -37,6 +37,14 @@ jest.mock('@/lib/notifications', () => ({
 jest.mock('@/lib/aiTaskParser', () => ({ parseTaskText: jest.fn() }));
 jest.mock('@/lib/voiceInput', () => ({ recognizeSpeech: jest.fn() }));
 
+// AI hızlı ekleme YAYINDA KAPALI (config.AI_QUICK_ADD_ENABLED=false — güvenlik
+// gerekçesi orada). Kod silinmediği için testleri de yaşatıyoruz: özellik geri
+// açıldığında korumasız dönmeyelim. Bu yüzden bayrak burada açık taklit edilir;
+// aşağıdaki AI testleri ÖZELLİK MANTIĞINI doğrular, sevkiyat kararını değil.
+// (Bayrağın kendisi bir sabit + && — ayrıca test etmenin değeri, test başına
+// modül yeniden yükleme maliyetini karşılamıyor.)
+jest.mock('@/config', () => ({ ...jest.requireActual('@/config'), AI_QUICK_ADD_ENABLED: true }));
+
 import { scheduleGoalReminders, scheduleHabitReminders, scheduleTaskReminders } from '@/lib/notifications';
 import { parseTaskText } from '@/lib/aiTaskParser';
 

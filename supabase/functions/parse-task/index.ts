@@ -1,3 +1,22 @@
+// ⚠ BU FONKSİYON ŞU AN KULLANIM DIŞI (2026-07-21) — istemci tarafı
+// config.AI_QUICK_ADD_ENABLED=false ile kapatıldı ve fonksiyonun Supabase'den
+// SİLİNMESİ gerekiyor. Kaynak, premium mimarisi netleşince geri dönmek için
+// repoda bırakıldı; deploy EDİLMEMELİ.
+//
+// GERİ AÇMADAN ÖNCE ÇÖZÜLMESİ GEREKENLER (denetim 2026-07-21):
+//   1) Kimlik: anon key APK'ya gömülü olduğundan bu uç nokta fiilen herkese
+//      açıktı. `role: "anon"` reddi TEK BAŞINA yetmez — saldırgan anon key ile
+//      signInAnonymously çağırıp `authenticated` token üretebilir. Kapı aktif
+//      ABONELİĞE bağlanmalı: o zaman kötüye kullanım para ödemeyi gerektirir
+//      ve suistimal eden uid banlanabilir (iptal edilebilirlik asıl kazanç).
+//   2) Girdi uzunluğu tavanı yok — `text` doğrudan prompt'a giriyor.
+//   3) LLM PROXY SUİSTİMALİ: responseSchema çıktının ŞEKLİNİ kısıtlıyor ama
+//      `title` serbest string; uç nokta genel amaçlı ücretsiz LLM'e çevrilebilir.
+//   4) Satır ~120 yukarı akış Gemini hata metnini istemciye AYNEN döndürüyor.
+//   5) API anahtarı URL query parametresinde gidiyor (aşağıda `?key=`); doğrusu
+//      `x-goog-api-key` başlığı — anahtarlar URL'de erişim loglarına düşer.
+//   6) uid başına hız sınırı + global harcama tavanı yok.
+//
 // Doğal dil → görev alanları (başlık/tarih/saat/öncelik). Gemini'nin
 // yapılandırılmış JSON çıkışını (responseSchema) kullanır — serbest metin
 // ayrıştırmaktan çok daha güvenilir, ekstra parse mantığı gerektirmez.

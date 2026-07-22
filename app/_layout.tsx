@@ -14,6 +14,7 @@ import {
   type Theme,
 } from '@react-navigation/native';
 import { AppDataProvider } from '@/ui/AppData';
+import { LoginGate } from '@/ui/LoginScreen';
 import { OnboardingGate } from '@/ui/Onboarding';
 import { TimerProvider } from '@/ui/TimerProvider';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
@@ -69,11 +70,18 @@ function ThemedStack() {
         <Stack.Screen name="account" options={{ headerShown: true, title: 'Hesap', presentation: 'modal' }} />
         <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
+        <Stack.Screen
+          name="login"
+          options={{ headerShown: true, title: t('login.title'), presentation: 'modal' }}
+        />
         <Stack.Screen name="habit/[id]" />
         <Stack.Screen name="goal/[id]" />
       </Stack>
       {/* İlk açılışta bir kez gösterilen tanıtım (kendi bayrağını yönetir). */}
       <OnboardingGate />
+      {/* Tanıtımdan sonra bir kez gösterilen giriş ekranı — atlanabilir, kendi
+          bayrağını yönetir ve ACCOUNTS_ENABLED kapalıyken hiç çizilmez. */}
+      <LoginGate />
     </NavThemeProvider>
   );
 }

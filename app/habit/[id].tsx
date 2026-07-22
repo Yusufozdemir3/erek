@@ -3,7 +3,7 @@
 // "Alışkanlıklar" sekmesinde bir kartın haftalık geçmiş şeridine dokununca açılır.
 // Mimari kural: SQL yok; yalnızca useHabitStats (habitRepo üzerinden) çağrılır.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -18,14 +18,13 @@ import {
   type GoalPeriodStat,
   type HabitChartSeries,
   type HabitStats,
-  type StreakEntry,
 } from '@/ui/useHabitStats';
 import { useHabitCalendar, type CalendarDay } from '@/ui/useHabitCalendar';
 import { ScoreLineChart } from '@/ui/ScoreLineChart';
 import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { DATE_LOCALE, DEFAULT_HABIT_COLOR, shortDate, type Colors } from '@/ui/theme';
+import { DATE_LOCALE, DEFAULT_HABIT_COLOR, type Colors } from '@/ui/theme';
 import type { Lang } from '@/i18n/translations';
 
 type Styles = ReturnType<typeof makeStyles>;
@@ -159,7 +158,38 @@ function PeriodTabs({
 // kayar. Değer etiketinde birim YOK (yalnızca kısaltılmış sayı, ör. "11.4k")
 // — dar sütunlarda birim eklemek aşırı sıkışık görünüyordu (kullanıcı geri
 // bildirimi); birim zaten başlıkta/"Hedef" bölümünde okunabiliyor.
-const HISTORY_COL_WIDTH_MIN = 20; // sütun başına ASGARİ piksel
+// Ekrana AYNI ANDA kaç kova sığar. Sütun genişliği bundan türer: eskiden tüm
+// kovalar sığdırılmaya çalışılıyordu (13-14 çubuk yan yana) ve grafik okunmaz
+// derecede kalabalıklaşıyordu (kullanıcı geri bildirimi). Kalan kovalar
+// KAYBOLMAZ — yatay kaydırmayla gelirler, açılışta en güncel uçta durulur.
+const HISTORY_VISIBLE_COLS = 7;
+// Çubuk alanı ölçüleri. statsHistoryRow/Label stilleri de bunlardan türer ki
+// çubuk yüksekliğini burada PİKSEL olarak hesaplayabilelim (yüzde değil) —
+// değer yazısının çubuğa sığıp sığmadığına ancak öyle karar verilebiliyor.
+const HISTORY_ROW_H = 190;
+const HISTORY_LABEL_H = 16;
+const HISTORY_LABEL_GAP = 6;
+const HISTORY_TRACK_H = HISTORY_ROW_H - HISTORY_LABEL_H - HISTORY_LABEL_GAP;
+// Değer yazısı çubuğun İÇİNDE ve YATAY. Bir ara 90° döndürülmüştü: sütun 26px
+// iken sayı çubuğa yatay sığmıyordu. HISTORY_VISIBLE_COLS=7 ile sütun ~50px'e,
+// çubuk ~33px'e çıkınca ("18.3k" ≈ 22px) döndürmeye gerek kalmadı — yatay yazı
+// hem okunaklı hem de dikeydeki "yazı çubuktan uzun" sorununu tamamen bitirdi:
+// artık sığma koşulu yazının UZUNLUĞU değil, tek satır yüksekliği.
+const HISTORY_VALUE_LINE = 12; // yazı satırının yüksekliği
+const HISTORY_VALUE_INSET = 4; // içeri yazarken çubuğun tepesinden boşluk
+// Bu boydan kısa çubukta satır içeri sığmaz, yazı çubuğun ÜSTÜNE çıkar.
+const HISTORY_VALUE_MIN_BAR = HISTORY_VALUE_LINE + HISTORY_VALUE_INSET * 2;
+
+// Çubuğun İÇİNE yazılan değerin mürekkep rengi: alışkanlık rengi kullanıcı
+// seçimi olduğu için sabit koyu/açık yazı her palette okunmuyor — zeminin
+// parlaklığına göre seçilir (BT.601).
+function inkOn(hex: string): string {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map((x) => x + x).join('') : h;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16));
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return '#0a0a0a';
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#0a0a0a' : '#ffffff';
+}
 
 function HistoryBars({
   buckets,
@@ -178,13 +208,20 @@ function HistoryBars({
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const didAutoScroll = useRef(false);
+  // Periyot (Gün/Hafta/Ay) değişince bileşen yeniden mount olmadığı için bayrak
+  // açık kalıyor ve "en güncel veri sağda" otomatik kaydırması atlanıyordu —
+  // kullanıcı sekmeye basınca 30 kovanın EN ESKİsine bakıyordu. Aynı düzeltme
+  // Puan grafiğinde de var (bkz. ScoreLineChart).
+  useEffect(() => {
+    didAutoScroll.current = false;
+  }, [period, buckets.length]);
   const [containerWidth, setContainerWidth] = useState(0);
   const max = Math.max(1, ...buckets.map((b) => b.total));
-  // Az kova varken (ör. sadece 4 hafta) sütun genişliği KONTEYNERİ doldursun —
-  // aksi halde çubuklar sol kenara yapışıp sağda çirkin bir boşluk bırakıyordu
-  // (Puan grafiğindeki aynı düzeltme, bkz. ScoreLineChart).
-  const colWidth =
-    containerWidth > 0 ? Math.max(HISTORY_COL_WIDTH_MIN, containerWidth / buckets.length) : HISTORY_COL_WIDTH_MIN;
+  // Sütun genişliği: ekranı HISTORY_VISIBLE_COLS kovaya böl. Kova sayısı bundan
+  // AZSA (ör. sadece 4 hafta) mevcut kovalar konteyneri doldurur — aksi halde
+  // çubuklar sol kenara yapışıp sağda çirkin bir boşluk bırakıyordu (Puan
+  // grafiğindeki aynı düzeltme, bkz. ScoreLineChart).
+  const colWidth = containerWidth > 0 ? containerWidth / Math.min(buckets.length, HISTORY_VISIBLE_COLS) : 0;
 
   return (
     <View onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
@@ -203,11 +240,16 @@ function HistoryBars({
           <View style={styles.statsHistoryRow}>
             {buckets.map((b, i) => {
               const pct = b.total > 0 ? Math.max(6, Math.round((b.total / max) * 100)) : 0;
+              // Değer yazısı çubuğun İÇİNDE, tepeye yakın (kullanıcı isteği:
+              // "miktarlar kolonların içinde yazsa"). Çubuk bir satır sığdıramayacak
+              // kadar kısaysa yazı çubuğun ÜSTÜNE çıkar.
+              const barH = (HISTORY_TRACK_H * pct) / 100;
+              const inside = barH >= HISTORY_VALUE_MIN_BAR;
+              const valueTop = inside
+                ? HISTORY_TRACK_H - barH + HISTORY_VALUE_INSET
+                : HISTORY_TRACK_H - barH - HISTORY_VALUE_INSET - HISTORY_VALUE_LINE;
               return (
                 <View key={b.bucketStart} style={[styles.statsHistoryCol, { width: colWidth }]}>
-              <Text style={[styles.statsHistoryValue, { color, width: colWidth }]} numberOfLines={1}>
-                {fmtHistoryValue(habit, b.total)}
-              </Text>
               <View style={styles.statsHistoryBarTrack}>
                 {pct > 0 &&
                   (b.partial ? (
@@ -219,6 +261,21 @@ function HistoryBars({
                     />
                   ))}
               </View>
+              <Text
+                style={[
+                  styles.statsHistoryValue,
+                  {
+                    width: colWidth,
+                    top: valueTop,
+                    // Çubuğun üstünde zemin alışkanlık rengi; dışarıda ve soluk
+                    // (partial) çubukta zemin kartın kendisi.
+                    color: inside && !b.partial ? inkOn(color) : color,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {fmtHistoryValue(habit, b.total)}
+              </Text>
               <Text style={styles.statsHistoryLabel}>
                 {historyBarLabel(period, b.bucketStart, i > 0 ? buckets[i - 1].bucketStart : null, lang)}
               </Text>
@@ -318,10 +375,24 @@ function HabitDarkStatsCard({
                 color={color}
                 gridColor={themeColors.line}
                 labelColor={themeColors.faint}
-                variant="step"
               />
             </View>
           )}
+        </View>
+      )}
+
+      {/* Puan KİLİTLİ: alışkanlık SCORE_MIN_DAYS günden az yaşadı. Sayı burada
+          matematiksel olarak doğru olurdu ama anlamlı olmazdı (birkaç günlük
+          veriden "puan" çıkarmak bugünü tekrar etmektir) — yanlış bir sayı
+          göstermektense geri sayım gösteriyoruz. Bkz. useHabitStats. */}
+      {!stats.series && stats.scoreUnlockInDays != null && (
+        <View style={[styles.statsSection, styles.statsSectionBordered]}>
+          <View style={styles.statsHeadRow}>
+            <Text style={styles.statsTitle}>{t('stats.scoreTitle')}</Text>
+          </View>
+          <Text style={[styles.statsMeta, { marginTop: 8 }]}>
+            {t('stats.scoreLocked', { n: stats.scoreUnlockInDays })}
+          </Text>
         </View>
       )}
 
@@ -389,44 +460,6 @@ function MonthCalendar({
   );
 }
 
-// Seri geçmişi: en uzundan en kısaya İLK 3 seri, her satırda uzunluk + tarih
-// aralığı + en uzuna göre oranlı bir çubuk (kabaca karşılaştırma için).
-function StreakList({
-  streaks,
-  color,
-  lang,
-  t,
-  suffixKey,
-  styles,
-}: {
-  streaks: StreakEntry[];
-  color: string;
-  lang: Lang;
-  t: (key: string, params?: Record<string, string | number>) => string;
-  suffixKey: string; // kota alışkanlıkta '{n} hafta', diğerlerinde '{n} gün'
-  styles: Styles;
-}) {
-  const top = streaks.slice(0, 3);
-  const max = top[0]?.length ?? 1;
-  return (
-    <View style={{ gap: 8 }}>
-      {top.map((s, i) => (
-        <View key={`${s.start}-${i}`} style={styles.streakRow}>
-          <Text style={styles.streakLen}>{t(suffixKey, { n: s.length })}</Text>
-          <View style={styles.streakBarTrack}>
-            <View
-              style={[styles.streakBarFill, { width: `${(s.length / max) * 100}%`, backgroundColor: color }]}
-            />
-          </View>
-          <Text style={styles.streakRange}>
-            {s.start === s.end ? shortDate(s.start, lang) : `${shortDate(s.start, lang)} – ${shortDate(s.end, lang)}`}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 export default function HabitStatsScreen() {
   const { colors, shared } = useTheme();
   const { t, lang } = useI18n();
@@ -439,6 +472,12 @@ export default function HabitStatsScreen() {
   // farklı, rozet eşikleri (gün cinsinden) hafta×7 ile karşılaştırılır.
   const isQuota = isQuotaSchedule(stats.habit?.schedule ?? null);
   const streakDays = isQuota ? stats.longestStreak * 7 : stats.longestStreak;
+  // Kazanılan rozetler + sıradaki eşik. İlerleme 0'dan sıradaki eşiğe göre
+  // ölçülür (bir önceki eşikten değil): "kalan gün" sayısıyla aynı doğrusal
+  // ölçek, çubuk ile yazı birbirini doğruluyor.
+  const earnedBadges = STREAK_MILESTONES.filter((m) => streakDays >= m.days);
+  const nextBadge = STREAK_MILESTONES.find((m) => streakDays < m.days) ?? null;
+  const badgePct = nextBadge ? Math.min(100, Math.round((streakDays / nextBadge.days) * 100)) : 100;
   const monthLabel = new Date(calendar.year, calendar.month, 1).toLocaleDateString(DATE_LOCALE[lang], {
     month: 'long',
     year: 'numeric',
@@ -471,11 +510,10 @@ export default function HabitStatsScreen() {
                 value={String(stats.longestStreak)}
                 styles={styles}
               />
-              <StatCard
-                label={t('stats.completionRate')}
-                value={`%${Math.round(stats.completionRate * 100)}`}
-                styles={styles}
-              />
+              {/* "Tamamlanma %" KALDIRILDI: ömür boyu ortalama olduğu için
+                  alışkanlık yaşlandıkça donuyordu (iyi de kötü de bir hafta
+                  sayıyı kıpırdatmıyor) — Puan kartındaki EMA aynı soruya trendle
+                  cevap veriyor, ikisi yan yana kafa karıştırıyordu. */}
             </View>
 
             {/* Hedef/Puan/Geçmiş — tek koyu kart (Claude Design mockup'ının portu, bkz. HabitDarkStatsCard). */}
@@ -491,25 +529,11 @@ export default function HabitStatsScreen() {
               />
             </View>
 
-
-            {/* Seri geçmişi — en uzun 3 seri. Kalan bölümler (bu ve altındakiler)
-                de kendi `styles.card` kutusunda — ekrandaki tüm istatistik
-                blokları artık TUTARLI şekilde kutulu/ayrık (bkz. dosya başı yorumu). */}
-            {stats.streaks.length > 0 && (
-              <View style={[styles.card, { marginTop: 12 }]}>
-                <Text style={styles.cardLabel}>{t('stats.streakHistory')}</Text>
-                <View style={{ marginTop: 12 }}>
-                  <StreakList
-                    streaks={stats.streaks}
-                    color={habitColor}
-                    lang={lang}
-                    t={t}
-                    suffixKey={isQuota ? 'stats.weeksSuffix' : 'stats.daysSuffix'}
-                    styles={styles}
-                  />
-                </View>
-              </View>
-            )}
+            {/* "Seri geçmişi" (en uzun 3 seri) KALDIRILDI: üstteki özet zaten
+                güncel + en uzun seriyi veriyordu, bölüm yalnız 2. ve 3. en uzunu
+                ekliyordu; hemen altındaki Takvim aynı geçmişi çok daha zengin
+                gösteriyor. Kalan bölümler kendi `styles.card` kutusunda — ekrandaki
+                istatistik blokları TUTARLI şekilde kutulu/ayrık. */}
 
             {/* Tam takvim — ay ay gezinilebilir. */}
             <View style={[styles.card, { marginTop: 12 }]}>
@@ -552,28 +576,40 @@ export default function HabitStatsScreen() {
             </View>
 
             {/* Rozetler — en uzun seri eşiği geçtiyse kazanılmış sayılır (seri
-                düşse bile madalya kalır). Kilitliler soluk. */}
+                düşse bile madalya kalır). Eskiden 4 eşiğin TAMAMI vitrindeydi,
+                kilitliler soluk: içerik üstteki "En uzun seri" sayısından zaten
+                türetilebiliyordu ve yeni kullanıcıyı 4 soluk madalya karşılıyordu.
+                Artık yalnız kazanılanlar + SIRADAKİ eşik ilerleme çubuğuyla —
+                mesaj "yapmadıkların"dan "az kaldı"ya döndü (aynı ekrandaki Hedef
+                kartının dili). */}
             <View style={[styles.card, { marginTop: 12 }]}>
               <Text style={styles.cardLabel}>{t('stats.badges')}</Text>
-              <View style={[styles.badgeRow, { marginTop: 12 }]}>
-                {STREAK_MILESTONES.map((m) => {
-                  const earned = streakDays >= m.days;
-                  return (
-                    <View
-                      key={m.days}
-                      style={[styles.badge, earned ? styles.badgeEarned : styles.badgeLocked]}
-                    >
-                      <Text style={[styles.badgeEmoji, !earned && styles.badgeEmojiLocked]}>
-                        {m.emoji}
-                      </Text>
-                      <Text style={[styles.badgeDays, earned && styles.badgeDaysEarned]}>
-                        {t('stats.daysSuffix', { n: m.days })}
-                      </Text>
+              {earnedBadges.length > 0 && (
+                <View style={[styles.badgeRow, { marginTop: 12 }]}>
+                  {earnedBadges.map((m) => (
+                    <View key={m.days} style={styles.badge}>
+                      <Text style={styles.badgeEmoji}>{m.emoji}</Text>
                       <Text style={styles.badgeLabel}>{t(m.labelKey)}</Text>
                     </View>
-                  );
-                })}
-              </View>
+                  ))}
+                </View>
+              )}
+              {nextBadge ? (
+                <View style={{ marginTop: 12 }}>
+                  <View style={styles.badgeNextRow}>
+                    <Text style={styles.badgeNextEmoji}>{nextBadge.emoji}</Text>
+                    <Text style={styles.badgeNextLabel}>{t(nextBadge.labelKey)}</Text>
+                    <Text style={styles.badgeNextLeft}>
+                      {t('date.daysLeft', { n: nextBadge.days - streakDays })}
+                    </Text>
+                  </View>
+                  <View style={styles.badgeTrack}>
+                    <View style={[styles.badgeFill, { width: `${badgePct}%`, backgroundColor: habitColor }]} />
+                  </View>
+                </View>
+              ) : (
+                <Text style={[styles.badgeAllEarned, { marginTop: 12 }]}>{t('stats.badgesAllEarned')}</Text>
+              )}
             </View>
           </>
         )}
@@ -612,23 +648,27 @@ const makeStyles = (c: Colors) =>
     cardValue: { fontSize: 20, fontWeight: '800', color: c.text, marginTop: 4 },
 
     // — Streak rozetleri —
+    // Yalnız KAZANILAN rozetler madalya olarak dizilir (kilitli vitrin kalktı).
     badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     badge: {
-      flexGrow: 1,
-      flexBasis: 70,
       alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
       borderRadius: 14,
       borderWidth: 1,
+      backgroundColor: c.primarySoft,
+      borderColor: c.primary,
     },
-    badgeEarned: { backgroundColor: c.primarySoft, borderColor: c.primary },
-    badgeLocked: { backgroundColor: c.card, borderColor: c.border },
-    badgeEmoji: { fontSize: 26 },
-    badgeEmojiLocked: { opacity: 0.3 },
-    badgeDays: { fontSize: 13, fontWeight: '800', color: c.faint, marginTop: 4 },
-    badgeDaysEarned: { color: c.text },
-    badgeLabel: { fontSize: 11, color: c.muted, marginTop: 1 },
+    badgeEmoji: { fontSize: 24 },
+    badgeLabel: { fontSize: 11, color: c.muted, marginTop: 2 },
+    // — Sıradaki rozet: emoji + ad + kalan gün, altında ilerleme çubuğu —
+    badgeNextRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    badgeNextEmoji: { fontSize: 16, opacity: 0.5 },
+    badgeNextLabel: { flex: 1, fontSize: 13, fontWeight: '700', color: c.text },
+    badgeNextLeft: { fontSize: 12, fontWeight: '600', color: c.muted },
+    badgeTrack: { height: 6, borderRadius: 3, backgroundColor: c.track, overflow: 'hidden', marginTop: 8 },
+    badgeFill: { height: '100%', borderRadius: 3 },
+    badgeAllEarned: { fontSize: 13, fontWeight: '700', color: c.text },
 
     // Kaçırılan gün (aylık takvim): iki temada da okunur bir kırmızı. Planlı
     // değil: zeminden ayrılan soluk gri (bg değil — bg zeminle aynı olup görünmez
@@ -648,19 +688,6 @@ const makeStyles = (c: Colors) =>
     periodBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft },
     periodText: { fontSize: 12, fontWeight: '700', color: c.faint },
     periodTextSel: { color: c.primary },
-
-    // — Seri geçmişi listesi —
-    streakRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    streakLen: { width: 52, fontSize: 12, fontWeight: '700', color: c.text },
-    streakBarTrack: {
-      flex: 1,
-      height: 10,
-      borderRadius: 5,
-      backgroundColor: c.track,
-      overflow: 'hidden',
-    },
-    streakBarFill: { height: '100%', borderRadius: 5 },
-    streakRange: { fontSize: 11, color: c.muted, minWidth: 92, textAlign: 'right' },
 
     // — Ay takvimi —
     calHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -710,10 +737,29 @@ const makeStyles = (c: Colors) =>
     statsPeriodBtn: { paddingHorizontal: 10, paddingVertical: 5 },
     statsTitle: { color: c.text, fontSize: 14, fontWeight: '700', letterSpacing: 1 },
     statsMeta: { color: c.faint, fontSize: 11, fontWeight: '600' },
-    statsHistoryRow: { flexDirection: 'row', alignItems: 'flex-end', height: 120, marginTop: 4 },
+    // ÖLÇEK: Puan grafiğiyle (ScoreLineChart) AYNI orana çekildi — eski değerler
+    // (120px sıra, 8/7px yazı) telefonda okunmuyordu ve Puan büyütülünce iki kart
+    // yan yana dengesiz duruyordu (kullanıcı geri bildirimi). Ölçüler HISTORY_*
+    // sabitlerinden gelir; çubuk yüksekliği orada piksel olarak hesaplanıyor.
+    statsHistoryRow: { flexDirection: 'row', alignItems: 'flex-end', height: HISTORY_ROW_H, marginTop: 4 },
     statsHistoryCol: { height: '100%', alignItems: 'center' },
-    statsHistoryValue: { fontSize: 8, fontWeight: '600', marginBottom: 6 },
+    // Genişlik/konum/renk çizim sırasında veriliyor (sütun ve çubuk boyuna bağlı).
+    statsHistoryValue: {
+      position: 'absolute',
+      left: 0,
+      height: HISTORY_VALUE_LINE,
+      lineHeight: HISTORY_VALUE_LINE,
+      fontSize: 9,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
     statsHistoryBarTrack: { flex: 1, width: '65%', justifyContent: 'flex-end' },
     statsHistoryBar: { width: '100%', borderRadius: 6, minHeight: 4 },
-    statsHistoryLabel: { fontSize: 7, fontWeight: '600', color: c.faint, marginTop: 6 },
+    statsHistoryLabel: {
+      fontSize: 10,
+      lineHeight: HISTORY_LABEL_H,
+      fontWeight: '600',
+      color: c.faint,
+      marginTop: HISTORY_LABEL_GAP,
+    },
   });
