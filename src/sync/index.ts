@@ -18,4 +18,17 @@ export {
   resetPasswordWithCode,
   type AuthUser,
 } from './auth';
-export { runSync, prepareFullResync, clearLocalData, type SyncResult } from './syncEngine';
+export {
+  runSync,
+  prepareFullResync,
+  clearLocalData,
+  // Hesap değişimi: sınıflandırma + iki çözüm yolu (bkz. syncEngine başlığı).
+  classifySignIn,
+  getSyncOwner,
+  setSyncOwner,
+  isOwnershipConflict,
+  prepareMergeIntoAccount,
+  prepareReplaceWithAccount,
+  type SignInKind,
+  type SyncResult,
+} from './syncEngine';

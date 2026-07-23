@@ -145,6 +145,45 @@ create index if not exists idx_goal_milestones_updated on public.goal_milestones
 create index if not exists idx_goal_entries_updated on public.goal_entries(updated_at);
 create index if not exists idx_reminders_updated on public.reminders(updated_at);
 
+-- SUNUCU ZAMAN DAMGASI -----------------------------------------------------
+-- updated_at İSTEMCİ saatinden gelir (offline-first: kaydı yazan cihaz damgalar).
+-- Senkron pull'unu ona göre filtrelemek iki şeyi bozuyordu:
+--   1) saati ileri kaymış bir cihaz filigranı geleceğe atıp aradaki satırları
+--      kalıcı olarak atlatıyordu (sessiz veri kaybı),
+--   2) bir satırın buluta ne zaman ULAŞTIĞI bilinmediği için sayfa sırası
+--      istemci saatlerine göre karışabiliyordu.
+-- Çözüm: sunucunun yazdığı ayrı bir damga. Pull filtresi + filigran
+-- server_updated_at'e bakar; son-yazan-kazanır kıyası eskisi gibi updated_at'e
+-- (kaydın gerçekten ne zaman değiştiğini o söyler).
+-- İstemci bu kolonu ASLA yazmaz — trigger her insert/update'te üzerine yazar.
+create or replace function public.set_server_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.server_updated_at := now();
+  return new;
+end;
+$$;
+
+-- Tüm senkron tablolarına idempotent kolon + indeks + trigger.
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'goals','goal_milestones','goal_entries','habits',
+    'tasks','reminders','habit_logs','subtasks'
+  ] loop
+    execute format(
+      'alter table public.%I add column if not exists server_updated_at timestamptz not null default now()', t);
+    execute format(
+      'create index if not exists idx_%s_server_updated on public.%I(server_updated_at)', t, t);
+    execute format(
+      'drop trigger if exists trg_%s_server_updated on public.%I', t, t);
+    execute format(
+      'create trigger trg_%s_server_updated before insert or update on public.%I
+         for each row execute function public.set_server_updated_at()', t, t);
+  end loop;
+end $$;
+
 -- ROW LEVEL SECURITY -------------------------------------------------------
 alter table public.goals      enable row level security;
 alter table public.habits     enable row level security;

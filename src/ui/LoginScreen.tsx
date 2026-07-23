@@ -12,17 +12,21 @@
 //     buradan girer; o yüzden "geç" düğmesi orada gizlenir).
 
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { userRepo } from '@/db';
 import {
+  classifySignIn,
   currentAuthUser,
+  currentUid,
   GoogleSignInCancelled,
   isGoogleSignInConfigured,
   isSyncConfigured,
   prepareFullResync,
+  prepareMergeIntoAccount,
+  prepareReplaceWithAccount,
   runSync,
   signInWithGoogle,
 } from '@/sync';
@@ -48,6 +52,24 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Kullanıcıya "birleştir mi, değiştir mi" sorar. Söz verilen davranış:
+  //   Birleştir -> yereldekiler bu hesaba KOPYALANIR (yeni id'lerle; eski hesabın
+  //                buluttaki verisi olduğu gibi kalır),
+  //   Değiştir  -> cihazdaki veri SİLİNİR, bu hesabın bulut verisi indirilir.
+  const askSwitchStrategy = (): Promise<'merge' | 'replace' | 'cancel'> =>
+    new Promise((resolve) => {
+      Alert.alert(
+        t('sync.switchTitle'),
+        t('sync.switchBody'),
+        [
+          { text: t('common.cancel'), style: 'cancel', onPress: () => resolve('cancel') },
+          { text: t('sync.switchMerge'), onPress: () => resolve('merge') },
+          { text: t('sync.switchReplace'), style: 'destructive', onPress: () => resolve('replace') },
+        ],
+        { cancelable: true, onDismiss: () => resolve('cancel') }
+      );
+    });
+
   const onGoogle = async () => {
     setBusy(true);
     setError(null);
@@ -58,8 +80,29 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
       // olabilir. account.tsx'teki hesap bağlama akışının aynısı.
       const authUser = await currentAuthUser();
       if (authUser?.email) userRepo.upgradeToAccount(user.id, authUser.email);
-      await prepareFullResync();
-      await runSync(user.id);
+
+      // HESAP DEĞİŞİMİ KONTROLÜ (çakışma OLUŞMADAN). Yerel id'ler hesap değişince
+      // değişmediği için, başka bir hesaba gönderilmiş veriyi olduğu gibi push
+      // etmek RLS'e takılır ve senkronu kalıcı kilitler — bu yüzden ne yapılacağı
+      // ÖNCEDEN sorulur. Bkz. sync/syncEngine.ts (classifySignIn).
+      const uid = await currentUid();
+      const kind = uid ? await classifySignIn(uid) : 'fresh';
+      if (kind === 'switch') {
+        const choice = await askSwitchStrategy();
+        if (choice === 'cancel') return;
+        if (choice === 'merge') await prepareMergeIntoAccount();
+        else await prepareReplaceWithAccount();
+      } else {
+        await prepareFullResync();
+      }
+
+      const result = await runSync(user.id);
+      if (result.status === 'error') {
+        setError(
+          result.ownershipConflict ? t('sync.ownershipConflict') : (result.message ?? '')
+        );
+        return;
+      }
       refreshUser();
       onDone();
     } catch (e) {

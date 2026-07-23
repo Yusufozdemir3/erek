@@ -209,6 +209,10 @@ export async function deleteAccountAndData(): Promise<void> {
   const { error } = await supabase.rpc('delete_account');
   if (error) throw error;
   await AsyncStorage.setItem(SIGNED_OUT_KEY, '1');
+  // Bulut hesabı silindi: cihazdaki veri artık HİÇBİR hesaba ait değil. Sahiplik
+  // damgası kalırsa sonraki giriş yanlışlıkla "hesap değişimi" sayılır ve
+  // kullanıcıya gereksiz yere birleştir/değiştir sorusu sorulurdu.
+  await AsyncStorage.removeItem('sync:ownerUid');
   // Sunucuda kullanıcı zaten silindi; yerel oturum kapatma hata verse de
   // (geçersiz token vb.) önemsiz — bayrak kalıntıyı ensureSignedIn'e temizletir.
   try {

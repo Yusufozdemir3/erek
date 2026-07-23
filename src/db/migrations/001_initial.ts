@@ -285,6 +285,24 @@ SELECT lower(hex(randomblob(16))), 'goal', id, remind_at, updated_at, NULL, 0
 FROM goals WHERE remind_at IS NOT NULL;
 `;
 
+// Migration 017: migration016'nın ürettiği hatırlatma id'lerini kanonik UUID
+// biçimine çevirir. Sorun: `lower(hex(randomblob(16)))` 32 karakter TİRESİZ metin
+// üretiyor; Supabase'deki reminders.id ise `uuid` kolonu — push'ta kabul edip
+// pull'da TİRELİ kanonik biçimde geri veriyor. Yerelde o tireli id bulunamayınca
+// aynı hatırlatma İKİNCİ satır olarak ekleniyor ve bildirim iki kez çalıyordu.
+// (Senkron tarafında ikinci savunma olarak reminders'a naturalKey verildi;
+// bkz. src/sync/syncEngine.ts.)
+//
+// synced=0: düzeltilen satır bir sonraki turda yeniden push edilir. Bulut zaten
+// kanonik biçimi sakladığı için bu upsert aynı satıra denk gelir (kopya üretmez).
+export const migration017 = `
+UPDATE reminders
+SET id = substr(id, 1, 8) || '-' || substr(id, 9, 4) || '-' || substr(id, 13, 4)
+         || '-' || substr(id, 17, 4) || '-' || substr(id, 21, 12),
+    synced = 0
+WHERE length(id) = 32 AND id NOT LIKE '%-%';
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -303,4 +321,5 @@ export const migrations = [
   { version: 14, sql: migration014 },
   { version: 15, sql: migration015 },
   { version: 16, sql: migration016 },
+  { version: 17, sql: migration017 },
 ];
