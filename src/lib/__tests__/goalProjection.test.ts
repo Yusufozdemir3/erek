@@ -1,9 +1,12 @@
-// goalProjection testleri — kullanıcının bildirdiği tutarsızlıkları kilitler:
-//  1) Son tarihi kaçıran yavaş tempoda "önde" DEĞİL "açık" (behindAmount > 0).
-//  2) avgDaily "Son 7 gün" toplamıyla tutarlı (last7Total / pencere).
-//  3) Pencere hedefin GERÇEKTEN yaşadığı gün sayısıyla sınırlı — bugün açılıp
-//     bugün girdi eklenen bir hedefte sabit 7'ye bölmek hızı yapay küçültüyordu
-//     (kullanıcı bunu "3 ders girdim ama 0.4 pace diyor" diye bildirdi).
+// goalProjection testleri.
+//
+// MODEL (kullanıcı kararı 2026-07-23): başlangıç ve son tarih ZORUNLU olduğu
+// için tüm hesaplar o eksende yapılır:
+//   • avgDaily   = mevcut / yaşanan gün (kayan 7/30 pencere DEĞİL)
+//   • last7Total = son 7 günün girdi toplamı (soru pencereli olduğu için)
+//   • projectedFinishDate  = bugün + kalan/avgDaily
+//   • projectedAtDeadline  = mevcut + avgDaily × kalan gün (son tarih geçtiyse: mevcut)
+//   • behindAmount         = hedef − projectedAtDeadline
 
 import { goalProjection, type GoalEntryLike } from '../goalProjection';
 
@@ -13,25 +16,9 @@ const entry = (amount: number, day: string): GoalEntryLike => ({
   updated_at: `${day}T10:00:00.000Z`,
 });
 
-describe('goalProjection', () => {
-  it('girdi yoksa her şey null', () => {
-    const p = goalProjection({
-      entries: [],
-      target: 200,
-      current: 0,
-      remaining: 200,
-      daysLeft: 15,
-      completed: false,
-      today: TODAY,
-    });
-    expect(p.avgDaily).toBeNull();
-    expect(p.behindAmount).toBeNull();
-    expect(p.projectedFinishDate).toBeNull();
-  });
-
-  it('BUGÜN açılan hedefte pencere 7 değil GERÇEK gün sayısıyla sınırlı (kullanıcının bildirdiği hata)', () => {
-    // Hedef bugün başladı (start_date=bugün), bugün 3 ders girildi. Sabit 7'ye
-    // bölünseydi 3/7≈0.4 çıkardı — oysa gerçek hız 3/gün (henüz 1 günün var).
+describe('goalProjection — yaşanan gün ekseni', () => {
+  it('bugün açılan hedefte yaşanan gün 1\'dir (bugün dahil)', () => {
+    // Sabit 7'ye bölünseydi 3/7≈0.43 çıkardı — oysa gerçek hız 3/gün.
     const p = goalProjection({
       entries: [entry(1, TODAY), entry(1, TODAY), entry(1, TODAY)],
       target: 21,
@@ -42,12 +29,47 @@ describe('goalProjection', () => {
       today: TODAY,
       startDate: TODAY,
     });
-    expect(p.daysElapsed).toBe(0);
+    expect(p.daysElapsed).toBe(1);
     expect(p.last7Total).toBe(3);
-    expect(p.avgDaily).toBeCloseTo(3); // 3/1, DEĞİL 3/7≈0.43
+    expect(p.avgDaily).toBeCloseTo(3);
   });
 
-  it('startDate verilmezse eski hedeflerde en eski girdinin tarihine düşülür', () => {
+  it('avgDaily girdilerden DEĞİL mevcut değer / yaşanan günden hesaplanır', () => {
+    // 10 gün önce başladı (bugün dahil 11 gün), mevcut 55 -> 5/gün.
+    // Girdi geçmişi eksik olsa bile (yalnız 1 satır) hız doğru çıkar.
+    const p = goalProjection({
+      entries: [entry(10, '2026-07-15')],
+      target: 200,
+      current: 55,
+      remaining: 145,
+      daysLeft: 15,
+      completed: false,
+      today: TODAY,
+      startDate: '2026-07-06',
+    });
+    expect(p.daysElapsed).toBe(11);
+    expect(p.avgDaily).toBeCloseTo(5);
+    expect(p.last7Total).toBe(10); // "son 7 günde ne kadar yaptım" ayrı soru
+  });
+
+  it('negatif düzeltme temposu SIFIRLAMAZ (eski hata: kartlar kaybolurdu)', () => {
+    // Kullanıcı yanlış girdiği 20'yi geri almış: son 7 günün neti negatif.
+    const p = goalProjection({
+      entries: [entry(-20, TODAY), entry(30, '2026-07-14')],
+      target: 200,
+      current: 50,
+      remaining: 150,
+      daysLeft: 20,
+      completed: false,
+      today: TODAY,
+      startDate: '2026-07-06',
+    });
+    expect(p.last7Total).toBe(10); // -20 + 30
+    expect(p.avgDaily).toBeCloseTo(50 / 11); // mevcut/yaşanan gün — negatiften etkilenmez
+    expect(p.projectedFinishDate).not.toBeNull();
+  });
+
+  it('startDate yoksa (eski hedef) en eski girdinin gününe düşülür', () => {
     const p = goalProjection({
       entries: [entry(3, TODAY)],
       target: 21,
@@ -56,69 +78,95 @@ describe('goalProjection', () => {
       daysLeft: 22,
       completed: false,
       today: TODAY,
-      // startDate YOK — geriye uyum yolu.
     });
-    expect(p.daysElapsed).toBe(0);
+    expect(p.daysElapsed).toBe(1);
     expect(p.avgDaily).toBeCloseTo(3);
   });
 
-  it('hedef 7+ gündür açıkken avgDaily tam 7 günün ortalamasıdır ve last7Total ile tutarlıdır', () => {
-    // Hedef 10 gün önce başladı (pencere doluyor), dün 10 sayfa girildi.
+  it('ne başlangıç ne girdi varsa hiçbir şey hesaplanmaz', () => {
     const p = goalProjection({
-      entries: [entry(10, '2026-07-15')],
+      entries: [],
       target: 200,
-      current: 112,
-      remaining: 88,
+      current: 0,
+      remaining: 200,
       daysLeft: 15,
       completed: false,
       today: TODAY,
-      startDate: '2026-07-06',
     });
-    expect(p.last7Total).toBe(10);
-    expect(p.avgDaily).toBeCloseTo(10 / 7);
-    expect(p.avgDaily! * 7).toBeCloseTo(p.last7Total!);
-    expect(p.daysElapsed).toBe(10);
+    expect(p.avgDaily).toBeNull();
+    expect(p.daysElapsed).toBeNull();
+    expect(p.projectedFinishDate).toBeNull();
   });
 
-  it('yavaş tempo son tarihi kaçırıyorsa "açık" (behind > 0), ASLA önde değil', () => {
-    // Kullanıcının senaryosu: 112/200, 15 gün kalmış, son 7 günde yalnız 10 sayfa,
-    // hedef 10 gündür açık (pencere dolu, 10/7 hızı).
+  it('hiç ilerleme yoksa hız null (bitiş tahmini de yok)', () => {
     const p = goalProjection({
-      entries: [entry(10, '2026-07-15')],
+      entries: [],
       target: 200,
-      current: 112,
-      remaining: 88,
+      current: 0,
+      remaining: 200,
       daysLeft: 15,
       completed: false,
       today: TODAY,
       startDate: '2026-07-06',
     });
-    // Bu hızla son tarihte ~133 sayfada olur → 200'ün ~67 altında.
-    expect(p.projectedAtDeadline).toBeCloseTo(112 + (10 / 7) * 15);
-    expect(p.behindAmount).toBeGreaterThan(0); // AÇIK — eski hata negatif (önde) üretiyordu
-    expect(p.behindAmount).toBeCloseTo(200 - (112 + (10 / 7) * 15));
-    // Tahmini bitiş son tarihten (15 gün) çok sonra.
-    expect(p.projectedFinishDate! > '2026-07-31').toBe(true);
+    expect(p.avgDaily).toBeNull();
+    expect(p.projectedFinishDate).toBeNull();
+    expect(p.daysElapsed).toBe(11); // yaşanan gün yine bilinir
+  });
+});
+
+describe('goalProjection — projeksiyonlar', () => {
+  it('yavaş tempo son tarihi kaçırıyorsa "açık" (behind > 0)', () => {
+    // 11 gündür açık, 55/200 -> 5/gün. 15 gün sonra 55+75=130 -> 70 açık.
+    const p = goalProjection({
+      entries: [entry(10, '2026-07-15')],
+      target: 200,
+      current: 55,
+      remaining: 145,
+      daysLeft: 15,
+      completed: false,
+      today: TODAY,
+      startDate: '2026-07-06',
+    });
+    expect(p.projectedAtDeadline).toBeCloseTo(130);
+    expect(p.behindAmount).toBeCloseTo(70);
+    expect(p.projectedFinishDate! > '2026-07-31').toBe(true); // son tarihten sonra
   });
 
   it('hızlı tempo hedefi aşacaksa "fazla" (behind < 0)', () => {
-    // 50/100, 10 gün kalmış, hedef 10 gündür açık, son 7 günde 70 sayfa → 10/gün → son tarihte 150.
+    // 11 gündür açık, 110/100... değil: 11 gün, mevcut 55, hedef 100 -> 5/gün,
+    // 10 gün sonra 105 -> hedefi 5 aşar.
     const p = goalProjection({
-      entries: [entry(70, '2026-07-15')],
+      entries: [entry(20, '2026-07-15')],
       target: 100,
-      current: 50,
-      remaining: 50,
+      current: 55,
+      remaining: 45,
       daysLeft: 10,
       completed: false,
       today: TODAY,
       startDate: '2026-07-06',
     });
-    expect(p.avgDaily).toBeCloseTo(10);
-    expect(p.projectedAtDeadline).toBeCloseTo(150);
-    expect(p.behindAmount).toBeCloseTo(-50); // FAZLA
+    expect(p.avgDaily).toBeCloseTo(5);
+    expect(p.projectedAtDeadline).toBeCloseTo(105);
+    expect(p.behindAmount).toBeCloseTo(-5);
   });
 
-  it('tamamlanmış hedefte projeksiyon üretilmez', () => {
+  it('SON TARİH GEÇTİYSE tahmin değil GERÇEKLEŞEN gösterilir (kart kaybolmaz)', () => {
+    const p = goalProjection({
+      entries: [entry(10, '2026-07-10')],
+      target: 200,
+      current: 120,
+      remaining: 80,
+      daysLeft: -5, // son tarih 5 gün önceydi
+      completed: false,
+      today: TODAY,
+      startDate: '2026-07-06',
+    });
+    expect(p.projectedAtDeadline).toBe(120); // o gün elindeki
+    expect(p.behindAmount).toBeCloseTo(80); // kalan miktar = açık
+  });
+
+  it('tamamlanmış hedefte bitiş tahmini üretilmez', () => {
     const p = goalProjection({
       entries: [entry(10, '2026-07-15')],
       target: 200,
@@ -130,9 +178,10 @@ describe('goalProjection', () => {
       startDate: '2026-07-06',
     });
     expect(p.projectedFinishDate).toBeNull();
-    expect(p.behindAmount).toBeNull();
-    // Tempo yine de gösterilebilir (avgDaily doludur), ama açık/bitiş yok.
-    expect(p.avgDaily).toBeCloseTo(10 / 7);
+    expect(p.avgDaily).not.toBeNull(); // hız yine gösterilebilir
+    // İleri uzatma YOK: addProgress hedefte kırptığı için "fazla yaparsın" yanlış olurdu.
+    expect(p.projectedAtDeadline).toBe(200);
+    expect(p.behindAmount).toBe(0);
   });
 
   it('son tarih yoksa bitiş tahmini var ama açık yok', () => {
@@ -151,36 +200,50 @@ describe('goalProjection', () => {
     expect(p.behindAmount).toBeNull();
   });
 
-  it('bu hafta girdi yoksa son 30 güne düşer (hedef 30+ gündür açıkken tam pencere)', () => {
-    // 20 gün önce 30 sayfa, son 7 günde hiç, hedef 40 gündür açık (30 günlük
-    // pencere dolu) → avgDaily = 30/30 = 1.
+  it('çok yavaş hızda saçma/geçersiz tarih üretmez (10 yıl sınırı)', () => {
+    // 100 gündür açık, mevcut 1 -> 0.01/gün. Kalan 9999 -> ~1 milyon gün.
     const p = goalProjection({
-      entries: [entry(30, '2026-06-26')],
-      target: 200,
-      current: 30,
-      remaining: 170,
-      daysLeft: 40,
+      entries: [entry(1, '2026-04-07')],
+      target: 10000,
+      current: 1,
+      remaining: 9999,
+      daysLeft: 30,
       completed: false,
       today: TODAY,
-      startDate: '2026-06-06',
+      startDate: '2026-04-07',
     });
-    expect(p.last7Total).toBe(0);
-    expect(p.avgDaily).toBeCloseTo(1);
+    expect(p.avgDaily).toBeGreaterThan(0);
+    expect(p.projectedFinishDate).toBeNull(); // "bu hızla bitmez"
+  });
+});
+
+describe('goalProjection — son 7 gün', () => {
+  it('pencere yaşanan günü aşamaz (2 günlük hedefte 2 günün toplamı)', () => {
+    const p = goalProjection({
+      entries: [entry(5, TODAY), entry(4, '2026-07-15'), entry(99, '2026-07-01')],
+      target: 100,
+      current: 9,
+      remaining: 91,
+      daysLeft: 20,
+      completed: false,
+      today: TODAY,
+      startDate: '2026-07-15',
+    });
+    expect(p.daysElapsed).toBe(2);
+    expect(p.last7Total).toBe(9); // 2 günlük pencere: eski 99 girmez
   });
 
-  it('30 günlük pencere de hedefin gerçek yaşıyla sınırlı', () => {
-    // Hedef 20 gün önce başladı (30'dan az) → pencere 30 değil 20 (startDate→today dahil 20+1=21, min(30,21)=21).
+  it('7 günden eski girdiler toplama girmez', () => {
     const p = goalProjection({
-      entries: [entry(30, '2026-06-26')],
-      target: 200,
-      current: 30,
-      remaining: 170,
-      daysLeft: 40,
+      entries: [entry(5, TODAY), entry(50, '2026-07-01')],
+      target: 100,
+      current: 55,
+      remaining: 45,
+      daysLeft: 20,
       completed: false,
       today: TODAY,
-      startDate: '2026-06-26', // hedef ilk girdiyle aynı gün başladı, bugüne 20 gün
+      startDate: '2026-06-16',
     });
-    expect(p.last7Total).toBe(0);
-    expect(p.avgDaily).toBeCloseTo(30 / 21);
+    expect(p.last7Total).toBe(5);
   });
 });

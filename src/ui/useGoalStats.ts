@@ -16,6 +16,7 @@ import { goalEntryRepo, goalMilestoneRepo, goalRepo, habitRepo, milestoneViews a
 import type { Goal, GoalEntry, GoalMilestone, MilestoneView } from '@/db';
 import { todayDate } from '@/lib/helpers';
 import { goalProjection } from '@/lib/goalProjection';
+import { nextMilestoneStat, type NextMilestoneStat } from '@/lib/milestoneStats';
 
 export interface LinkedHabit {
   id: string;
@@ -32,27 +33,24 @@ export interface GoalStats {
   daysLeft: number | null; // null = son tarih yok; negatifse gecikmiş
   isOverdue: boolean;
   overdueDays: number | null; // yalnız isOverdue iken dolu (pozitif)
-  // Yalnız 'numeric': hedefe son tarihte yetişmek için gereken tempo.
-  // Son tarih yoksa, tamamlandıysa ya da son tarih geçtiyse üçü de null.
+  // Yalnız 'numeric': hedefe son tarihte yetişmek için gereken tempo
+  // ("belirlenen tarihte bitirmek için günde/haftada ne kadar yapmalıyım").
+  // Son tarih yoksa, tamamlandıysa ya da son tarih geçtiyse ikisi de null.
   dailyPace: number | null;
   weeklyPace: number | null;
-  monthlyPace: number | null;
-  // — Girdi geçmişinden türetilen gerçekleşen tempo + projeksiyonlar (numeric) —
-  // avgDaily: günlük ortalama ilerleme. Son 14 günde girdi varsa o pencereden,
-  // yoksa ilk girdiden bugüne genel ortalamadan hesaplanır. Girdi yoksa null.
+  // — Gerçekleşen tempo + projeksiyonlar (numeric); bkz. lib/goalProjection.ts —
+  // Hepsi başlangıç–son tarih ekseninde hesaplanır (ikisi de zorunlu alan).
+  // "Günde ne kadar yapıyorum": mevcut / yaşanan gün.
   avgDaily: number | null;
-  // Bu hızla son tarihte ulaşılacak miktar (deadline gelecekte + avgDaily varken).
+  // "Bu hızla son tarihte miktar ne olur"; son tarih geçtiyse gerçekleşen değer.
   projectedAtDeadline: number | null;
-  // Bu hızla hedefin biteceği tahmini tarih ("YYYY-MM-DD"; avgDaily>0 iken).
+  // "Bu hızla hangi tarihte bitiririm" ("YYYY-MM-DD"; makul aralıktaysa).
   projectedFinishDate: string | null;
-  // Doğrusal plana göre fark: pozitif = plana göre GERİDE, negatif = önde.
-  // Plan: ilk girdi gününde 0'dan son tarihte hedefe düz çizgi.
+  // Son tarihteki fark: pozitif = açık kalır, negatif = hedefi aşar.
   behindAmount: number | null;
-  // İlk girdiden bugüne geçen gün (girdi yoksa null).
+  // Başlangıç tarihinden bugüne yaşanan gün (bugün dahil).
   daysElapsed: number | null;
-  // Günlük ortalama ilerlemenin hedefe oranı (0..1; %'ye çevirip göster).
-  dailyPercent: number | null;
-  // Son 7 günde girilen toplam miktar (girdi yoksa null).
+  // "Son 7 günde ne kadar yaptım" — girdi geçmişinden.
   last7Total: number | null;
   // Adımlar artık HER İKİ tipte de opsiyonel olabilir ('numeric' hedefe de
   // checklist eklenebilir) — bu alanlar milestonesTotal>0 iken doludur, tipe
@@ -64,8 +62,10 @@ export interface GoalStats {
   milestonesDone: number;
   milestonesTotal: number;
   milestonesRemaining: number;
-  milestonePaceDays: number | null; // ortalama: kalan her adım için kaç gün var
-  milestoneWeeklyPace: number | null; // haftada tamamlanması gereken adım sayısı
+  // İstatistik sekmesinin adım bölümü artık TOPLU tempo (gün/adım, adım/hafta)
+  // yerine YALNIZ sıradaki adımı gösterir — bkz. lib/milestoneStats.ts.
+  // Hiç adım yoksa ya da hepsi tamamlandıysa null.
+  nextMilestone: NextMilestoneStat | null;
   // Bu hedefe bağlı (goal_id ile işaretlenmiş) alışkanlıklar — bkz. HabitForm.linkGoal.
   linkedHabits: LinkedHabit[];
   // "Genel" sekmesindeki serbest miktar girişlerinin geçmişi (en yeniden en
@@ -84,21 +84,18 @@ const EMPTY_BASE = {
   overdueDays: null,
   dailyPace: null,
   weeklyPace: null,
-  monthlyPace: null,
   avgDaily: null,
   projectedAtDeadline: null,
   projectedFinishDate: null,
   behindAmount: null,
   daysElapsed: null,
-  dailyPercent: null,
   last7Total: null,
   milestones: [] as GoalMilestone[],
   milestoneViews: [] as MilestoneView[],
   milestonesDone: 0,
   milestonesTotal: 0,
   milestonesRemaining: 0,
-  milestonePaceDays: null,
-  milestoneWeeklyPace: null,
+  nextMilestone: null as NextMilestoneStat | null,
   linkedHabits: [] as LinkedHabit[],
   entries: [] as GoalEntry[],
 };
@@ -136,7 +133,6 @@ export function useGoalStats(goalId: string): GoalStats {
     const dailyPace =
       !completed && remaining != null && effectiveDays != null ? remaining / effectiveDays : null;
     const weeklyPace = dailyPace != null ? dailyPace * 7 : null;
-    const monthlyPace = dailyPace != null ? dailyPace * 30 : null;
 
     // Adımlar tipten bağımsız çekilir: 'milestone' hedefte zorunlu iş akışının
     // parçası, 'numeric' hedefte miktarlı ara-eşik ya da (miktarsızsa) checklist
@@ -148,12 +144,8 @@ export function useGoalStats(goalId: string): GoalStats {
     const milestonesDone = views.filter((v) => v.reached).length;
     const milestonesTotal = views.length;
     const milestonesRemaining = Math.max(0, milestonesTotal - milestonesDone);
-    // Tempo: adımı olan HERHANGİ bir hedefte anlamlı (yalnızca 'milestone' değil).
-    const milestonePaceDays =
-      !completed && milestonesRemaining > 0 && effectiveDays != null
-        ? effectiveDays / milestonesRemaining
-        : null;
-    const milestoneWeeklyPace = milestonePaceDays != null ? 7 / milestonePaceDays : null;
+    // Sıradaki adım: kullanıcının o an üzerinde çalıştığı tek eşik.
+    const nextMilestone = nextMilestoneStat(views, goal.current_value, todayDate());
 
     // Bu hedefe bağlı alışkanlıklar — ayrı bir sorgu yerine tüm kullanıcı
     // alışkanlıkları tek listede zaten çekiliyor (liste büyüklüğü küçük).
@@ -173,7 +165,6 @@ export function useGoalStats(goalId: string): GoalStats {
       projectedAtDeadline,
       projectedFinishDate,
       behindAmount,
-      dailyPercent,
     } =
       goal.goal_type === 'numeric'
         ? goalProjection({
@@ -193,7 +184,6 @@ export function useGoalStats(goalId: string): GoalStats {
             projectedAtDeadline: null,
             projectedFinishDate: null,
             behindAmount: null,
-            dailyPercent: null,
           };
 
     setStats({
@@ -206,21 +196,18 @@ export function useGoalStats(goalId: string): GoalStats {
       overdueDays,
       dailyPace,
       weeklyPace,
-      monthlyPace,
       avgDaily,
       projectedAtDeadline,
       projectedFinishDate,
       behindAmount,
       daysElapsed,
-      dailyPercent,
       last7Total,
       milestones,
       milestoneViews: views,
       milestonesDone,
       milestonesTotal,
       milestonesRemaining,
-      milestonePaceDays,
-      milestoneWeeklyPace,
+      nextMilestone,
       linkedHabits,
       entries,
     });

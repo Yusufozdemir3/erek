@@ -25,14 +25,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, ScrollView, Text, View } from 'react-native';
+import { AXIS_W, chartLayout } from '@/ui/scoreChartLayout';
 
 // ÖLÇEK: referans Loop Habit Tracker'ın puan grafiği (kullanıcı videosu). Eski
 // değerler (110px yükseklik, 8px yazı) yanındaki "Geçmiş" kartına göre basık
 // kalıyor ve telefonda yazılar okunmuyordu (kullanıcı geri bildirimi: "ekrana
 // tam oturmuyor, yazılar çok küçük"). Loop'ta çizim alanı ~145dp, eksen/gün
 // yazıları ~10dp; buradaki sayılar onun oranlarına denk gelir.
-const POINT_SPACING_MIN = 30; // nokta başına ASGARİ piksel (bunun altına inmez)
-const AXIS_W = 40; // SABİT sol eksen şeridinin genişliği ("%100" yazısına göre)
+// POINT_SPACING_MIN / AXIS_W / LABEL_W_MAX -> scoreChartLayout.ts (yerleşim
+// hesabıyla aynı yerde dursunlar diye).
 // Yüzde yazısı ile çizim alanı arasındaki boşluk. Yazılar şeridin SAĞINA
 // yaslı (sayıların sağ kenarları hizalı okunur); bu payı büyütmek onları
 // topluca sola kaydırır — 6 iken çizgiye fazla yapışıklardı (kullanıcı isteği).
@@ -45,7 +46,6 @@ const Y_BASE = 156;
 // Alt eksen etiket kutusunun genişliği: nokta aralığından geniş olamaz (yoksa
 // komşu etiketler çakışır) ama az noktada aralık çok açıldığında da bu kadarla
 // sınırlı kalır — etiket her hâlükârda kendi noktasının ÜSTÜNE ortalanır.
-const LABEL_W_MAX = 48;
 const LABEL_ROW_H = 16;
 const LABEL_FONT = 10;
 const AXIS_FONT = 10;
@@ -133,21 +133,8 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
 
   if (n === 0) return <View onLayout={onLayout} />;
 
-  // İki rejim var, çünkü etiket kutusu spacing ile LABEL_W_MAX'in küçüğü:
-  //   dar  (labelW = spacing)     -> plotW = n * spacing
-  //   geniş(labelW = LABEL_W_MAX) -> plotW = (n-1) * spacing + LABEL_W_MAX
-  // Hangisi geçerliyse ondan çözülür; ikisi de plotW = availableForPlot verir,
-  // yani grafik kartı TAM doldurur (tek formülle ~16px boşluk kalıyordu).
-  // İlk/son noktanın etiketi yarım kutu taştığı için bu pay hesaba katılmalı —
-  // aksi halde tam sığması gereken grafik bile kaydırılabilir hale geliyordu.
-  const availableForPlot = Math.max(0, containerWidth - AXIS_W);
-  const narrowFit = availableForPlot / n;
-  const fitSpacing =
-    narrowFit < LABEL_W_MAX ? narrowFit : n > 1 ? (availableForPlot - LABEL_W_MAX) / (n - 1) : availableForPlot;
-  const spacing = containerWidth > 0 ? Math.max(POINT_SPACING_MIN, fitSpacing) : POINT_SPACING_MIN;
-  const labelW = Math.min(spacing, LABEL_W_MAX);
-  const plotW = Math.max(1, n - 1) * spacing + labelW;
-  const xAt = (i: number) => labelW / 2 + i * spacing;
+  // Yerleşim matematiği saf modülde (test edilebilir): scoreChartLayout.ts
+  const { spacing, labelW, plotW, xAt } = chartLayout(n, containerWidth);
   const yAt = (v: number) => Y_BASE - Math.max(0, Math.min(1, v)) * (Y_BASE - Y_TOP);
   const coords = points.map((p, i) => ({ x: xAt(i), y: yAt(p.value) }));
 
