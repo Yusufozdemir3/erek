@@ -10,7 +10,11 @@ import type { Priority } from '@/db';
 import type { Lang } from '@/i18n/translations';
 
 // Aktif dile karşılık gelen Intl/Date yerel ayarı (ay/gün adları için).
-export const DATE_LOCALE: Record<Lang, string> = { tr: 'tr-TR', en: 'en-US', de: 'de-DE' };
+// Geriye uyum: DATE_LOCALE artık i18n/dateLocale.ts'te (RN'siz saf veri) —
+// buradan yeniden dışa açılıyor ki mevcut import'lar bozulmasın. NOT: `export
+// ... from` ismi bu modülün KAPSAMINA sokmaz, o yüzden ayrıca import ediliyor.
+import { DATE_LOCALE } from '@/i18n/dateLocale';
+export { DATE_LOCALE };
 
 // Tek bir temanın tüm renk jetonları.
 export interface Colors {
