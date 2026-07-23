@@ -1,0 +1,156 @@
+// TaskForm'un stil fabrikası — src/ui/TaskForm.tsx'ten AYRILDI (denetim
+// bulgusu H1: form bileşenleri 600+ satırdı ve bunun büyük kısmı stil sözlüğüydü).
+//
+// DESEN (bkz. ThemeProvider): modül seviyesinde StyleSheet.create YOK — tema
+// değişince yeniden üretilebilsin diye fabrika render sırasında çağrılır.
+
+import { StyleSheet } from 'react-native';
+import type { Colors } from '@/ui/theme';
+
+export type TaskFormStyles = ReturnType<typeof makeTaskFormStyles>;
+
+export const makeTaskFormStyles = (c: Colors) =>
+  StyleSheet.create({
+    label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },
+    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
+    input: {
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 12,
+    },
+    row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+    chip: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    chipText: { fontSize: 14, fontWeight: '600', color: c.muted },
+    chipTextSelected: { color: c.onAccent },
+    dateBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    dateBtnText: { fontSize: 15, color: c.text },
+    clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
+    clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
+    hint: { fontSize: 12, color: c.danger, marginTop: -6, marginBottom: 10 },
+    // Tekrar seçici (HabitForm sıklık seçicisiyle aynı görünüm). 6 seçenek
+    // olduğundan satır sarar; flexBasis üçlü sıraya oturtur.
+    // Kapalıyken seçili kipi gösteren özet düğmesi; tekrar varsa vurgu renginde.
+    repeatBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+      marginBottom: 12,
+    },
+    repeatBtnText: { fontSize: 15, fontWeight: '700', color: c.muted },
+    repeatBtnTextOn: { color: c.primary },
+    repeatRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+    freqBtn: {
+      flexGrow: 1,
+      flexBasis: '30%',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    // "Kaç günde bir? / Ayın günü" satırı.
+    freqNumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+    freqNumLabel: { fontSize: 14, fontWeight: '600', color: c.text },
+    freqNumInput: {
+      width: 64,
+      textAlign: 'center',
+      backgroundColor: c.inputBg,
+      borderRadius: 10,
+      paddingVertical: 8,
+      fontSize: 15,
+      fontWeight: '700',
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
+    // Yıllık tarihlere seçilen "12 Şub ×" çipleri.
+    yearDateChip: { width: undefined, paddingHorizontal: 10, backgroundColor: c.primarySoft, borderColor: c.primary },
+    yearDateChipText: { fontSize: 13, fontWeight: '700', color: c.primary },
+    freqBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
+    freqBtnText: { fontSize: 14, fontWeight: '600', color: c.muted },
+    freqBtnTextSel: { color: c.primary },
+    dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+    dayChip: {
+      width: 42,
+      paddingVertical: 8,
+      borderRadius: 10,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    dayChipSel: { borderColor: c.primary, backgroundColor: c.primary },
+    dayChipText: { fontSize: 13, fontWeight: '700', color: c.muted },
+    dayChipTextSel: { color: c.onAccent },
+    actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
+    saveBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 15,
+      borderRadius: 14,
+      backgroundColor: c.primary,
+      shadowColor: c.primary,
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
+    },
+    saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
+
+    // — Taslak alt görev editörü (oluşturma) —
+    subRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, gap: 10 },
+    subBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.faint },
+    subTitle: { flex: 1, fontSize: 14, color: c.text },
+    subDelete: { fontSize: 20, color: c.faint, paddingHorizontal: 4 },
+    subAddRow: { flexDirection: 'row', gap: 8, marginBottom: 4, alignItems: 'center' },
+    subInput: {
+      flex: 1,
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: c.text,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    subAddBtn: {
+      width: 44,
+      alignSelf: 'stretch',
+      borderRadius: 12,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    subAddText: { fontSize: 20, color: c.primary, fontWeight: '600' },
+  });

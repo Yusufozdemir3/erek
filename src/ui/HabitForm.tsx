@@ -13,7 +13,7 @@
 // mantığı değişmez, edit akışı davranışsal olarak birebir korunur.
 
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { goalRepo } from '@/db';
 import type { Goal, GoalContribution, HabitKind, Recurrence } from '@/db';
@@ -22,10 +22,19 @@ import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
-import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
+import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { DEFAULT_HABIT_COLOR, HABIT_COLORS, shortDate, type Colors } from '@/ui/theme';
+import { makeHabitFormStyles } from '@/ui/habitFormStyles';
+import { HabitAppearancePicker } from '@/ui/habit/HabitAppearancePicker';
+import {
+  buildSchedule,
+  buildTarget,
+  clampEndDate,
+  ratioToGoalFactor,
+  type FreqMode as HabitFreqMode,
+} from '@/lib/habitFormLogic';
+import { DEFAULT_HABIT_COLOR, shortDate } from '@/ui/theme';
 
 // Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
 // Etiketler i18n anahtarı; render'da t() ile çevrilir.
@@ -71,7 +80,8 @@ interface Props {
 
 type WizardStep = 'kind' | 'identity' | 'schedule' | 'tracking' | 'reminder';
 // Sıklık kipi (UI durumu; Recurrence'a submit'te çevrilir — bkz. submit).
-type FreqMode = 'daily' | 'days' | 'interval' | 'quota';
+// Dört sıklık kipi lib/habitFormLogic.ts'te tanımlı (dönüşümü orası yapıyor).
+type FreqMode = HabitFreqMode;
 
 // Takip tipi seçimi — sihirbazın ilk adımı (yalnız oluşturmada, tip sabit
 // verilmemişse). Emoji yerine ikon setiyle aynı çizgi vektör dili (Feather).
@@ -93,7 +103,7 @@ export function HabitForm({
 }: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
-  const styles = makeStyles(colors);
+  const styles = makeHabitFormStyles(colors);
   const initSchedule = initial?.schedule ?? null;
   // Tip: sabit verilmişse (düzenleme) ondan; yoksa (oluşturma) kullanıcı sihirbazın
   // ilk adımında seçer (null = henüz seçilmedi).
@@ -228,51 +238,22 @@ export function HabitForm({
     // değil — kaydet butonu doğrudan burayı çağırır, bu yüzden aynı kural
     // burada da uygulanır (bkz. trackingTargetValid).
     if (!trackingTargetValid) return;
-    // Sıklık kipini Recurrence'a çevir. Geçersiz/boş girdiler güvenli tarafa,
-    // "her gün"e (null) düşer: belirli günlerde hiç gün seçilmemişse, aralıkta
-    // sayı <2 ise, kotada sayı 1-7 dışındaysa.
-    let schedule: Recurrence | null = null;
-    if (freqMode === 'days' && weekdays.length > 0) {
-      schedule = { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) };
-    } else if (freqMode === 'interval') {
-      const n = parseInt(everyNText, 10);
-      if (Number.isFinite(n) && n >= 2) {
-        // Çapa (referans günü): düzenlemede mevcut çapa korunur ki planlı günler
-        // kaymasın; oluşturmada başlangıç tarihi (yoksa bugün) çapadır.
-        const anchor =
-          initSchedule?.freq === 'interval' && initSchedule.anchor
-            ? initSchedule.anchor
-            : startDate ?? todayDate();
-        schedule = { freq: 'interval', every: n, anchor };
-      }
-    } else if (freqMode === 'quota') {
-      const n = parseInt(quotaText, 10);
-      if (Number.isFinite(n) && n >= 1 && n <= 7) {
-        schedule = { freq: 'weekly', timesPerWeek: n };
-      }
-    }
-    // Hedef/birim tipe göre: numeric = miktar+birim, timer = dakika→saniye,
-    // binary = ikisi de null.
-    const parsed = parseFloat(targetText.replace(',', '.'));
-    let target_amount: number | null = null;
-    let unitVal: string | null = null;
-    if (kind === 'numeric') {
-      target_amount = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-      unitVal = target_amount != null && unit.trim() ? unit.trim() : null;
-    } else if (kind === 'timer') {
-      // Dakika girilir, saniye saklanır (habit_logs.amount de saniye birikir).
-      target_amount = Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 60) : null;
-    }
-    // Bitiş başlangıçtan önce olamaz; olduysa başlangıca çekilir (tek günlük aralık).
-    const end_date = endDate && startDate && endDate < startDate ? startDate : endDate;
+    // Saf dönüşümler lib/habitFormLogic.ts'te (test edilebilir olsun diye).
+    const schedule = buildSchedule({
+      freqMode,
+      weekdays,
+      everyNText,
+      quotaText,
+      startDate,
+      previousSchedule: initSchedule,
+    });
+    const { target_amount, unit: unitVal } = buildTarget(kind, targetText, unit);
+    const end_date = clampEndDate(startDate, endDate);
     // Katkı biçimi yalnız bir hedefe bağlı nicel/zamanlayıcı alışkanlıkta anlamlı;
     // aksi halde NULL (= per_completion) gönderilir.
     const goal_contribution: GoalContribution | null =
       goalId && kind !== 'binary' ? goalContribution : null;
-    // Kullanıcı "kaç {birim} bir {hedef birimi} eder" oranını girer (ör. 4);
-    // DB'de saklanan goal_factor bunun tersidir (0.25 — hedefe eklenecek gerçek çarpan).
-    const parsedRatio = parseFloat(goalRatioText.replace(',', '.'));
-    const goal_factor = Number.isFinite(parsedRatio) && parsedRatio > 0 ? 1 / parsedRatio : 1;
+    const goal_factor = ratioToGoalFactor(goalRatioText);
     onSubmit({
       title: t,
       kind,
@@ -394,52 +375,16 @@ export function HabitForm({
       {/* İkon + renk — çizgi vektör ikon seçili renkle tintlenir; seçili olana
           tekrar basınca kaldırılır. */}
       {show('identity') && (
-        <>
-          <Text style={styles.label}>{t('habit.icon')}</Text>
-          <View style={styles.iconGrid}>
-            {HABIT_ICON_SET.map((entry) => {
-              const sel = icon === entry.id;
-              return (
-                <Pressable
-                  key={entry.id}
-                  style={[
-                    styles.iconCell,
-                    sel && {
-                      borderColor: previewColor,
-                      backgroundColor: previewColor + '1f',
-                      borderWidth: 2,
-                    },
-                  ]}
-                  onPress={() => setIcon(sel ? null : entry.id)}
-                  accessibilityLabel={t(entry.labelKey)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: sel }}
-                >
-                  <HabitIconGlyph id={entry.id} size={20} color={sel ? previewColor : colors.muted} />
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text style={styles.label}>{t('habit.color')}</Text>
-          <View style={styles.colorRow}>
-            {HABIT_COLORS.map((c, i) => {
-              const sel = color === c;
-              return (
-                <Pressable
-                  key={c}
-                  style={[styles.swatch, { backgroundColor: c }, sel && styles.swatchSel]}
-                  onPress={() => setColor(sel ? null : c)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: sel }}
-                  accessibilityLabel={t('habit.colorOptionA11y', { n: i + 1 })}
-                >
-                  {sel && <Text style={styles.swatchCheck}>✓</Text>}
-                </Pressable>
-              );
-            })}
-          </View>
-        </>
+        <HabitAppearancePicker
+          icon={icon}
+          onIconChange={setIcon}
+          color={color}
+          onColorChange={setColor}
+          previewColor={previewColor}
+          colors={colors}
+          styles={styles}
+          t={t}
+        />
       )}
 
       {/* Sıklık — her gün / belirli günler / her X günde bir / haftada X kez,
@@ -768,213 +713,3 @@ export function HabitForm({
     </>
   );
 }
-
-const makeStyles = (c: Colors) =>
-  StyleSheet.create({
-    // Bölüm başlığı — düzenlemede (stepped=false) tüm alan grupları tek scrollda
-    // art arda geldiği için hangi grubun nerede bittiğini/başladığını gösterir
-    // (Kimlik/Sıklık/Hedef/Hatırlatma). Sihirbazda (stepped) her adımda tek bir
-    // başlık görünür — o adımın bağlamını netleştirir, zarar vermez.
-    sectionHeader: {
-      fontSize: 16,
-      fontWeight: '800',
-      color: c.text,
-      marginTop: 22,
-      marginBottom: 12,
-      paddingTop: 18,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: c.border,
-    },
-    label: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.muted,
-      marginBottom: 8,
-      marginTop: 4,
-    },
-    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
-    input: {
-      backgroundColor: c.inputBg,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.border,
-      marginBottom: 12,
-    },
-    row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-    iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-    iconCell: {
-      width: 42,
-      height: 42,
-      borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: c.inputBg,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
-    swatch: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    swatchSel: { borderWidth: 3, borderColor: c.text },
-    swatchCheck: { color: c.onAccent, fontSize: 14, fontWeight: '800' },
-    freqRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-    // "Kaç günde bir? / Haftada kaç kez?" satırı (interval + kota kipleri).
-    freqNumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-    freqNumLabel: { fontSize: 14, fontWeight: '600', color: c.text },
-    freqNumInput: {
-      width: 64,
-      textAlign: 'center',
-      backgroundColor: c.inputBg,
-      borderRadius: 10,
-      paddingVertical: 8,
-      fontSize: 15,
-      fontWeight: '700',
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
-    // Çipler İKİŞERLİ sarar (flexBasis ~yarım satır + flexGrow ile satırı doldurur).
-    // Eskiden `flex: 1` idi: 4 sıklık çipi tek satıra sıkışıp her biri ¼ genişlik
-    // alıyor, "Haftada X kez" iki satıra kırılıp satır yüksekliğini bozuyordu.
-    // İki çipli kullanımda (katkı biçimi) görünüm aynı kalır — tek satırda ikisi.
-    freqBtn: {
-      flexBasis: '47%',
-      flexGrow: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 10,
-      paddingHorizontal: 8,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    freqBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
-    freqBtnText: { fontSize: 14, fontWeight: '600', color: c.muted, textAlign: 'center' },
-    freqBtnTextSel: { color: c.primary },
-    dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-    dayChip: {
-      width: 42,
-      paddingVertical: 8,
-      borderRadius: 10,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    dayChipSel: { borderColor: c.primary, backgroundColor: c.primary },
-    dayChipText: { fontSize: 13, fontWeight: '700', color: c.muted },
-    dayChipTextSel: { color: c.onAccent },
-    targetInput: { flex: 1, marginBottom: 0 },
-    hint: { fontSize: 12, color: c.faint, marginTop: 4, marginBottom: 12 },
-    goalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-    goalChip: {
-      paddingVertical: 8,
-      paddingHorizontal: 14,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    goalChipSel: { borderColor: c.primary, backgroundColor: c.primary },
-    goalChipText: { fontSize: 13, fontWeight: '600', color: c.muted },
-    goalChipTextSel: { color: c.onAccent },
-    dateBtn: {
-      flex: 1,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    dateBtnText: { fontSize: 15, color: c.text },
-    clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
-    clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
-    actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-    saveBtn: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: 15,
-      borderRadius: 14,
-      backgroundColor: c.primary,
-      shadowColor: c.primary,
-      shadowOpacity: 0.35,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 4,
-    },
-    saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
-    saveBtnDisabled: { opacity: 0.4 },
-
-    // Sihirbaz: üstteki kimlik rozeti (kimlik dışındaki adımlarda gösterilir).
-    previewRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 20,
-    },
-    previewCircle: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      borderWidth: 2,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 10,
-    },
-    previewTitle: { fontSize: 15, fontWeight: '700', color: c.text, flex: 1 },
-
-    // Sihirbaz: alt gezinme (nokta göstergesi + Geri/İleri).
-    wizardNav: { marginTop: 20 },
-    dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 16 },
-    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.border },
-    dotActive: { backgroundColor: c.primary, width: 18 },
-    navBtns: { flexDirection: 'row', gap: 12 },
-    navBackBtn: {
-      width: 50,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    navBackText: { fontSize: 20, fontWeight: '700', color: c.text },
-    navNextBtn: { flex: 1 },
-
-    // Sihirbaz: takip tipi seçim kartları (ilk adım).
-    kindCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: c.inputBg,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: c.border,
-      padding: 14,
-      marginBottom: 10,
-    },
-    kindCardSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
-    kindIconWrap: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: c.primarySoft,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-    },
-    kindIconWrapSel: { backgroundColor: c.primary },
-    kindBody: { flex: 1 },
-    kindTitle: { fontSize: 16, fontWeight: '700', color: c.text },
-    kindDesc: { fontSize: 13, color: c.muted, marginTop: 2 },
-  });

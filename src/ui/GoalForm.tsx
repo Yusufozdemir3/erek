@@ -15,7 +15,7 @@
 // Mimari kural: SQL yok — yalnızca çağıran repo yazar.
 
 import { useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import type { GoalType } from '@/db';
 import { isTimeUnit, TIME_UNIT, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
@@ -24,7 +24,8 @@ import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { longDateLabel, shortDate, type Colors } from '@/ui/theme';
+import { makeGoalFormStyles } from '@/ui/goalFormStyles';
+import { longDateLabel, shortDate } from '@/ui/theme';
 
 // Oluşturmada eklenen taslak adım. Eskiden düz `string` (yalnız başlık) idi:
 // hedef DETAY ekranındaki adım editörü miktar ve son tarih de alabildiği için
@@ -93,7 +94,7 @@ export function GoalForm({
 }: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
-  const styles = makeStyles(colors);
+  const styles = makeGoalFormStyles(colors);
   const isEditing = initial !== undefined;
 
   const [title, setTitle] = useState(initial?.title ?? '');
@@ -530,140 +531,3 @@ export function GoalForm({
     </>
   );
 }
-
-const makeStyles = (c: Colors) =>
-  StyleSheet.create({
-    label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },
-    counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
-    typeTag: {
-      alignSelf: 'flex-start',
-      fontSize: 12,
-      fontWeight: '700',
-      color: c.primary,
-      backgroundColor: c.primarySoft,
-      borderRadius: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      marginBottom: 12,
-      overflow: 'hidden',
-    },
-    input: {
-      backgroundColor: c.inputBg,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.border,
-      marginBottom: 12,
-    },
-    row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-    col: { flex: 1 },
-    hint: { fontSize: 12, color: c.faint, marginTop: -6, marginBottom: 12 },
-    checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
-    checkBox: {
-      width: 20,
-      height: 20,
-      borderRadius: 6,
-      borderWidth: 2,
-      borderColor: c.line,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    checkBoxOn: { backgroundColor: c.primary, borderColor: c.primary },
-    checkMark: { color: c.onAccent, fontSize: 12, fontWeight: '800' },
-    checkLabel: { flex: 1, fontSize: 13, color: c.text },
-    chip: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: 10,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    chipSelected: { backgroundColor: c.primary, borderColor: c.primary },
-    chipText: { fontSize: 14, fontWeight: '600', color: c.muted },
-    chipTextSelected: { color: c.onAccent },
-    dateBtn: {
-      flex: 1,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    dateBtnText: { fontSize: 15, color: c.text },
-    clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
-    clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
-    actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-    saveBtnDisabled: { opacity: 0.4 },
-    saveBtn: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: 15,
-      borderRadius: 14,
-      backgroundColor: c.primary,
-      shadowColor: c.primary,
-      shadowOpacity: 0.35,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 4,
-    },
-    saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
-
-    // — Taslak milestone editörü (oluşturma) —
-    subRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, gap: 10 },
-    subBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.faint },
-    subTitle: { flex: 1, fontSize: 14, color: c.text },
-    subMeta: { fontSize: 11, fontWeight: '600', color: c.muted },
-    subDelete: { fontSize: 20, color: c.faint, paddingHorizontal: 4 },
-    // — Kademeli çipler (miktar / tarih) — detay ekranındaki milestoneChip* ile aynı dil.
-    subChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
-    subChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    subChipSet: { borderColor: c.primary, backgroundColor: c.primarySoft },
-    subChipText: { fontSize: 12, fontWeight: '700', color: c.muted },
-    subChipTextSet: { color: c.primary },
-    subAmountInput: {
-      width: 96,
-      textAlign: 'center',
-      backgroundColor: c.inputBg,
-      borderRadius: 999,
-      paddingVertical: 7,
-      fontSize: 13,
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.primary,
-    },
-    subHint: { fontSize: 11, color: c.faint, marginTop: 8, lineHeight: 15 },
-    subAddRow: { flexDirection: 'row', gap: 8, marginBottom: 4, alignItems: 'center' },
-    subInput: {
-      flex: 1,
-      backgroundColor: c.inputBg,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    subAddBtn: {
-      width: 44,
-      alignSelf: 'stretch',
-      borderRadius: 12,
-      backgroundColor: c.primarySoft,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    subAddText: { fontSize: 20, color: c.primary, fontWeight: '600' },
-  });
