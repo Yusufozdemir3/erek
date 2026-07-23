@@ -1,11 +1,14 @@
 name: CI
 
-# main'e her push'ta ve her PR'da tip kontrolü + testler koşar.
-# Bu repo GitHub'a bağlanana kadar bu workflow tetiklenmez; dosya hazır bekler.
-
+# Her push'ta ve her PR'da tip kontrolü + testler koşar.
+#
+# DAL ADI: bu depoda tek dal `master` (2026-07-23'te github.com/Yusufozdemir3/erek
+# olarak bağlandı). Eskiden burada yalnız `main` yazıyordu — depo bağlansa bile
+# workflow HİÇ tetiklenmezdi (denetim bulgusu G2: "CI hiç çalışmamış"). İkisi de
+# listede: ileride varsayılan dal main'e çevrilirse dosyayı değiştirmek gerekmesin.
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
 
 jobs:
