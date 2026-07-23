@@ -248,30 +248,39 @@ Keine Werbung. Kein Tracking. Keine Analyse. Deine Daten werden nicht verkauft.
 
 ---
 
-## Ekran görüntüleri (henüz ÜRETİLMEDİ)
+## Ekran görüntüleri (ÜRETİLDİ — 2026-07-23)
 
-Play, telefon için **en az 2, en fazla 8** ekran görüntüsü ister; 16:9 veya 9:16,
-kenar en az 320 px, en fazla 3840 px. Önerilen sıra (ilk ikisi listede en çok
-görülen ikisidir, en güçlü olanlar başa):
+Konum: `C:\Users\Y\Desktop\erek-magaza-gorselleri\` — 10 kare, **1080×2400**
+(dikey; Play'in telefon için istediği 320–3840 px aralığında). Emülatörde
+(Android 16) **Türkçe arayüzle** ve **2 haftalık gerçek geçmişle** üretildi:
+alışkanlıkların başlangıç tarihi bugünden 14 gün öncesine alındı, günler tek tek
+işaretlendi ve birkaç gün bilerek KAÇIRILDI — böylece grafikler düz %100 çizgi
+değil, inandırıcı bir gidiş gösteriyor.
 
-1. **Bugün ekranı** — dolu bir gün: birkaç alışkanlık (biri sayaçlı, biri
-   zamanlayıcılı), birkaç görev, üstte günlük özet çubuğu.
-2. **Alışkanlık istatistiği** — puan grafiği yükselirken + aylık takvim; seri
-   ve rozetler görünsün (uzun geçmişi olan bir alışkanlık gerekir).
-3. **Hedef istatistiği** — sonuç bandı ("bu hızla ... tarihinde bitirirsin"),
-   tempo kartları ve sıradaki adım.
-4. **Alışkanlık listesi** — renkli simgeler ve haftalık şeritler.
-5. **Alışkanlık oluşturma sihirbazı** — tip seçimi (Basit / Sayısal / Zamanlayıcı).
-6. **Görev düzenleme** — alt görevler ve hatırlatma saatleri.
-7. **Ana ekran widget'ı** — telefonun ana ekranında.
-8. **Koyu/açık tema** — aynı ekranın iki hâli yan yana.
+| Dosya | İçerik |
+|---|---|
+| `01_bugun.png` | Bugün ekranı: günlük özet (2/3), görevler, ikili + sayaçlı (8/8 bardak) alışkanlıklar, seri ve rozet |
+| `02_aliskanlik_listesi.png` | Alışkanlıklar sekmesi: renkli simgeler, haftalık şeritler |
+| `03_istatistik_ust.png` | Alışkanlık istatistiği üst: seriler + dönem hedefleri |
+| `04_istatistik_puan.png` | **Puan grafiği** — sıfırdan tırmanan merdiven çizgi + takvim + rozetler |
+| `05_istatistik_takvim.png` | Aylık takvim: yapılan/kaçırılan günler |
+| `06_istatistik_rozetler.png` | Rozet vitrini: kazanılan + sıradakine kalan gün |
+| `07_hedefler.png` | Hedefler listesi |
+| `08_hedef_istatistik.png` | Hedef istatistiği: sonuç bandı + ilerleme/tempo kartları |
+| `09_hedef_siradaki_adim.png` | "Senin temponun" kartları + sıradaki adım |
+| `10_gorevler.png` | Görevler sekmesi |
 
-Not: gerçekçi görünmesi için ekran görüntüleri **birkaç haftalık geçmişi olan**
-bir veriyle alınmalı; boş bir kurulumda grafikler tek noktaya düşer.
+**Play'e yüklerken:** en az 2 kare şart, en fazla 8 yüklenebilir. Önerilen sıra:
+`01` → `04` → `08` → `02` → `09` → `03` → `10` → `06` (en güçlüler başta).
 
-Ayrıca gereken görseller:
-- **Uygulama simgesi:** 512×512 PNG (32 bit, alfa yok) — `assets/icon.png` var.
-- **Öne çıkan görsel (feature graphic):** 1024×500 PNG/JPG — **YOK, üretilmeli.**
+**Not — içerik dili:** başlıklar (`Kitap oku`, `Su`, `Sabah yoga`, `Market`,
+`Rapor`) bilerek Türkçe karakter İÇERMEYEN kelimelerden seçildi: emülatöre metin
+yazan `adb shell input text` ASCII dışı karakter kabul etmiyor (Türkçe
+karakterlerde NullPointerException). "Su iç", "Koşu" gibi başlıklar isteniyorsa
+uygulama içinden elle yeniden adlandırılıp kare yeniden alınmalı.
+
+**Hâlâ eksik:** öne çıkan görsel (feature graphic) **1024×500** — Play'de zorunlu.
+Uygulama simgesi (`assets/icon.png`) hazır.
 
 ---
 
