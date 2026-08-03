@@ -50,6 +50,7 @@
       "expo-localization",
       "expo-font",
       "./plugins/withForceDarkDisabled",
+      "./plugins/withoutUnusedPermissions",
       [
         "react-native-android-widget",
         {

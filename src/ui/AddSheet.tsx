@@ -8,14 +8,10 @@
 // Mimari kural: SQL yok — yalnızca repo çağrıları.
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { goalMilestoneRepo, goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import { scheduleGoalReminders, scheduleHabitReminders, scheduleTaskReminders } from '@/lib/notifications';
-import { AI_QUICK_ADD_ENABLED } from '@/config';
-import { isAiQuickAddEnabled } from '@/lib/aiPrefs';
-import { parseTaskText, type ParsedTaskFields } from '@/lib/aiTaskParser';
-import { recognizeSpeech } from '@/lib/voiceInput';
 import { useAppData } from '@/ui/AppData';
 import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
@@ -24,14 +20,9 @@ import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { EntityIcon, type EntityType } from '@/ui/EntityIcon';
-import { Feather } from '@expo/vector-icons';
-import { shortDate, type Colors } from '@/ui/theme';
+import type { Colors } from '@/ui/theme';
 
 export type Step = 'menu' | 'task' | 'habit' | 'goal';
-
-// Sesli girişte, kullanıcı tek dokunuşla art arda kaç cümle söyleyebilir
-// (her cümle sonrası recognizer otomatik yeniden açılır — bkz. runVoiceInput).
-const MAX_VOICE_RESTARTS = 5;
 
 interface Props {
   visible: boolean;
@@ -51,112 +42,15 @@ const MENU_OPTIONS: { step: Step; type: EntityType; titleKey: string; descKey: s
 
 export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { colors } = useTheme();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const styles = makeStyles(colors);
   const { user, notifyDataChanged, selectedDate } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
 
-  // AI ile hızlı ekleme — kullanıcı Profil'den açtıysa (varsayılan KAPALI) görev
-  // adımında bir metin kutusu belirir. TaskForm kendi state'ini yalnızca mount
-  // anında initial'den okur (uncontrolled) — bu yüzden AI sonucu gelince
-  // aiFormKey artırılıp TaskForm TAZE remount edilir (HabitEditModal deseni).
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiText, setAiText] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [voiceLoading, setVoiceLoading] = useState(false);
-  const [aiPrefill, setAiPrefill] = useState<ParsedTaskFields | null>(null);
-  const [aiFormKey, setAiFormKey] = useState(0);
-  // Metinde BİRDEN FAZLA görev bulunursa (bkz. parseTaskText) tek formu prefill
-  // etmek yerine bu liste dolar — ekran o zaman TaskForm değil, seçilebilir bir
-  // özet liste gösterir (aşağıda aiResults != null kontrolü).
-  const [aiResults, setAiResults] = useState<ParsedTaskFields[] | null>(null);
-  const [aiSelected, setAiSelected] = useState<Set<number>>(new Set());
-
-  // Her açılışta istenen adıma (varsayılan menü) dön + önceki AI taslağını at.
+  // Her açılışta istenen adıma (varsayılan menü) dön.
   useEffect(() => {
-    if (visible) {
-      setStep(initialStep);
-      setAiPrefill(null);
-      setAiResults(null);
-      setAiText('');
-      // Özellik bayrağı kapalıysa kullanıcının kayıtlı tercihi ne olursa olsun
-      // AI bölümü hiç açılmaz (bkz. config.AI_QUICK_ADD_ENABLED).
-      if (AI_QUICK_ADD_ENABLED) isAiQuickAddEnabled().then(setAiEnabled);
-      else setAiEnabled(false);
-    }
+    if (visible) setStep(initialStep);
   }, [visible, initialStep]);
-
-  // Metni Gemini'ye gönderip görev(ler)e ayrıştırır. Hem "Ayrıştır" düğmesi hem
-  // sesli girişten sonra ÇAĞRILIR — parametre olarak alır, aiText state'ine
-  // güvenmez (sesli giriş dönüşünde state henüz güncellenmemiş olabilir).
-  // Tek görev bulunursa TaskForm'u prefill eder (tam düzenleme); birden fazla
-  // bulunursa seçilebilir özet liste gösterilir (toplu ekleme).
-  const doParse = async (text: string) => {
-    if (!text.trim()) return;
-    setAiLoading(true);
-    const parsed = await parseTaskText(text, lang);
-    setAiLoading(false);
-    if (!parsed || parsed.length === 0) {
-      Alert.alert(t('add.aiParseFailedTitle'), t('add.aiParseFailedBody'));
-      return;
-    }
-    if (parsed.length === 1) {
-      setAiPrefill(parsed[0]);
-      setAiFormKey((k) => k + 1);
-      setAiResults(null);
-    } else {
-      setAiResults(parsed);
-      setAiSelected(new Set(parsed.map((_, i) => i)));
-      setAiPrefill(null);
-    }
-    setAiText('');
-  };
-
-  const toggleAiSelected = (i: number) => {
-    setAiSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      return next;
-    });
-  };
-
-  const runAiParse = () => doParse(aiText);
-
-  // Sesli giriş — Android'in sistem konuşma tanıma ekranını açar (ücretsiz,
-  // ekstra API çağrısı yok). Recognizer her açılışta TEK bir cümle sonunda
-  // kendini kapatır; birden fazla cümle söyleyebilmek için burada otomatik
-  // yeniden açılır (kullanıcı tekrar dokunmadan) ve metinler birleştirilir.
-  // Zincir, gerçek bir "bitirme" sinyali gelince durur: 'canceled'/'unavailable'
-  // veya boş sonuç (konuşma algılanmadı — kullanıcı susmuş demektir). MAX_VOICE_RESTARTS
-  // sonsuz döngüyü / pil tüketimini sınırlar.
-  // Sonuç gelince otomatik ayrıştırılır (konuşmak zaten niyetli bir eylem; form
-  // yine de kaydetmeden ÖNCE gözden geçirmeyi gerektirir). 'unavailable' (cihazda
-  // tanıma uygulaması yok) yalnızca HİÇ metin toplanamadıysa gösterilir — aksi
-  // halde zaten alınmış bir sonucu "çalışmıyor" gibi göstermiş oluruz.
-  const runVoiceInput = async () => {
-    if (voiceLoading || aiLoading) return;
-    setVoiceLoading(true);
-    let combinedText = '';
-    let unavailable = false;
-    for (let i = 0; i < MAX_VOICE_RESTARTS; i++) {
-      const result = await recognizeSpeech(lang, t('add.aiVoicePrompt'));
-      if (result.status === 'unavailable') {
-        unavailable = combinedText === '';
-        break;
-      }
-      if (result.status === 'canceled' || !result.text) break;
-      combinedText = combinedText ? `${combinedText} ${result.text}` : result.text;
-      setAiText(combinedText);
-    }
-    setVoiceLoading(false);
-    if (unavailable) {
-      Alert.alert(t('add.voiceUnavailableTitle'), t('add.voiceUnavailableBody'));
-      return;
-    }
-    if (!combinedText) return;
-    await doParse(combinedText);
-  };
 
   // Ekleme sonrası: menüyü kapat, listeleri tazele, ilgili sekmeye git.
   const finish = (tab: '/(tabs)/tasks' | '/(tabs)/habits' | '/(tabs)/goals') => {
@@ -165,10 +59,9 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     router.navigate(tab);
   };
 
-  // DB'ye yazma + bildirim kurma — finish/navigasyon İÇERMEZ (bkz. addTask tekli
-  // / addSelectedAiTasks toplu: toplu eklemede finish tek seferde en sonda çağrılır,
-  // her görev için modalı kapatıp yönlendirmek anlamsız/riskli olurdu).
-  const createTask = (values: TaskFormValues) => {
+  // Görev, düzenleme paneliyle aynı TaskForm'la oluşturulur — öncelik, son tarih,
+  // saat ve (isteğe bağlı) alt görevler oluşturma anında ayarlanabilir.
+  const addTask = (values: TaskFormValues) => {
     const created = taskRepo.create({
       user_id: user.id,
       title: values.title,
@@ -183,37 +76,6 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     const reminders = reminderRepo.replaceAll('task', created.id, values.remind_times);
     scheduleTaskReminders(created, reminders).then((ok) => {
       if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
-    });
-    return created;
-  };
-
-  // Görev, düzenleme paneliyle aynı TaskForm'la oluşturulur — öncelik, son tarih,
-  // saat ve (isteğe bağlı) alt görevler oluşturma anında ayarlanabilir.
-  const addTask = (values: TaskFormValues) => {
-    createTask(values);
-    finish('/(tabs)/tasks');
-  };
-
-  // AI'ın bulduğu BİRDEN FAZLA görevden seçili olanları toplu oluşturur — her
-  // biri için tam form YOK (hız için bilinçli), ama ekleme öncesi özet liste
-  // (bkz. render) gözden geçirip istemediğini çıkarma imkanı verir.
-  const addSelectedAiTasks = () => {
-    if (!aiResults) return;
-    aiResults.forEach((r, i) => {
-      if (!aiSelected.has(i)) return;
-      const due_date = r.due_date
-        ? r.due_time
-          ? `${r.due_date}T${r.due_time}:00`
-          : r.due_date
-        : selectedDate;
-      createTask({
-        title: r.title,
-        priority: r.priority ?? 'medium',
-        due_date,
-        end_time: null,
-        recurrence: null,
-        remind_times: r.remind_times ?? [],
-      });
     });
     finish('/(tabs)/tasks');
   };
@@ -306,134 +168,17 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   onSubmit={addHabit}
                 />
               ) : step === 'task' ? (
-                <>
-                  {/* AI ile hızlı ekleme — Profil'den açılmışsa görünür (varsayılan
-                      KAPALI). Metin yalnızca "Ayrıştır"a basınca gönderilir; sonuç
-                      formu ÖNCEDEN DOLDURUR, otomatik kaydetmez — kullanıcı gözden
-                      geçirip düzenleyebilir/reddedebilir. */}
-                  {aiEnabled && !aiResults && (
-                    <View style={styles.aiBox}>
-                      <View style={styles.aiInputRow}>
-                        {Platform.OS === 'android' && (
-                          <Pressable
-                            style={[styles.aiMicBtn, voiceLoading && styles.aiBtnDisabled]}
-                            onPress={runVoiceInput}
-                            disabled={aiLoading || voiceLoading}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('add.aiVoicePrompt')}
-                          >
-                            {voiceLoading ? (
-                              <ActivityIndicator color={colors.primary} size="small" />
-                            ) : (
-                              <Feather name="mic" size={18} color={colors.primary} />
-                            )}
-                          </Pressable>
-                        )}
-                        <TextInput
-                          style={styles.aiInput}
-                          value={aiText}
-                          onChangeText={setAiText}
-                          placeholder={t('add.aiPlaceholder')}
-                          placeholderTextColor={colors.faint}
-                          editable={!aiLoading}
-                          multiline
-                        />
-                        <Pressable
-                          style={[styles.aiBtn, (aiLoading || !aiText.trim()) && styles.aiBtnDisabled]}
-                          onPress={runAiParse}
-                          disabled={aiLoading || !aiText.trim()}
-                        >
-                          {aiLoading ? (
-                            <ActivityIndicator color={colors.onAccent} size="small" />
-                          ) : (
-                            <Text style={styles.aiBtnText}>{t('add.aiParse')}</Text>
-                          )}
-                        </Pressable>
-                      </View>
-                      <Text style={styles.aiHint}>{t('add.aiHint')}</Text>
-                    </View>
-                  )}
-
-                  {aiResults ? (
-                    // Birden fazla görev bulundu — tek tek form doldurmak yerine
-                    // seçilebilir özet liste (hız için bilinçli; istemediğini
-                    // çıkarabilirsin, yanlış geleni sonradan düzenleme panelinden
-                    // düzeltebilirsin).
-                    <View>
-                      <Text style={styles.aiResultsTitle}>
-                        {t('add.aiMultiFound', { n: aiResults.length })}
-                      </Text>
-                      {aiResults.map((r, i) => {
-                        const selected = aiSelected.has(i);
-                        const meta = r.due_date
-                          ? r.due_time
-                            ? `${shortDate(r.due_date, lang)} · ${r.due_time}`
-                            : shortDate(r.due_date, lang)
-                          : null;
-                        return (
-                          <Pressable
-                            key={i}
-                            style={styles.aiResultRow}
-                            onPress={() => toggleAiSelected(i)}
-                            accessibilityRole="checkbox"
-                            accessibilityState={{ checked: selected }}
-                          >
-                            <Feather
-                              name={selected ? 'check-square' : 'square'}
-                              size={20}
-                              color={selected ? colors.primary : colors.faint}
-                            />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.aiResultTitle}>{r.title}</Text>
-                              {meta && <Text style={styles.aiResultMeta}>{meta}</Text>}
-                            </View>
-                          </Pressable>
-                        );
-                      })}
-                      <View style={styles.actions}>
-                        <Pressable style={styles.aiBackBtn} onPress={() => setAiResults(null)}>
-                          <Text style={styles.aiBackBtnText}>{t('common.back')}</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.saveBtn, aiSelected.size === 0 && styles.aiBtnDisabled]}
-                          onPress={addSelectedAiTasks}
-                          disabled={aiSelected.size === 0}
-                        >
-                          <Text style={styles.saveBtnText}>
-                            {t('add.aiAddN', { n: aiSelected.size })}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ) : (
-                    // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat)
-                    // + oluşturmada taslak alt görev ekleme. Son tarih "Bugün" ekranında
-                    // o an bakılan güne varsayılanır (selectedDate) — Cuma'ya bakarken
-                    // eklenen görev Cuma'ya gitsin diye. AI sonucu gelince key değişip
-                    // form taze remount olur (initial yeni alanlarla doldurulur).
-                    <TaskForm
-                      key={aiFormKey}
-                      initial={
-                        aiPrefill
-                          ? {
-                              title: aiPrefill.title,
-                              priority: aiPrefill.priority ?? undefined,
-                              due_date: aiPrefill.due_date
-                                ? aiPrefill.due_time
-                                  ? `${aiPrefill.due_date}T${aiPrefill.due_time}:00`
-                                  : aiPrefill.due_date
-                                : selectedDate,
-                              remind_times: aiPrefill.remind_times,
-                            }
-                          : { due_date: selectedDate }
-                      }
-                      submitLabel={t('common.add')}
-                      autoFocusTitle={!aiEnabled}
-                      enableSubtaskDraft
-                      onSubmit={addTask}
-                    />
-                  )}
-                </>
+                // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat)
+                // + oluşturmada taslak alt görev ekleme. Son tarih "Bugün" ekranında
+                // o an bakılan güne varsayılanır (selectedDate) — Cuma'ya bakarken
+                // eklenen görev Cuma'ya gitsin diye.
+                <TaskForm
+                  initial={{ due_date: selectedDate }}
+                  submitLabel={t('common.add')}
+                  autoFocusTitle
+                  enableSubtaskDraft
+                  onSubmit={addTask}
+                />
               ) : (
                 // Hedef: düzenleme paneliyle aynı GoalForm — tip (sayısal/parçalı)
                 // yalnızca oluştururken seçilir.
@@ -453,86 +198,6 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     heading: { fontSize: 18, fontWeight: '700', color: c.text, marginBottom: 16, textAlign: 'center' },
-
-    // — AI ile hızlı ekleme (görev adımı, Profil'den açılırsa görünür) —
-    aiBox: {
-      backgroundColor: c.primarySoft,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: c.primary,
-      padding: 12,
-      marginBottom: 16,
-    },
-    aiInputRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-end' },
-    aiMicBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: c.inputBg,
-      borderWidth: 1,
-      borderColor: c.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    aiInput: {
-      flex: 1,
-      backgroundColor: c.inputBg,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      fontSize: 14,
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.border,
-      maxHeight: 80,
-    },
-    aiBtn: {
-      backgroundColor: c.primary,
-      borderRadius: 12,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      minWidth: 76,
-    },
-    aiBtnDisabled: { opacity: 0.5 },
-    aiBtnText: { color: c.onAccent, fontSize: 13, fontWeight: '700' },
-    aiHint: { fontSize: 11, color: c.muted, marginTop: 8 },
-
-    // — Çoklu görev özet listesi (AI birden fazla görev bulunca) —
-    aiResultsTitle: { fontSize: 14, fontWeight: '700', color: c.text, marginBottom: 12 },
-    aiResultRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      backgroundColor: c.inputBg,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: c.border,
-      padding: 12,
-      marginBottom: 8,
-    },
-    aiResultTitle: { fontSize: 14, fontWeight: '600', color: c.text },
-    aiResultMeta: { fontSize: 12, color: c.muted, marginTop: 2 },
-    aiBackBtn: {
-      paddingVertical: 15,
-      paddingHorizontal: 18,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: c.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    aiBackBtnText: { fontSize: 15, fontWeight: '700', color: c.muted },
-    actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-    saveBtn: {
-      flex: 1,
-      alignItems: 'center',
-      paddingVertical: 15,
-      borderRadius: 14,
-      backgroundColor: c.primary,
-    },
-    saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
 
     option: {
       flexDirection: 'row',

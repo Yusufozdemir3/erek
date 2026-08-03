@@ -72,7 +72,7 @@ export function AddFabButton({
       }
       hitSlop={8}
       accessibilityRole="button"
-      accessibilityLabel={open ? 'Ekleme menüsünü kapat' : 'Ekle'}
+      accessibilityLabel={open ? t('add.collapse') : t('add.expand')}
       accessibilityHint={onLongPress ? t('timer.longPressHint') : undefined}
       accessibilityState={{ expanded: open }}
     >

@@ -17,7 +17,6 @@ import {
   toYmd,
   weekStartOf,
 } from '@/lib/helpers';
-import { buildHabitInsights, type HabitInsight } from '@/lib/habitInsights';
 import { buildSeries, type HabitChartSeries } from '@/lib/habitSeries';
 
 // Puan grafiğinin veri üretimi ve tipleri lib/habitSeries.ts'e taşındı (saf
@@ -67,7 +66,6 @@ export interface HabitStats {
   // tüketicisi o ekrandı; alan kalsaydı her yüklemede boşa sorgu/döngü olurdu.
   series: HabitChartSeries | null; // hiç log yoksa null
   goalPeriods: GoalPeriodStat[]; // Bugün/Hafta/Ay/3 Ay/Yıl hedef karşılaştırması
-  insights: HabitInsight[]; // kural tabanlı gözlemler (bkz. habitInsights.ts) — en fazla 2
   historyTotals: HistoryTotals | null; // "Geçmiş" kartı — yalnız nicel/zamanlayıcıda dolu
 }
 
@@ -78,7 +76,6 @@ const EMPTY: HabitStats = {
   totalAmount: null,
   series: null,
   goalPeriods: [],
-  insights: [],
   historyTotals: null,
 };
 
@@ -245,7 +242,6 @@ export function useHabitStats(habitId: string): HabitStats {
       // kendisi — gizlemek tam da görülmek istenen tırmanışı gizliyordu.
       series: buildSeries(habit, allLogs),
       goalPeriods: buildGoalPeriods(habit, allLogs, todayDate()),
-      insights: buildHabitInsights(habit, allLogs, todayDate(), currentStreak, longestStreak),
       historyTotals: buildHistoryTotals(habit, allLogs, todayDate()),
     });
   }, [habitId]);

@@ -16,7 +16,13 @@ import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { ACCOUNTS_ENABLED } from '@/config';
-import { userRepo } from '@/db';
+import { goalRepo, habitRepo, taskRepo, userRepo } from '@/db';
+import {
+  cancelAllReminders,
+  rescheduleAllGoalReminders,
+  rescheduleAllReminders,
+  rescheduleAllTaskReminders,
+} from '@/lib/notifications';
 import {
   classifySignIn,
   currentAuthUser,
@@ -29,6 +35,7 @@ import {
   prepareReplaceWithAccount,
   runSync,
   signInWithGoogle,
+  signOutAccount,
 } from '@/sync';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -75,26 +82,41 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
     setError(null);
     try {
       await signInWithGoogle();
-      // Yerel kullanıcı kaydına e-postayı yaz (hesaplı duruma yükselt), sonra
-      // TAM bir senkron turu: giriş öncesi yerel veri buluta hiç gitmemiş
-      // olabilir. account.tsx'teki hesap bağlama akışının aynısı.
-      const authUser = await currentAuthUser();
-      if (authUser?.email) userRepo.upgradeToAccount(user.id, authUser.email);
 
-      // HESAP DEĞİŞİMİ KONTROLÜ (çakışma OLUŞMADAN). Yerel id'ler hesap değişince
-      // değişmediği için, başka bir hesaba gönderilmiş veriyi olduğu gibi push
-      // etmek RLS'e takılır ve senkronu kalıcı kilitler — bu yüzden ne yapılacağı
-      // ÖNCEDEN sorulur. Bkz. sync/syncEngine.ts (classifySignIn).
+      // HESAP DEĞİŞİMİ KONTROLÜ (çakışma OLUŞMADAN, e-postayı yazmadan ÖNCE —
+      // aşağıda kullanıcı vazgeçerse yerel kayıt yanlış hesabın e-postasıyla
+      // "hesaplı" görünmemeli). Yerel id'ler hesap değişince değişmediği için,
+      // başka bir hesaba gönderilmiş veriyi olduğu gibi push etmek RLS'e takılır
+      // ve senkronu kalıcı kilitler — bu yüzden ne yapılacağı ÖNCEDEN sorulur.
+      // Bkz. sync/syncEngine.ts (classifySignIn).
       const uid = await currentUid();
       const kind = uid ? await classifySignIn(uid) : 'fresh';
+      let switched = false;
       if (kind === 'switch') {
         const choice = await askSwitchStrategy();
-        if (choice === 'cancel') return;
+        if (choice === 'cancel') {
+          // signInWithGoogle() Supabase oturumunu ÇOKTAN yeni hesaba geçirdi;
+          // vazgeçildiğinde geri almazsak açılıştaki sessiz senkron bu hesapla
+          // dener, eski hesabın satırlarını RLS reddeder ve senkron kalıcı
+          // kilitlenir — kullanıcı hiçbir şey görmeden (sahada görülmüş sınıf,
+          // bkz. syncEngine.ts OWNER_UID_KEY notu).
+          await signOutAccount().catch((e) =>
+            console.warn('[Giriş] iptal sonrası oturum kapatılamadı:', e)
+          );
+          return;
+        }
         if (choice === 'merge') await prepareMergeIntoAccount();
         else await prepareReplaceWithAccount();
+        switched = true;
       } else {
         await prepareFullResync();
       }
+
+      // Yerel kullanıcı kaydına e-postayı yaz (hesaplı duruma yükselt) —
+      // KARARDAN SONRA (yukarıdaki 'cancel' zaten return etti). account.tsx'teki
+      // hesap bağlama akışının aynısı.
+      const authUser = await currentAuthUser();
+      if (authUser?.email) userRepo.upgradeToAccount(user.id, authUser.email);
 
       const result = await runSync(user.id);
       if (result.status === 'error') {
@@ -103,6 +125,24 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
         );
         return;
       }
+
+      if (switched) {
+        // Birleştir yeni id'ler üretti, değiştir tüm satırları silip yeniden
+        // indirdi — ikisinde de OS'un bildirim kuyruğunda ESKİ id'lerle kurulu
+        // tetikleyiciler yetim kalır (bkz. notifications.ts cancelAllReminders
+        // başlığı). Nuke edip güncel DB'den baştan kur.
+        await cancelAllReminders();
+        await rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
+          console.warn('[Bildirim] Hesap değişimi sonrası alışkanlık hatırlatmaları kurulamadı:', e)
+        );
+        await rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
+          console.warn('[Bildirim] Hesap değişimi sonrası görev hatırlatmaları kurulamadı:', e)
+        );
+        await rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
+          console.warn('[Bildirim] Hesap değişimi sonrası hedef hatırlatmaları kurulamadı:', e)
+        );
+      }
+
       refreshUser();
       onDone();
     } catch (e) {

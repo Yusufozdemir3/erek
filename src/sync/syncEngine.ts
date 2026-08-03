@@ -1,7 +1,8 @@
 // Senkron motoru — offline-first, son-yazan-kazanır (updated_at).
 //
 // Akış:
-//   1) ensureSignedIn -> anonim uid
+//   1) ensureSignedIn -> hesap uid'si; giriş yoksa null döner ve senkron
+//      'disabled' ile çıkar (anonim oturum AÇILMAZ — bkz. sync/auth.ts).
 //   2) PUSH: her tabloda synced=0 satırları Supabase'e upsert et, synced=1 yap
 //   3) PULL: son senkrondan beri değişen uzak satırları çek, updated_at'e göre
 //      yereldekinden yeniyse uygula (silme dahil), synced=1 olarak yaz.

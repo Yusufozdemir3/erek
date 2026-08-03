@@ -102,8 +102,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             );
           });
         // Açılışta arka planda bir kez senkronla (yapılandırılmamışsa sessiz geçer).
-        // Hesap özelliği kapalıyken (MVP) senkron hiç başlamaz — hiçbir veri
-        // cihazdan çıkmaz (anonim oturum bile açılmaz). Bkz. src/config.ts.
+        // KULLANICI GİRİŞ YAPMAMIŞSA BU ÇAĞRI HİÇBİR ŞEY GÖNDERMEZ: runSync ilk
+        // iş olarak ensureSignedIn'e sorar, o da oturum yoksa null döner ve tur
+        // 'disabled' ile biter (anonim oturum AÇILMAZ — bkz. sync/auth.ts).
+        // Yani veri ancak kullanıcı bilerek bir hesaba girdiyse cihazdan çıkar.
         if (ACCOUNTS_ENABLED) {
           runSync(user.id).catch((e) => console.warn('[Senkron] Açılış senkronu başarısız:', e));
         }

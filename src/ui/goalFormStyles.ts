@@ -7,8 +7,6 @@
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
 
-export type GoalFormStyles = ReturnType<typeof makeGoalFormStyles>;
-
 export const makeGoalFormStyles = (c: Colors) =>
   StyleSheet.create({
     label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },

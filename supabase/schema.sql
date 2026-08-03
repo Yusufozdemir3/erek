@@ -1,8 +1,14 @@
--- Habit App — Supabase şeması (anonim auth + RLS)
+-- Habit App — Supabase şeması (Google girişi + RLS)
 -- Supabase panelinde: SQL Editor > New query > bu dosyayı yapıştır > Run.
--- Ayrıca Authentication > Providers > "Anonymous sign-ins" AÇIK olmalı.
 --
--- Tasarım: id'ler cihazda üretilen UUID. user_id = auth.uid() (anonim kullanıcı).
+-- PANEL AYARI: Authentication > Providers > "Anonymous sign-ins" KAPALI olmalı.
+-- Uygulama artık anonim oturum açmıyor (bkz. src/sync/auth.ts): veri ancak
+-- kullanıcı bilerek giriş yaptığında buluta çıkar. Ayarı açık bırakmak yalnızca
+-- gereksiz bir saldırı yüzeyi olur — anon key APK'ya gömülü olduğundan onu
+-- çıkaran herkes signInAnonymously ile geçerli bir `authenticated` jeton üretip
+-- projede satır oluşturabilir.
+--
+-- Tasarım: id'ler cihazda üretilen UUID. user_id = auth.uid() (giriş yapmış kullanıcı).
 -- Tarih/saat alanlarının çoğu uygulamada metin (ISO ya da "YYYY-MM-DD"); senkron
 -- filigranı için yalnızca updated_at timestamptz. RLS her kullanıcıyı kendi
 -- satırlarına kısıtlar.

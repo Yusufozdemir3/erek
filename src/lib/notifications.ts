@@ -432,10 +432,21 @@ const MIGRATED_KEY = 'notif:migratedMultiReminder';
 export async function migrateToMultiReminderIfNeeded(): Promise<void> {
   const done = await AsyncStorage.getItem(MIGRATED_KEY);
   if (done) return;
+  await cancelAllReminders();
+  await AsyncStorage.setItem(MIGRATED_KEY, '1');
+}
+
+// Hesap birleştirme/değiştirme sonrası çağrılır (bkz. LoginScreen.onGoogle):
+// reassignLocalIds (birleştir) tüm alışkanlık/görev/hedef/hatırlatma satırlarına
+// YENİ id verir, clearLocalData (değiştir) hepsini SİLİP yeniden indirir — ikisinde
+// de OS'un bildirim kuyruğunda ESKİ id'lerle kurulmuş tetikleyiciler yetim kalır:
+// cancelHabitReminders(yeniId) onları asla bulamaz, eski içerikle sonsuza dek
+// (çift) çalmaya devam ederler. Yukarıdaki migrateToMultiReminderIfNeeded'daki
+// aynı "nuke + rescheduleAll* güncel DB'den baştan kurar" deseni burada da geçerli.
+export async function cancelAllReminders(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch {
     // hiç izin/kayıt yoksa hata verebilir — önemsiz, devam.
   }
-  await AsyncStorage.setItem(MIGRATED_KEY, '1');
 }

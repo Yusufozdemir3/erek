@@ -1,7 +1,20 @@
-// Senkron kimliği.
-//  - ANONİM: oturum yoksa Supabase'de anonim kullanıcı oluşturulur (ilk açılış).
-//  - HESAP: kullanıcı Ayarlar'dan e-posta+parola ile giriş/kayıt yapabilir.
+// Senkron kimliği. TEK KURAL: veri, ANCAK kullanıcı bilerek bir hesaba giriş
+// yaptıysa cihazdan çıkar. Giriş yoksa senkron devre dışıdır ve uygulama
+// tamamen yereldir.
 // Dönen uid, buluttaki satırların user_id'si olur (RLS: auth.uid() = user_id).
+//
+// ANONİM OTURUM ARTIK AÇILMIYOR (2026-07-30). Eskiden ensureSignedIn oturum
+// bulamayınca signInAnonymously çağırırdı. ACCOUNTS_ENABLED kapalıyken bu yol
+// hiç çalışmadığı için zararsızdı; bayrak açılınca (bkz. src/config.ts) canlıya
+// çıktı ve şu davranışı üretti: kullanıcı giriş ekranını "Şimdilik geç" ile
+// atlasa bile açılıştaki runSync (bkz. ui/AppData.tsx) anonim bir bulut hesabı
+// açıp TÜM yerel veriyi yüklüyordu. Bu, uygulamanın üç ayrı yerdeki sözüyle
+// çelişiyordu:
+//   - gizlilik politikası §1 ("Giriş yapmazsanız ... hiçbir veri cihazınızdan çıkmaz")
+//   - giriş ekranı ('login.localNote': "verilerin cihazında kalır")
+//   - Profil dipnotu ('profile.footnoteLocal')
+// Anonim yedeklemenin kullanıcıya bir faydası da yoktu: hesabı olmayan kişi o
+// veriyi başka bir cihazda geri getiremez, uygulamayı silince erişemez.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -11,13 +24,6 @@ import {
 } from '@react-native-google-signin/google-signin';
 import { supabase } from './supabase';
 
-// Kullanıcı Ayarlar'dan bilerek çıkış yaptığında set edilir; başarılı bir
-// giriş/kayıt bayrağı temizler. Bayrak varken ensureSignedIn YENİ anonim oturum
-// AÇMAZ (senkron devre dışı kalır). Sebep: çıkıştan sonra otomatik açılan yeni
-// anonim uid, buluttaki satırların (eski hesabın uid'sinde duran) sahibi olmaz;
-// sonraki her push RLS'e takılır ve senkron kalıcı hata durumuna girerdi.
-const SIGNED_OUT_KEY = 'sync:signedOut';
-
 // Oturumdaki kullanıcı özeti (UI'da hesap durumunu göstermek için).
 export interface AuthUser {
   id: string;
@@ -25,39 +31,31 @@ export interface AuthUser {
   isAnonymous: boolean;
 }
 
-// Mevcut oturumun uid'sini döner; oturum yoksa anonim giriş yapar.
-// Supabase istemcisi yoksa (yapılandırma eksik) ya da kullanıcı bilerek çıkış
-// yapmışsa (yeniden giriş yapana dek) null döner — senkron devre dışı kalır.
+// Senkronun kullanacağı uid'yi döner; YOKSA null (senkron devre dışı kalır).
+// Oturum AÇMAZ — yalnızca kullanıcının kendi açtığı hesap oturumunu kullanır
+// (bkz. dosya başındaki not).
+//
+// KALINTI ANONİM OTURUM: bu değişiklikten önceki sürümlerde açılmış anonim
+// oturumlar cihazlarda duruyor olabilir. Onları kullanmaya devam etmek aynı
+// sessiz yüklemeyi sürdürmek olurdu; bu yüzden bulunduklarında kapatılır ve
+// senkron devre dışı kalır. Buluttaki eski anonim veriye DOKUNULMAZ: kullanıcı
+// sonradan gerçekten giriş yaparsa, sync:ownerUid damgası sayesinde bu "hesap
+// değişimi" olarak sınıflanır ve birleştir/değiştir seçeneği sunulur
+// (bkz. syncEngine.classifySignIn) — yani eski veri kaybolmaz, sahipsiz de kalmaz.
 export async function ensureSignedIn(): Promise<string | null> {
   if (!supabase) return null;
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  const u = sessionData.session?.user;
+  const { data } = await supabase.auth.getSession();
+  const u = data.session?.user;
+  if (!u) return null;
+  if (!(u.is_anonymous ?? false)) return u.id;
 
-  if (!(await AsyncStorage.getItem(SIGNED_OUT_KEY))) {
-    if (u) return u.id;
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error) throw error;
-    return data.user?.id ?? null;
-  }
-
-  // Bilerek çıkış yapılmış durumdayız:
-  // - Gerçek HESAP oturumu varsa bayrak bayattır (ör. çıkış yarıda kalmış ya da
-  //   giriş bayrağı temizleyememiş) — bayrağı temizle, oturumu kullan.
-  // - ANONİM oturum varsa kalıntıdır (eski sürümün otomatik açtığı oturum ya da
-  //   çıkış anındaki yarış) — buluttaki satırların sahibi olmadığı için her push
-  //   RLS'e takılırdı; oturumu kapat ve senkronu devre dışı bırak.
-  if (u && !(u.is_anonymous ?? false)) {
-    await AsyncStorage.removeItem(SIGNED_OUT_KEY);
-    return u.id;
-  }
-  if (u) {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      // Kapatılamazsa (ör. ağ yok) sonraki senkronda yeniden denenir.
-      console.warn('[Senkron] Kalıntı anonim oturum kapatılamadı:', e);
-    }
+  try {
+    await supabase.auth.signOut();
+  } catch (e) {
+    // Kapatılamazsa (ör. ağ yok) sonraki turda yeniden denenir. Bu arada zaten
+    // null dönüyoruz, yani kalıntı oturumla push YAPILMAZ — kalıcı zarar yok.
+    console.warn('[Senkron] Kalıntı anonim oturum kapatılamadı:', e);
   }
   return null;
 }
@@ -90,9 +88,6 @@ export async function signUpWithEmail(
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) throw error;
-  // Bayrak yalnızca gerçekten oturum açıldıysa temizlenir. Onay bekleyen kayıtta
-  // temizlemek, araya otomatik anonim oturum sokup öksüz veri üretirdi.
-  if (data.session) await AsyncStorage.removeItem(SIGNED_OUT_KEY);
   return { needsConfirmation: !data.session };
 }
 
@@ -102,11 +97,15 @@ export async function signUpWithEmail(
 // bulut satırlarının sahibi değişmez → çakışma olmaz, manuel silme gerekmez.
 // Not: "Confirm email" açıksa e-posta onay bekler ama parola ve uid anında
 // geçerlidir; senkron (uid'ye bağlı) hemen çalışır.
+//
+// ARTIK YALNIZCA KALINTI oturumlar için anlamlı: uygulama kendiliğinden anonim
+// oturum açmadığından (bkz. ensureSignedIn), buraya ancak eski bir sürümden
+// kalan anonim oturumu olan kullanıcı düşer. O kullanıcı için hâlâ DOĞRU yol:
+// uid korunur, buluttaki verisi yeni hesabına aynen geçer.
 export async function linkEmailToAnonymous(email: string, password: string): Promise<void> {
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { error } = await supabase.auth.updateUser({ email, password });
   if (error) throw error;
-  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
 // — GOOGLE İLE GİRİŞ —
@@ -159,7 +158,6 @@ export async function signInWithGoogle(): Promise<void> {
   if (!idToken) throw new Error('Google kimlik jetonu alınamadı');
   const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
   if (error) throw error;
-  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
 // E-posta + parola ile mevcut hesaba giriş yapar.
@@ -167,7 +165,6 @@ export async function signInWithEmail(email: string, password: string): Promise<
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
-  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
 // — PAROLA SIFIRLAMA — uygulama İÇİ kod akışı (deep link/web sayfası gerekmez):
@@ -194,27 +191,24 @@ export async function resetPasswordWithCode(
   if (error) throw error;
   const { error: updErr } = await supabase.auth.updateUser({ password: newPassword });
   if (updErr) throw updErr;
-  // Kod doğrulaması gerçek bir oturum açtı — bilerek-çıkış bayrağı artık bayat.
-  await AsyncStorage.removeItem(SIGNED_OUT_KEY);
 }
 
 // Hesabı ve buluttaki TÜM veriyi KALICI olarak siler (Google Play hesap-silme
 // zorunluluğu). Sunucudaki SECURITY DEFINER delete_account() RPC'si çağrılır
 // (bkz. supabase/schema.sql): kullanıcının satırlarını ve auth kaydını tek
 // işlemde siler. Yerel veri cihazda KALIR; kullanıcıyı anonime düşürmek
-// çağıranın işidir. Silme başarılıysa bilerek-çıkış bayrağı set edilir ki
-// otomatik yeni anonim oturum açılmasın (signOutAccount ile aynı desen).
+// çağıranın işidir.
 export async function deleteAccountAndData(): Promise<void> {
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { error } = await supabase.rpc('delete_account');
   if (error) throw error;
-  await AsyncStorage.setItem(SIGNED_OUT_KEY, '1');
   // Bulut hesabı silindi: cihazdaki veri artık HİÇBİR hesaba ait değil. Sahiplik
   // damgası kalırsa sonraki giriş yanlışlıkla "hesap değişimi" sayılır ve
   // kullanıcıya gereksiz yere birleştir/değiştir sorusu sorulurdu.
   await AsyncStorage.removeItem('sync:ownerUid');
   // Sunucuda kullanıcı zaten silindi; yerel oturum kapatma hata verse de
-  // (geçersiz token vb.) önemsiz — bayrak kalıntıyı ensureSignedIn'e temizletir.
+  // (geçersiz token vb.) önemsiz: senkron yalnızca GEÇERLİ bir hesap oturumuyla
+  // çalışır, silinmiş kullanıcının jetonuyla yapılan push sunucuda reddedilir.
   try {
     await supabase.auth.signOut();
   } catch {
@@ -222,15 +216,11 @@ export async function deleteAccountAndData(): Promise<void> {
   }
 }
 
-// Hesaptan çıkış yapar. Yerel veri cihazda kalır; senkron, kullanıcı yeniden
-// giriş yapana dek devre dışı kalır (SIGNED_OUT_KEY — dosya başındaki nota bak).
+// Hesaptan çıkış yapar. Yerel veri cihazda kalır; oturum kapandığı için senkron
+// kullanıcı yeniden giriş yapana dek kendiliğinden devre dışı kalır
+// (ensureSignedIn oturum açmaz — bkz. dosya başındaki not).
 export async function signOutAccount(): Promise<void> {
   if (!supabase) return;
-  // Bayrak, oturum kapanmadan ÖNCE yazılır: tam bu anda başlayan bir senkron
-  // oturumsuz yakalarsa yeni anonim oturum açmasın (yarış penceresi). Çıkış
-  // başarısız olur da hesap oturumu sürerse ensureSignedIn bayrağı bayat sayıp
-  // kendisi temizler — kalıcı zarar yok.
-  await AsyncStorage.setItem(SIGNED_OUT_KEY, '1');
   // Google oturumu da bırakılır: aksi halde bir sonraki girişte hesap seçici
   // hiç açılmadan aynı hesapla sessizce dönülür ve kullanıcı hesap değiştiremez.
   // Hiç Google ile girilmemişse bu çağrı zaten sessizce başarısız olur — yutuyoruz.

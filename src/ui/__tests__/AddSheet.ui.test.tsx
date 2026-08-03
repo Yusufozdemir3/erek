@@ -1,8 +1,8 @@
 // AddSheet bileşen testi — merkezi ＋ menüsü (en karmaşık paylaşılan yüzey: üç
-// formun tümü + AI ile hızlı ekleme). Bildirim (expo-notifications gerektirir) ve
-// dış servisler (AI ayrıştırma, sesli giriş, router) mock'lanır; taskRepo/habitRepo/
-// goalRepo/subtaskRepo/goalMilestoneRepo/reminderRepo GERÇEK (in-memory SQLite) —
-// TaskEditModal.ui.test.tsx ile aynı desen (uçtan uca DB doğrulaması).
+// formun tümü). Bildirim (expo-notifications gerektirir) ve router mock'lanır;
+// taskRepo/habitRepo/goalRepo/subtaskRepo/goalMilestoneRepo/reminderRepo GERÇEK
+// (in-memory SQLite) — TaskEditModal.ui.test.tsx ile aynı desen (uçtan uca DB
+// doğrulaması).
 
 import { Alert } from 'react-native';
 import { fireEvent, act } from '@testing-library/react-native';
@@ -34,19 +34,7 @@ jest.mock('@/lib/notifications', () => ({
   scheduleGoalReminders: jest.fn(async () => true),
 }));
 
-jest.mock('@/lib/aiTaskParser', () => ({ parseTaskText: jest.fn() }));
-jest.mock('@/lib/voiceInput', () => ({ recognizeSpeech: jest.fn() }));
-
-// AI hızlı ekleme YAYINDA KAPALI (config.AI_QUICK_ADD_ENABLED=false — güvenlik
-// gerekçesi orada). Kod silinmediği için testleri de yaşatıyoruz: özellik geri
-// açıldığında korumasız dönmeyelim. Bu yüzden bayrak burada açık taklit edilir;
-// aşağıdaki AI testleri ÖZELLİK MANTIĞINI doğrular, sevkiyat kararını değil.
-// (Bayrağın kendisi bir sabit + && — ayrıca test etmenin değeri, test başına
-// modül yeniden yükleme maliyetini karşılamıyor.)
-jest.mock('@/config', () => ({ ...jest.requireActual('@/config'), AI_QUICK_ADD_ENABLED: true }));
-
 import { scheduleGoalReminders, scheduleHabitReminders, scheduleTaskReminders } from '@/lib/notifications';
-import { parseTaskText } from '@/lib/aiTaskParser';
 
 async function pick(mode: 'date' | 'time', date: Date) {
   const cb = (globalThis as any).__pickers?.[mode];
@@ -58,7 +46,7 @@ async function pick(mode: 'date' | 'time', date: Date) {
 
 beforeEach(async () => {
   await resetTestDb();
-  await AsyncStorage.clear(); // ai:quickAddEnabled dahil tercihler testler arası sızmasın
+  await AsyncStorage.clear();
   mockUserId = userRepo.getOrCreateLocal().id;
   jest.clearAllMocks();
 });
@@ -159,65 +147,5 @@ describe('AddSheet — hedef oluşturma', () => {
     expect(created!.goal_type).toBe('milestone');
     expect(goalMilestoneRepo.listByGoal(created!.id).map((m) => m.title)).toEqual(['Kutuları topla']);
     expect(scheduleGoalReminders).not.toHaveBeenCalled(); // hiç hatırlatma eklenmedi
-  });
-});
-
-describe('AddSheet — AI ile hızlı ekleme (opt-in)', () => {
-  beforeEach(async () => {
-    await AsyncStorage.setItem('ai:quickAddEnabled', '1');
-  });
-
-  it('kapalıyken (varsayılan) AI kutusu hiç görünmez', async () => {
-    await AsyncStorage.setItem('ai:quickAddEnabled', '0');
-    const { queryByPlaceholderText } = await renderUI(
-      <AddSheet visible onClose={jest.fn()} initialStep="task" />
-    );
-    await act(async () => {});
-    expect(queryByPlaceholderText('örn. yarın 17:00 doktora git')).toBeNull();
-  });
-
-  it('tek görev bulununca formu ÖNCEDEN DOLDURUR, otomatik kaydetmez', async () => {
-    (parseTaskText as jest.Mock).mockResolvedValue([
-      { title: 'Doktora git', due_date: '2026-02-01', due_time: '17:00', priority: 'high' },
-    ]);
-    const { getByText, getByPlaceholderText, getByDisplayValue } = await renderUI(
-      <AddSheet visible onClose={jest.fn()} initialStep="task" />
-    );
-    await act(async () => {});
-    fireEvent.changeText(getByPlaceholderText('örn. yarın 17:00 doktora git'), 'yarın 17:00 doktora git');
-    await act(async () => {
-      fireEvent.press(getByText('Ayrıştır'));
-    });
-    expect(getByDisplayValue('Doktora git')).toBeTruthy();
-    // Otomatik kaydetmedi — görev DB'de henüz yok.
-    expect(taskRepo.listByUser(mockUserId).find((t) => t.title === 'Doktora git')).toBeUndefined();
-  });
-
-  it('birden fazla görev bulununca seçilebilir liste gösterir, seçilenleri toplu ekler', async () => {
-    (parseTaskText as jest.Mock).mockResolvedValue([
-      { title: 'Görev A', due_date: null, due_time: null, priority: null },
-      { title: 'Görev B', due_date: null, due_time: null, priority: null },
-    ]);
-    const { getByText, getByPlaceholderText } = await renderUI(
-      <AddSheet visible onClose={jest.fn()} initialStep="task" />
-    );
-    await act(async () => {});
-    fireEvent.changeText(getByPlaceholderText('örn. yarın 17:00 doktora git'), 'iki görev metni');
-    await act(async () => {
-      fireEvent.press(getByText('Ayrıştır'));
-    });
-    expect(getByText('Görev A')).toBeTruthy();
-    expect(getByText('Görev B')).toBeTruthy();
-
-    // Görev B'nin seçimini kaldır — yalnız A eklenmeli.
-    fireEvent.press(getByText('Görev B'));
-
-    await act(async () => {
-      fireEvent.press(getByText('Ekle (1)'));
-    });
-
-    const titles = taskRepo.listByUser(mockUserId).map((t) => t.title);
-    expect(titles).toContain('Görev A');
-    expect(titles).not.toContain('Görev B');
   });
 });
