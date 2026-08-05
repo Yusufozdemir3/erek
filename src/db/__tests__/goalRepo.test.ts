@@ -5,6 +5,7 @@
 import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
+import { TIME_UNIT } from '../../lib/helpers';
 import { resetTestDb } from '../../test/dbTestUtils';
 
 let userId: string;
@@ -97,20 +98,26 @@ describe('update', () => {
     expect(fromDb.synced).toBe(0);
   });
 
-  it('current_value negatif verilirse 0\'a, hedefi aşarsa hedefe sıkışır', () => {
+  it('current_value negatif verilirse 0\'a sıkışır (tek sınır budur)', () => {
     const goal = numericGoal({ target_value: 100 });
     goalRepo.update(goal.id, { current_value: -5 });
     expect(goalRepo.getById(goal.id)!.current_value).toBe(0);
-    goalRepo.update(goal.id, { current_value: 500 });
-    expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
   });
 
-  it('aynı çağrıda hedef de değişiyorsa clamp YENİ hedefe göre yapılır', () => {
+  it('current_value hedefi AŞABİLİR (hedef sınır değil eşiktir)', () => {
+    const goal = numericGoal({ target_value: 100 });
+    goalRepo.update(goal.id, { current_value: 500 });
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(500);
+  });
+
+  it('hedefi düşürmek birikmiş ilerlemeyi KESMEZ', () => {
+    // Eskiden buradaki clamp 80'i 50'ye çekiyordu: kullanıcının gerçekten
+    // yaptığı iş, yalnızca hedefini küçülttüğü için sessizce siliniyordu.
     const goal = numericGoal({ target_value: 100 });
     goalRepo.update(goal.id, { target_value: 50, current_value: 80 });
     const fromDb = goalRepo.getById(goal.id)!;
     expect(fromDb.target_value).toBe(50);
-    expect(fromDb.current_value).toBe(50);
+    expect(fromDb.current_value).toBe(80);
   });
 
   it('hiç alan verilmezse hiçbir şey yapmaz', () => {
@@ -133,15 +140,15 @@ describe('addProgress girdi geçmişi', () => {
     expect(entries[0].amount).toBe(40);
   });
 
-  it('kırpılınca girdiye istenen değil GERÇEKLEŞEN fark yazılır', () => {
+  it('0 tabanında kırpılınca girdiye istenen değil GERÇEKLEŞEN fark yazılır', () => {
     const goal = numericGoal({ target_value: 100 });
-    goalRepo.addProgress(goal.id, 90);
-    // 90 + 30 = 120 ama tavan 100 → gerçekte yalnız +10 uygulanır.
-    expect(goalRepo.addProgress(goal.id, 30)).toBe(10);
-    expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
+    goalRepo.addProgress(goal.id, 10);
+    // 10 - 30 = -20 ama taban 0 → gerçekte yalnız -10 uygulanır.
+    expect(goalRepo.addProgress(goal.id, -30)).toBe(-10);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(0);
     const amounts = goalEntryRepo.listByGoal(goal.id).map((e) => e.amount);
-    expect(amounts).toContain(10);
-    expect(amounts).not.toContain(30);
+    expect(amounts).toContain(-10);
+    expect(amounts).not.toContain(-30);
   });
 
   it('negatif ilerleme (geri alma) negatif girdi yazar', () => {
@@ -153,9 +160,12 @@ describe('addProgress girdi geçmişi', () => {
 
   it('hiçbir şey değişmezse girdi yazmaz', () => {
     const goal = numericGoal({ target_value: 100 });
-    goalRepo.addProgress(goal.id, 100); // tavana oturdu
-    expect(goalRepo.addProgress(goal.id, 5)).toBe(0); // tamamen kırpıldı
-    expect(goalEntryRepo.listByGoal(goal.id)).toHaveLength(1);
+    goalRepo.addProgress(goal.id, 0); // fark yok
+    expect(goalEntryRepo.listByGoal(goal.id)).toEqual([]);
+    goalRepo.addProgress(goal.id, 10);
+    expect(goalRepo.addProgress(goal.id, -30)).toBe(-10); // 0 tabanına oturdu
+    expect(goalRepo.addProgress(goal.id, -5)).toBe(0); // zaten 0, değişmez
+    expect(goalEntryRepo.listByGoal(goal.id)).toHaveLength(2);
   });
 
   it('sayısal olmayan hedefte girdi yazmaz', () => {
@@ -169,6 +179,135 @@ describe('addProgress girdi geçmişi', () => {
   });
 });
 
+// current_value artık TÜRETİLMİŞ bir önbeklek: value_baseline + aktif girdilerin
+// toplamı (bkz. migration019). Bu değişmez bozulursa senkronun pull sonrası
+// yeniden hesabı kullanıcının değerini kaydırır — o yüzden ayrıca sınanıyor.
+describe('current_value değişmezi (baseline + girdiler)', () => {
+  const invariant = (goalId: string) => {
+    const goal = goalRepo.getById(goalId)!;
+    const sum = goalEntryRepo.listByGoal(goalId).reduce((s, e) => s + e.amount, 0);
+    expect(goal.current_value).toBe(Math.max(0, goal.value_baseline + sum));
+  };
+
+  it('yeni hedefte baseline 0, değer 0', () => {
+    const goal = numericGoal();
+    expect(goal.value_baseline).toBe(0);
+    invariant(goal.id);
+  });
+
+  it('addProgress girdiyi yazar, baseline\'a DOKUNMAZ', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 40);
+    const after = goalRepo.getById(goal.id)!;
+    expect(after.current_value).toBe(40);
+    expect(after.value_baseline).toBe(0); // katkı girdilerde, baseline'da değil
+    invariant(goal.id);
+  });
+
+  it('"Mevcut değer"i ELLE değiştirmek baseline\'ı yazar, girdi geçmişine dokunmaz', () => {
+    // Elle düzeltme bir günün emeği değildir; tempoyu şişirmemeli (bu yüzden
+    // girdi yazılmaz). Ama değerin yeniden hesapta hayatta kalması için bir yere
+    // yazılması gerekir — orası baseline.
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 40);
+    const entriesBefore = goalEntryRepo.listByGoal(goal.id).length;
+
+    goalRepo.update(goal.id, { current_value: 100 });
+
+    const after = goalRepo.getById(goal.id)!;
+    expect(after.current_value).toBe(100);
+    expect(after.value_baseline).toBe(60); // 100 = 60 + 40 (girdi)
+    expect(goalEntryRepo.listByGoal(goal.id).length).toBe(entriesBefore);
+    invariant(goal.id);
+  });
+
+  it('elle düzeltmeden SONRAKİ ilerleme düzeltmenin üstüne biner', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 40);
+    goalRepo.update(goal.id, { current_value: 100 }); // baseline 60
+    goalRepo.addProgress(goal.id, 5);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(105);
+    invariant(goal.id);
+  });
+
+  it('negatif düzeltme girdisi toplamdan düşer', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 40);
+    goalRepo.addProgress(goal.id, -15);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(25);
+    invariant(goal.id);
+  });
+
+  it('yalnız başlık güncellemek değeri ve baseline\'ı bozmaz', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 40);
+    goalRepo.update(goal.id, { title: 'Yeni ad' });
+    const after = goalRepo.getById(goal.id)!;
+    expect(after.current_value).toBe(40);
+    expect(after.value_baseline).toBe(0);
+  });
+
+  it('recomputeAllFromEntries değeri değiştirmez (zaten tutarlıysa)', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 40);
+    goalRepo.update(goal.id, { current_value: 100 });
+    goalRepo.recomputeAllFromEntries();
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
+  });
+
+  // "İlerleme geçmişine de ekle" işaretliyken fark BASELINE'a değil GİRDİYE yazılır.
+  // İkisi birden yapılırsa toplam current_value'dan kopar ve değer, kullanıcı
+  // hiçbir şey yapmadan bir sonraki yeniden hesapta sıçrar (eskiden ekranda
+  // yapılan hata tam olarak buydu — bkz. goalRepo.update yorumu).
+  describe('log_manual_change', () => {
+    it('işaretliyken fark girdi olarak yazılır, baseline sabit kalır', () => {
+      const goal = numericGoal();
+      goalRepo.addProgress(goal.id, 40);
+
+      goalRepo.update(goal.id, { current_value: 100, log_manual_change: true });
+
+      const after = goalRepo.getById(goal.id)!;
+      expect(after.current_value).toBe(100);
+      expect(after.value_baseline).toBe(0); // baseline'a DOKUNULMADI
+      const amounts = goalEntryRepo.listByGoal(goal.id).map((e) => e.amount);
+      expect(amounts).toContain(60); // fark geçmişe düştü
+      invariant(goal.id);
+    });
+
+    it('DEĞER SIÇRAMAZ: yeniden hesap sonrası da aynı kalır', () => {
+      const goal = numericGoal();
+      goalRepo.addProgress(goal.id, 40);
+      goalRepo.update(goal.id, { current_value: 100, log_manual_change: true });
+
+      goalRepo.recomputeAllFromEntries();
+
+      expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
+    });
+
+    it('işaretli DEĞİLKEN geçmişe hiçbir şey yazılmaz', () => {
+      const goal = numericGoal();
+      goalRepo.addProgress(goal.id, 40);
+      const before = goalEntryRepo.listByGoal(goal.id).length;
+
+      goalRepo.update(goal.id, { current_value: 100 });
+
+      expect(goalRepo.listByUser(userId)[0].current_value).toBe(100);
+      expect(goalEntryRepo.listByGoal(goal.id).length).toBe(before);
+    });
+
+    it('değer değişmemişse boş girdi üretmez', () => {
+      const goal = numericGoal();
+      goalRepo.addProgress(goal.id, 40);
+      const before = goalEntryRepo.listByGoal(goal.id).length;
+
+      goalRepo.update(goal.id, { current_value: 40, log_manual_change: true });
+
+      expect(goalEntryRepo.listByGoal(goal.id).length).toBe(before);
+      invariant(goal.id);
+    });
+  });
+});
+
 describe('addProgress', () => {
   it('sayısal hedefte ilerlemeyi artırır', () => {
     const goal = numericGoal({ target_value: 100 });
@@ -178,10 +317,12 @@ describe('addProgress', () => {
     expect(goalRepo.getById(goal.id)!.current_value).toBe(45);
   });
 
-  it('hedefi aşmaz (target_value ile sınırlı)', () => {
+  it('hedefi AŞABİLİR — sayaç dürüsttür, tavan yok', () => {
     const goal = numericGoal({ target_value: 100 });
     goalRepo.addProgress(goal.id, 130);
-    expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(130);
+    // Gösterim tarafı yine de taşmaz: oran 1'de kırpılır.
+    expect(goalRepo.progressRatio(goalRepo.getById(goal.id)!)).toBe(1);
   });
 
   it('0\'ın altına inmez', () => {
@@ -205,6 +346,53 @@ describe('addProgress', () => {
 
   it('olmayan hedefte hata vermez', () => {
     expect(() => goalRepo.addProgress('yok', 5)).not.toThrow();
+  });
+});
+
+// HEDEFİ AŞMIŞ hedef (current_value > target_value) sıradan bir durumdur:
+// zamanlayıcı hedefe ulaşınca DURMAZ, kullanıcı çalışmaya devam edebilir.
+// Eskiden addProgress'in tavan kırpması böyle bir hedefte İSTENEN yönün TERSİNE
+// bir fark üretiyordu ("+1 ekle" demek current_value'yu tavana geri çekip aradaki
+// tüm fazlalığı siliyor, girdi geçmişine hiç yaşanmamış dev bir negatif kayıt
+// düşüyordu). Tavan tamamen kaldırıldı — bu testler o davranışın geri gelmemesini
+// kilitler.
+describe('addProgress — hedefi aşmış hedef', () => {
+  // 1 saatlik (3600 sn) hedefte 100 dakika (6000 sn) çalışılmış bir durum kurar.
+  const overshotGoal = () => {
+    const goal = numericGoal({ target_value: 3600, unit: TIME_UNIT });
+    goalRepo.addProgress(goal.id, 6000);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(6000);
+    return goal;
+  };
+
+  it('pozitif ekleme tam uygulanır, ilerlemeyi DÜŞÜRMEZ', () => {
+    const goal = overshotGoal();
+    expect(goalRepo.addProgress(goal.id, 60)).toBe(60);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(6060);
+  });
+
+  it('pozitif eklemede girdi geçmişine negatif kayıt yazmaz', () => {
+    const goal = overshotGoal();
+    goalRepo.addProgress(goal.id, 60);
+    const amounts = goalEntryRepo.listByGoal(goal.id).map((e) => e.amount);
+    expect(amounts.filter((a) => a < 0)).toEqual([]);
+  });
+
+  it('negatif düzeltme hedefi aşmış hedefte de tam uygulanır', () => {
+    const goal = overshotGoal();
+    expect(goalRepo.addProgress(goal.id, -60)).toBe(-60);
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(5940);
+  });
+
+  // Bağlı alışkanlıktaki "işaretle → geri al" döngüsünün net etkisi SIFIR olmalı.
+  // Tavan varken +1 yutuluyor, -1 uygulanıyordu; her döngü hedeften 1 birim
+  // sessizce çalıyordu (bkz. habitRepo.bumpGoalIfLinked).
+  it('hedef doluyken +1/-1 döngüsü simetriktir (net etki 0)', () => {
+    const goal = numericGoal({ target_value: 100 });
+    goalRepo.addProgress(goal.id, 100); // tam doldu
+    goalRepo.addProgress(goal.id, 1); // alışkanlık işaretlendi
+    goalRepo.addProgress(goal.id, -1); // geri alındı
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
   });
 });
 

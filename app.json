@@ -51,6 +51,7 @@
       "expo-font",
       "./plugins/withForceDarkDisabled",
       "./plugins/withoutUnusedPermissions",
+      "./plugins/withBackupRules",
       [
         "react-native-android-widget",
         {
@@ -69,7 +70,14 @@
           ]
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-1389231740794130~1288487312"
+        }
+      ],
+      "./plugins/withAdsCompatibleGmsAds"
     ],
     "experiments": {
       "typedRoutes": true

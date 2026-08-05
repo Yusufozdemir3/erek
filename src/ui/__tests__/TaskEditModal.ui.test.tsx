@@ -18,6 +18,7 @@ import { TaskEditModal } from '@/ui/TaskEditModal';
 jest.mock('@/lib/notifications', () => ({
   scheduleTaskReminders: jest.fn(() => Promise.resolve(true)),
   cancelTaskReminders: jest.fn(() => Promise.resolve()),
+  refreshTaskReminders: jest.fn(() => Promise.resolve()),
 }));
 
 let userId: string;

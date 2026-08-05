@@ -59,8 +59,13 @@ export default function HabitsScreen() {
   };
 
   const removeHabit = (h: HabitListItem) => {
+    // Hatırlatma SATIRLARINI habitRepo.softDelete temizler; burada iptal edilen
+    // OS'un bildirim kuyruğundaki tetikleyiciler. cancelByPrefix native listeyi
+    // okuduğu için reddedebilir — yakalanmazsa "unhandled rejection" olur.
     habitRepo.softDelete(h.id);
-    cancelHabitReminders(h.id);
+    cancelHabitReminders(h.id).catch((e) =>
+      console.warn('[Bildirim] Silinen alışkanlığın hatırlatmaları iptal edilemedi:', e)
+    );
     reload();
   };
 

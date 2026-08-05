@@ -78,6 +78,7 @@ export const tr: Dict = {
   'habit.reminder': 'Hatırlatma saati',
   'reminders.add': 'Saat ekle',
   'reminders.none': 'Henüz hatırlatma yok',
+  'reminders.max': 'En fazla {n} hatırlatma ekleyebilirsin.',
   'reminders.removeA11y': 'Hatırlatmayı kaldır: {time}',
   'habit.icon': 'İkon',
   'habit.color': 'Renk',
@@ -92,6 +93,7 @@ export const tr: Dict = {
   'habit.quotaPrompt': 'Haftada kaç kez?',
   'habit.quotaHint': 'Günü sen seç — haftada bu sayıya ulaşmak yeterli',
   'schedule.everyNDays': '{n} günde bir',
+  'schedule.everyNDays_one': 'Her gün',
   'schedule.timesPerWeek': 'Haftada {n} kez',
   'schedule.monthDay': "Her ayın {d}. günü",
   'schedule.yearly': 'Her yıl: {dates}',
@@ -177,8 +179,10 @@ export const tr: Dict = {
   // Tarih yardımcıları (theme.ts'teki paylaşılan formatlayıcılar için)
   'date.noDate': 'Tarihsiz',
   'date.daysLeft': '{n} gün kaldı',
+  'date.daysLeft_one': '{n} gün kaldı',
   'date.dueToday': 'Bugün son gün',
   'date.daysAgo': '{n} gün geçti',
+  'date.daysAgo_one': '{n} gün geçti',
   'date.pickTitle': 'Tarih seç',
   'date.prevMonth': 'Önceki ay',
   'date.nextMonth': 'Sonraki ay',
@@ -190,6 +194,11 @@ export const tr: Dict = {
 
   // Ekran alt başlıkları
   'screen.tasksSubtitle': '{n} görev bekliyor',
+  'screen.tasksSubtitle_one': '{n} görev bekliyor',
+  // "Görevler" ekranı eski tamamlananları varsayılan olarak gizler (liste
+  // yıllar içinde sınırsız büyüyordu); bu düğme hepsini açar.
+  'tasks.showOlderCompleted': 'Daha eski {n} tamamlanan görevi göster',
+  'tasks.showOlderCompleted_one': 'Daha eski {n} tamamlanan görevi göster',
   'screen.habitsSubtitle': 'Her gün küçük bir adım',
   'screen.goalsSubtitle': 'Büyük resmi takip et',
   'today.backToday': 'Bugüne dön',
@@ -247,6 +256,7 @@ export const tr: Dict = {
   'goal.milestoneDateChip': 'Tarih',
   'goal.milestoneThresholdHint': 'Miktarlı adımlar sırayla, yaptığın girişlerle kendiliğinden dolar — elle işaretlenmez.',
   'goal.milestoneCountSuffix': 'adım',
+  'goal.milestoneCountSuffix_one': 'adım',
   'goal.statRatio': 'İlerleme',
   'goal.statRemaining': 'Kalan',
   'goal.statDeadline': 'Son tarih',
@@ -327,6 +337,7 @@ export const tr: Dict = {
   'common.editA11y': '{title}, düzenle',
   'common.deleteA11y': '{title}, sil',
   'task.subtaskCountSuffix': 'alt görev',
+  'task.subtaskCountSuffix_one': 'alt görev',
   'habit.todayA11y': '{title}, bugün',
   'habit.statsA11y': '{title} istatistiklerini aç',
   'habit.checkboxA11y': '{title} alışkanlığı',
@@ -357,11 +368,14 @@ export const tr: Dict = {
   'onboarding.page1Title': 'Hepsi bir arada',
   'onboarding.page1Body':
     'Alışkanlıklar, görevler ve hedefler tek uygulamada. "Bugün" ekranı günün tamamını tek bakışta gösterir; alttaki ＋ ile her şeyi oradan eklersin.',
-  'onboarding.page2Title': 'Üç tip alışkanlık',
+  'onboarding.page2Title': 'Kendi tarzında takip et',
   'onboarding.page2Body':
-    'Basit tik ("yaptım"), sayısal hedef (8 bardak su) ya da zamanlayıcı (20 dk meditasyon). Bir alışkanlığı hedefe bağla — tamamladığın her gün hedefe +1 yazılır.',
-  'onboarding.page3Title': 'Verilerin sende',
+    'Basit tik ("yaptım"), sayısal hedef (8 bardak su) ya da zamanlayıcı (20 dk meditasyon) — üçü de serini ve puanını besler. Bir alışkanlığı hedefe bağla, tamamladığın her gün otomatik ilerleme yazsın.',
+  'onboarding.page3Title': 'Ana ekranından bile gör',
   'onboarding.page3Body':
+    "Widget'ı ana ekrana ekle, uygulamayı açmadan günün durumunu gör. Hatırlatma saatlerini kendin belirle — bildirimler tamamen cihazında çalışır.",
+  'onboarding.page4Title': 'Verilerin sende',
+  'onboarding.page4Body':
     "Her şey önce cihazında saklanır, internetsiz çalışır. İstersen Profil'den hesap bağlayıp buluta yedekleyebilir, başka cihazlarla eşitleyebilirsin.",
 
   // İstatistik ekranı (habit/[id].tsx)
@@ -412,8 +426,10 @@ export const tr: Dict = {
   'goalStats.aheadLabel': 'Son tarihte fazla',
   'goalStats.verdictDone': 'Hedef tamamlandı 🎉',
   'goalStats.verdictEarly': 'Bu hızla {date} — son tarihten {n} gün önce 🎉',
+  'goalStats.verdictEarly_one': 'Bu hızla {date} — son tarihten {n} gün önce 🎉',
   'goalStats.verdictOnTime': 'Bu hızla tam zamanında: {date} 👍',
   'goalStats.verdictLate': 'Bu hızla {date} — son tarihi {n} gün kaçırırsın',
+  'goalStats.verdictLate_one': 'Bu hızla {date} — son tarihi {n} gün kaçırırsın',
   'goalStats.verdictFix': 'Yetişmek için günde {amount} gerekiyor',
   'goalStats.verdictFinish': 'Bu hızla {date} tarihinde bitirirsin',
   'goalStats.verdictNeed': 'Son tarihe yetişmek için günde {amount} gerekiyor',
@@ -500,6 +516,8 @@ export const tr: Dict = {
   'profile.syncConnectedAccount': '✓ Bağlı (hesap)',
   'profile.syncConnectedAnon': '✓ Bağlı (anonim)',
   'profile.syncNotConnected': 'Bağlı değil',
+  'profile.lastBackup': 'Son yedek',
+  'profile.lastBackupNever': 'Henüz yok',
   'profile.lastSync': 'Son senkron: ↑{pushed} gönderildi · ↓{pulled} alındı',
   'profile.syncError': 'Hata: {message}',
   'profile.syncDisabled': 'Senkron şu an kapalı: oturum yok. Hesap bağlayınca kaldığı yerden sürer.',

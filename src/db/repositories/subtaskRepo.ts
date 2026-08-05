@@ -3,7 +3,7 @@
 // Her yazma işlemi updated_at'i tazeler ve synced=0 yapar (senkron bekliyor).
 
 import { getDb } from '../database';
-import { newId, nowIso } from '../../lib/helpers';
+import { chunk, newId, nowIso } from '../../lib/helpers';
 import type { Subtask } from '../../types/models';
 
 function rowToSubtask(row: any): Subtask {
@@ -73,17 +73,19 @@ export const subtaskRepo = {
   // Yalnızca en az bir (silinmemiş) alt görevi olan görevler döner — alt görevsiz
   // görevler sonuçta hiç yer almaz (çağıran "total > 0" filtresine gerek kalmaz).
   countsForTasks(taskIds: string[]): Record<string, { done: number; total: number }> {
-    if (taskIds.length === 0) return {};
     const db = getDb();
-    const placeholders = taskIds.map(() => '?').join(',');
-    const rows = db.getAllSync<{ task_id: string; done: number; total: number }>(
-      `SELECT task_id, COALESCE(SUM(completed), 0) AS done, COUNT(*) AS total
-       FROM subtasks WHERE task_id IN (${placeholders}) AND deleted_at IS NULL
-       GROUP BY task_id`,
-      taskIds
-    );
     const out: Record<string, { done: number; total: number }> = {};
-    for (const r of rows) out[r.task_id] = { done: r.done ?? 0, total: r.total ?? 0 };
+    // Parçalı: `IN (…)` bağlı değişken sayısı liste uzunluğuna eşit (bkz. helpers.chunk).
+    for (const ids of chunk(taskIds)) {
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = db.getAllSync<{ task_id: string; done: number; total: number }>(
+        `SELECT task_id, COALESCE(SUM(completed), 0) AS done, COUNT(*) AS total
+         FROM subtasks WHERE task_id IN (${placeholders}) AND deleted_at IS NULL
+         GROUP BY task_id`,
+        ids
+      );
+      for (const r of rows) out[r.task_id] = { done: r.done ?? 0, total: r.total ?? 0 };
+    }
     return out;
   },
 

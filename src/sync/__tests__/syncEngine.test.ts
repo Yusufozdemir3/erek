@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDb } from '../../db/database';
 import { habitRepo } from '../../db/repositories/habitRepo';
 import { goalRepo } from '../../db/repositories/goalRepo';
+import { goalEntryRepo } from '../../db/repositories/goalEntryRepo';
 import { taskRepo } from '../../db/repositories/taskRepo';
 import { subtaskRepo } from '../../db/repositories/subtaskRepo';
 import { reminderRepo } from '../../db/repositories/reminderRepo';
@@ -36,6 +37,9 @@ import {
 } from '../syncEngine';
 
 const LEGACY_KEY = 'sync:lastPulledAt';
+// syncEngine'deki WATERMARK_SAFETY_MS ile aynı olmalı: filigran, görülen en büyük
+// sunucu damgasının bu kadar gerisine kurulur (sırasız commit'ler atlanmasın diye).
+const WATERMARK_SAFETY_MS = 5_000;
 const wmKey = (table: string) => `sync:lastPulledAt:${table}`;
 const EPOCH = '1970-01-01T00:00:00.000Z';
 const UID = 'remote-uid';
@@ -47,6 +51,10 @@ let remoteData: Record<string, Row[]>;
 let upserts: Array<{ table: string; payload: Row[] }>;
 let upsertErrorTable: string | null;
 let upsertErrorMessage: string;
+// Push artık parti parti gidiyor (bkz. PUSH_PAGE_SIZE), yani bir tabloya birden
+// çok upsert isteği düşebilir. null = o tablonun TÜM istekleri patlar (eski
+// davranış); sayı verilirse yalnızca o sıradaki (1'den başlayarak) istek patlar.
+let upsertErrorAtCall: number | null;
 let gtCalls: Array<{ table: string; since: string }>;
 let rangeCalls: Array<{ table: string; from: number; to: number }>;
 
@@ -62,7 +70,10 @@ function fakeFrom(table: string) {
   return {
     upsert: async (payload: Row[]) => {
       upserts.push({ table, payload });
-      if (upsertErrorTable === table) return { error: { message: upsertErrorMessage } };
+      const nth = upserts.filter((u) => u.table === table).length;
+      if (upsertErrorTable === table && (upsertErrorAtCall == null || upsertErrorAtCall === nth)) {
+        return { error: { message: upsertErrorMessage } };
+      }
       return { error: null };
     },
     select: () => {
@@ -106,6 +117,10 @@ function remoteHabit(overrides: Row & { id: string; updated_at: string }): Row {
     unit: null,
     start_date: null,
     end_date: null,
+    // Bağlı hedefe katkı ayarları — gerçek bir bulut satırı bunları taşır
+    // (goal_factor uzak şemada NOT NULL DEFAULT 1).
+    goal_contribution: null,
+    goal_factor: 1,
     deleted_at: null,
     ...overrides,
   };
@@ -126,6 +141,7 @@ beforeEach(async () => {
   upserts = [];
   upsertErrorTable = null;
   upsertErrorMessage = 'upsert patladı';
+  upsertErrorAtCall = null;
   gtCalls = [];
   rangeCalls = [];
   mockFrom.mockImplementation(fakeFrom);
@@ -169,6 +185,71 @@ describe('runSync — push', () => {
   });
 });
 
+// Uzun süredir kullanan birinde bekleyen satır sayısı binleri bulabilir
+// (prepareFullResync her girişte HEPSİNİ synced=0 yapar). Tek dev istek mobil
+// şebekede zaman aşımına düşerse hep-ya-hiç davranışı senkronu kalıcı olarak
+// kilitliyordu — parti parti gönderim bunu kırar.
+describe('runSync — push partileri (büyük birikim)', () => {
+  // Tek alışkanlığa `count` ayrı güne log yazar (UNIQUE(habit_id, log_date)).
+  function seedLogs(userId: string, count: number): void {
+    const habit = habitRepo.create({ user_id: userId, title: 'Su iç' });
+    const dayMs = 86_400_000;
+    const base = Date.parse('2026-01-01T00:00:00.000Z');
+    for (let i = 0; i < count; i++) {
+      habitRepo.toggleLog(habit.id, new Date(base + i * dayMs).toISOString().slice(0, 10), true);
+    }
+  }
+
+  it('600 bekleyen satır tek istek yerine 250\'lik partilerde gider', async () => {
+    const user = userRepo.getOrCreateLocal();
+    seedLogs(user.id, 600);
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    const logPushes = upserts.filter((u) => u.table === 'habit_logs');
+    expect(logPushes.map((u) => u.payload.length)).toEqual([250, 250, 100]);
+    // Hiçbir satır atlanmadı.
+    expect(syncedFlags('habit_logs')).toHaveLength(600);
+    expect(syncedFlags('habit_logs').every((f) => f === 1)).toBe(true);
+  });
+
+  it('ortadaki parti patlarsa ÖNCEKİ partiler işaretli kalır (ilerleme korunur)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    seedLogs(user.id, 600);
+    upsertErrorTable = 'habit_logs';
+    upsertErrorAtCall = 2; // ilk parti geçer, ikincisi patlar
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('habit_logs push');
+
+    // KRİTİK: parti yokken bu sayı 0 olurdu ve her tur baştan başlardı.
+    const flags = syncedFlags('habit_logs');
+    expect(flags.filter((f) => f === 1)).toHaveLength(250);
+    expect(flags.filter((f) => f === 0)).toHaveLength(350);
+  });
+
+  it('yeniden denemede yalnızca KALAN satırlar gönderilir', async () => {
+    const user = userRepo.getOrCreateLocal();
+    seedLogs(user.id, 600);
+    upsertErrorTable = 'habit_logs';
+    upsertErrorAtCall = 2;
+    await runSync(user.id); // 250 geçti, 350 bekliyor
+
+    upsertErrorTable = null;
+    upserts = [];
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    // 350 kalan → 250 + 100; ilk turdaki 250 tekrar GÖNDERİLMEZ.
+    const logPushes = upserts.filter((u) => u.table === 'habit_logs');
+    expect(logPushes.map((u) => u.payload.length)).toEqual([250, 100]);
+    expect(syncedFlags('habit_logs').every((f) => f === 1)).toBe(true);
+  });
+});
+
 describe('runSync — pull', () => {
   it('uzaktaki yeni kaydı yerele ekler, user_id\'yi yerel kimliğe çevirir', async () => {
     const user = userRepo.getOrCreateLocal();
@@ -204,21 +285,45 @@ describe('runSync — pull', () => {
     expect(habitRepo.getById(b.id)!.title).toBe('Yerel B');
   });
 
-  it('filigranı görülen en yeni sunucu damgasına taşır ve sonraki tur oradan sürer', async () => {
+  it('filigranı görülen en yeni damganın GÜVENLİK PAYI gerisine taşır ve sonraki tur oradan sürer', async () => {
     const user = userRepo.getOrCreateLocal();
     const t1 = isoShift(0);
     remoteData['habits'] = [remoteHabit({ id: 'uzak-1', updated_at: t1 })];
 
     await runSync(user.id);
-    expect(await AsyncStorage.getItem(wmKey('habits'))).toBe(t1);
+    // Tam olarak en büyük damgaya kurulsaydı, o damgadan biraz ÖNCE başlayıp
+    // SONRA commit eden eşzamanlı bir işlemin satırı kalıcı olarak atlanırdı
+    // (server_updated_at = now() ve now() transaction BAŞLANGICI'dır).
+    const stored = (await AsyncStorage.getItem(wmKey('habits')))!;
+    expect(new Date(stored).getTime()).toBe(new Date(t1).getTime() - WATERMARK_SAFETY_MS);
 
     gtCalls = [];
     await runSync(user.id);
     // Yalnız habits kendi filigranından sürer; satır görmemiş tablolar epoch'ta kalır.
-    expect(gtCalls.find((c) => c.table === 'habits')!.since).toBe(t1);
+    expect(gtCalls.find((c) => c.table === 'habits')!.since).toBe(stored);
     for (const call of gtCalls.filter((c) => c.table !== 'habits')) {
       expect(call.since).toBe(EPOCH);
     }
+  });
+
+  it('güvenlik payı sayesinde SIRASIZ commit edilen satır bir sonraki turda yakalanır', async () => {
+    // Senaryo: iki işlem eşzamanlı. Geç başlayan ÖNCE commit ediyor (büyük damga),
+    // erken başlayan SONRA (küçük damga). İlk tur yalnız büyük damgalıyı görür.
+    const user = userRepo.getOrCreateLocal();
+    const late = isoShift(0);
+    const early = new Date(new Date(late).getTime() - 2000).toISOString(); // pay içinde
+    remoteData['habits'] = [remoteHabit({ id: 'gec-commit', updated_at: late })];
+
+    await runSync(user.id);
+    expect(habitRepo.getById('gec-commit')).not.toBeNull();
+
+    // Gecikmiş işlem şimdi commit etti: damgası daha KÜÇÜK.
+    remoteData['habits'].push(remoteHabit({ id: 'erken-baslayan', updated_at: early }));
+    await runSync(user.id);
+
+    // Pay bırakılmasaydı bu satır `> since` koşuluna hiç uymaz ve sonsuza dek
+    // atlanırdı (sessiz veri kaybı).
+    expect(habitRepo.getById('erken-baslayan')).not.toBeNull();
   });
 
   it('filigran TABLO BAŞINA tutulur: bir tablonun yeni satırı diğerinin eski satırını atlatmaz', async () => {
@@ -264,7 +369,9 @@ describe('runSync — pull', () => {
     const user = userRepo.getOrCreateLocal();
     const first = runSync(user.id);
     const second = await runSync(user.id);
-    expect(second.status).toBe('error');
+    // 'error' DEĞİL 'busy': çakışma bir arıza değil, çağıranın sessizce
+    // yok sayması gereken bir durum (bkz. SyncResult).
+    expect(second.status).toBe('busy');
     expect(second.message).toContain('zaten sürüyor');
     expect((await first).status).toBe('ok');
   });
@@ -305,8 +412,10 @@ describe('runSync — sayfalama (1000+ kayıt)', () => {
     expect(count?.n).toBe(1001);
 
     // Filigran son (en yeni) satıra taşındı — kırpılma kaynaklı kayıp yok.
+    // (Güvenlik payı kadar geride; bkz. WATERMARK_SAFETY_MS.)
     const lastUpdated = new Date(base + 1000 * 1000).toISOString();
-    expect(await AsyncStorage.getItem(wmKey('habit_logs'))).toBe(lastUpdated);
+    const stored = (await AsyncStorage.getItem(wmKey('habit_logs')))!;
+    expect(new Date(stored).getTime()).toBe(new Date(lastUpdated).getTime() - WATERMARK_SAFETY_MS);
   });
 });
 
@@ -386,6 +495,169 @@ describe('runSync — habit_logs doğal anahtar birleştirme', () => {
     expect(result.pulled).toBe(0);
     const rows = getDb().getAllSync<any>(`SELECT id, completed FROM habit_logs`);
     expect(rows).toEqual([{ id: localId, completed: 1 }]);
+  });
+});
+
+// Bağlı hedefe katkı ayarları (goal_contribution/goal_factor) uzun süre senkron
+// kolon listesinde YOKTU: alışkanlığı kuran cihazda "4 bardak = 1 litre" doğru
+// çalışırken, aynı hesabın ikinci cihazına satır varsayılanlarla (per_completion,
+// çarpan 1) iniyordu — o cihazda her işaretleme hedefe 0.25 yerine +1 yazıyordu.
+// Yapısal koruma __tests__/syncColumnParity.test.ts'te; buradakiler DAVRANIŞI
+// (gerçekten gidip geliyor mu) doğrular.
+describe('runSync — bağlı hedef katkı ayarları', () => {
+  it('push: katkı biçimi ve çarpan payload\'a girer', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const goal = goalRepo.create({ user_id: user.id, title: 'Su', goal_type: 'numeric', target_value: 2 });
+    habitRepo.create({
+      user_id: user.id,
+      title: 'Su iç',
+      kind: 'numeric',
+      goal_id: goal.id,
+      goal_contribution: 'amount',
+      goal_factor: 0.25,
+    });
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    const habitPush = upserts.find((u) => u.table === 'habits')!;
+    expect(habitPush.payload[0].goal_contribution).toBe('amount');
+    expect(habitPush.payload[0].goal_factor).toBe(0.25);
+  });
+
+  it('pull: uzaktan gelen katkı biçimi ve çarpan yerele yazılır', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['habits'] = [
+      remoteHabit({
+        id: 'uzak-1',
+        updated_at: isoShift(0),
+        kind: 'numeric',
+        goal_contribution: 'amount',
+        goal_factor: 0.25,
+      }),
+    ];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    const habit = habitRepo.getById('uzak-1')!;
+    expect(habit.goal_contribution).toBe('amount');
+    expect(habit.goal_factor).toBe(0.25);
+  });
+
+  it('pull: çarpan uzaktan BOŞ gelirse varsayılana düşer, senkronu kilitlemez', async () => {
+    // goal_factor yerelde NOT NULL — ham null yazmak pull'u fırlatır ve o
+    // kullanıcının senkronu her turda aynı satırda patlayarak KALICI kilitlenirdi
+    // (bkz. TableCfg.defaults).
+    const user = userRepo.getOrCreateLocal();
+    remoteData['habits'] = [
+      remoteHabit({ id: 'uzak-1', updated_at: isoShift(0), goal_factor: null, kind: null }),
+    ];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    const habit = habitRepo.getById('uzak-1')!;
+    expect(habit.goal_factor).toBe(1);
+    expect(habit.kind).toBe('binary');
+  });
+});
+
+// P1: hedef ilerlemesi çok cihazda SESSİZCE kayboluyordu. current_value sıradan
+// bir kolondu ve son-yazan-kazanır ile taşınıyordu; goal_entries ise ekleme-yalnız
+// ve satır satır senkronlanıyordu. A'da +5, B'de +3 girilince iki GİRDİ de her
+// cihaza ulaşıyor ama current_value yalnız son senkronlayanın değerini alıyordu —
+// kullanıcı aynı ekranda "5 / 100" ile "+5, +3" geçmişini yan yana görüyordu.
+// Çözüm: current_value = value_baseline + girdiler toplamı, pull'dan sonra
+// yeniden hesaplanır (bkz. migration019 + goalRepo.recomputeAllFromEntries).
+describe('runSync — hedef ilerlemesi çok cihazda birleşir', () => {
+  // Uzak hedef satırı: DİĞER cihazın gördüğü (bu cihazın katkısını içermeyen)
+  // eski önbellek değeriyle.
+  function remoteGoal(over: Row & { id: string; updated_at: string }): Row {
+    return {
+      user_id: UID,
+      title: 'Koş',
+      goal_type: 'numeric',
+      target_value: 100,
+      current_value: 0,
+      value_baseline: 0,
+      unit: 'km',
+      deadline: null,
+      completed_at: null,
+      remind_at: null,
+      start_date: null,
+      deleted_at: null,
+      ...over,
+    };
+  }
+
+  it('İKİ CİHAZIN KATKISI TOPLANIR: uzak current_value yerel katkıyı EZMEZ', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const goal = goalRepo.create({ user_id: user.id, title: 'Koş', goal_type: 'numeric', target_value: 100 });
+    goalRepo.addProgress(goal.id, 5); // bu cihaz: +5 km
+
+    // Diğer cihaz +3 km girmiş: kendi girdisini ve KENDİ gördüğü current_value'yu
+    // (3 — bizim 5'imizden habersiz) buluta yazmış. Hedef satırı yerelden yeni.
+    remoteData['goals'] = [
+      remoteGoal({ id: goal.id, updated_at: isoShift(60_000), current_value: 3 }),
+    ];
+    remoteData['goal_entries'] = [
+      { id: 'uzak-girdi', goal_id: goal.id, amount: 3, updated_at: isoShift(60_000), deleted_at: null },
+    ];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    // Eskiden 3 çıkıyordu (uzak önbellek yerel katkıyı eziyordu). Artık 5 + 3.
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(8);
+    // Geçmiş ve değer artık birbirini doğruluyor.
+    const sum = goalEntryRepo.listByGoal(goal.id).reduce((s, e) => s + e.amount, 0);
+    expect(sum).toBe(8);
+  });
+
+  it('elle yapılan düzeltme (baseline) girdilerin ÜSTÜNE biner', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const goal = goalRepo.create({ user_id: user.id, title: 'Koş', goal_type: 'numeric', target_value: 100 });
+    goalRepo.addProgress(goal.id, 5);
+    goalRepo.update(goal.id, { current_value: 50 }); // baseline 45
+
+    remoteData['goal_entries'] = [
+      { id: 'uzak-girdi', goal_id: goal.id, amount: 3, updated_at: isoShift(60_000), deleted_at: null },
+    ];
+
+    await runSync(user.id);
+
+    // 45 (elle) + 5 (yerel girdi) + 3 (uzak girdi)
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(53);
+  });
+
+  it('uzaktan gelen baseline uygulanır (elle düzeltme son-yazan-kazanır kalır)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const goal = goalRepo.create({ user_id: user.id, title: 'Koş', goal_type: 'numeric', target_value: 100 });
+    goalRepo.addProgress(goal.id, 5);
+
+    // Diğer cihazda kullanıcı "Mevcut değer"i elle 30'a çekmiş → baseline 30.
+    remoteData['goals'] = [
+      remoteGoal({ id: goal.id, updated_at: isoShift(60_000), value_baseline: 30, current_value: 30 }),
+    ];
+
+    await runSync(user.id);
+
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(35); // 30 + 5 (yerel girdi)
+  });
+
+  it('yeniden hesap sonsuz push gel-gitine yol açmaz (synced bozulmaz)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const goal = goalRepo.create({ user_id: user.id, title: 'Koş', goal_type: 'numeric', target_value: 100 });
+    goalRepo.addProgress(goal.id, 5);
+
+    await runSync(user.id); // ilk turda push edilir
+    upserts = [];
+    const second = await runSync(user.id);
+
+    expect(second.status).toBe('ok');
+    expect(second.pushed).toBe(0); // ikinci turda gönderilecek bir şey kalmamalı
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(5);
   });
 });
 

@@ -17,6 +17,78 @@ function createTask(extra: Partial<Parameters<typeof taskRepo.create>[0]> = {}) 
   return taskRepo.create({ user_id: userId, title: 'Görev', ...extra });
 }
 
+// "Görevler" ekranının sorgusu. Tamamlanan görev listeden hiç düşmediği için
+// liste yıllar içinde sınırsız büyüyordu (ve hepsi aynı anda çiziliyordu);
+// artık AKTİF görevlerin tamamı + yalnız son N günde tamamlananlar gelir.
+describe('listForScreen / countCompletedBefore', () => {
+  // completed_at'e doğrudan yazıyoruz: setCompleted her zaman "şimdi"yi damgalar,
+  // testin ise geçmişte tamamlanmış bir görev üretmesi gerek.
+  function completeAt(id: string, iso: string): void {
+    const { getDb } = require('../database');
+    getDb().runSync(`UPDATE tasks SET completed_at = ? WHERE id = ?`, [iso, id]);
+  }
+
+  it('sınır verilmezse (null) her şeyi döndürür', () => {
+    const active = createTask({ title: 'Aktif' });
+    const old = createTask({ title: 'Eski' });
+    completeAt(old.id, '2020-01-01T10:00:00.000Z');
+
+    const ids = taskRepo.listForScreen(userId, null).map((t) => t.id);
+    expect(ids).toContain(active.id);
+    expect(ids).toContain(old.id);
+  });
+
+  it('sınırdan ESKİ tamamlananları eler, aktifleri ASLA elemez', () => {
+    const active = createTask({ title: 'Aktif' });
+    const old = createTask({ title: 'Eski tamamlanan' });
+    completeAt(old.id, '2020-01-01T10:00:00.000Z');
+
+    const ids = taskRepo.listForScreen(userId, '2026-06-01').map((t) => t.id);
+    expect(ids).toContain(active.id);
+    expect(ids).not.toContain(old.id);
+  });
+
+  it('sınırdan SONRA tamamlananlar listede kalır', () => {
+    const recent = createTask({ title: 'Yeni tamamlanan' });
+    completeAt(recent.id, '2026-06-15T10:00:00.000Z');
+
+    const ids = taskRepo.listForScreen(userId, '2026-06-01').map((t) => t.id);
+    expect(ids).toContain(recent.id);
+  });
+
+  it('tamamlananlar listenin DİBİNDE sıralanır', () => {
+    const done = createTask({ title: 'Bitti' });
+    completeAt(done.id, '2026-06-15T10:00:00.000Z');
+    const active = createTask({ title: 'Aktif' });
+
+    const list = taskRepo.listForScreen(userId, '2026-06-01');
+    expect(list[list.length - 1].id).toBe(done.id);
+    expect(list[0].id).toBe(active.id);
+  });
+
+  it('countCompletedBefore yalnız SINIRIN DIŞINDA kalanları sayar', () => {
+    const old1 = createTask();
+    const old2 = createTask();
+    const recent = createTask();
+    const active = createTask();
+    completeAt(old1.id, '2020-01-01T10:00:00.000Z');
+    completeAt(old2.id, '2021-01-01T10:00:00.000Z');
+    completeAt(recent.id, '2026-06-15T10:00:00.000Z');
+
+    expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(2);
+    expect(active.completed_at).toBeNull(); // aktif görev sayıma hiç girmez
+  });
+
+  it('silinen görev ne listede ne sayımda yer alır', () => {
+    const deleted = createTask();
+    completeAt(deleted.id, '2020-01-01T10:00:00.000Z');
+    taskRepo.softDelete(deleted.id);
+
+    expect(taskRepo.listForScreen(userId, null).map((t) => t.id)).not.toContain(deleted.id);
+    expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(0);
+  });
+});
+
 describe('create / getById / softDelete', () => {
   it('varsayılanlarla oluşturur ve geri okur', () => {
     const task = createTask();

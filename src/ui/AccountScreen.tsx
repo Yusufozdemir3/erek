@@ -1,7 +1,20 @@
-// Hesap bağlama / giriş ekranı (modal). Offline-first korunur: buraya girmek
-// zorunlu değil — Profil'den isteğe bağlı açılır (şu an ACCOUNTS_ENABLED=false
-// olduğu için giriş noktası gizli; ekran, hesaplar açılınca hazır olsun diye
-// tam işlevsel tutulur).
+// E-posta + parola ile hesap bağlama ekranı. ŞU AN KULLANILMIYOR ve bir ROTA
+// DEĞİL — bilerek app/ dışında duruyor (eskiden app/account.tsx'ti).
+//
+// NEDEN TAŞINDI: giriş yalnız Google ile yapılıyor (bkz. ui/LoginScreen.tsx) ve
+// bu ekrana hiçbir yerden bağlantı yoktu. Ama app/ altında durduğu sürece rota
+// canlıydı: `habitapp://account` ile açılabiliyordu ve orada üç sorun vardı —
+// (1) e-posta+parola ile İKİNCİ bir hesap açılabiliyor, "yalnız Google" kararının
+//     etrafından dolaşılıyordu;
+// (2) senkron doğrudan runSync ile çalıştırılıyor (AppData.syncNow atlanıyor),
+//     yani "son yedek" damgası ve senkron hata durumu güncellenmiyordu;
+// (3) hesap değişimi kontrolü (classifySignIn / birleştir-değiştir) hiç yoktu,
+//     yani düzeltilmiş olan RLS kilidi yeniden üretilebiliyordu.
+//
+// GERİ AÇILACAKSA: önce yukarıdaki üçü LoginScreen'deki akışa hizalanmalı;
+// dosyayı app/ altına geri taşımak TEK BAŞINA yeterli değildir.
+//
+// Aşağıdaki özgün not (akışın kendisi) olduğu gibi korunuyor:
 //
 // Akış:
 //   - Giriş yap / Kayıt ol (üstte segment; e-posta + parola, Supabase auth).
@@ -40,29 +53,13 @@ import {
   signUpWithEmail,
   type SyncResult,
 } from '@/sync';
+import { translateAuthError } from '@/lib/authErrors';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { type Colors } from '@/ui/theme';
 
 type Mode = 'signin' | 'signup' | 'forgot';
-
-// Supabase'in İngilizce hata mesajlarını kullanıcının diline çevirir.
-function translateAuthError(e: unknown, t: (key: string) => string): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  const m = msg.toLowerCase();
-  if (m.includes('invalid login credentials')) return t('account.errInvalidCreds');
-  if (m.includes('already registered') || m.includes('already been registered'))
-    return t('account.errAlreadyRegistered');
-  if (m.includes('email not confirmed')) return t('account.errEmailNotConfirmed');
-  if (m.includes('password should be at least')) return t('account.errPasswordShort');
-  if (m.includes('unable to validate email') || m.includes('invalid email'))
-    return t('account.errInvalidEmail');
-  if (m.includes('expired') || m.includes('invalid') || m.includes('token'))
-    return t('account.errCodeInvalid');
-  if (m.includes('network')) return t('account.errNetwork');
-  return msg;
-}
 
 export default function AccountScreen() {
   const { colors } = useTheme();

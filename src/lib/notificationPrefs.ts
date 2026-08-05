@@ -51,16 +51,28 @@ const CUSTOM_SOUND_NAME_KEY = 'notif:customSoundName';
 // yönetiyordu. 'notif:vibration' hiç yazılmamışsa eski 'notif:sound' değerini miras
 // alır: böylece combined'ı KAPATMIŞ kullanıcıda titreşim de kapalı gelir (ikisini
 // birden istemiyordu), açık bırakmışta ikisi de açık.
+// TEK multiGet: eskiden döngü içinde `await getItem` vardı, yani her çağrı 9
+// SIRALI depolama gidiş-dönüşü demekti. Bu fonksiyon her bildirim kurulumunda
+// (varlık başına) çağrıldığından açılıştaki toplu yeniden programlamada yüzlerce
+// gereksiz okuma birikiyordu.
 export async function getNotificationPrefs(): Promise<NotificationPrefs> {
+  const boolKeys = Object.keys(KEYS) as BoolPrefKey[];
+  const pairs = await AsyncStorage.multiGet([
+    ...boolKeys.map((k) => KEYS[k]),
+    CUSTOM_SOUND_URI_KEY,
+    CUSTOM_SOUND_NAME_KEY,
+  ]);
+  const stored = new Map<string, string | null>(pairs);
+
   const out = { ...DEFAULT_NOTIFICATION_PREFS };
-  for (const key of Object.keys(KEYS) as BoolPrefKey[]) {
-    const v = await AsyncStorage.getItem(KEYS[key]);
-    if (v !== null) out[key] = v === '1';
+  for (const key of boolKeys) {
+    const v = stored.get(KEYS[key]);
+    if (v != null) out[key] = v === '1';
   }
-  const vibRaw = await AsyncStorage.getItem(KEYS.vibration);
-  if (vibRaw === null) out.vibration = out.sound; // eski combined davranışını miras al
-  out.customSoundUri = await AsyncStorage.getItem(CUSTOM_SOUND_URI_KEY);
-  out.customSoundName = await AsyncStorage.getItem(CUSTOM_SOUND_NAME_KEY);
+  // eski combined davranışını miras al (bkz. fonksiyon başlığı)
+  if (stored.get(KEYS.vibration) == null) out.vibration = out.sound;
+  out.customSoundUri = stored.get(CUSTOM_SOUND_URI_KEY) ?? null;
+  out.customSoundName = stored.get(CUSTOM_SOUND_NAME_KEY) ?? null;
   return out;
 }
 

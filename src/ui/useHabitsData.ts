@@ -50,15 +50,17 @@ export function useHabitsData(userId: string) {
     const goalTitles = new Map(goalRepo.listByUser(userId).map((g) => [g.id, g.title]));
     // Hatırlatma saatlerini tek sorguda topla (alışkanlık başına ayrı sorgu yok).
     const reminderMap = reminderRepo.mapByType('habit');
+    // O GÜNÜN durumu ve HAFTANIN şeridi artık ikişer değil TOPLAM iki sorgu:
+    // eskiden alışkanlık başına recentLogs + getAmountOn atılıyordu, yani liste
+    // uzadıkça doğrusal büyüyen bir N+1 vardı ve her işaretlemede baştan koşuyordu.
+    const list = habitRepo.listByUser(userId);
+    const ids = list.map((h) => h.id);
+    const dayStates = habitRepo.getDayStates(ids, today);
+    const weekCompleted = habitRepo.completedDatesBetween(ids, week[0], today);
     setHabits(
-      habitRepo.listByUser(userId).map((h) => {
-        // Son 60 günün tamamlanan tarihlerini tek sorguda topla, haftayı ondan üret.
-        const completed = new Set(
-          habitRepo
-            .recentLogs(h.id, 60)
-            .filter((l) => l.completed === 1)
-            .map((l) => l.log_date)
-        );
+      list.map((h) => {
+        const completed = weekCompleted[h.id] ?? new Set<string>();
+        const state = dayStates[h.id];
         return {
           id: h.id,
           title: h.title,
@@ -71,9 +73,10 @@ export function useHabitsData(userId: string) {
           target: h.target_amount,
           unit: h.unit,
           goalTitle: h.goal_id ? goalTitles.get(h.goal_id) ?? null : null,
-          amount: habitRepo.getAmountOn(h.id, today),
-          completedToday: completed.has(today),
-          streak: habitRepo.currentStreak(h.id),
+          amount: state?.amount ?? 0,
+          completedToday: state?.completed ?? false,
+          // Alışkanlık elimizde — currentStreak'in kendi getById'sini atlıyoruz.
+          streak: habitRepo.currentStreak(h.id, h),
           week: week.map((d) => completed.has(d)),
         };
       })

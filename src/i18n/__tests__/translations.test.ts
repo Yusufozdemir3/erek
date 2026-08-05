@@ -59,3 +59,44 @@ describe('translate', () => {
     expect(translate('en', 'kesinlikle.olmayan.anahtar')).toBe('kesinlikle.olmayan.anahtar');
   });
 });
+
+// Türkçe sayıdan sonra çoğul eki almadığı için tek şablon Türkçe'de doğru
+// görünüyordu; İngilizce "1 days left", Almanca "Noch 1 Tage" / "Vor 1 Tagen"
+// çıkıyordu. `n === 1` iken `<anahtar>_one` denenerek çözüldü (bkz. translate).
+describe('translate — tekil biçim (çoğullaştırma)', () => {
+  it('n=1 iken _one biçimini kullanır', () => {
+    expect(translate('en', 'date.daysLeft', { n: 1 })).toBe('1 day left');
+    expect(translate('de', 'date.daysAgo', { n: 1 })).toBe('Vor 1 Tag');
+  });
+
+  it('n≠1 iken anahtarın kendisi (çoğul) kullanılır', () => {
+    expect(translate('en', 'date.daysLeft', { n: 3 })).toBe('3 days left');
+    expect(translate('de', 'date.daysAgo', { n: 0 })).toBe('Vor 0 Tagen');
+  });
+
+  it('Türkçe\'de tekil ve çoğul aynı sonucu verir (dil çoğul eki almaz)', () => {
+    expect(translate('tr', 'date.daysLeft', { n: 1 })).toBe('1 gün kaldı');
+    expect(translate('tr', 'date.daysLeft', { n: 5 })).toBe('5 gün kaldı');
+  });
+
+  it('_one karşılığı olmayan anahtar n=1 ile de çalışır (çoğula düşer)', () => {
+    // 'schedule.timesPerWeek' tekil biçim gerektirmez; sessizce base kullanılmalı.
+    expect(translate('en', 'schedule.timesPerWeek', { n: 1 })).toBe('1× a week');
+  });
+
+  it('n parametresi yoksa tekil arama HİÇ yapılmaz', () => {
+    expect(translate('en', 'date.daysLeft')).toBe('{n} days left');
+  });
+
+  // Tekil biçimi olan her anahtarın ÜÇ dilde de karşılığı olmalı — yoksa
+  // İngilizce arayüzde birden Türkçe bir cümle belirir (sözlük bütünlüğü
+  // testlerinin aynı gerekçesi, çoğul kardeşler için).
+  it('her _one anahtarının çoğul karşılığı da var', () => {
+    for (const lang of SUPPORTED_LANGS) {
+      const orphans = Object.keys(translations[lang])
+        .filter((k) => k.endsWith('_one'))
+        .filter((k) => !(k.slice(0, -'_one'.length) in translations[lang]));
+      expect(orphans).toEqual([]);
+    }
+  });
+});

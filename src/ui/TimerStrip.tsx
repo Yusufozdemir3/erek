@@ -4,6 +4,7 @@
 // context değerini yenilediği için (bkz. TimerProvider yorumu) burada ayrı bir
 // interval kurmaya gerek yok — useTimer() zaten canlı tikler.
 
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -22,29 +23,44 @@ export function TimerStrip() {
   const styles = makeStyles(colors);
   const timer = useTimer();
   const activeTarget = timer.active();
+  const kind = activeTarget?.kind ?? null;
+  const id = activeTarget?.id ?? null;
 
-  if (!activeTarget) return null;
-
-  const { kind, id } = activeTarget;
-  const live = timer.liveSeconds(kind, id) ?? 0;
-
-  let title: string;
-  let target: number;
-  let icon: string | null = null;
-  let color = DEFAULT_HABIT_COLOR;
-  if (kind === 'habit') {
-    const habit = habitRepo.getById(id);
-    if (!habit) return null; // silinmiş olabilir (nadir yarış); şerit sessizce kaybolur
-    title = habit.title;
-    target = habit.target_amount ?? 0;
-    icon = habit.icon;
-    color = habit.color ?? DEFAULT_HABIT_COLOR;
-  } else {
+  // Başlık/ikon/renk/hedef zamanlayıcı boyunca DEĞİŞMEZ, ama bu bileşen her
+  // saniye yeniden render edilir (context canlı tikliyor). Aramayı hedef
+  // kimliğine bağlamazsak 45 dakikalık bir seans = 2700 gereksiz senkron SQLite
+  // sorgusu demek — hepsi JS thread'inde, hepsi aynı değişmeyen satır için.
+  // useMemo ile seans başına BİR sorguya iner.
+  // (Bilinçli sınır: zamanlayıcı çalışırken alışkanlığın adı değiştirilirse
+  // şerit eski adı gösterir; seans bitince düzelir. Alternatifi — adı
+  // ActiveTimer'a kopyalayıp AsyncStorage'a yazmak — veriyi tek doğru
+  // kaynaktan koparırdı.)
+  const meta = useMemo(() => {
+    if (!kind || !id) return null;
+    if (kind === 'habit') {
+      const habit = habitRepo.getById(id);
+      if (!habit) return null; // silinmiş olabilir (nadir yarış); şerit sessizce kaybolur
+      return {
+        title: habit.title,
+        target: habit.target_amount ?? 0,
+        icon: habit.icon,
+        color: habit.color ?? DEFAULT_HABIT_COLOR,
+      };
+    }
     const goal = goalRepo.getById(id);
     if (!goal) return null;
-    title = goal.title;
-    target = goal.target_value ?? 0;
-  }
+    return {
+      title: goal.title,
+      target: goal.target_value ?? 0,
+      icon: null as string | null,
+      color: DEFAULT_HABIT_COLOR,
+    };
+  }, [kind, id]);
+
+  if (!activeTarget || !meta || !kind || !id) return null;
+
+  const { title, target, icon, color } = meta;
+  const live = timer.liveSeconds(kind, id) ?? 0;
 
   const openTarget = () => {
     if (kind === 'habit') router.push({ pathname: '/habit/[id]', params: { id } });

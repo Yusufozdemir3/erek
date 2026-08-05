@@ -67,7 +67,15 @@ function ThemedStack() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="account" options={{ headerShown: true, title: 'Hesap', presentation: 'modal' }} />
+        {/* "account" ROTASI KALDIRILDI (ekran src/ui/AccountScreen.tsx'te duruyor).
+            Gerekçe: giriş artık yalnız Google ile (bkz. ui/LoginScreen.tsx) ve o
+            ekrana hiçbir yerden bağlantı yoktu — ama app/ altında durduğu sürece
+            rota CANLIYDI ve `habitapp://account` ile açılabiliyordu. Orada
+            e-posta+parola ile İKİNCİ bir hesap açılabiliyor, senkron doğrudan
+            runSync ile (AppData.syncNow'ı atlayarak) çalıştırılıyor — yani "son
+            yedek" damgası ve hata durumu güncellenmiyor — ve hesap değişimi
+            kontrolü (classifySignIn) hiç yapılmıyordu, yani düzeltilmiş olan RLS
+            kilidi yeniden üretilebiliyordu. */}
         <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
         <Stack.Screen

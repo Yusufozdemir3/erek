@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { hmToDate, toHm } from '@/lib/helpers';
+import { MAX_REMINDERS_PER_ENTITY } from '@/ui/formLimits';
 import { TimePickerModal } from '@/ui/TimePickerModal';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -24,9 +25,14 @@ export function ReminderListEditor({ label, times, onChange }: Props) {
   const styles = makeStyles(colors);
   const [showPicker, setShowPicker] = useState(false);
 
+  // Tavan hem burada hem düğmenin gizlenmesinde: seçici zaten açıkken liste
+  // dolarsa (ya da ileride başka bir çağıran gelirse) sessizce aşılmasın.
+  const atMax = times.length >= MAX_REMINDERS_PER_ENTITY;
+
   const addTime = (picked: Date) => {
     const hm = toHm(picked);
-    if (!times.includes(hm)) onChange([...times, hm].sort());
+    if (atMax || times.includes(hm)) return;
+    onChange([...times, hm].sort());
   };
   const removeTime = (hm: string) => onChange(times.filter((x) => x !== hm));
 
@@ -45,11 +51,16 @@ export function ReminderListEditor({ label, times, onChange }: Props) {
             <Text style={styles.chipText}>{hm} ×</Text>
           </Pressable>
         ))}
-        <Pressable style={styles.addBtn} onPress={() => setShowPicker(true)}>
-          <Text style={styles.addBtnText}>＋ {t('reminders.add')}</Text>
-        </Pressable>
+        {!atMax && (
+          <Pressable style={styles.addBtn} onPress={() => setShowPicker(true)}>
+            <Text style={styles.addBtnText}>＋ {t('reminders.add')}</Text>
+          </Pressable>
+        )}
       </View>
       {times.length === 0 && <Text style={styles.hint}>{t('reminders.none')}</Text>}
+      {atMax && (
+        <Text style={styles.hint}>{t('reminders.max', { n: MAX_REMINDERS_PER_ENTITY })}</Text>
+      )}
 
       <TimePickerModal
         visible={showPicker}

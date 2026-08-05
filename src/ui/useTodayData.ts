@@ -76,7 +76,8 @@ export function useTodayData(userId: string, selectedDate: string, today: string
           unit: h.unit,
           amount: state?.amount ?? 0,
           completed: state?.completed ?? false,
-          streak: habitRepo.currentStreak(h.id),
+          // Alışkanlık elimizde — currentStreak'in kendi getById'sini atlıyoruz.
+          streak: habitRepo.currentStreak(h.id, h),
           weekQuota: isQuotaSchedule(h.schedule)
             ? {
                 done: habitRepo.completionsInWeek(h.id, selectedDate),

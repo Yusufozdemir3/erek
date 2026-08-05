@@ -98,6 +98,7 @@ function makeGoal(overrides: Partial<Goal> = {}): Goal {
     goal_type: 'numeric',
     target_value: 100,
     current_value: 10,
+    value_baseline: 10, // girdisi olmayan hedefte değerin tamamı baseline'dadır
     unit: 'sayfa',
     deadline: '2999-01-01',
     completed_at: null,
@@ -185,6 +186,24 @@ describe('scheduleHabitReminders', () => {
     expect(ok).toBe(true);
     expect(mockCancel).toHaveBeenCalledWith('habit:habit-1:old');
     expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  // Yaşam aralığı: OS tetikleyicileri (DAILY/WEEKLY) tarih bilmez, sonsuza dek
+  // tekrar eder. Aralık bu yüzden her programlamada burada denetlenir.
+  it('HENÜZ BAŞLAMAMIŞ alışkanlıkta kurulmaz (başlangıç tarihi gelecekte)', async () => {
+    // "1 Eylül'de başlasın" diyen kullanıcı bugünden bildirim almamalı; alışkanlık
+    // listelerde de görünmüyor (useTodayData aynı aralığı süzüyor).
+    const habit = makeHabit({ start_date: '2999-01-01' });
+
+    const ok = await scheduleHabitReminders(habit, [makeReminder('08:00')]);
+
+    expect(ok).toBe(true);
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  it('başlangıç tarihi BUGÜN ya da geçmişse normal kurulur', async () => {
+    await scheduleHabitReminders(makeHabit({ start_date: '2020-01-01' }), [makeReminder('08:00')]);
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
   });
 
   it('bitiş tarihi geçmişse kurulmaz', async () => {
@@ -286,6 +305,37 @@ describe('rescheduleAllReminders / rescheduleAllTaskReminders / rescheduleAllGoa
     await rescheduleAllReminders([makeHabit({ id: 'h1' })]);
 
     expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  // Her scheduleX çağrısı önce cancelX yapar, o da kurulu bildirimlerin TAMAMINI
+  // native köprüden çeker. Bu tarama varlık başına tekrarlanırsa açılış maliyeti
+  // varlık sayısıyla doğrusal büyür (80 varlık = 80 tam tarama, hepsi seri).
+  // Tur başına TEK tarama olmalı — bu test o kazancı kilitler.
+  it('varlık sayısından bağımsız olarak kurulu bildirimleri TEK kez tarar', async () => {
+    for (const id of ['h1', 'h2', 'h3', 'h4', 'h5']) reminderRepo.create('habit', id, '08:00');
+    const habits = ['h1', 'h2', 'h3', 'h4', 'h5'].map((id) => makeHabit({ id }));
+
+    await rescheduleAllReminders(habits);
+
+    expect(mockSchedule).toHaveBeenCalledTimes(5); // beşi de kuruldu
+    expect(mockGetAll).toHaveBeenCalledTimes(1); // ama tarama bir kez yapıldı
+  });
+
+  it('eski tetikleyiciler toplu turda da iptal edilir (anlık görüntü kullanılır)', async () => {
+    reminderRepo.create('habit', 'h1', '08:00');
+    reminderRepo.create('habit', 'h2', '08:00');
+    mockGetAll.mockResolvedValue([
+      { identifier: 'habit:h1:eski' },
+      { identifier: 'habit:h2:eski' },
+      { identifier: 'timer:h1' }, // zamanlayıcı bildirimi — DOKUNULMAMALI
+    ]);
+
+    await rescheduleAllReminders([makeHabit({ id: 'h1' }), makeHabit({ id: 'h2' })]);
+
+    const cancelled = mockCancel.mock.calls.map((c) => c[0]);
+    expect(cancelled).toContain('habit:h1:eski');
+    expect(cancelled).toContain('habit:h2:eski');
+    expect(cancelled).not.toContain('timer:h1');
   });
 
   it('görev: yalnız tamamlanmamış + son tarihli + hatırlatmalı görevleri kurar', async () => {

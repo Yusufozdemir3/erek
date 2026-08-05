@@ -5,6 +5,7 @@
 import { getDb } from '../database';
 import { newId, nowIso, todayDate } from '../../lib/helpers';
 import { goalEntryRepo } from './goalEntryRepo';
+import { reminderRepo } from './reminderRepo';
 import type { Goal, GoalType } from '../../types/models';
 
 function rowToGoal(row: any): Goal {
@@ -23,7 +24,34 @@ function rowToGoal(row: any): Goal {
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
+    value_baseline: row.value_baseline ?? 0,
   };
+}
+
+// current_value'nun girdilerden TÜRETİLDİĞİ tek nokta (bkz. migration019):
+//   current_value = value_baseline + aktif girdilerin toplamı, 0 tabanlı.
+// Girdiler toplamsal ve ayrı ayrı senkronlandığı için iki cihazın katkısı
+// çakışmadan birleşir; baseline yalnız elle düzeltmeleri ve eski birikimi taşır.
+//
+// 0 TABANI: tek cihazda addProgress zaten tabanı uyguluyor, ama iki cihaz aynı
+// anda eksiye çeken düzeltme girerse toplam negatife düşebilir — okurken
+// kırpıyoruz ki "-5 km" gibi anlamsız bir değer hiç ortaya çıkmasın.
+//
+// bumpSync: değer bir KULLANICI EYLEMİ sonucu değiştiyse (addProgress, elle
+// düzenleme) satır yeniden gönderilmeli. Senkronun pull sonrası yeniden hesabında
+// ise FALSE geçilir — aksi halde her tur, hiçbir şey değişmese bile tüm hedefleri
+// yeniden push eden bir gel-git doğardı.
+function recompute(id: string, bumpSync: boolean): void {
+  const db = getDb();
+  const sums = bumpSync ? ', updated_at = ?, synced = 0' : '';
+  const vals = bumpSync ? [nowIso(), id] : [id];
+  db.runSync(
+    `UPDATE goals SET current_value = MAX(0, value_baseline + COALESCE((
+       SELECT SUM(amount) FROM goal_entries
+        WHERE goal_entries.goal_id = goals.id AND goal_entries.deleted_at IS NULL
+     ), 0))${sums} WHERE id = ?`,
+    vals
+  );
 }
 
 export interface CreateGoalInput {
@@ -72,7 +100,11 @@ export const goalRepo = {
 
   // Hedefin tanımını günceller (başlık, hedef değeri, birim, son tarih, mevcut değer).
   // goal_type değiştirilmez — tip değişimi alanları tutarsız bırakır.
-  // current_value verilirse 0..target_value aralığına sıkıştırılır.
+  // current_value verilirse yalnızca 0 tabanına sıkıştırılır; ÜST sınır YOKTUR
+  // (bkz. addProgress: hedef bir sınır değil eşiktir). Eskiden burada da tavan
+  // vardı ve hedefi düşürmek mevcut ilerlemeyi sessizce kesiyordu (100 hedefli,
+  // 50 birikmiş bir hedefi 10'a çekmek 50'yi 10 yapıyordu — kullanıcının
+  // gerçekten yaptığı iş kayboluyordu).
   update(
     id: string,
     fields: Partial<{
@@ -83,6 +115,9 @@ export const goalRepo = {
       remind_at: string | null;
       start_date: string | null;
       current_value: number;
+      // "Mevcut değer" elle değiştirilirken bu fark İLERLEME GEÇMİŞİNE de yazılsın mı
+      // (GoalForm'daki onay kutusu). false/verilmezse sessiz düzeltmedir.
+      log_manual_change: boolean;
     }>
   ): void {
     const db = getDb();
@@ -94,32 +129,75 @@ export const goalRepo = {
     if (fields.deadline !== undefined) { sets.push('deadline = ?'); vals.push(fields.deadline); }
     if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
     if (fields.start_date !== undefined) { sets.push('start_date = ?'); vals.push(fields.start_date); }
-    if (fields.current_value !== undefined) {
-      // Hedef belirliyse aşmasın; negatif olmasın. Hedef bu çağrıda da değişebilir.
-      const cap = fields.target_value !== undefined
-        ? fields.target_value
-        : (this.getById(id)?.target_value ?? null);
-      let v = fields.current_value;
-      if (v < 0) v = 0;
-      if (cap != null && v > cap) v = cap;
-      sets.push('current_value = ?'); vals.push(v);
+    // "Mevcut değer"i ELLE değiştirmenin İKİ yolu var ve ikisi de current_value'yu
+    // DOĞRUDAN yazamaz — o değer artık girdilerden türetiliyor (bkz. migration019),
+    // doğrudan yazılan sayı bir sonraki yeniden hesapta silinirdi:
+    //
+    //   log_manual_change=false (varsayılan, SESSİZ DÜZELTME): fark BASELINE'a
+    //     yazılır, girdi geçmişine hiçbir şey eklenmez. Elle düzeltme bir günün
+    //     emeği değildir ve tempoyu şişirmemeli.
+    //   log_manual_change=true: fark bir GİRDİ olarak yazılır, baseline'a
+    //     dokunulmaz — kullanıcı bunu bilerek ilerleme sayıyor.
+    //
+    // İkisi birlikte YAPILMAZ: bu kural eskiden ekranda (app/goal/[id].tsx)
+    // duruyordu ve baseline'ı yazdıktan SONRA ayrıca girdi ekliyordu; toplam bir
+    // anda `requested + fark` oluyor ama current_value `requested`te kalıyordu.
+    // Değer, kullanıcı hiçbir şey yapmadan, bir sonraki senkron turunda sıçrardı.
+    // Kural artık burada — tek yerde, iki yol da aynı değişmezi korur.
+    // Negatif olmasın; üst sınır yok (bkz. yukarıdaki not).
+    const requested = fields.current_value !== undefined ? Math.max(0, fields.current_value) : null;
+    if (sets.length === 0 && requested === null) return;
+    const before = requested !== null ? this.getById(id)?.current_value ?? 0 : 0;
+    if (sets.length > 0) {
+      sets.push('updated_at = ?'); vals.push(nowIso());
+      sets.push('synced = 0');
+      vals.push(id);
+      db.runSync(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
     }
-    if (sets.length === 0) return;
-    sets.push('updated_at = ?'); vals.push(nowIso());
-    sets.push('synced = 0');
-    vals.push(id);
-    db.runSync(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
+    if (requested !== null) {
+      const delta = requested - before;
+      if (fields.log_manual_change) {
+        if (delta !== 0) goalEntryRepo.create(id, delta);
+      } else {
+        db.runSync(
+          `UPDATE goals SET value_baseline = ? - COALESCE((
+             SELECT SUM(amount) FROM goal_entries
+              WHERE goal_entries.goal_id = goals.id AND goal_entries.deleted_at IS NULL
+           ), 0) WHERE id = ?`,
+          [requested, id]
+        );
+      }
+      recompute(id, true);
+    }
   },
 
-  // Sayısal hedefte ilerlemeyi artırır (örn. +5 km). Hedefi aşmaz.
+  // Sayısal hedefte ilerlemeyi DELTA olarak değiştirir (örn. +5 km, -1 düzeltme).
+  //
+  // TAVAN YOK (2026-08-03 kararı). current_value artık dürüst bir SAYAÇ'tır:
+  // ne kadar yapıldıysa onu tutar, target_value'yu aşabilir. Hedef bir SINIR
+  // değil bir EŞİK'tir ve yalnızca GÖSTERİMDE anlam taşır — progressRatio zaten
+  // Math.min(1, …) ile oranı kırpar, useGoalStats.remaining Math.max(0, …) ile
+  // kalanı, milestoneViews eşik oranlarını. Yani "%120 dolu bar" gibi bir şey
+  // ortaya çıkmaz; yalnızca metinde dürüstçe "120 / 100 km" yazar.
+  //
+  // NEDEN KALDIRILDI — kırpma iki ayrı veri kaybı üretiyordu:
+  //   1) current_value hedefi aşmışken (zamanlayıcı bunu üretebiliyordu) "+1 dk"
+  //      eklemek `next = target` dediği için ilerlemeyi GERİ ÇEKİYORDU:
+  //      current=6000, target=3600, +60 → applied = -2400 (40 dakika silindi)
+  //      ve girdi geçmişine hiç yaşanmamış bir -40:00 kaydı düşüyordu.
+  //   2) Hedef DOLUYKEN bağlı alışkanlığı işaretle→geri al döngüsü asimetrikti:
+  //      +1 kırpılıp yutuluyor (applied=0), -1 ise uygulanıyordu → her döngüde
+  //      hedeften 1 birim sessizce eksiliyordu (bkz. habitRepo.bumpGoalIfLinked'in
+  //      "+1/-1 simetriktir" varsayımı). Tavan kalkınca ikisi de tam uygulanır.
+  // Tek kalan sınır 0 tabanı: negatif ilerleme anlamsız.
+  //
   // Yalnızca 'numeric' hedeflerde anlamlı: 'milestone' hedefte current_value
   // kullanılmadığından sessizce yok sayılır (bağlı alışkanlık geçişi de buraya
   // düşer; milestone hedefe bağlansa bile sayaç bozulmaz).
-  // İlerlemeyi değiştirir VE değişikliği girdi geçmişine (goal_entries) yazar.
-  // Dönüş: GERÇEKTEN uygulanan fark (0..target kırpması istenen delta'yı kısabilir;
-  // ör. hedef doluyken +1 → 0). Kayda istenen değil, gerçekleşen fark düşer ki
-  // geçmiş ve ondan hesaplanan tempo/projeksiyon current_value ile tutarlı kalsın.
-  // Fark 0 ise (kırpıldı / numeric değil) hiçbir şey yazılmaz.
+  // Dönüş: GERÇEKTEN uygulanan fark — yalnız 0 tabanı istenen delta'yı kısabilir
+  // (ör. current=2 iken -5 istenirse gerçek fark -2'dir). Kayda istenen değil
+  // gerçekleşen fark düşer ki geçmiş ve ondan hesaplanan tempo/projeksiyon
+  // current_value ile tutarlı kalsın. Fark 0 ise hiçbir şey yazılmaz.
   //
   // Girdi kaydı BİLEREK burada: eskiden her çağıranın ayrıca goalEntryRepo.create
   // çağırması gerekiyordu ve bağlı alışkanlık katkıları (habitRepo) bunu ATLIYORDU
@@ -128,45 +206,24 @@ export const goalRepo = {
   //
   // NOT: `update` ile "Mevcut değer"i ELLE set etmek hâlâ girdi yazmaz — o bir
   // ilerleme değil DÜZELTME'dir (bir günün emeği gibi sayılıp tempoyu şişirmemeli).
+  //
+  // ZAMANLAYICI DA BURAYI KULLANIR: eskiden ayrı bir addTimeProgress vardı, tek
+  // farkı tavanı uygulamamasıydı. Tavan kalkınca ikisi birebir aynı fonksiyon
+  // oldu ve ayrı tutmak, aynı alan üzerinde FARKLI invariant varsayan iki yazma
+  // yolu demekti — yukarıdaki (1) numaralı hatanın kök nedeni tam olarak buydu.
   addProgress(id: string, amount: number): number {
-    const db = getDb();
     const goal = this.getById(id);
     if (!goal || goal.goal_type !== 'numeric') return 0;
-    let next = goal.current_value + amount;
-    if (goal.target_value != null && next > goal.target_value) {
-      next = goal.target_value;
-    }
-    if (next < 0) next = 0;
-    const applied = next - goal.current_value;
-    if (applied === 0) return 0;
-    db.runSync(
-      `UPDATE goals SET current_value = ?, updated_at = ?, synced = 0 WHERE id = ?`,
-      [next, nowIso(), id]
-    );
-    goalEntryRepo.create(id, applied);
-    return applied;
-  },
-
-  // Süre-ölçümlü hedef ZAMANLAYICISI için — addProgress'in aksine target_value'yu
-  // AŞMAYA izin verir (0'ın altına inmez). addProgress hedefte kırpar (manuel
-  // +/- ve alışkanlık-bağlantısı katkıları için doğru davranış); ama zamanlayıcı
-  // hedefe ulaşınca da kullanıcı çalışmaya devam edebilsin istiyoruz — tıpkı
-  // habitRepo.incrementAmount'ın (zamanlayıcı alışkanlıklarda) hiç kırpmaması gibi
-  // (bkz. TimerProvider). Kırpma olsaydı hedef sonrası geçen süre commit'te
-  // sessizce 0 uygulanır, kullanıcının fazladan çalıştığı süre kaybolurdu.
-  addTimeProgress(id: string, amount: number): void {
-    const db = getDb();
-    const goal = this.getById(id);
-    if (!goal || goal.goal_type !== 'numeric') return;
     const next = Math.max(0, goal.current_value + amount);
     const applied = next - goal.current_value;
-    if (applied === 0) return;
-    db.runSync(`UPDATE goals SET current_value = ?, updated_at = ?, synced = 0 WHERE id = ?`, [
-      next,
-      nowIso(),
-      id,
-    ]);
+    if (applied === 0) return 0;
+    // ÖNCE girdi, SONRA yeniden hesap: current_value artık girdilerden türetiliyor
+    // (bkz. migration019 + recompute). Doğrudan yazmak, senkron pull'undan sonraki
+    // yeniden hesapla çelişirdi — ve zaten aynı sonucu verir: baseline sabit
+    // kaldığı için toplam tam olarak `next` çıkar.
     goalEntryRepo.create(id, applied);
+    recompute(id, true);
+    return applied;
   },
 
   // 0-1 arası ilerleme oranı. UI yüzde göstergesi için.
@@ -197,9 +254,31 @@ export const goalRepo = {
     );
   },
 
+  // TÜM hedeflerin current_value'sunu girdilerden yeniden türetir.
+  // Senkron pull'u bittikten sonra çağrılır (bkz. syncEngine.runSync): uzaktan
+  // gelen girdiler ve/veya baseline yereldeki toplamı değiştirmiş olabilir ve
+  // uzaktan gelen current_value'nun kendisi (son-yazan-kazanır ile taşınan eski
+  // önbellek) diğer cihazın katkısını GÖRMEZ — kaybolan ilerlemenin kaynağı
+  // tam olarak buydu (bkz. migration019).
+  //
+  // synced'e DOKUNMAZ: bu bir kullanıcı eylemi değil, zaten senkronlanmış
+  // veriden yapılan yeniden hesap. Aksi halde her tur tüm hedefleri yeniden
+  // push eden sonu gelmez bir gel-git olurdu.
+  recomputeAllFromEntries(): void {
+    const db = getDb();
+    db.runSync(
+      `UPDATE goals SET current_value = MAX(0, value_baseline + COALESCE((
+         SELECT SUM(amount) FROM goal_entries
+          WHERE goal_entries.goal_id = goals.id AND goal_entries.deleted_at IS NULL
+       ), 0))`
+    );
+  },
+
+  // Hedefe ait hatırlatma satırları da burada temizlenir (gerekçe: habitRepo.softDelete).
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();
     db.runSync(`UPDATE goals SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`, [now, now, id]);
+    reminderRepo.deleteAllForEntity('goal', id);
   },
 };

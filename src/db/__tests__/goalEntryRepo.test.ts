@@ -64,21 +64,33 @@ describe('create / listByGoal', () => {
 });
 
 describe('goalRepo.addProgress ile entegrasyon', () => {
-  it('addProgress her çağrıda GERÇEKLEŞEN farkı (kırpma sonrası) girdi olarak yazar', async () => {
+  it('addProgress her çağrıda GERÇEKLEŞEN farkı (0 tabanı sonrası) girdi olarak yazar', async () => {
     goalRepo.addProgress(goalId, 95); // 0 -> 95
     await tick();
-    goalRepo.addProgress(goalId, 20); // 95 + 20 = 115 -> hedef 100'e kırpılır, gerçek fark 5
+    goalRepo.addProgress(goalId, -120); // 95 - 120 = -25 -> 0 tabanı, gerçek fark -95
 
     const entries = goalEntryRepo.listByGoal(goalId);
-    expect(entries.map((e) => e.amount)).toEqual([5, 95]); // en yeniden en eskiye
-    expect(goalRepo.getById(goalId)!.current_value).toBe(100);
+    expect(entries.map((e) => e.amount)).toEqual([-95, 95]); // en yeniden en eskiye
+    expect(goalRepo.getById(goalId)!.current_value).toBe(0);
   });
 
-  it('kırpma sonrası fark 0 ise (hedef zaten dolu) hiç girdi yazılmaz', () => {
+  it('hedef dolu olsa bile ekleme UYGULANIR ve girdi yazılır (tavan yok)', async () => {
     goalRepo.addProgress(goalId, 100); // hedefi doldur
+    await tick();
     const beforeCount = goalEntryRepo.listByGoal(goalId).length;
 
-    goalRepo.addProgress(goalId, 10); // zaten dolu, uygulanan fark 0
+    // Hedef bir SINIR değil EŞİK: üstüne çalışmak da kaydedilir.
+    expect(goalRepo.addProgress(goalId, 10)).toBe(10);
+
+    expect(goalEntryRepo.listByGoal(goalId).length).toBe(beforeCount + 1);
+    expect(goalRepo.getById(goalId)!.current_value).toBe(110);
+  });
+
+  it('gerçek fark 0 ise hiç girdi yazılmaz', () => {
+    goalRepo.addProgress(goalId, 100);
+    const beforeCount = goalEntryRepo.listByGoal(goalId).length;
+
+    goalRepo.addProgress(goalId, 0); // hiçbir şey değişmiyor
 
     expect(goalEntryRepo.listByGoal(goalId).length).toBe(beforeCount);
   });

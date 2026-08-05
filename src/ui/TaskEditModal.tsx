@@ -13,7 +13,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { cancelTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
+import { cancelTaskReminders, refreshTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
 import { TITLE_MAX_LEN } from '@/ui/formLimits';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -58,20 +58,14 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       taskRepo.setCompleted(task.id, true);
       notifySuccess();
       // Tekrarlayan görev ileri sarmış olabilir (hâlâ tamamlanmamış ama yeni
-      // tarihli) — o durumda hatırlatmayı yeni tarihe göre yeniden kur; aksi
-      // halde (gerçekten tamamlandı) sadece iptal et.
-      const after = taskRepo.getById(task.id);
-      if (after && after.completed_at === null) {
-        scheduleTaskReminders(after, reminderRepo.listByEntity('task', after.id));
-      } else {
-        cancelTaskReminders(task.id);
-      }
+      // tarihli) — karar güncel DB durumuna bakılarak verilir.
+      refreshTaskReminders(task.id);
     } else if (!shouldBeCompleted && isCompleted) {
       taskRepo.setCompleted(task.id, false);
       tapLight();
-      const reopened = taskRepo.getById(task.id);
-      // geri açıldı — vadesi geçmemişse hatırlatmalar dönsün
-      if (reopened) scheduleTaskReminders(reopened, reminderRepo.listByEntity('task', reopened.id));
+      // Geri açıldı — vadesi geçmemişse hatırlatmalar dönsün (aynı fonksiyon:
+      // görev artık tamamlanmamış olduğu için yeniden kurar).
+      refreshTaskReminders(task.id);
     }
   };
 
@@ -123,7 +117,9 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
   const handleDelete = () => {
     taskRepo.softDelete(task.id);
-    cancelTaskReminders(task.id);
+    cancelTaskReminders(task.id).catch((e) =>
+      console.warn('[Bildirim] Silinen görevin hatırlatmaları iptal edilemedi:', e)
+    );
     onChanged();
     onClose();
   };

@@ -16,13 +16,8 @@ import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { ACCOUNTS_ENABLED } from '@/config';
-import { goalRepo, habitRepo, taskRepo, userRepo } from '@/db';
-import {
-  cancelAllReminders,
-  rescheduleAllGoalReminders,
-  rescheduleAllReminders,
-  rescheduleAllTaskReminders,
-} from '@/lib/notifications';
+import { userRepo } from '@/db';
+import { cancelAllReminders, rescheduleEverything } from '@/lib/notifications';
 import {
   classifySignIn,
   currentAuthUser,
@@ -33,10 +28,10 @@ import {
   prepareFullResync,
   prepareMergeIntoAccount,
   prepareReplaceWithAccount,
-  runSync,
   signInWithGoogle,
   signOutAccount,
 } from '@/sync';
+import { onOnboardingDone, ONBOARDING_SEEN_KEY } from '@/ui/Onboarding';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -55,7 +50,9 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
-  const { user, refreshUser } = useAppData();
+  // Giriş sonrası ilk tur da AppData'nın syncNow'ından geçer (runSync doğrudan
+  // ÇAĞRILMAZ): "son yedek" damgası ve senkron hata durumu tek yerde toplansın.
+  const { user, refreshUser, syncNow } = useAppData();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,9 +105,18 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
         if (choice === 'merge') await prepareMergeIntoAccount();
         else await prepareReplaceWithAccount();
         switched = true;
-      } else {
+      } else if (kind === 'fresh') {
+        // Bu cihazın verisi hiçbir hesaba gönderilmemiş (ya da bağlı olduğu hesap
+        // silinmiş — deleteAccountAndData sahiplik damgasını temizler). Satırlar
+        // synced=1 kalmış olabileceğinden hepsi yeniden gönderilmeyi beklemeli.
         await prepareFullResync();
       }
+      // kind === 'same': HAZIRLIK GEREKMEZ. Veri zaten bu hesaba ait; bekleyen
+      // satırlar zaten synced=0 (her repo yazımı öyle işaretler) ve filigranlar
+      // bu hesap için geçerli. Eskiden burada da prepareFullResync çağrılıyordu:
+      // yıllardır kullanan birinde bu, her girişte on binlerce satırın yeniden
+      // push edilmesi + tüm tabloların baştan çekilmesi demekti — mobil veride
+      // ve pilde bedeli olan, hiçbir şey kazandırmayan bir tur.
 
       // Yerel kullanıcı kaydına e-postayı yaz (hesaplı duruma yükselt) —
       // KARARDAN SONRA (yukarıdaki 'cancel' zaten return etti). account.tsx'teki
@@ -118,7 +124,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
       const authUser = await currentAuthUser();
       if (authUser?.email) userRepo.upgradeToAccount(user.id, authUser.email);
 
-      const result = await runSync(user.id);
+      const result = await syncNow();
       if (result.status === 'error') {
         setError(
           result.ownershipConflict ? t('sync.ownershipConflict') : (result.message ?? '')
@@ -132,15 +138,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
         // tetikleyiciler yetim kalır (bkz. notifications.ts cancelAllReminders
         // başlığı). Nuke edip güncel DB'den baştan kur.
         await cancelAllReminders();
-        await rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
-          console.warn('[Bildirim] Hesap değişimi sonrası alışkanlık hatırlatmaları kurulamadı:', e)
-        );
-        await rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
-          console.warn('[Bildirim] Hesap değişimi sonrası görev hatırlatmaları kurulamadı:', e)
-        );
-        await rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
-          console.warn('[Bildirim] Hesap değişimi sonrası hedef hatırlatmaları kurulamadı:', e)
-        );
+        await rescheduleEverything(user.id);
       }
 
       refreshUser();
@@ -210,16 +208,39 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
 }
 
 // Kök layout'a konan kapı: bayrağı okur, görülmemişse giriş ekranını BİR KEZ
-// tam ekran açar (OnboardingGate ile aynı desen ve aynı sıra — tanıtım bittikten
-// sonra sırada bu var). Hesaplar kapalıyken (ACCOUNTS_ENABLED=false) hiç çizilmez.
+// tam ekran açar. Hesaplar kapalıyken (ACCOUNTS_ENABLED=false) hiç çizilmez.
+//
+// TANITIMDAN SONRA: iki kapı da bağımsız birer Modal açıyor ve aralarında hiçbir
+// sıralama YOKTU — gerçek ilk açılışta ikisi aynı anda mount olup giriş ekranı
+// tanıtımın ÜSTÜNE biniyordu. Sonuç, kullanıcının uygulamanın ne olduğunu
+// öğrenmeden "Google ile giriş yap" ekranıyla karşılanmasıydı; üstelik tanıtımın
+// son sayfası ("verilerin sende kalır") tam da bu kararın bağlamını veriyor ve
+// arkada kalıyordu. Artık tanıtım bayrağı yazılmadan bu kapı hiç çizilmez.
 export function LoginGate() {
   const [seen, setSeen] = useState<boolean | null>(null); // null = henüz bilinmiyor
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(SEEN_KEY).then((v) => setSeen(v === '1'));
   }, []);
 
-  if (!ACCOUNTS_ENABLED || seen !== false) return null;
+  // Tanıtım durumu: bayrak bir kez okunur; bu açılışta tanıtım gösteriliyorsa
+  // kapanma anı için abone olunur (bkz. Onboarding.onOnboardingDone).
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(ONBOARDING_SEEN_KEY).then((v) => {
+      if (!cancelled) setOnboardingDone(v === '1');
+    });
+    const unsubscribe = onOnboardingDone(() => {
+      if (!cancelled) setOnboardingDone(true);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  if (!ACCOUNTS_ENABLED || seen !== false || onboardingDone !== true) return null;
   const done = () => {
     setSeen(true);
     AsyncStorage.setItem(SEEN_KEY, '1').catch(() => {});

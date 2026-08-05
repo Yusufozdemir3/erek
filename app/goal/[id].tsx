@@ -17,7 +17,7 @@ import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { goalEntryRepo, goalMilestoneRepo, goalRepo, reminderRepo } from '@/db';
+import { goalMilestoneRepo, goalRepo, reminderRepo } from '@/db';
 import type { GoalMilestone } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { fmtClock, isTimeUnit, todayDate, toYmd } from '@/lib/helpers';
@@ -157,27 +157,26 @@ export default function GoalDetailScreen() {
 
   // — Düzenle sekmesi —
   // "Mevcut değer"i elle değiştirmek VARSAYILAN olarak salt DÜZELTMEdir — tempo/
-  // projeksiyon (goalProjection.ts) yalnızca goal_entries'ten hesaplandığından
-  // bu değişiklik oraya yazılmaz. Kullanıcı GoalForm'daki "İlerleme geçmişine de
-  // ekle" onay kutusunu işaretlerse (log_manual_change), GERÇEKTEN uygulanan farkı
-  // (kırpma sonrası) goalEntryRepo'ya yazarız — addProgress'in yaptığının aynısı,
-  // yalnızca elle düzenleme yolundan.
+  // projeksiyon (goalProjection.ts) girdi geçmişinden beslendiği için oraya
+  // yazılmaz. Kullanıcı GoalForm'daki "İlerleme geçmişine de ekle" kutusunu
+  // işaretlerse fark bir girdi olarak düşer.
+  // KARARIN KENDİSİ ARTIK REPO'DA (goalRepo.update'in log_manual_change alanı):
+  // current_value girdilerden türetildiği için (bkz. migration019) "baseline'a mı
+  // girdiye mi yazılacak" sorusunun tek bir doğru cevabı var ve ikisi aynı anda
+  // yapılamaz. Burada ayrıca girdi yazmak toplamı current_value'dan koparıyor,
+  // değer bir sonraki senkron turunda kendiliğinden sıçrıyordu.
   const handleEditSubmit = (values: GoalFormValues) => {
     if (!goal) return;
-    const previousValue = goal.current_value;
     goalRepo.update(goal.id, {
       title: values.title,
       target_value: values.target_value,
       unit: values.unit,
       deadline: values.deadline,
       start_date: values.start_date,
-      ...(values.current_value != null ? { current_value: values.current_value } : {}),
+      ...(values.current_value != null
+        ? { current_value: values.current_value, log_manual_change: values.log_manual_change }
+        : {}),
     });
-    if (values.log_manual_change && values.current_value != null) {
-      const updated = goalRepo.getById(goal.id);
-      const delta = updated ? updated.current_value - previousValue : 0;
-      if (delta !== 0) goalEntryRepo.create(goal.id, delta);
-    }
     reminderRepo.replaceAll('goal', goal.id, values.remind_times);
     // Kullanıcı hatırlatmayı BİLEREK değiştirdiği an — izin reddiyse uyar
     // (habit/task düzenleme panelleriyle aynı desen).
@@ -307,7 +306,8 @@ export default function GoalDetailScreen() {
                 ) : (
                   <View style={styles.entryRow}>
                     <Text style={styles.overviewLine}>
-                      {stats.milestonesDone}/{stats.milestonesTotal} {t('goal.milestoneCountSuffix')}
+                      {stats.milestonesDone}/{stats.milestonesTotal}{' '}
+                      {t('goal.milestoneCountSuffix', { n: stats.milestonesTotal })}
                     </Text>
                     {/* Elle tamamlandı işaretleme — adımlar varsa Adımlar sekmesiyle senkron kalır. */}
                     <Pressable

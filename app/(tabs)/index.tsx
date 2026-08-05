@@ -14,7 +14,7 @@ import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
-import { cancelTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
+import { refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
@@ -96,15 +96,9 @@ export default function TodayScreen() {
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
     // Tekrarlayan görev "tamamla"da tamamlanmak yerine bir sonraki tarihe ileri
-    // sarabilir — bu durumda görev hâlâ tamamlanmamış ama yeni tarihlidir. Bu
-    // yüzden güncel duruma bakarız: tamamlanmamışsa (geri açıldı ya da ileri
-    // sardı) hatırlatmayı yeni değere göre kur, tamamlandıysa iptal et.
-    const after = taskRepo.getById(t.id);
-    if (after && after.completed_at === null) {
-      scheduleTaskReminders(after, reminderRepo.listByEntity('task', after.id));
-    } else {
-      cancelTaskReminders(t.id);
-    }
+    // sarabilir — bu durumda görev hâlâ tamamlanmamış ama yeni tarihlidir; karar
+    // güncel DB durumuna bakılarak verilir (bkz. refreshTaskReminders).
+    refreshTaskReminders(t.id);
     reload();
   };
 
@@ -251,7 +245,7 @@ export default function TodayScreen() {
                               ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
                               : null,
                             subtaskCounts[t.id]
-                              ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix')}`
+                              ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`
                               : null,
                           ]
                             .filter(Boolean)

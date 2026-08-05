@@ -183,7 +183,51 @@ describe('getDayStates (çoklu gün durumu)', () => {
   });
 });
 
+// "Alışkanlıklar" ekranındaki son-7-gün şeridi bunu kullanır. Eskiden alışkanlık
+// başına ayrı bir recentLogs sorgusu atılıyordu (liste uzadıkça büyüyen N+1) —
+// bu toplu sürüm onun yerini aldı, sonuç birebir aynı olmalı.
+describe('completedDatesBetween (çoklu aralık)', () => {
+  it('boş liste için boş nesne döner', () => {
+    expect(habitRepo.completedDatesBetween([], '2026-06-01', TODAY)).toEqual({});
+  });
+
+  it('yalnızca TAMAMLANMIŞ günleri, alışkanlık başına küme olarak verir', () => {
+    const a = createHabit();
+    const b = createHabit();
+    habitRepo.toggleLog(a.id, '2026-06-29', true);
+    habitRepo.toggleLog(a.id, '2026-06-30', true);
+    habitRepo.toggleLog(a.id, TODAY, false); // işaretsiz — sayılmamalı
+    habitRepo.toggleLog(b.id, '2026-06-30', true);
+
+    const out = habitRepo.completedDatesBetween([a.id, b.id], '2026-06-29', TODAY);
+
+    expect([...out[a.id]].sort()).toEqual(['2026-06-29', '2026-06-30']);
+    expect([...out[b.id]]).toEqual(['2026-06-30']);
+  });
+
+  it('aralık dışındaki günleri getirmez', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, '2026-06-01', true); // aralıktan önce
+    habitRepo.toggleLog(habit.id, '2026-06-30', true);
+
+    const out = habitRepo.completedDatesBetween([habit.id], '2026-06-29', TODAY);
+
+    expect([...out[habit.id]]).toEqual(['2026-06-30']);
+  });
+
+  it('hiç tamamlanmış günü olmayan alışkanlık sonuçta yer almaz', () => {
+    const habit = createHabit();
+    expect(habitRepo.completedDatesBetween([habit.id], '2026-06-29', TODAY)[habit.id]).toBeUndefined();
+  });
+});
+
 describe('currentStreak — günlük plan', () => {
+  it('önceden yüklenmiş alışkanlıkla aynı sonucu verir (fazladan sorgu atmadan)', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(habitRepo.currentStreak(habit.id, habit)).toBe(habitRepo.currentStreak(habit.id));
+  });
+
   it('hiç log yoksa 0', () => {
     const habit = createHabit();
     expect(habitRepo.currentStreak(habit.id)).toBe(0);
@@ -561,13 +605,20 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
     expect(currentValue(goal.id)).toBe(0);
   });
 
-  it('hedef sınırını aşmaz (addProgress kırpması korunur)', () => {
+  // Hedef bir SINIR değil EŞİK'tir (bkz. goalRepo.addProgress): katkılar hedef
+  // dolduktan sonra da sayılır. Kırpma varken bu senaryo asimetrikti — ikinci
+  // alışkanlığın +1'i yutuluyor ama geri alındığında -1 uygulanıyordu, yani
+  // işaretle→geri al döngüsü hedeften sessizce ilerleme çalıyordu.
+  it('hedef dolduktan sonraki katkılar da sayılır ve geri alma simetriktir', () => {
     const goal = createNumericGoal(1); // hedef değeri 1
     const h1 = createHabit({ goal_id: goal.id });
     const h2 = createHabit({ goal_id: goal.id });
 
-    habitRepo.toggleLog(h1.id, TODAY, true); // 1
-    habitRepo.toggleLog(h2.id, TODAY, true); // sınırda kalır
+    habitRepo.toggleLog(h1.id, TODAY, true); // 1 — hedef doldu
+    habitRepo.toggleLog(h2.id, TODAY, true); // 2 — eşiğin üstüne çıkar
+    expect(currentValue(goal.id)).toBe(2);
+
+    habitRepo.toggleLog(h2.id, TODAY, false); // geri alındı → tam olarak başa döner
     expect(currentValue(goal.id)).toBe(1);
   });
 

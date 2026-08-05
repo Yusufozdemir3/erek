@@ -4,6 +4,7 @@
 
 import { getDb } from '../database';
 import {
+  chunk,
   isQuotaSchedule,
   isScheduledOn,
   isWithinHabitDates,
@@ -38,6 +39,7 @@ function shiftWeek(weekStart: string, weeks: number): string {
 }
 import type { GoalContribution, Habit, HabitKind, HabitLog, Recurrence } from '../../types/models';
 import { goalRepo } from './goalRepo';
+import { reminderRepo } from './reminderRepo';
 
 function rowToHabit(row: any): Habit {
   return {
@@ -152,10 +154,18 @@ export const habitRepo = {
     db.runSync(`UPDATE habits SET ${sets.join(', ')} WHERE id = ?`, vals);
   },
 
+  // Alışkanlığı VE ona ait hatırlatma satırlarını soft-delete eder.
+  // Hatırlatmalar burada temizlenmeli, çağıranda DEĞİL: silme dört ayrı yerden
+  // yapılıyor (liste ekranı, düzenleme paneli, …) ve hepsinde tek tek hatırlamak
+  // gerekiyordu — hiçbirinde yapılmıyordu. Sonuç: satırlar aktif kalıp sonsuza
+  // dek buluta push ediliyor, hesap birleştirmede yeni kimlik alıp yeniden
+  // gönderiliyordu. Bildirimin kendisi ayrı bir mesele (OS kuyruğu) ve onu
+  // çağıran iptal eder — burası yalnız VERİ.
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();
     db.runSync(`UPDATE habits SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`, [now, now, id]);
+    reminderRepo.deleteAllForEntity('habit', id);
   },
 
   // Belirli bir gün için alışkanlığı tamamlandı/tamamlanmadı işaretler.
@@ -235,16 +245,43 @@ export const habitRepo = {
     habitIds: string[],
     date: string
   ): Record<string, { amount: number; completed: boolean }> {
-    if (habitIds.length === 0) return {};
     const db = getDb();
-    const placeholders = habitIds.map(() => '?').join(',');
-    const rows = db.getAllSync<{ habit_id: string; amount: number; completed: number }>(
-      `SELECT habit_id, amount, completed FROM habit_logs
-       WHERE log_date = ? AND habit_id IN (${placeholders})`,
-      [date, ...habitIds]
-    );
     const out: Record<string, { amount: number; completed: boolean }> = {};
-    for (const r of rows) out[r.habit_id] = { amount: r.amount ?? 0, completed: r.completed === 1 };
+    // Parçalı: `IN (…)` bağlı değişken sayısı liste uzunluğuna eşit, SQLite'ın
+    // sınırı ise sabit (bkz. helpers.chunk).
+    for (const ids of chunk(habitIds)) {
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = db.getAllSync<{ habit_id: string; amount: number; completed: number }>(
+        `SELECT habit_id, amount, completed FROM habit_logs
+         WHERE log_date = ? AND habit_id IN (${placeholders})`,
+        [date, ...ids]
+      );
+      for (const r of rows) out[r.habit_id] = { amount: r.amount ?? 0, completed: r.completed === 1 };
+    }
+    return out;
+  },
+
+  // getDayStates'in ARALIK sürümü: verilen alışkanlıkların [start, end] arasında
+  // TAMAMLANDI işaretli günleri, alışkanlık başına bir küme. "Alışkanlıklar"
+  // ekranındaki son-7-gün şeridi bunu kullanır — eskiden alışkanlık başına ayrı
+  // bir recentLogs sorgusu atılıyordu (liste uzadıkça doğrusal büyüyen N+1).
+  completedDatesBetween(
+    habitIds: string[],
+    startYmd: string,
+    endYmd: string
+  ): Record<string, Set<string>> {
+    const db = getDb();
+    const out: Record<string, Set<string>> = {};
+    for (const ids of chunk(habitIds)) {
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = db.getAllSync<{ habit_id: string; log_date: string }>(
+        `SELECT habit_id, log_date FROM habit_logs
+         WHERE completed = 1 AND log_date >= ? AND log_date <= ?
+           AND habit_id IN (${placeholders})`,
+        [startYmd, endYmd, ...ids]
+      );
+      for (const r of rows) (out[r.habit_id] ??= new Set()).add(r.log_date);
+    }
     return out;
   },
 
@@ -298,9 +335,13 @@ export const habitRepo = {
   // KOTA (haftada X kez) kuralında sonuç GÜN değil HAFTA sayısıdır: kotası dolan
   // ardışık haftalar; içinde bulunulan hafta dolmadıysa seriyi bozmaz (hafta
   // bitmedi), dolduysa sayılır.
-  currentStreak(habitId: string): number {
+  // `preloaded` verilirse alışkanlık tekrar SORGULANMAZ (bumpGoalIfLinked'deki
+  // aynı desen). Liste ekranları alışkanlığı zaten ellerinde tutuyor ve bu
+  // fonksiyonu satır başına çağırıyor; içerideki getById, listedeki her
+  // alışkanlık için gereksiz ikinci bir sorgu demekti.
+  currentStreak(habitId: string, preloaded?: Habit | null): number {
     const db = getDb();
-    const habit = this.getById(habitId);
+    const habit = preloaded !== undefined ? preloaded : this.getById(habitId);
     const isDue = (d: string) =>
       isScheduledOn(habit?.schedule ?? null, d) &&
       isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);

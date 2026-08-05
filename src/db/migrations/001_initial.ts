@@ -303,6 +303,64 @@ SET id = substr(id, 1, 8) || '-' || substr(id, 9, 4) || '-' || substr(id, 13, 4)
 WHERE length(id) = 32 AND id NOT LIKE '%-%';
 `;
 
+// Migration 018: goal_contribution/goal_factor buluta HİÇ gitmemişti.
+// Sorun: iki kolon migration010'da yerel şemaya eklendi ama senkron motorunun
+// habits kolon listesine (src/sync/syncEngine.ts) ve bulut şemasına
+// (supabase/schema.sql) eklenmedi. Sonuç sessizdi: alışkanlığı kuran cihazda
+// "4 bardak = 1 litre" doğru çalışıyor, aynı hesaptaki İKİNCİ cihaza satır
+// goal_contribution=NULL, goal_factor=1 (SQLite DEFAULT) olarak iniyordu. O
+// cihazda alışkanlığı işaretlemek hedefe 0.25 yerine +1 yazıyor, alışkanlık
+// orada bir kez düzenlenirse yanlış değer LWW ile İLK cihaza da geri taşınıp
+// doğru ayarı eziyordu.
+//
+// Şema değişikliği YOK — kolonlar zaten yerelde var. Tek yaptığı, artık
+// senkronlanan bu iki alanın mevcut satırlar için de buluta çıkmasını sağlamak:
+// synced=1 kalmış satırlar bir daha hiç push edilmezdi, yani düzeltme yalnız
+// bundan sonra DEĞİŞEN alışkanlıklara uygulanırdı. habits tablosu küçük olduğu
+// için tümünü yeniden bekletmenin maliyeti ihmal edilebilir.
+//
+// DİKKAT: bu sürüm dağıtılmadan ÖNCE supabase/schema.sql yeniden çalıştırılmalı
+// (iki kolonun bulut karşılığı orada). Aksi halde push "Could not find the
+// 'goal_contribution' column" ile patlar — syncEngine.schemaHint bu durumda
+// kullanıcıya ne yapılacağını söyler.
+export const migration018 = `
+UPDATE habits SET synced = 0;
+`;
+
+// Migration 019: hedef ilerlemesi artık TÜRETİLİYOR — çok cihazda kaybolmasın.
+//
+// SORUN: goals.current_value sıradan bir kolondu ve senkronda son-yazan-kazanır
+// ile taşınıyordu. goal_entries ise EKLEME-YALNIZ bir tablo ve her satırı ayrı
+// ayrı senkronlanıyor. Cihaz A'da +5 km, cihaz B'de +3 km girilirse iki GİRDİ de
+// her cihaza ulaşıyor ama current_value yalnız son senkronlayanın değerini
+// alıyordu: kullanıcı aynı ekranda hem "5 / 100 km" hem de "+5 km, +3 km"
+// geçmişini görüyor, 3 km sessizce kayboluyordu.
+//
+// ÇÖZÜM: current_value = value_baseline + (aktif girdilerin toplamı), 0 tabanlı.
+//   - GİRDİLER toplamsaldır ve kendi id'leriyle senkronlanır → iki cihazın
+//     katkısı çakışmadan BİRLEŞİR (kaybolan taraf kalmaz).
+//   - value_baseline, girdilerle temsil EDİLMEYEN her şeyi tutar: bu migration'dan
+//     önceki birikmiş değer + kullanıcının "Mevcut değer"i elle değiştirmesi.
+//     Bu alan son-yazan-kazanır kalır ve doğrusu budur: elle yapılan açık bir
+//     üzerine yazma zaten "son yazan kazansın" demektir.
+//   - current_value KOLON olarak kalır (önbellek): her okuyucu (liste kartları,
+//     istatistik, ara-eşik adımları, projeksiyon) olduğu gibi çalışmaya devam eder.
+//
+// GERİYE UYUM: baseline, mevcut değerden girdilerin toplamı çıkarılarak doldurulur.
+// Yani bu migration hiçbir hedefin görünen değerini DEĞİŞTİRMEZ — yalnız aynı
+// sayıyı bundan sonra birleşebilir iki parçaya ayırır. Girdisi olmayan eski
+// hedeflerde baseline doğrudan mevcut değere eşit olur.
+//
+// synced=0: yeni kolonun buluta çıkması için hedefler bir kez yeniden gönderilir.
+export const migration019 = `
+ALTER TABLE goals ADD COLUMN value_baseline REAL NOT NULL DEFAULT 0;
+UPDATE goals SET value_baseline = current_value - COALESCE((
+  SELECT SUM(amount) FROM goal_entries
+   WHERE goal_entries.goal_id = goals.id AND goal_entries.deleted_at IS NULL
+), 0);
+UPDATE goals SET synced = 0;
+`;
+
 // Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -322,4 +380,6 @@ export const migrations = [
   { version: 15, sql: migration015 },
   { version: 16, sql: migration016 },
   { version: 17, sql: migration017 },
+  { version: 18, sql: migration018 },
+  { version: 19, sql: migration019 },
 ];

@@ -24,6 +24,11 @@ create table if not exists public.goals (
   deadline      text,
   completed_at  text,                      -- yalnız 'milestone' hedeflerde anlamlı
   remind_at     text,                      -- "HH:MM" günlük giriş hatırlatması
+  -- current_value TÜRETİLMİŞ bir önbellektir: value_baseline + goal_entries
+  -- toplamı (yerel migration019). Girdiler ayrı satırlar olarak senkronlandığı
+  -- için iki cihazın katkısı çakışmadan birleşir; baseline yalnız elle yapılan
+  -- düzeltmeleri ve bu değişiklikten önceki birikimi taşır.
+  value_baseline double precision not null default 0,
   updated_at    timestamptz not null,
   deleted_at    timestamptz
 );
@@ -43,6 +48,11 @@ create table if not exists public.habits (
   unit          text,
   start_date    text,
   end_date      text,
+  -- Bağlı hedefe katkı biçimi + birim çarpanı (yerel migration010'un karşılığı).
+  -- NULL = 'per_completion' (tamamlanan gün başına +1); 'amount' = o gün yapılan
+  -- miktar × goal_factor hedefe eklenir.
+  goal_contribution text,
+  goal_factor   double precision not null default 1,
   updated_at    timestamptz not null,
   deleted_at    timestamptz
 );
@@ -58,6 +68,13 @@ alter table public.habits add column if not exists start_date    text;
 alter table public.habits add column if not exists end_date      text;
 alter table public.habits add column if not exists kind          text not null default 'binary';
 update public.habits set kind = 'numeric' where kind = 'binary' and target_amount is not null and target_amount > 0;
+-- Bağlı hedefe katkı biçimi + çarpan — yerel migration010'un karşılığı. Bu iki
+-- kolon uzun süre HEM burada HEM senkron motorunun kolon listesinde eksikti;
+-- sonuç, çok cihazlı kullanıcıda birim çarpanının sessizce varsayılana düşmesiydi.
+-- İSTEMCİ GÜNCELLENMEDEN ÖNCE ÇALIŞTIRILMALI: kolonlar bulutta yoksa yeni
+-- istemcinin push'u "Could not find the 'goal_contribution' column" ile patlar.
+alter table public.habits add column if not exists goal_contribution text;
+alter table public.habits add column if not exists goal_factor   double precision not null default 1;
 
 create table if not exists public.tasks (
   id           uuid primary key,
@@ -113,6 +130,10 @@ alter table public.goal_milestones add column if not exists due_date text;
 alter table public.goals add column if not exists remind_at text;
 -- Tempo/projeksiyon hesabının sıfır günü — yerel migration015'in karşılığı.
 alter table public.goals add column if not exists start_date text;
+-- Hedef ilerlemesinin girdilerle temsil edilmeyen parçası — yerel migration019'un
+-- karşılığı. İSTEMCİ GÜNCELLENMEDEN ÖNCE ÇALIŞTIRILMALI (goal_contribution ile
+-- aynı gerekçe): kolon bulutta yoksa yeni istemcinin push'u şema hatasıyla patlar.
+alter table public.goals add column if not exists value_baseline double precision not null default 0;
 
 -- Hedefin 'Genel' sekmesinde serbest miktar girişiyle ("Ekle") eklenen kayıtların
 -- günlüğü. Yalnızca görüntüleme içindir — goals.current_value tek doğru kaynak

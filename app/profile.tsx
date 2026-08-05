@@ -22,17 +22,15 @@ import {
   currentUid,
   deleteAccountAndData,
   isSyncConfigured,
-  runSync,
   signOutAccount,
   type AuthUser,
-  type SyncResult,
 } from '@/sync';
 import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
 import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { LANG_LABELS, SUPPORTED_LANGS } from '@/i18n/translations';
-import { ACCENT_ORDER, ACCENT_THEMES, type Colors } from '@/ui/theme';
+import { ACCENT_ORDER, ACCENT_THEMES, dateTimeLabel, type Colors } from '@/ui/theme';
 import { ACCOUNTS_ENABLED } from '@/config';
 
 const THEME_OPTIONS: { mode: ThemeMode; labelKey: string }[] = [
@@ -45,9 +43,11 @@ export default function ProfileScreen() {
   const { colors, scheme, mode, setMode, accent, setAccent, darkStyle, setDarkStyle } = useTheme();
   const { t, lang, setLang } = useI18n();
   const styles = makeStyles(colors);
-  const { user, refreshUser, hideCompleted, setHideCompleted } = useAppData();
-  const [syncing, setSyncing] = useState(false);
-  const [result, setResult] = useState<SyncResult | null>(null);
+  // Senkron durumu AppData'da tutulur, burada DEĞİL: turların çoğu bu ekran hiç
+  // açılmadan çalışıyor (açılış + ön plana gelme). Yerel bir kopya tutmak, o
+  // otomatik turların sonucunu görünmez bırakırdı — düzeltilen sorun tam da buydu.
+  const { user, refreshUser, hideCompleted, setHideCompleted, syncResult, lastSyncAt, syncing, syncNow } =
+    useAppData();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -80,7 +80,6 @@ export default function ProfileScreen() {
       refreshUser();
       setAuthUser(null);
       setSignedIn(false);
-      setResult(null);
     } catch (e) {
       // Çıkış hatası kritik değil; durum bir sonraki odaklanmada tazelenir.
       console.warn('[Hesap] Çıkış sırasında hata:', e);
@@ -111,7 +110,6 @@ export default function ProfileScreen() {
       refreshUser();
       setAuthUser(null);
       setSignedIn(false);
-      setResult(null);
       Alert.alert(t('profile.deletedTitle'), t('profile.deletedBody'));
     } catch (e) {
       Alert.alert(t('profile.deleteFailedTitle'), e instanceof Error ? e.message : String(e));
@@ -121,10 +119,7 @@ export default function ProfileScreen() {
   };
 
   const doSync = async () => {
-    setSyncing(true);
-    const r = await runSync(user.id);
-    setResult(r);
-    setSyncing(false);
+    await syncNow();
     const uid = await currentUid();
     setSignedIn(uid !== null);
   };
@@ -349,15 +344,39 @@ export default function ProfileScreen() {
               </Text>
             </View>
 
-            {result?.status === 'ok' && (
+            {/* SON YEDEK — kullanıcı için tek gerçekten anlamlı sinyal:
+                "buluttaki kopyam ne kadar eski?". Uygulama yeniden başlasa da
+                korunur (bkz. AppData.LAST_SYNC_KEY). ↑/↓ sayıları yalnızca o
+                turun ayrıntısı; bu satır durumun kendisi. */}
+            {signedIn && (
+              <View style={[styles.statusRow, styles.statusRowSpaced]}>
+                <Text style={styles.muted}>{t('profile.lastBackup')}</Text>
+                <Text style={styles.statusValue}>
+                  {lastSyncAt != null ? dateTimeLabel(new Date(lastSyncAt).toISOString(), lang) : t('profile.lastBackupNever')}
+                </Text>
+              </View>
+            )}
+
+            {syncResult?.status === 'ok' && (
               <Text style={styles.okText}>
-                {t('profile.lastSync', { pushed: result.pushed ?? 0, pulled: result.pulled ?? 0 })}
+                {t('profile.lastSync', {
+                  pushed: syncResult.pushed ?? 0,
+                  pulled: syncResult.pulled ?? 0,
+                })}
               </Text>
             )}
-            {result?.status === 'error' && (
-              <Text style={styles.errText}>{t('profile.syncError', { message: result.message ?? '' })}</Text>
+            {/* Hata artık KALICI: açılışta ya da ön plana gelirken çalışan
+                otomatik turun hatası da buraya düşer (eskiden hiçbir yere
+                düşmüyordu). Sahiplik çakışmasının kendi anlaşılır metni var —
+                ham Postgres mesajı kullanıcıya hiçbir şey anlatmıyor. */}
+            {syncResult?.status === 'error' && (
+              <Text style={styles.errText}>
+                {syncResult.ownershipConflict
+                  ? t('sync.ownershipConflict')
+                  : t('profile.syncError', { message: syncResult.message ?? '' })}
+              </Text>
             )}
-            {result?.status === 'disabled' && (
+            {syncResult?.status === 'disabled' && (
               <Text style={[styles.muted, { marginTop: 12 }]}>{t('profile.syncDisabled')}</Text>
             )}
 
@@ -408,6 +427,7 @@ const makeStyles = (c: Colors) =>
     hint: { fontSize: 12, color: c.faint, marginTop: 10 },
     code: { fontWeight: '700', color: c.text },
     statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    statusRowSpaced: { marginTop: 10 },
     switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     switchRowSpaced: { marginTop: 12 },
     switchLabel: { fontSize: 14, color: c.text, flex: 1, marginRight: 12 },

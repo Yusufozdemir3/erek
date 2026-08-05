@@ -108,9 +108,11 @@ export function goalProjection(input: ProjectionInput): Projection {
   if (daysLeft != null && target != null) {
     // İleri projeksiyon YALNIZ hedef henüz açıkken anlamlı:
     //   • son tarih geçtiyse tahmin değil GERÇEKLEŞEN (o gün elindeki miktar),
-    //   • hedef tamamlandıysa da uzatma yapılmaz — goalRepo.addProgress miktarı
-    //     hedefte kırpar, "son tarihte 90 fazla yaparsın" gibi bir sayı üretmek
-    //     hem yanlış hem anlamsız olurdu.
+    //   • hedef tamamlandıysa uzatma yapılmaz: bitmiş bir hedef için "son tarihte
+    //     90 fazla yaparsın" demek anlamsız — kullanıcının sorduğu soru
+    //     ("yetişecek miyim?") çoktan cevaplanmış.
+    // (Bu not eskiden "addProgress miktarı hedefte kırpar" diyordu; o tavan
+    // 2026-08-03'te kaldırıldı — sayaç artık hedefi dürüstçe aşabiliyor.)
     const extrapolate = daysLeft >= 0 && !completed;
     projectedAtDeadline = extrapolate ? current + (avgDaily ?? 0) * daysLeft : current;
     behindAmount = target - projectedAtDeadline;

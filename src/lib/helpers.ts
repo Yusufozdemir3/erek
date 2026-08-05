@@ -87,6 +87,20 @@ export function lastDays(count: number): string[] {
   return out;
 }
 
+// SQLite bir sorguda sınırlı sayıda bağlı değişken kabul eder (modern sürümlerde
+// 32766, eskilerde 999). `IN (?, ?, …)` üreten TOPLU sorgular bu sayıyı doğrudan
+// liste uzunluğundan aldığı için, yeterince uzun bir listede sorgu anlaşılmaz bir
+// hatayla patlar — ve bu tam da "uygulamayı en çok kullanan" kişide olur. Parçalara
+// bölüp sonuçları birleştirmek sınırı tümüyle konu dışı bırakır.
+export const SQL_PARAM_CHUNK = 400;
+
+export function chunk<T>(items: T[], size: number = SQL_PARAM_CHUNK): T[][] {
+  if (items.length <= size) return items.length > 0 ? [items] : [];
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 // JSON alanları güvenli parse/stringify (recurrence gibi).
 export function parseJson<T>(value: string | null): T | null {
   if (value == null) return null;
@@ -157,7 +171,17 @@ export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boo
     return schedule.weekdays?.includes(d.getDay()) ?? false;
   }
   if (schedule.freq === 'monthly') {
-    return new Date(`${dateYmd}T00:00:00`).getDate() === schedule.monthDay;
+    if (!schedule.monthDay) return false;
+    const d = new Date(`${dateYmd}T00:00:00`);
+    // AYIN SONUNA KIRPMA: "ayın 31'i" seçen kullanıcı 30 günlük aylarda ve
+    // Şubat'ta hiç planlı gün almıyordu — alışkanlık yılda 5 ay görünmüyor,
+    // "her ay sonu" niyeti sessizce kayboluyordu. Ayın son gününü aşan seçim,
+    // o ayın son gününe düşer (takvim uygulamalarının standart davranışı).
+    // BEDELİ (bilinçli): 29/30/31 seçmiş mevcut alışkanlıklarda artık daha çok
+    // planlı gün var, yani o günler işaretlenmezse seri bozulur. Alternatifi —
+    // ayı tamamen atlamak — zaten yanlış olan davranışı sürdürmekti.
+    const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return d.getDate() === Math.min(schedule.monthDay, lastDayOfMonth);
   }
   if (schedule.freq === 'interval') {
     const every = schedule.every ?? 0;

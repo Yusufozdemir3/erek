@@ -153,7 +153,7 @@ export default function GoalsScreen() {
                     opsiyonel adım eklenebiliyor (bkz. dosya başı yorumu). */}
                 {counts && counts.total > 0 && (
                   <Text style={[styles.goalMeta, styles.standaloneMeta]}>
-                    {counts.done}/{counts.total} {t('goal.milestoneCountSuffix')}
+                    {counts.done}/{counts.total} {t('goal.milestoneCountSuffix', { n: counts.total })}
                   </Text>
                 )}
                 {/* Son tarih artık kartın sağ alt köşesinde küçük bir rozet gibi. */}

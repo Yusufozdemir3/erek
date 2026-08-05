@@ -3,6 +3,7 @@
 //   import { db, taskRepo, habitRepo } from '@/db';
 
 import { runMigrations } from './database';
+import { purgeOldTombstones } from './maintenance';
 import { userRepo } from './repositories/userRepo';
 import { taskRepo } from './repositories/taskRepo';
 import { subtaskRepo } from './repositories/subtaskRepo';
@@ -36,5 +37,13 @@ export type {
 export async function initDataLayer() {
   await runMigrations();
   const user = userRepo.getOrCreateLocal();
+  // Süresi dolmuş silme kayıtlarını temizle (bkz. maintenance.ts). Açılışı
+  // ASLA engellememeli: bir bakım işi yüzünden uygulama açılmaması, çözdüğü
+  // sorundan çok daha kötü olurdu.
+  try {
+    purgeOldTombstones();
+  } catch (e) {
+    console.warn('[DB] Eski silme kayıtları temizlenemedi:', e);
+  }
   return { user };
 }

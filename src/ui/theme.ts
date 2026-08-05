@@ -35,14 +35,23 @@ export interface Colors {
   onAccent: string;   // renkli buton/işaret ÜSTÜ metin (iki modda da açık)
 }
 
+// — METİN TONLARININ KONTRASTI —
+// text/muted/faint üçü de GERÇEK içerik taşır: faint yalnız süs değil, form
+// placeholder'ları, ipucu satırları ve dipnotlar odur. Bu yüzden üçü de WCAG AA
+// gövde metni eşiğini (4.5:1) zemin üstünde geçmek zorunda.
+// Önceki palette faint açık temada 2.5:1, sıcak koyuda 3.9:1, siyahta 4.1:1 idi —
+// yani güneş altında ya da yaşa bağlı görme kaybında okunmuyordu. faint eşiği
+// geçecek kadar koyulaştırıldı; üç kademe arasındaki hiyerarşi kaybolmasın diye
+// muted de birlikte kaydırıldı (açık temada). Ölçülen oranlar yorumlarda; bir
+// daha sessizce gerilemesin diye __tests__/contrast.ui.test.tsx bunları doğrular.
 export const lightColors: Colors = {
   bg: '#f8fafc',
   card: '#ffffff',
   border: '#e2e8f0',
   line: '#cbd5e1',
-  text: '#0f172a',
-  muted: '#64748b',
-  faint: '#94a3b8',
+  text: '#0f172a',   // ~17:1
+  muted: '#4b5768',  // ~7.1:1 (eski #64748b faint'e kaydı)
+  faint: '#64748b',  // ~4.6:1 (eski #94a3b8 → 2.5:1, AA altındaydı)
   primary: '#4f46e5',
   primarySoft: '#e0e7ff',
   done: '#10b981',
@@ -63,8 +72,8 @@ export const darkColors: Colors = {
   border: '#3a3632',
   line: '#4a453f',
   text: '#f4f1ea',
-  muted: '#a8a29a',
-  faint: '#78726a',
+  muted: '#a8a29a',  // ~7.3:1
+  faint: '#8d867c',  // ~5.1:1 (eski #78726a → 3.9:1, AA altındaydı)
   primary: '#818cf8',
   primarySoft: '#312e81',
   done: '#34d399',
@@ -85,8 +94,10 @@ export const blackColors: Colors = {
   border: '#262626',
   line: '#3a3a3a',
   text: '#f2f2f2',
-  muted: '#9c9c9c',
-  faint: '#6e6e6e',
+  muted: '#9c9c9c',  // ~7.6:1
+  // Kart zemini (#101010) saf siyahtan açık olduğu için ölçü ORADA yapılır:
+  // #7a7a7a saf siyahta 5.1:1 verirken kartta 4.43'e düşüyordu.
+  faint: '#7d7d7d',  // kart üstünde ~4.6:1 (eski #6e6e6e → 4.1:1, AA altındaydı)
   primary: '#818cf8',
   primarySoft: '#26264a',
   done: '#34d399',
@@ -215,6 +226,18 @@ export function longDateLabel(value: string | null, lang: Lang = 'tr', noDateLab
     month: 'long',
     year: 'numeric',
   });
+}
+
+// ISO zaman damgası -> "15 Tem, 14:32" (tarih + saat). Diğer tarih
+// etiketlerinden farkı SAATİ de göstermesi: "bu tam olarak ne zaman oldu"
+// sorusuna cevap veren yerler için (hedef girdi geçmişi, son senkron damgası).
+// Göreli biçim ("3 gün önce") bilerek TERCİH EDİLMEDİ: çoğul kuralı gerektirir,
+// t() şu an çoğullaştırmayı desteklemiyor (İngilizce'de "1 days ago" çıkardı).
+export function dateTimeLabel(iso: string, lang: Lang = 'tr'): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString(DATE_LOCALE[lang], { day: 'numeric', month: 'short' });
+  const time = d.toLocaleTimeString(DATE_LOCALE[lang], { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time}`;
 }
 
 // "YYYY-MM-DD" -> gün adlı tam etiket ("Pazartesi, 29 Haziran 2026" gibi).

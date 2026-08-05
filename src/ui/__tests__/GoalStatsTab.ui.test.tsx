@@ -27,6 +27,8 @@ const goal: Goal = {
   goal_type: 'numeric',
   target_value: 200,
   current_value: 50,
+  // Girdisi olmayan hedefte tüm değer baseline'dadır (bkz. migration019).
+  value_baseline: 50,
   unit: 'sayfa',
   deadline: '2026-08-30',
   completed_at: null,

@@ -43,7 +43,9 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
 
   const handleDelete = () => {
     habitRepo.softDelete(habit.id);
-    cancelHabitReminders(habit.id);
+    cancelHabitReminders(habit.id).catch((e) =>
+      console.warn('[Bildirim] Silinen alışkanlığın hatırlatmaları iptal edilemedi:', e)
+    );
     onChanged();
     onClose();
   };

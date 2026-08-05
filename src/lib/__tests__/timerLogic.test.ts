@@ -2,7 +2,16 @@
 // duvar-saati davranışı deterministik doğrulanır — uygulama kapalıyken geçen
 // süre, hedef sınırı, saat geri alma ve gece yarısı devri kararı dahil.
 
-import { commitDelta, elapsedOf, isFinished, type ActiveTimer } from '../timerLogic';
+import {
+  commitDelta,
+  elapsedOf,
+  isFinished,
+  isStaleSession,
+  restoreCommitDelta,
+  type ActiveTimer,
+} from '../timerLogic';
+
+const DAY_MS = 86_400_000;
 
 const T0 = 1_750_000_000_000; // sabit başlangıç anı (epoch ms)
 
@@ -77,5 +86,53 @@ describe('isFinished', () => {
 
   it('base zaten hedefe eşitse anında bitmiştir', () => {
     expect(isFinished(timer({ baseSeconds: 20 * 60 }), T0)).toBe(true);
+  });
+});
+
+// Süreç öldükten sonra geri yükleme. Duvar-saati modeli uygulama AÇIKKEN
+// doğrudur (kullanıcı hedefi aşmayı seçebilir), ama süreç ölüyken o aralıkta
+// zamanlayıcı gerçekten çalışmıyordu — bu iki fonksiyon o farkı temsil eder.
+describe('isStaleSession', () => {
+  it('aynı gün + hedef dolmamış: seans sürüyor sayılır', () => {
+    expect(isStaleSession(timer(), '2026-07-08', T0 + 5 * 60_000)).toBe(false);
+  });
+
+  it('gün değiştiyse bayattır (kayıt geçmiş bir güne gidecekti)', () => {
+    expect(isStaleSession(timer(), '2026-07-09', T0 + 5 * 60_000)).toBe(true);
+  });
+
+  it('kapalıyken hedef dolduysa bayattır', () => {
+    expect(isStaleSession(timer(), '2026-07-08', T0 + 25 * 60_000)).toBe(true);
+  });
+});
+
+describe('restoreCommitDelta', () => {
+  it('İKİ GÜN KAPALI KALAN SEANS: 48 saat değil, hedefe kalan kadarı yazılır', () => {
+    // Düzeltilen hata tam olarak buydu: 20 dk hedefli seans akşam başlatılıp
+    // uygulama öldürülür ve iki gün sonra açılırsa, geçen sürenin TAMAMI seansın
+    // başladığı güne yazılıyordu (~172800 sn). Kayıt geçmiş bir güne düştüğü için
+    // "Sıfırla" ile bile geri alınamıyordu.
+    const a = timer();
+    expect(commitDelta(a, T0 + 2 * DAY_MS)).toBe(2 * 86_400); // ham duvar saati: 48 saat
+    expect(restoreCommitDelta(a, T0 + 2 * DAY_MS)).toBe(20 * 60); // yazılan: hedef kadar
+  });
+
+  it('kısmen dolu seansta yalnızca hedefe KALAN kadarı yazılır', () => {
+    // base 18 dk, hedef 20 dk → en fazla 2 dk yazılabilir.
+    expect(restoreCommitDelta(timer({ baseSeconds: 18 * 60 }), T0 + 5 * DAY_MS)).toBe(120);
+  });
+
+  it('base zaten hedefteyse hiçbir şey yazılmaz (o aralık hakkında bilgi yok)', () => {
+    expect(restoreCommitDelta(timer({ baseSeconds: 20 * 60 }), T0 + DAY_MS)).toBe(0);
+    expect(restoreCommitDelta(timer({ baseSeconds: 30 * 60 }), T0 + DAY_MS)).toBe(0);
+  });
+
+  it('hedefin altındaki kısa aralıkta kırpma YOK — commitDelta ile aynıdır', () => {
+    const a = timer();
+    expect(restoreCommitDelta(a, T0 + 5 * 60_000)).toBe(commitDelta(a, T0 + 5 * 60_000));
+  });
+
+  it('saat geri alınmışsa negatif olmaz', () => {
+    expect(restoreCommitDelta(timer(), T0 - 5_000)).toBe(0);
   });
 });

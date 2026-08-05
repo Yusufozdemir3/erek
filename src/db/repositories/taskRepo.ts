@@ -3,6 +3,7 @@
 // Her yazma işlemi updated_at'i tazeler ve synced=0 yapar (senkron bekliyor).
 
 import { getDb } from '../database';
+import { reminderRepo } from './reminderRepo';
 import { subtaskRepo } from './subtaskRepo';
 import { newId, nextTaskOccurrence, nowIso, parseJson, toJson, todayDate } from '../../lib/helpers';
 import type { Task, Priority, Recurrence } from '../../types/models';
@@ -94,6 +95,40 @@ export const taskRepo = {
       [userId]
     );
     return rows.map(rowToTask);
+  },
+
+  // "Görevler" ekranı için: TÜM tamamlanmamış görevler + yalnızca `completedSince`
+  // gününden beri tamamlananlar. Tamamlananlar zaten listenin dibinde.
+  //
+  // NEDEN SINIR VAR: listByUser tamamlananlar dahil HER görevi döndürüyor ve ekran
+  // hepsini çiziyordu. Tamamlanan görev hiç düşmediği için bir yıl kullanan birinde
+  // liste binleri buluyor; hem sorgu hem render doğrusal büyüyor ve asıl işe yarayan
+  // kısım (yapılacaklar) o yığının içinde kayboluyordu. Aktif görevler
+  // SINIRLANMAZ — kullanıcının gerçek çalışma kümesi odur ve kendiliğinden küçüktür.
+  // completedSince null verilirse sınır uygulanmaz ("tümünü göster").
+  listForScreen(userId: string, completedSince: string | null): Task[] {
+    const db = getDb();
+    const rows = db.getAllSync<any>(
+      `SELECT * FROM tasks
+       WHERE user_id = ? AND deleted_at IS NULL
+         AND (completed_at IS NULL OR ?2 IS NULL OR date(completed_at, 'localtime') >= ?2)
+       ORDER BY (completed_at IS NOT NULL), (due_date IS NULL), ${DUE_ORDER_SQL}`,
+      [userId, completedSince]
+    );
+    return rows.map(rowToTask);
+  },
+
+  // Sınırın DIŞINDA kalan (daha eski tarihte tamamlanmış) görev sayısı — ekran
+  // "tümünü göster" düğmesini yalnız gerçekten gizlenen bir şey varsa gösterir.
+  countCompletedBefore(userId: string, since: string): number {
+    const db = getDb();
+    const row = db.getFirstSync<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM tasks
+       WHERE user_id = ? AND deleted_at IS NULL
+         AND completed_at IS NOT NULL AND date(completed_at, 'localtime') < ?`,
+      [userId, since]
+    );
+    return row?.n ?? 0;
   },
 
   // "Bugün" ekranı için: bugün veya daha önce vadesi gelen, tamamlanmamış görevler.
@@ -197,6 +232,7 @@ export const taskRepo = {
   },
 
   // Soft delete - kayıt kalır, deleted_at işaretlenir (senkronda geri gelmesin diye).
+  // Göreve ait hatırlatma satırları da burada temizlenir (gerekçe: habitRepo.softDelete).
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();
@@ -204,5 +240,6 @@ export const taskRepo = {
       `UPDATE tasks SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
       [now, now, id]
     );
+    reminderRepo.deleteAllForEntity('task', id);
   },
 };

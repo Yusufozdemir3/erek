@@ -2,6 +2,7 @@
 // Sabit tarihler kullanılır: 2026-06-29 Pazartesi, 2026-07-01 Çarşamba.
 
 import {
+  chunk,
   diffDays,
   extractTime,
   hmToDate,
@@ -18,6 +19,39 @@ import {
   weekStartOf,
 } from '../helpers';
 import type { Recurrence } from '../../types/models';
+
+// SQLite'ın `IN (?, ?, …)` bağlı değişken sınırını aşmamak için toplu sorgular
+// listeyi bu fonksiyonla parçalıyor (bkz. habitRepo.getDayStates ve benzerleri).
+// Sınırın kendisi büyük (32766) ama tetiklenmemesi, binlerce alışkanlığı/görevi
+// olan bir kullanıcının sorgusunun anlaşılmaz bir SQLite hatasıyla patlamasından iyidir.
+describe('chunk', () => {
+  it('boş listede boş dizi döner (tek boş parça değil)', () => {
+    expect(chunk([], 10)).toEqual([]);
+  });
+
+  it('sınırın altındaki liste TEK parça olarak döner', () => {
+    expect(chunk([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
+  });
+
+  it('sınıra TAM eşit liste tek parça kalır (sınırda bölünmez)', () => {
+    expect(chunk([1, 2, 3], 3)).toEqual([[1, 2, 3]]);
+  });
+
+  it('sınırı bir aşan liste iki parçaya bölünür: son parça tek eleman', () => {
+    expect(chunk([1, 2, 3, 4], 3)).toEqual([[1, 2, 3], [4]]);
+  });
+
+  it('birden çok tam parça + kalan doğru sırayla üretilir', () => {
+    expect(chunk([1, 2, 3, 4, 5, 6, 7], 3)).toEqual([[1, 2, 3], [4, 5, 6], [7]]);
+  });
+
+  it('parçalar orijinal elemanların TAMAMINI, tekrarsız ve sırayla kapsar', () => {
+    const items = Array.from({ length: 953 }, (_, i) => i);
+    const parts = chunk(items, 400);
+    expect(parts.flat()).toEqual(items);
+    expect(parts.map((p) => p.length)).toEqual([400, 400, 153]);
+  });
+});
 
 describe('parseJson', () => {
   it('geçerli JSON parse edilir', () => {
@@ -72,6 +106,29 @@ describe('isScheduledOn', () => {
     const s: Recurrence = { freq: 'monthly', monthDay: 15 };
     expect(isScheduledOn(s, '2026-07-15')).toBe(true);
     expect(isScheduledOn(s, '2026-07-14')).toBe(false);
+  });
+
+  // "Ayın 31'i" seçen kullanıcı eskiden 30 günlük aylarda ve Şubat'ta HİÇ planlı
+  // gün almıyordu: alışkanlık yılda 5 ay görünmüyor, "her ay sonu" niyeti sessizce
+  // kayboluyordu. Seçim artık o ayın son gününe kırpılır.
+  it('monthly: ayın son gününü aşan seçim SON GÜNE kırpılır', () => {
+    const s: Recurrence = { freq: 'monthly', monthDay: 31 };
+    expect(isScheduledOn(s, '2026-07-31')).toBe(true); // 31 çeken ay: kendi günü
+    expect(isScheduledOn(s, '2026-09-30')).toBe(true); // 30 çeken ay: son gün
+    expect(isScheduledOn(s, '2026-09-29')).toBe(false);
+    expect(isScheduledOn(s, '2026-02-28')).toBe(true); // Şubat (artık yıl değil)
+    expect(isScheduledOn(s, '2024-02-29')).toBe(true); // artık yılda 29
+    expect(isScheduledOn(s, '2024-02-28')).toBe(false);
+  });
+
+  it('monthly: kısa aylara denk gelmeyen seçim (<=28) etkilenmez', () => {
+    const s: Recurrence = { freq: 'monthly', monthDay: 15 };
+    expect(isScheduledOn(s, '2026-02-15')).toBe(true);
+    expect(isScheduledOn(s, '2026-02-28')).toBe(false); // son gün kuralı devreye girmez
+  });
+
+  it('monthly: monthDay yoksa hiçbir gün planlı değildir', () => {
+    expect(isScheduledOn({ freq: 'monthly' }, '2026-07-15')).toBe(false);
   });
 
   it('interval çapadan itibaren her N günde bir planlıdır (çapadan öncesi değil)', () => {
@@ -188,13 +245,14 @@ describe('nextTaskOccurrence', () => {
     expect(nextTaskOccurrence(rec, '2026-07-15', '2026-07-15')).toBe('2026-07-18');
   });
 
-  it('monthly: bir sonraki ayın aynı gününe sarılır; 31 kısa ayı atlar', () => {
+  it('monthly: bir sonraki ayın aynı gününe sarılır; 31 kısa ayda SON GÜNE düşer', () => {
     expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 15 }, '2026-07-15', '2026-07-15')).toBe(
       '2026-08-15'
     );
-    // 31 çekmeyen aylar atlanır: 31 Tem → (Eylül 31 yok) → 31 Ağu zaten var; 31 Ağu'dan sonraki 31 Eki.
+    // Eskiden 31 çekmeyen aylar tamamen atlanıyordu (31 Ağu → 31 Eki, Eylül yok
+    // sayılıyordu). Artık kısa ay son gününe kırpılır: 31 Ağu → 30 Eyl.
     expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 31 }, '2026-08-31', '2026-08-31')).toBe(
-      '2026-10-31'
+      '2026-09-30'
     );
   });
 

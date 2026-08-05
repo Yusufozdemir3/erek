@@ -6,21 +6,30 @@
 // Duraklat/bitir'de biriken saniye ilgili yere yazılır: habit → habitRepo.
 // incrementAmount (habit_logs.amount), goal → goalRepo.addProgress (current_value
 // + goal_entries, tempo/projeksiyon otomatik faydalanır). Hedefe ulaşınca
-// completed=1/current_value=target olur AMA zamanlayıcı DURMAZ — kullanıcı
-// isterse hedefi aşarak çalışmaya devam edebilir (celebratedRef, oturum başına
-// tek seferlik commit+haptik+bildirim-iptali sağlar). Bildirim hedef anına kurulur.
+// tamamlanmış SAYILIR (oran 1'e dayanır) AMA zamanlayıcı DURMAZ ve sayaç da
+// kırpılmaz — kullanıcı hedefi aşarak çalışmaya devam edebilir, fazladan geçen
+// süre de dürüstçe kaydedilir (celebratedRef, oturum başına tek seferlik
+// commit+haptik+bildirim-iptali sağlar). Bildirim hedef anına kurulur.
 //
 // Tek doğru kaynak yine SQLite: bu modül yalnızca "şu an ne kadar süre geçti"nin
 // geçici (çalışan) durumunu ve tik'i yönetir; kalıcı toplam DB'dedir.
 
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { goalRepo, habitRepo } from '@/db';
 import { isTimeUnit, todayDate } from '@/lib/helpers';
 import { notifySuccess } from '@/lib/haptics';
 import { cancelTimerDone, scheduleTimerDone } from '@/lib/notifications';
 // Saf zaman matematiği ayrı modülde (test edilebilir); gece yarısı kararı da orada.
-import { commitDelta, elapsedOf, isFinished, type ActiveTimer, type TimerKind } from '@/lib/timerLogic';
+import {
+  commitDelta,
+  elapsedOf,
+  isFinished,
+  isStaleSession,
+  restoreCommitDelta,
+  type ActiveTimer,
+  type TimerKind,
+} from '@/lib/timerLogic';
 import { useAppData } from '@/ui/AppData';
 
 const ACTIVE_KEY = 'timer:active';
@@ -50,7 +59,11 @@ export function useTimer(): TimerApi {
 export function TimerProvider({ children }: { children: React.ReactNode }) {
   const { notifyDataChanged } = useAppData();
   const [active, setActive] = useState<ActiveTimer | null>(null);
-  const [, setNow] = useState(Date.now()); // her saniye yeniden render tetikler
+  // Her saniye yeniden render tetikler. Değeri ATILMIYOR: aşağıdaki context
+  // değeri onunla memoize ediliyor (bkz. useMemo) — canlı sayaç `now`'a bağlı
+  // olduğundan tik başına tazelenmeli, ama tik DIŞINDAKİ render'larda (ör. üstteki
+  // AppData durumu değişince) tüketicileri boşuna yeniden çizmemeli.
+  const [now, setNow] = useState(Date.now());
   // Interval/async içinde en güncel active'e erişmek için ref (kapanış bayatlamasın).
   const activeRef = useRef<ActiveTimer | null>(null);
   activeRef.current = active;
@@ -64,11 +77,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Aktif süreyi kalıcılaştır: geçen saniyeyi ilgili yere ekle, bildirimi iptal et.
-  const commit = useCallback((a: ActiveTimer) => {
-    const delta = commitDelta(a);
+  // `seconds` yalnız geri yükleme yolunda verilir (bkz. restoreCommitDelta) —
+  // normal duraklat/bitir akışında koşan sürenin tamamı yazılır.
+  const commit = useCallback((a: ActiveTimer, seconds?: number) => {
+    const delta = seconds ?? commitDelta(a);
     if (delta > 0) {
       if (a.kind === 'habit') habitRepo.incrementAmount(a.targetId, a.date, delta, a.targetSeconds);
-      else goalRepo.addTimeProgress(a.targetId, delta);
+      // Eskiden ayrı bir addTimeProgress vardı (tek farkı hedef tavanını
+      // uygulamamasıydı). addProgress'in tavanı kalktığı için ikisi aynı
+      // fonksiyon oldu ve tekil yazma yolunda birleşti — bkz. goalRepo.addProgress.
+      else goalRepo.addProgress(a.targetId, delta);
     }
     cancelTimerDone(a.targetId);
   }, []);
@@ -86,22 +104,32 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     notifyDataChanged();
   }, [commit, notifyDataChanged]);
 
-  // Açılışta kalıcı durumu geri yükle. Kapalıyken hedef dolduysa ilerlemeyi
-  // hemen DB'ye yaz (tamamlandı sayılsın) ama zamanlayıcıyı DURDURMA —
-  // kullanıcı isterse çalışmaya devam etsin.
+  // Açılışta kalıcı durumu geri yükle.
+  //
+  // Bu efekt yalnız SÜREÇ yeniden başladığında çalışır (uygulama arka plandan öne
+  // gelirken bileşen zaten mount'tur, buraya düşmez). Yani buradaki seans, hiç
+  // kimsenin başında olmadığı bir aralığı temsil ediyor olabilir — duvar saati
+  // olduğu gibi yazılamaz (bkz. timerLogic.isStaleSession/restoreCommitDelta).
+  //
+  // BAYAT seans (gün değişmiş ya da kapalıyken hedef dolmuş): hedefe kalan kadarı
+  // yazılıp seans KAPATILIR. Eskiden burada geçen sürenin tamamı yazılıp
+  // zamanlayıcı çalışmaya devam ediyordu; iki gün kapalı kalan bir uygulama
+  // seansın başladığı güne 48 saat yazabiliyordu ve o kayıt geçmiş bir güne
+  // düştüğü için "Sıfırla" ile bile geri alınamıyordu.
+  //
+  // TAZE seans (aynı gün, hedef henüz dolmamış): eskisi gibi olduğu yerden devam
+  // eder — kısa bir çökme/yeniden başlatma seansı bozmamalı.
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(ACTIVE_KEY);
       if (!raw) return;
       try {
         const a = JSON.parse(raw) as ActiveTimer;
-        if (isFinished(a)) {
-          commit(a);
-          celebratedRef.current = true;
+        if (isStaleSession(a, todayDate())) {
+          commit(a, restoreCommitDelta(a));
+          setActive(null);
+          persist(null);
           notifyDataChanged();
-          const updated: ActiveTimer = { ...a, baseSeconds: elapsedOf(a), startedAt: Date.now() };
-          setActive(updated);
-          persist(updated);
         } else {
           setActive(a);
         }
@@ -203,14 +231,23 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [notifyDataChanged]
   );
 
-  const isRunning = (kind: TimerKind, id: string) => active?.kind === kind && active?.targetId === id;
-  const liveSeconds = (kind: TimerKind, id: string) =>
-    isRunning(kind, id) ? elapsedOf(active!) : null;
-  const activeFn = () => (active ? { kind: active.kind, id: active.targetId } : null);
+  // `now` bilerek bağımlılıkta: canlı sayaç duvar saatinden okunuyor, yani
+  // tik başına yeni bir context değeri ŞART. Memoizasyonun kazancı tik DIŞINDAKİ
+  // render'lar (üstteki sağlayıcıların durumu değişince TimerProvider da yeniden
+  // render oluyordu ve her seferinde yeni nesne üretip tüm tüketicileri —
+  // HabitTimer, TimerPicker, TimerStrip — boşuna yeniden çiziyordu).
+  const api = useMemo<TimerApi>(() => {
+    const isRunning = (kind: TimerKind, id: string) =>
+      active?.kind === kind && active?.targetId === id;
+    return {
+      isRunning,
+      liveSeconds: (kind, id) => (isRunning(kind, id) ? elapsedOf(active!, now) : null),
+      active: () => (active ? { kind: active.kind, id: active.targetId } : null),
+      start,
+      pause,
+      reset,
+    };
+  }, [active, now, start, pause, reset]);
 
-  return (
-    <TimerContext.Provider value={{ isRunning, liveSeconds, active: activeFn, start, pause, reset }}>
-      {children}
-    </TimerContext.Provider>
-  );
+  return <TimerContext.Provider value={api}>{children}</TimerContext.Provider>;
 }
