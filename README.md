@@ -93,3 +93,7 @@ console.log(habitRepo.currentStreak(habit.id)); // 1
 - `docs/privacy-policy.md` — privacy policy
 - `docs/google-signin-setup.md` — Google sign-in setup
 - `docs/sharing-design.md` — sharing feature design notes
+
+## License
+
+[MIT](LICENSE)

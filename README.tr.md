@@ -93,3 +93,7 @@ console.log(habitRepo.currentStreak(habit.id)); // 1
 - `docs/privacy-policy.md` — gizlilik politikası
 - `docs/google-signin-setup.md` — Google girişi kurulumu
 - `docs/sharing-design.md` — paylaşım özelliği tasarım notları
+
+## Lisans
+
+[MIT](LICENSE)
