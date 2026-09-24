@@ -2,7 +2,7 @@
 
 # Erek
 
-Erek is an offline-first habit, task and goal tracker built with Expo and React Native. Track habits, tasks and goals — no account required, no ads, no tracking.
+Erek is an offline-first habit, task and goal tracker built with Expo and React Native. Track habits, tasks and goals — no account required, no tracking, no data ever sold.
 
 ## Features
 
@@ -13,6 +13,7 @@ Erek is an offline-first habit, task and goal tracker built with Expo and React 
 - **Goals** — numeric goals (e.g. read 200 pages) or milestone lists, with pace/ETA projections. A habit can be linked to a goal so completing it advances the goal automatically.
 - **Reminders** — local notifications for habits, tasks and goals, with configurable sound and vibration.
 - **Home screen widget** — Android widget showing today's tasks and habits.
+- **Ads** — a full-screen (interstitial) AdMob ad, shown at most once every 30 minutes when the app returns to the foreground, and never right after onboarding/first install or right after completing a habit/task.
 - **Appearance** — light, dark (two tones) and system theme, with a selectable accent colour.
 - **Languages** — Turkish, English and German.
 - **Optional cloud sync** — sign in with Google to back up and sync data across devices via Supabase; fully optional, and the account (with all cloud data) can be permanently deleted from within the app.
@@ -66,7 +67,7 @@ npm test                # run all tests
 npm start               # starts Expo (open on your phone with Expo Go, or run android/ios)
 ```
 
-The app works fully without any `.env` values — cloud sync, Google sign-in, crash reporting and ads are all optional and stay disabled until configured. See `.env.example` for what each variable does.
+The app works fully without any `.env` values — cloud sync, Google sign-in and crash reporting are all optional and stay disabled until configured. Ads work out of the box using Google's test ad unit (no revenue); set `EXPO_PUBLIC_ADMOB_INTERSTITIAL_UNIT_ID` in `.env` to use a real one. See `.env.example` for what each variable does.
 
 > Note: `expo-sqlite` and `expo-crypto` work on real devices/emulators; SQLite is limited in the web preview.
 

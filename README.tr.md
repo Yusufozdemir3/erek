@@ -2,7 +2,7 @@
 
 # Erek
 
-Erek; Expo ve React Native ile geliştirilmiş, offline-first çalışan bir alışkanlık, görev ve hedef takip uygulamasıdır. Hesap gerektirmez, reklam ve takip içermez.
+Erek; Expo ve React Native ile geliştirilmiş, offline-first çalışan bir alışkanlık, görev ve hedef takip uygulamasıdır. Hesap gerektirmez, takip içermez, verini asla satmaz.
 
 ## Özellikler
 
@@ -13,6 +13,7 @@ Erek; Expo ve React Native ile geliştirilmiş, offline-first çalışan bir al�
 - **Hedefler** — sayısal hedefler (örn. 200 sayfa oku) ya da adım listesi, hız/tahmini bitiş tarihi projeksiyonlarıyla birlikte. Bir alışkanlık bir hedefe bağlanabilir; alışkanlık her tamamlandığında hedef kendiliğinden ilerler.
 - **Hatırlatmalar** — alışkanlık, görev ve hedefler için yerel bildirimler; ses ve titreşim ayarlanabilir.
 - **Ana ekran widget'ı** — bugünkü görev ve alışkanlıkları gösteren Android widget'ı.
+- **Reklamlar** — uygulama ön plana her getirildiğinde en fazla 30 dakikada bir gösterilen tam ekran (interstitial) AdMob reklamı; kurulumdan/onboarding'den hemen sonra ya da bir alışkanlık/görev tamamlandığında asla gösterilmez.
 - **Görünüm** — açık, koyu (iki farklı ton) ve sistem teması, seçilebilir vurgu rengi.
 - **Diller** — Türkçe, İngilizce ve Almanca.
 - **İsteğe bağlı bulut senkronu** — Google hesabınla giriş yaparak verilerini Supabase üzerinden yedekleyip cihazlar arasında eşitleyebilirsin; tamamen isteğe bağlıdır ve hesabını (buluttaki tüm verinle birlikte) uygulama içinden kalıcı olarak silebilirsin.
@@ -66,7 +67,7 @@ npm test                # tüm testleri çalıştır
 npm start               # Expo'yu başlatır (telefonda Expo Go ile aç ya da android/ios çalıştır)
 ```
 
-Uygulama hiçbir `.env` değeri olmadan da tam çalışır — bulut senkronu, Google girişi, çökme raporlama ve reklamlar isteğe bağlıdır ve yapılandırılana kadar devre dışı kalır. Her değişkenin ne işe yaradığı için `.env.example` dosyasına bak.
+Uygulama hiçbir `.env` değeri olmadan da tam çalışır — bulut senkronu, Google girişi ve çökme raporlama isteğe bağlıdır ve yapılandırılana kadar devre dışı kalır. Reklamlar Google'ın test reklam birimiyle kutudan çıktığı gibi çalışır (gelir üretmez); gerçek gelir için `.env` dosyasına `EXPO_PUBLIC_ADMOB_INTERSTITIAL_UNIT_ID` değerini gir. Her değişkenin ne işe yaradığı için `.env.example` dosyasına bak.
 
 > Not: `expo-sqlite` ve `expo-crypto` gerçek cihazda/emülatörde çalışır; web önizlemesinde SQLite kısıtlıdır.
 
