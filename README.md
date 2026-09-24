@@ -4,6 +4,15 @@
 
 Erek is an offline-first habit, task and goal tracker built with Expo and React Native. Track habits, tasks and goals — no account required, no tracking, no data ever sold.
 
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/today.jpg" width="200" alt="Today screen" />
+  <img src="docs/screenshots/habits.jpg" width="200" alt="Habits list" />
+  <img src="docs/screenshots/habit-stats.jpg" width="200" alt="Habit statistics" />
+  <img src="docs/screenshots/profile.jpg" width="200" alt="Profile & settings" />
+</p>
+
 ## Features
 
 - **Habits** — three types: simple (done/not done), numeric (daily amount, e.g. 8 glasses of water) and timer-based (e.g. 20 minutes of meditation). Set the frequency (daily, specific weekdays, every X days, X times a week), give each habit an icon and a colour.

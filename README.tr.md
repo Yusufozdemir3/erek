@@ -4,6 +4,15 @@
 
 Erek; Expo ve React Native ile geliştirilmiş, offline-first çalışan bir alışkanlık, görev ve hedef takip uygulamasıdır. Hesap gerektirmez, takip içermez, verini asla satmaz.
 
+## Ekran görüntüleri
+
+<p>
+  <img src="docs/screenshots/today.jpg" width="200" alt="Bugün ekranı" />
+  <img src="docs/screenshots/habits.jpg" width="200" alt="Alışkanlıklar listesi" />
+  <img src="docs/screenshots/habit-stats.jpg" width="200" alt="Alışkanlık istatistiği" />
+  <img src="docs/screenshots/profile.jpg" width="200" alt="Profil ve ayarlar" />
+</p>
+
 ## Özellikler
 
 - **Alışkanlıklar** — üç tip: basit (yaptın/yapmadın), sayısal (günlük miktar hedefi, örn. 8 bardak su) ve zamanlayıcılı (örn. 20 dakika meditasyon). Sıklığı sen belirlersin (her gün, haftanın belirli günleri, her X günde bir, haftada X kez); her alışkanlığa simge ve renk verebilirsin.
