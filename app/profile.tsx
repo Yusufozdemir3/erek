@@ -19,6 +19,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { userRepo } from '@/db';
 import { Feather } from '@expo/vector-icons';
 import {
+  clearLocalData,
   currentAuthUser,
   currentUid,
   deleteAccountAndData,
@@ -76,6 +77,24 @@ export default function ProfileScreen() {
     }, [])
   );
 
+  // Shared/handed-off device concern: signing out (or deleting the account)
+  // leaves all local SQLite data readable to whoever opens the app next -
+  // there's no PIN/biometric lock. Offer an explicit, opt-in way to wipe it.
+  const promptEraseLocalData = () => {
+    Alert.alert(t('profile.eraseDataTitle'), t('profile.eraseDataBody'), [
+      { text: t('profile.eraseDataKeep'), style: 'cancel' },
+      {
+        text: t('profile.eraseDataConfirm'),
+        style: 'destructive',
+        onPress: async () => {
+          await clearLocalData();
+          refreshUser();
+          Alert.alert(t('profile.eraseDataDoneTitle'), t('profile.eraseDataDoneBody'));
+        },
+      },
+    ]);
+  };
+
   const doSignOut = async () => {
     setSigningOut(true);
     try {
@@ -84,6 +103,7 @@ export default function ProfileScreen() {
       refreshUser();
       setAuthUser(null);
       setSignedIn(false);
+      promptEraseLocalData();
     } catch (e) {
       // A sign-out error isn't critical; the status refreshes on the next focus.
       console.warn('[Account] Error during sign-out:', e);
@@ -114,7 +134,9 @@ export default function ProfileScreen() {
       refreshUser();
       setAuthUser(null);
       setSignedIn(false);
-      Alert.alert(t('profile.deletedTitle'), t('profile.deletedBody'));
+      Alert.alert(t('profile.deletedTitle'), t('profile.deletedBody'), [
+        { text: t('common.ok'), onPress: promptEraseLocalData },
+      ]);
     } catch (e) {
       Alert.alert(t('profile.deleteFailedTitle'), e instanceof Error ? e.message : String(e));
     } finally {

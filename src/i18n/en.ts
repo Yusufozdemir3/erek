@@ -12,6 +12,7 @@ export const en: Dict = {
   'common.delete': 'Delete',
   'common.clear': 'Clear',
   'common.cancel': 'Cancel',
+  'common.ok': 'OK',
   'common.done': 'Done',
   'common.today': 'Today',
   'common.back': '‹ Back',
@@ -506,6 +507,13 @@ export const en: Dict = {
   'profile.deletedTitle': 'Account deleted',
   'profile.deletedBody': 'Your cloud account and cloud data were deleted. Data on this device remains.',
   'profile.deleteFailedTitle': 'Deletion failed',
+  'profile.eraseDataTitle': 'Also erase data on this device?',
+  'profile.eraseDataBody':
+    "You can also permanently delete all habit/task/goal data on this device. Recommended if this is a shared device or one you're handing off to someone else.",
+  'profile.eraseDataKeep': 'Keep data on device',
+  'profile.eraseDataConfirm': 'Also erase device data',
+  'profile.eraseDataDoneTitle': 'Device data erased',
+  'profile.eraseDataDoneBody': 'All data on this device was permanently deleted.',
 
   // Account switch — signing in while local data belongs to a different account
   // (see sync/syncEngine.ts classifySignIn).

@@ -13,6 +13,7 @@ export const tr: Dict = {
   'common.delete': 'Sil',
   'common.clear': 'Temizle',
   'common.cancel': 'İptal',
+  'common.ok': 'Tamam',
   'common.done': 'Tamam',
   'common.today': 'Bugün',
   'common.back': '‹ Geri',
@@ -531,6 +532,13 @@ export const tr: Dict = {
   'profile.deletedTitle': 'Hesap silindi',
   'profile.deletedBody': 'Bulut hesabın ve buluttaki verilerin silindi. Cihazındaki veriler duruyor.',
   'profile.deleteFailedTitle': 'Silme başarısız',
+  'profile.eraseDataTitle': 'Cihazdaki veriler de silinsin mi?',
+  'profile.eraseDataBody':
+    'İstersen bu cihazdaki tüm habit/görev/hedef verilerini de kalıcı olarak silebiliriz. Ortak veya başkasına devredilecek bir cihazdaysan bunu seçmen önerilir.',
+  'profile.eraseDataKeep': 'Verileri cihazda tut',
+  'profile.eraseDataConfirm': 'Cihazdaki verileri de sil',
+  'profile.eraseDataDoneTitle': 'Cihaz verileri silindi',
+  'profile.eraseDataDoneBody': 'Bu cihazdaki tüm veriler kalıcı olarak silindi.',
 
   // Account switch — signing in while local data belongs to a DIFFERENT
   // account (see sync/syncEngine.ts classifySignIn).

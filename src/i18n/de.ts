@@ -12,6 +12,7 @@ export const de: Dict = {
   'common.delete': 'Löschen',
   'common.clear': 'Zurücksetzen',
   'common.cancel': 'Abbrechen',
+  'common.ok': 'OK',
   'common.done': 'Fertig',
   'common.today': 'Heute',
   'common.back': '‹ Zurück',
@@ -510,6 +511,13 @@ export const de: Dict = {
   'profile.deletedBody':
     'Dein Cloud-Konto und deine Cloud-Daten wurden gelöscht. Die Daten auf diesem Gerät bleiben erhalten.',
   'profile.deleteFailedTitle': 'Löschen fehlgeschlagen',
+  'profile.eraseDataTitle': 'Auch die Daten auf diesem Gerät löschen?',
+  'profile.eraseDataBody':
+    'Du kannst auch alle Habit-/Aufgaben-/Ziel-Daten auf diesem Gerät dauerhaft löschen. Empfohlen, wenn es sich um ein gemeinsam genutztes oder weitergegebenes Gerät handelt.',
+  'profile.eraseDataKeep': 'Daten auf dem Gerät behalten',
+  'profile.eraseDataConfirm': 'Gerätedaten auch löschen',
+  'profile.eraseDataDoneTitle': 'Gerätedaten gelöscht',
+  'profile.eraseDataDoneBody': 'Alle Daten auf diesem Gerät wurden dauerhaft gelöscht.',
 
   // Kontowechsel — Anmeldung, wenn die lokalen Daten zu einem anderen Konto
   // gehören (siehe sync/syncEngine.ts classifySignIn).
