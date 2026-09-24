@@ -1,58 +1,60 @@
-# Habit App — Veri Katmanı (Adım 1)
+*Other languages: [Türkçe](README.tr.md)*
 
-Görev / hedef / alışkanlık takip uygulamasının çekirdeği. Bu ilk adım **UI içermez**; offline-first veri katmanını kurar. Üstüne ekranlar bindirilecek.
+# Habit App — Data Layer (Step 1)
 
-## Mimari kararlar
+The core of a task / goal / habit tracking app. This first step **contains no UI**; it sets up the offline-first data layer. Screens will be built on top of it.
 
-- **Offline-first.** Her şey önce cihazdaki SQLite'a yazılır. İnternet olmadan tam çalışır.
-- **UI asla SQL görmez.** Ekranlar yalnızca repository fonksiyonlarını çağırır (`taskRepo.create()` gibi). Bu, ileride veritabanını değiştirsek bile UI'ı kırmaz.
-- **UUID kimlikler.** ID'leri cihaz üretir; internetsizken oluşturulan kayıtlar buluttakiyle çakışmaz.
-- **Son yazan kazanır + soft delete.** Her kayıtta `updated_at` (çakışma çözümü) ve `deleted_at` (silinen kayıt işaretlenir, gerçekten silinmez) var. Bu, ileride bulut senkronunu sorunsuz açmamızı sağlar.
-- **Streak saklanmaz, hesaplanır.** Seri sayısı her zaman alışkanlık loglarından türetilir — tek doğru kaynak loglar.
+## Architecture decisions
 
-## Klasör yapısı
+- **Offline-first.** Everything is written to the on-device SQLite database first. The app works fully without internet.
+- **UI never sees SQL.** Screens only call repository functions (like `taskRepo.create()`). This means changing the database later won't break the UI.
+- **UUID identifiers.** IDs are generated on-device, so records created while offline never collide with cloud records.
+- **Last write wins + soft delete.** Every record has `updated_at` (for conflict resolution) and `deleted_at` (deleted records are marked, not actually removed). This lets us add cloud sync later without friction.
+- **Streaks aren't stored, they're computed.** The streak count is always derived from habit logs — the logs are the single source of truth.
+
+## Folder structure
 
 ```
 src/
-  types/models.ts              Tüm veri tipleri
-  lib/helpers.ts               UUID, tarih, JSON yardımcıları
+  types/models.ts              All data types
+  lib/helpers.ts               UUID, date, JSON helpers
   db/
-    database.ts                Bağlantı + migration çalıştırıcı
-    index.ts                   Veri katmanının tek giriş noktası
-    migrations/001_initial.ts  Şema (tüm tablolar)
+    database.ts                Connection + migration runner
+    index.ts                   Single entry point for the data layer
+    migrations/001_initial.ts  Schema (all tables)
     repositories/
-      userRepo.ts              Anonim başlangıç + hesaba yükseltme
-      taskRepo.ts              Görevler (son tarih, öncelik, tekrar)
-      habitRepo.ts             Alışkanlıklar + streak hesabı
-      goalRepo.ts              Hedefler (sayısal + tarihli)
+      userRepo.ts               Anonymous start + upgrade to account
+      taskRepo.ts                Tasks (due date, priority, recurrence)
+      habitRepo.ts                Habits + streak calculation
+      goalRepo.ts                 Goals (numeric + date-based)
 ```
 
-## Kurulum
+## Setup
 
 ```bash
 npm install
-npm run typecheck   # tip kontrolü
-npm start           # Expo'yu başlatır (telefonda Expo Go ile aç)
+npm run typecheck   # type checking
+npm start           # starts Expo (open on your phone with Expo Go)
 ```
 
-> Not: `expo-sqlite` ve `expo-crypto` gerçek cihazda/emülatörde çalışır; web önizlemesinde SQLite kısıtlıdır.
+> Note: `expo-sqlite` and `expo-crypto` work on real devices/emulators; SQLite is limited in the web preview.
 
-## Kullanım örneği
+## Usage example
 
 ```ts
 import { initDataLayer, taskRepo, habitRepo } from '@/db';
 
 const { user } = await initDataLayer();
 
-// Görev ekle
-taskRepo.create({ user_id: user.id, title: 'Sunumu bitir', priority: 'high', due_date: '2026-07-01' });
+// Add a task
+taskRepo.create({ user_id: user.id, title: 'Finish the presentation', priority: 'high', due_date: '2026-07-01' });
 
-// Alışkanlık ekle ve bugünü işaretle
-const habit = habitRepo.create({ user_id: user.id, title: 'Su iç', remind_at: '09:00' });
+// Add a habit and check it off for today
+const habit = habitRepo.create({ user_id: user.id, title: 'Drink water', remind_at: '09:00' });
 habitRepo.toggleLog(habit.id, '2026-06-28', true);
 console.log(habitRepo.currentStreak(habit.id)); // 1
 ```
 
-## Sonraki adım
+## Next step
 
-"Bugün" ekranı + görev modülü UI'ı. Veri katmanı hazır olduğu için ekranlar doğrudan repository'leri çağıracak.
+The "Today" screen + task module UI. Since the data layer is ready, screens will call the repositories directly.
