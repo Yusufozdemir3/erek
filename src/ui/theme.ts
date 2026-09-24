@@ -1,57 +1,58 @@
-// Ekranların paylaştığı renk paletleri (açık/koyu) ve ortak stiller.
-// Karanlık mod: renkler artık statik değil — aktif palet ThemeProvider'dan
-// useTheme() ile alınır. Ekranlar/bileşenler stillerini makeShared(colors) ve
-// kendi makeStyles(colors) fabrikalarıyla render sırasında üretir.
-// Geriye uyum: `colors` ve `shared` açık paletle export edilir (henüz taşınmamış
-// bir yer kalırsa açık görünür, derleme bozulmaz).
+// Color palettes (light/dark) and shared styles used across screens.
+// Dark mode: colors are no longer static — the active palette is obtained from
+// ThemeProvider via useTheme(). Screens/components generate their styles at
+// render time with makeShared(colors) and their own makeStyles(colors) factories.
+// Backward compat: `colors` and `shared` are exported with the light palette (if
+// a spot hasn't been migrated yet, it just appears light — the build doesn't break).
 
 import { StyleSheet } from 'react-native';
 import type { Priority } from '@/db';
 import type { Lang } from '@/i18n/translations';
 
-// Aktif dile karşılık gelen Intl/Date yerel ayarı (ay/gün adları için).
-// Geriye uyum: DATE_LOCALE artık i18n/dateLocale.ts'te (RN'siz saf veri) —
-// buradan yeniden dışa açılıyor ki mevcut import'lar bozulmasın. NOT: `export
-// ... from` ismi bu modülün KAPSAMINA sokmaz, o yüzden ayrıca import ediliyor.
+// The Intl/Date locale matching the active language (for month/day names).
+// Backward compat: DATE_LOCALE now lives in i18n/dateLocale.ts (plain data, no
+// RN dependency) — re-exported from here so existing imports don't break. NOTE:
+// `export ... from` doesn't bring the name into THIS module's scope, so it's also imported separately.
 import { DATE_LOCALE } from '@/i18n/dateLocale';
 export { DATE_LOCALE };
 
-// Tek bir temanın tüm renk jetonları.
+// All color tokens for a single theme.
 export interface Colors {
-  bg: string;         // ekran zemini
-  card: string;       // kart/panel zemini
-  border: string;     // ince kenarlık
-  line: string;       // biraz daha belirgin çizgi (checkbox kenarı, tutamaç)
-  text: string;       // ana metin
-  muted: string;      // ikincil metin
-  faint: string;      // en soluk metin/placeholder
-  primary: string;    // marka vurgusu
-  primarySoft: string;// vurgunun soluk zemini (çip/rozet)
-  done: string;       // tamamlandı (yeşil)
-  streak: string;     // seri (turuncu)
-  danger: string;     // sil/hata (kırmızı)
-  track: string;      // ilerleme çubuğu/ızgara zemini
-  inputBg: string;    // form girdisi zemini
-  onAccent: string;   // renkli buton/işaret ÜSTÜ metin (iki modda da açık)
+  bg: string;         // screen background
+  card: string;       // card/panel background
+  border: string;     // thin border
+  line: string;       // a slightly more visible line (checkbox border, handle)
+  text: string;       // primary text
+  muted: string;      // secondary text
+  faint: string;      // faintest text/placeholder
+  primary: string;    // brand accent
+  primarySoft: string;// the accent's faint background (chip/badge)
+  done: string;       // completed (green)
+  streak: string;     // streak (orange)
+  danger: string;     // delete/error (red)
+  track: string;      // progress bar/grid background
+  inputBg: string;    // form input background
+  onAccent: string;   // text ON TOP of a colored button/mark (light in both modes)
 }
 
-// — METİN TONLARININ KONTRASTI —
-// text/muted/faint üçü de GERÇEK içerik taşır: faint yalnız süs değil, form
-// placeholder'ları, ipucu satırları ve dipnotlar odur. Bu yüzden üçü de WCAG AA
-// gövde metni eşiğini (4.5:1) zemin üstünde geçmek zorunda.
-// Önceki palette faint açık temada 2.5:1, sıcak koyuda 3.9:1, siyahta 4.1:1 idi —
-// yani güneş altında ya da yaşa bağlı görme kaybında okunmuyordu. faint eşiği
-// geçecek kadar koyulaştırıldı; üç kademe arasındaki hiyerarşi kaybolmasın diye
-// muted de birlikte kaydırıldı (açık temada). Ölçülen oranlar yorumlarda; bir
-// daha sessizce gerilemesin diye __tests__/contrast.ui.test.tsx bunları doğrular.
+// — CONTRAST OF TEXT TONES —
+// text/muted/faint all carry REAL content: faint isn't just decoration, it's
+// form placeholders, hint lines, and footnotes. So all three must clear the
+// WCAG AA body-text threshold (4.5:1) against the background.
+// In the previous palette, faint was 2.5:1 in light, 3.9:1 in warm dark, 4.1:1 in
+// black — i.e. unreadable in sunlight or with age-related vision loss. faint was
+// darkened enough to clear the threshold; muted was shifted along with it (in
+// the light theme) so the hierarchy between the three levels isn't lost. Measured
+// ratios are in the comments; __tests__/contrast.ui.test.tsx verifies them so this
+// doesn't silently regress again.
 export const lightColors: Colors = {
   bg: '#f8fafc',
   card: '#ffffff',
   border: '#e2e8f0',
   line: '#cbd5e1',
   text: '#0f172a',   // ~17:1
-  muted: '#4b5768',  // ~7.1:1 (eski #64748b faint'e kaydı)
-  faint: '#64748b',  // ~4.6:1 (eski #94a3b8 → 2.5:1, AA altındaydı)
+  muted: '#4b5768',  // ~7.1:1 (old #64748b shifted to faint)
+  faint: '#64748b',  // ~4.6:1 (old #94a3b8 → 2.5:1, was below AA)
   primary: '#4f46e5',
   primarySoft: '#e0e7ff',
   done: '#10b981',
@@ -62,10 +63,11 @@ export const lightColors: Colors = {
   onAccent: '#ffffff',
 };
 
-// Sıcak mürekkep: kahverengiye çalan neredeyse-siyah zemin (soğuk slate/lacivert
-// yerine) — açık moddaki krem zeminle (#F4F1EA) aynı ailede durur, metin rengi de
-// o kremle birebir aynıdır. İki mod böylece aynı editorial kimliğin parçası gibi
-// hisseder (bkz. vurgu renkleri: çam/kiremit/mürekkep/bordo/hardal de sıcak tonlar).
+// Warm ink: a near-black background leaning toward brown (instead of a cool
+// slate/navy) — sits in the same family as the cream background in light mode
+// (#F4F1EA), and the text color is identical to that cream. This makes both
+// modes feel like part of the same editorial identity (see the accent colors:
+// pine/terracotta/ink/wine/mustard are also warm tones).
 export const darkColors: Colors = {
   bg: '#161412',
   card: '#211f1c',
@@ -73,7 +75,7 @@ export const darkColors: Colors = {
   line: '#4a453f',
   text: '#f4f1ea',
   muted: '#a8a29a',  // ~7.3:1
-  faint: '#8d867c',  // ~5.1:1 (eski #78726a → 3.9:1, AA altındaydı)
+  faint: '#8d867c',  // ~5.1:1 (old #78726a → 3.9:1, was below AA)
   primary: '#818cf8',
   primarySoft: '#312e81',
   done: '#34d399',
@@ -84,10 +86,10 @@ export const darkColors: Colors = {
   onAccent: '#ffffff',
 };
 
-// TAM SİYAH (AMOLED) koyu stil: saf siyah zemin + nötr koyu griler. OLED
-// ekranlarda piksel kapatır (pil + kontrast). Sıcak koyudan farklı olarak
-// kahve tonu yok — kullanıcı Profil > Görünüm'den "Koyu tema stili" ile seçer
-// (bkz. ThemeProvider.darkStyle). Vurgu yine ACCENT_THEMES'in dark paletinden gelir.
+// FULL BLACK (AMOLED) dark style: pure black background + neutral dark grays.
+// Turns off pixels on OLED screens (battery + contrast). Unlike warm dark, there's
+// no brown tint — the user picks it from Profile > Appearance via "Dark theme
+// style" (see ThemeProvider.darkStyle). The accent still comes from ACCENT_THEMES' dark palette.
 export const blackColors: Colors = {
   bg: '#000000',
   card: '#101010',
@@ -95,9 +97,10 @@ export const blackColors: Colors = {
   line: '#3a3a3a',
   text: '#f2f2f2',
   muted: '#9c9c9c',  // ~7.6:1
-  // Kart zemini (#101010) saf siyahtan açık olduğu için ölçü ORADA yapılır:
-  // #7a7a7a saf siyahta 5.1:1 verirken kartta 4.43'e düşüyordu.
-  faint: '#7d7d7d',  // kart üstünde ~4.6:1 (eski #6e6e6e → 4.1:1, AA altındaydı)
+  // Since the card background (#101010) is lighter than pure black, the
+  // measurement is done AGAINST IT: #7a7a7a gives 5.1:1 on pure black but drops
+  // to 4.43 on the card.
+  faint: '#7d7d7d',  // ~4.6:1 on the card (old #6e6e6e → 4.1:1, was below AA)
   primary: '#818cf8',
   primarySoft: '#26264a',
   done: '#34d399',
@@ -108,13 +111,13 @@ export const blackColors: Colors = {
   onAccent: '#ffffff',
 };
 
-// Geriye uyumlu varsayılan (açık). Taşınmış bileşenler useTheme().colors kullanır.
+// Backward-compatible default (light). Migrated components use useTheme().colors.
 export const colors: Colors = lightColors;
 
-// Vurgu rengi (marka rengi) — kullanıcı Profil'den seçer, AsyncStorage'da saklanır
-// (bkz. ThemeProvider). Yalnızca primary/primarySoft'u geçersiz kılar; done/danger/
-// streak gibi anlamlı renkler ve zemin/metin tonları temadan (açık/koyu) gelmeye
-// devam eder — vurgu rengi yalnızca "marka" anlamına gelir.
+// Accent color (brand color) — chosen by the user in Profile, stored in
+// AsyncStorage (see ThemeProvider). Only overrides primary/primarySoft;
+// semantic colors like done/danger/streak and the background/text tones keep
+// coming from the theme (light/dark) — the accent color only carries "brand" meaning.
 export type AccentKey =
   | 'pine'
   | 'terracotta'
@@ -175,26 +178,26 @@ export const ACCENT_THEMES: Record<AccentKey, { light: AccentPalette; dark: Acce
   },
 };
 
-// Profil ekranındaki seçici sırası; ilk eleman varsayılan vurgu rengidir.
+// Selector order on the Profile screen; the first element is the default accent color.
 export const ACCENT_ORDER: AccentKey[] = [
   'pine', 'terracotta', 'ink', 'indigo', 'wine', 'mustard',
   'ocean', 'plum', 'rose', 'slate',
 ];
 export const DEFAULT_ACCENT: AccentKey = 'pine';
 
-// Öncelik ve alışkanlık renkleri iki modda da aynı (canlı vurgular; koyuda da okunur).
+// Priority and habit colors are the same in both modes (vivid accents; readable in dark too).
 export const PRIORITY_COLOR: Record<Priority, string> = {
   high: '#ef4444',
   medium: '#f59e0b',
   low: '#10b981',
 };
 
-// Öncelik seçicideki sıralama (düşükten yükseğe).
+// Order in the priority picker (low to high).
 export const PRIORITY_ORDER: Priority[] = ['low', 'medium', 'high'];
 
-// Alışkanlık renk paleti (ikon seti için bkz. src/ui/habitIcons.tsx — eskiden
-// burada ham emoji listesi vardı, çizgi vektör ikon setine geçildi).
-// 16 renk — hepsi iki temada da okunur canlı orta tonlar.
+// Habit color palette (for the icon set, see src/ui/habitIcons.tsx — this used
+// to hold a raw emoji list, since replaced with a line-vector icon set).
+// 16 colors — all vivid mid-tones readable in both themes.
 export const HABIT_COLORS = [
   '#4f46e5', '#0ea5e9', '#10b981', '#f59e0b',
   '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6',
@@ -202,12 +205,12 @@ export const HABIT_COLORS = [
   '#a855f7', '#e11d48', '#a16207', '#64748b',
 ];
 
-// Alışkanlığın rengi yoksa kullanılacak varsayılan.
+// Default used when a habit has no color.
 export const DEFAULT_HABIT_COLOR = '#6366f1';
 
-// "YYYY-MM-DD" (ya da ISO) -> "28 Haz" gibi kısa etiket. lang belirler hangi
-// yerel ayarla (ay adı vb.) biçimlensin; noDateLabel değer yoksa gösterilecek
-// çevrilmiş metin (çağıran t('date.noDate') verir).
+// "YYYY-MM-DD" (or ISO) -> a short label like "Jun 28". lang determines which
+// locale (month names, etc.) is used to format it; noDateLabel is the translated
+// text shown when there's no value (the caller passes t('date.noDate')).
 export function shortDate(value: string | null, lang: Lang = 'tr', noDateLabel = 'Tarihsiz'): string {
   if (!value) return noDateLabel;
   const ymd = value.slice(0, 10);
@@ -217,7 +220,7 @@ export function shortDate(value: string | null, lang: Lang = 'tr', noDateLabel =
   });
 }
 
-// "YYYY-MM-DD" (ya da ISO) -> "28 Haziran 2026" gibi uzun etiket.
+// "YYYY-MM-DD" (or ISO) -> a long label like "June 28, 2026".
 export function longDateLabel(value: string | null, lang: Lang = 'tr', noDateLabel = 'Tarihsiz'): string {
   if (!value) return noDateLabel;
   const ymd = value.slice(0, 10);
@@ -228,11 +231,11 @@ export function longDateLabel(value: string | null, lang: Lang = 'tr', noDateLab
   });
 }
 
-// ISO zaman damgası -> "15 Tem, 14:32" (tarih + saat). Diğer tarih
-// etiketlerinden farkı SAATİ de göstermesi: "bu tam olarak ne zaman oldu"
-// sorusuna cevap veren yerler için (hedef girdi geçmişi, son senkron damgası).
-// Göreli biçim ("3 gün önce") bilerek TERCİH EDİLMEDİ: çoğul kuralı gerektirir,
-// t() şu an çoğullaştırmayı desteklemiyor (İngilizce'de "1 days ago" çıkardı).
+// ISO timestamp -> "Jul 15, 14:32" (date + time). What sets it apart from other
+// date labels is that it also shows the TIME: for places answering "exactly when
+// did this happen" (goal entry history, last sync timestamp).
+// A relative format ("3 days ago") was deliberately NOT CHOSEN: it requires
+// pluralization rules, which t() doesn't currently support (would produce "1 days ago" in English).
 export function dateTimeLabel(iso: string, lang: Lang = 'tr'): string {
   const d = new Date(iso);
   const date = d.toLocaleDateString(DATE_LOCALE[lang], { day: 'numeric', month: 'short' });
@@ -240,7 +243,7 @@ export function dateTimeLabel(iso: string, lang: Lang = 'tr'): string {
   return `${date}, ${time}`;
 }
 
-// "YYYY-MM-DD" -> gün adlı tam etiket ("Pazartesi, 29 Haziran 2026" gibi).
+// "YYYY-MM-DD" -> a full label with weekday name (like "Monday, June 29, 2026").
 export function fullDateLabel(ymd: string, lang: Lang = 'tr'): string {
   return new Date(`${ymd}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], {
     weekday: 'long',
@@ -250,8 +253,8 @@ export function fullDateLabel(ymd: string, lang: Lang = 'tr'): string {
   });
 }
 
-// Tarihli bir hedef/görev için kalan gün etiketini üretir. Çevrilmiş parçalar
-// (kaç gün kaldı/geçti, "bugün son gün") çağırandan (t()) alınır.
+// Produces the remaining-days label for a dated goal/task. The translated pieces
+// (how many days left/passed, "due today") come from the caller (t()).
 export function deadlineLabel(
   ymd: string | null,
   labels: { daysLeft: (n: number) => string; dueToday: string; daysAgo: (n: number) => string }
@@ -266,7 +269,7 @@ export function deadlineLabel(
   return labels.daysAgo(-diff);
 }
 
-// Ortak stilleri aktif palete göre üretir. Bileşenler: const { shared } = useTheme().
+// Generates shared styles for the active palette. Components: const { shared } = useTheme().
 export function makeShared(c: Colors) {
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: c.bg },
@@ -274,7 +277,7 @@ export function makeShared(c: Colors) {
 
     greeting: { fontSize: 34, fontWeight: '800', color: c.text },
     subtitle: { fontSize: 15, color: c.muted, marginTop: 2 },
-    // Ekran başlığı + sağdaki profil ikonu satırı.
+    // Screen title + profile icon row on the right.
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
     sectionHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 28, marginBottom: 12 },
@@ -325,5 +328,5 @@ export function makeShared(c: Colors) {
   });
 }
 
-// Geriye uyumlu varsayılan ortak stiller (açık). Taşınmış ekranlar useTheme().shared kullanır.
+// Backward-compatible default shared styles (light). Migrated screens use useTheme().shared.
 export const shared = makeShared(lightColors);

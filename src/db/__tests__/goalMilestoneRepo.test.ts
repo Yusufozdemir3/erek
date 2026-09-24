@@ -1,5 +1,5 @@
-// goalMilestoneRepo testleri: ekleme sırası (position), toggle, soft delete,
-// sayım + ara-eşik (amount) türetmesi. subtaskRepo.test.ts ile aynı temel desen.
+// goalMilestoneRepo tests: insertion order (position), toggle, soft delete,
+// counting + intermediate-threshold (amount) derivation. Same base pattern as subtaskRepo.test.ts.
 
 import { goalMilestoneRepo, milestoneViews } from '../repositories/goalMilestoneRepo';
 import { goalRepo } from '../repositories/goalRepo';
@@ -111,7 +111,7 @@ describe('milestoneViews — ara-eşik türetme (saf fonksiyon)', () => {
   });
 
   it('miktarlı adımlar KENDİ BAĞIMSIZ hedefine göre dolar (sıfırdan, birbirinin payını paylaşmaz)', () => {
-    // Koşu örneği: "ilk 5km", "ilk 20km", "ilk 50km" — üçü de aynı current_value'dan.
+    // Running example: "first 5km", "first 20km", "first 50km" — all three read from the same current_value.
     const views = milestoneViews([ms('5km', 5), ms('20km', 20), ms('50km', 50)], 8);
     expect(views[0].reached).toBe(true);  // 8 >= 5
     expect(views[0].ratio).toBe(1);
@@ -136,7 +136,7 @@ describe('milestoneViews — ara-eşik türetme (saf fonksiyon)', () => {
     expect(views[1].reached).toBe(true); // completed=1
     expect(views[1].ratio).toBe(1);
     expect(views[0].ratio).toBeCloseTo(250 / 300);
-    expect(views[2].reached).toBe(true); // 250 >= 200, B kendi hedefine göre bağımsız dolar
+    expect(views[2].reached).toBe(true); // 250 >= 200, B fills independently against its own target
     expect(views[2].ratio).toBe(1);
   });
 });

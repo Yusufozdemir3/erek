@@ -1,13 +1,13 @@
-// Merkezi ＋ hızlı ekleme butonu (speed-dial).
-// ＋ kare bir butondur; dokununca 45° dönerek ×'e döner ve üç seçenek
-// (Görev · Alışkanlık · Hedef) yaylanarak (swing) yukarı açılır. Bir seçenek
-// seçilince ilgili tür doğrudan AddSheet formunda açılır.
+// The central ＋ quick-add button (speed-dial).
+// ＋ is a square button; tapping it rotates it 45° into an ×, and three
+// options (Task · Habit · Goal) fan open upward with a spring (swing) motion.
+// Picking an option opens the relevant type directly in the AddSheet form.
 //
-// İki parça birlikte, aynı `open` durumuyla sürülür:
-//   • AddFabButton — sekme çubuğunun ortasındaki kare buton (dönen ＋).
-//   • AddFab       — tüm ekranı kaplayan overlay (arka fon + yaylanan seçenekler).
-// Overlay, sekme çubuğuna sığmayacağı için _layout'ta Tabs'ın kardeşi olarak
-// (üstünde) çizilir.
+// Two pieces are driven together by the same `open` state:
+//   • AddFabButton — the square button in the middle of the tab bar (the rotating ＋).
+//   • AddFab       — the full-screen overlay (backdrop + the spring-out options).
+// Since the overlay wouldn't fit inside the tab bar, it's drawn as a sibling of
+// Tabs in _layout (on top of it).
 
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -20,19 +20,19 @@ import type { Colors } from '@/ui/theme';
 
 type AddStep = Exclude<Step, 'menu'>;
 
-// Seçenek daireleri sabit vurgu renkleri (iki modda da okunur). İkon: tab
-// bar'daki aynı çizgi ikon seti (EntityIcon); etiket i18n anahtarı (AddSheet
-// menüsüyle aynı 'add.*' anahtarları — tek kaynak, tutarlı metin).
+// Fixed accent colors for the option circles (readable in both theme modes).
+// Icon: the same line-icon set as the tab bar (EntityIcon); label is an i18n
+// key (the same 'add.*' keys as the AddSheet menu — single source, consistent text).
 const OPTIONS: { step: AddStep; type: EntityType; labelKey: string; color: string }[] = [
   { step: 'goal', type: 'goal', labelKey: 'add.goal', color: '#f59e0b' },
   { step: 'habit', type: 'habit', labelKey: 'add.habit', color: '#f97316' },
   { step: 'task', type: 'task', labelKey: 'add.task', color: '#6366f1' },
 ];
 
-// Sekme çubuğundaki kare ＋ butonu. `open` iken ＋ 45° dönerek × olur.
-// UZUN BASIŞ ayrı bir eylem açar (bağımsız sayaç seçici — bkz. TimerPicker);
-// kısa dokunuşla ÇAKIŞMASIN diye `onLongPress` opsiyonel bırakıldı (verilmezse
-// buton eskisi gibi yalnız kısa dokunuşa tepki verir).
+// The square ＋ button in the tab bar. While `open`, ＋ rotates 45° into an ×.
+// A LONG PRESS opens a separate action (independent timer picker — see
+// TimerPicker); `onLongPress` is left optional so it doesn't CONFLICT with a
+// short tap (if not passed, the button reacts only to short taps, as before).
 export function AddFabButton({
   open,
   onPress,
@@ -76,8 +76,8 @@ export function AddFabButton({
       accessibilityHint={onLongPress ? t('timer.longPressHint') : undefined}
       accessibilityState={{ expanded: open }}
     >
-      {/* Kare çerçevenin tamamı döner; içindeki ＋ de onunla dönüp × olur.
-          ＋ iki çubukla çizilir → font metriğinden bağımsız, tam ortalı. */}
+      {/* The whole square frame rotates; the ＋ inside rotates with it into an ×.
+          The ＋ is drawn with two bars → independent of font metrics, perfectly centered. */}
       <Animated.View style={[styles.square, { transform: [{ rotate }] }]}>
         <View style={styles.plusBox}>
           <View style={styles.plusBarH} />
@@ -88,7 +88,7 @@ export function AddFabButton({
   );
 }
 
-// Tüm ekranı kaplayan overlay: arka fon + yaylanarak açılan seçenekler.
+// The full-screen overlay: backdrop + options that spring open.
 export function AddFab({
   open,
   onClose,
@@ -101,10 +101,10 @@ export function AddFab({
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
-  // Her seçenek için ayrı animasyon değeri (stagger'lı yay girişi) + arka fon.
+  // A separate animation value per option (staggered spring entrance) + backdrop.
   const anims = useRef(OPTIONS.map(() => new Animated.Value(0))).current;
   const backdrop = useRef(new Animated.Value(0)).current;
-  // Kapanış animasyonu bitene kadar ağaçta kalması için ayrı mount durumu.
+  // Separate mount state so it stays in the tree until the close animation finishes.
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -144,7 +144,7 @@ export function AddFab({
       <View style={styles.fan} pointerEvents="box-none">
         {OPTIONS.map((opt, i) => {
           const a = anims[i];
-          // Yaylanma: aşağıdan yukarı süzülüp hafif dönerek "swing" ile gelir.
+          // The spring: glides from bottom to top, arriving with a slight "swing" rotation.
           const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [56, 0] });
           const scale = a.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
           const rotate = a.interpolate({ inputRange: [0, 1], outputRange: ['-14deg', '0deg'] });
@@ -175,10 +175,10 @@ export function AddFab({
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    // — Sekme çubuğundaki kare buton —
-    // Üste hizala (flex-start) + kendi yarısı (18) kadar yukarı taşı: böylece
-    // karenin dikey merkezi, çubuk yüksekliğinden BAĞIMSIZ olarak tam üst
-    // çizgiye oturur. 45° dönünce yan köşeler çizgiye denk gelir.
+    // — The square button in the tab bar —
+    // Align to top (flex-start) + shift up by half its own size (18): this way
+    // the square's vertical center sits exactly on the top edge, INDEPENDENT of
+    // the bar's height. When rotated 45°, the side corners line up with the edge.
     buttonWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
     square: {
       width: 36,
@@ -187,7 +187,7 @@ const makeStyles = (c: Colors) =>
       backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      // Karenin merkezini çubuğun üst çizgisine ortalar (yarı yukarı = -18).
+      // Centers the square on the bar's top edge (half up = -18).
       marginTop: -18,
       shadowColor: '#000',
       shadowOpacity: 0.2,
@@ -195,15 +195,15 @@ const makeStyles = (c: Colors) =>
       shadowOffset: { width: 0, height: 3 },
       elevation: 6,
     },
-    // ＋ işaretini iki çubukla çiziyoruz; kutu 16×16, çubuklar tam ortada.
+    // The ＋ mark is drawn with two bars; the box is 16×16, bars perfectly centered.
     plusBox: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
     plusBarH: { position: 'absolute', width: 16, height: 2.5, borderRadius: 2, backgroundColor: c.onAccent },
     plusBarV: { position: 'absolute', width: 2.5, height: 16, borderRadius: 2, backgroundColor: c.onAccent },
 
-    // — Açılan overlay —
+    // — The opening overlay —
     backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.35)' },
     fan: {
-      // Seçenekler sekme çubuğunun hemen üstünde, ortalanmış olarak dizilir.
+      // Options are laid out centered, right above the tab bar.
       position: 'absolute',
       left: 0,
       right: 0,
@@ -216,7 +216,7 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'center',
       marginBottom: 18,
     },
-    // Daire tam ortada; etiket, dairenin soluna mutlak konumla yerleşir.
+    // The circle sits dead center; the label is positioned absolutely to its left.
     optionCircle: {
       width: 52,
       height: 52,
@@ -232,7 +232,7 @@ const makeStyles = (c: Colors) =>
     labelBtn: {
       position: 'absolute',
       right: '50%',
-      marginRight: 38, // dairenin yarısı (26) + boşluk (12)
+      marginRight: 38, // half the circle (26) + gap (12)
       justifyContent: 'center',
     },
     optionLabel: {

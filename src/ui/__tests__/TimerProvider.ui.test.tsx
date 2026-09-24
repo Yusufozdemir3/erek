@@ -1,19 +1,20 @@
-// TimerProvider bileşen testi — özellikle SÜREÇ ÖLÜMÜNDEN SONRA GERİ YÜKLEME
-// yolu (bkz. lib/timerLogic.isStaleSession/restoreCommitDelta).
+// TimerProvider component test — specifically the RESTORE-AFTER-PROCESS-DEATH
+// path (see lib/timerLogic.isStaleSession/restoreCommitDelta).
 //
-// NEDEN AYRICA GEREKLİ: timerLogic.test.ts o iki fonksiyonu SAF matematik olarak
-// zaten kapsıyor (kritik P1 düzeltmesi). Ama asıl hata sınıfı BAĞLANTIDA yaşıyordu:
-// "commit(a) yerine commit(a, restoreCommitDelta(a)) çağrılmalı" gibi bir kablo
-// hatası, saf fonksiyon testlerinden hiçbirini kırmaz — ikisi de ayrı ayrı doğru
-// çalışır, yalnızca biri diğerini YANLIŞ ARGÜMANLA çağırıyordur. Bu dosya
-// TimerProvider'ın mount effect'ini gerçek AsyncStorage + gerçek habitRepo
-// (in-memory SQLite) ile çalıştırıp DB'ye YAZILAN miktarı doğrular — yani
-// tam olarak "bağlantı doğru mu" sorusunu sorar.
+// WHY THIS IS NEEDED SEPARATELY: timerLogic.test.ts already covers those two
+// functions as PURE math (critical P1 fix). But the actual bug class lived in
+// the WIRING: a wiring mistake like "commit(a) should be
+// commit(a, restoreCommitDelta(a))" wouldn't break either of the pure
+// function tests — both work correctly on their own, it's just that one is
+// calling the other with the WRONG ARGUMENT. This file runs TimerProvider's
+// mount effect against a real AsyncStorage + a real habitRepo (in-memory
+// SQLite) and verifies the amount WRITTEN to the DB — i.e. it asks exactly
+// the "is the wiring correct" question.
 //
-// TARİH HESABI: `todayDate()` (TimerProvider'ın kullandığı) YEREL saate göredir.
-// Testte "bugün/dün" de aynı fonksiyonla hesaplanır — `toISOString().slice(0,10)`
-// (UTC) kullanmak, testi çalıştıran makinenin UTC ofsetine göre YANLIŞ güne
-// düşürüp testi kendi başına kırılgan kılardı.
+// DATE CALCULATION: `todayDate()` (the one TimerProvider uses) is based on
+// LOCAL time. "today/yesterday" in the test are computed with the same
+// function — using `toISOString().slice(0,10)` (UTC) would land on the WRONG
+// day depending on the test machine's UTC offset, making the test flaky on its own.
 
 import { useEffect } from 'react';
 import { Text } from 'react-native';
@@ -42,7 +43,7 @@ jest.mock('@/ui/AppData', () => ({
   useAppData: () => ({ notifyDataChanged: mockNotifyDataChanged }),
 }));
 
-// Bildirim iptali yan etkidir; bu testin konusu değil.
+// Canceling notifications is a side effect; not the subject of this test.
 jest.mock('@/lib/notifications', () => ({
   cancelTimerDone: jest.fn(async () => {}),
   scheduleTimerDone: jest.fn(async () => {}),
@@ -50,8 +51,8 @@ jest.mock('@/lib/notifications', () => ({
 
 jest.mock('@/lib/haptics', () => ({ notifySuccess: jest.fn() }));
 
-// TimerProvider'ın context'ini dışarı sızdıran minik prob — testin ihtiyacı olan
-// tek şey `active()`'in geri yüklemeden sonra null olduğunu görmek.
+// A tiny probe that leaks TimerProvider's context out — all the test needs is
+// to see that `active()` is null after the restore.
 function Probe({ onReady }: { onReady: (api: ReturnType<typeof useTimer>) => void }) {
   const timer = useTimer();
   useEffect(() => {
@@ -71,17 +72,18 @@ beforeEach(async () => {
 
 describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
   it('İKİ GÜN KAPALI KALAN SEANS: DB\'ye 48 saat değil, hedefe kalan kadarı yazılır', async () => {
-    // Düzeltilen hata tam olarak buydu (bkz. TimerProvider dosya başı yorumu):
-    // 20 dk hedefli bir seans akşam başlatılıp uygulama öldürülür ve iki gün sonra
-    // açılırsa, geçen sürenin TAMAMI habit_logs.amount'a yazılıyordu.
+    // This is exactly the bug that got fixed (see the file-header comment in
+    // TimerProvider): a session with a 20-min target started in the evening,
+    // the app gets killed, and if it's opened two days later, the ENTIRE
+    // elapsed time was being written to habit_logs.amount.
     const habit = habitRepo.create({
       user_id: userId,
       title: 'Kitap oku',
       kind: 'timer',
-      target_amount: 20 * 60, // 20 dk hedef
+      target_amount: 20 * 60, // 20-min target
     });
     const yesterday = daysAgo(2);
-    // Kalıcı durum: iki gün önce, o günün tarihiyle, sıfır birikimle başlamış.
+    // Persisted state: started two days ago, dated that day, with zero accumulation.
     await AsyncStorage.setItem(
       ACTIVE_KEY,
       JSON.stringify({
@@ -101,15 +103,15 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
       </TimerProvider>
     );
 
-    // Async geri yükleme (AsyncStorage okuma + DB yazma) bitene kadar bekle —
-    // tek bir `act(async () => {})` paralel koşuda mikro görevin tamamının
-    // aktığını garanti etmez; waitFor gerçek sonucu poll'lar.
+    // Wait until the async restore (AsyncStorage read + DB write) finishes —
+    // a single `act(async () => {})` doesn't guarantee all microtasks have
+    // flushed on a parallel run; waitFor polls for the actual result.
     await waitFor(() => expect(habitRepo.getAmountOn(habit.id, yesterday)).toBe(20 * 60));
 
-    // Seans KAPANMALI — bayat bir seansla çalışmaya devam etmemeli.
+    // The session MUST close — it shouldn't keep running with a stale session.
     expect(api!.active()).toBeNull();
     expect(api!.isRunning('habit', habit.id)).toBe(false);
-    // Kalıcı durum temizlendi — bir sonraki açılışta aynı seans tekrar işlenmez.
+    // Persisted state was cleared — the same session won't be reprocessed on the next open.
     expect(await AsyncStorage.getItem(ACTIVE_KEY)).toBeNull();
   });
 
@@ -127,7 +129,7 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
         kind: 'habit',
         targetId: habit.id,
         date: today,
-        startedAt: Date.now() - 5 * 60_000, // 5 dk önce başladı
+        startedAt: Date.now() - 5 * 60_000, // started 5 min ago
         baseSeconds: 0,
         targetSeconds: 20 * 60,
       })
@@ -140,9 +142,9 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
       </TimerProvider>
     );
 
-    // Kısa bir çökme/yeniden başlatma seansı BOZMAMALI — hâlâ çalışıyor sayılır.
+    // A short crash/restart session must NOT break it — it's still considered running.
     await waitFor(() => expect(api!.isRunning('habit', habit.id)).toBe(true));
-    // DB'ye henüz hiçbir şey YAZILMADI — commit yalnız duraklat/bitirde olur.
+    // Nothing has been WRITTEN to the DB yet — commit only happens on pause/finish.
     expect(habitRepo.getAmountOn(habit.id, today)).toBe(0);
   });
 
@@ -160,7 +162,7 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
         kind: 'habit',
         targetId: habit.id,
         date: today,
-        startedAt: Date.now() - 30 * 60_000, // 30 dk önce — hedefi (10 dk) çoktan aştı
+        startedAt: Date.now() - 30 * 60_000, // started 30 min ago — already exceeded the 10-min target
         baseSeconds: 0,
         targetSeconds: 10 * 60,
       })
@@ -173,7 +175,7 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
       </TimerProvider>
     );
 
-    await waitFor(() => expect(habitRepo.getAmountOn(habit.id, today)).toBe(10 * 60)); // 30 dk değil, hedef kadar
+    await waitFor(() => expect(habitRepo.getAmountOn(habit.id, today)).toBe(10 * 60)); // the target amount, not 30 min
     expect(api!.active()).toBeNull();
   });
 

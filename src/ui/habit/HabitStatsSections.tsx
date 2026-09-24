@@ -1,10 +1,11 @@
-// Alışkanlık istatistik ekranının GÖRSEL bölümleri — app/habit/[id].tsx'ten
-// AYRILDI (denetim bulgusu H1: ekran dosyası 750 satırdı ve bunun ~390'ı zaten
-// bağımsız fonksiyonlar halinde duran sunum bileşenleriydi).
+// Visual sections of the habit stats screen — SPLIT OUT of app/habit/[id].tsx
+// (audit finding H1: the screen file was 750 lines and ~390 of that was
+// already standalone presentational components).
 //
-// Hepsi salt-okunur: veri okumazlar, mutasyon yapmazlar; yalnız verilen prop'u
-// çizerler.  prop'u ekranın stil fabrikasından gelir (habitStatsStyles.ts)
-// ki tema/ölçü tek yerden yönetilsin.
+// All of them are read-only: they don't read data or perform mutations; they
+// just render the given props. The `styles` prop comes from the screen's
+// style factory (habitStatsStyles.ts) so theme/sizing stays managed from a
+// single place.
 
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -50,8 +51,8 @@ export function StatCard({ label, value, styles }: { label: string; value: strin
   );
 }
 
-// Küçük Gün/Hafta/Ay sekme seçici — Puan ve Geçmiş bölümlerinin ikisi de
-// kullanır (periodRow/periodBtn stilleri Tamamlama grafiğiyle PAYLAŞILIR).
+// Small Day/Week/Month tab selector — used by both the Score and History
+// sections (the periodRow/periodBtn styles are SHARED with the Completion chart).
 export function PeriodTabs({
   period,
   onChange,
@@ -100,19 +101,20 @@ export function HistoryBars({
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const didAutoScroll = useRef(false);
-  // Periyot (Gün/Hafta/Ay) değişince bileşen yeniden mount olmadığı için bayrak
-  // açık kalıyor ve "en güncel veri sağda" otomatik kaydırması atlanıyordu —
-  // kullanıcı sekmeye basınca 30 kovanın EN ESKİsine bakıyordu. Aynı düzeltme
-  // Puan grafiğinde de var (bkz. ScoreLineChart).
+  // The component doesn't remount when the period (Day/Week/Month) changes,
+  // so the flag stayed set and the "latest data on the right" auto-scroll got
+  // skipped — the user would tap a tab and end up looking at the OLDEST of 30
+  // buckets. The same fix exists in the Score chart (see ScoreLineChart).
   useEffect(() => {
     didAutoScroll.current = false;
   }, [period, buckets.length]);
   const [containerWidth, setContainerWidth] = useState(0);
   const max = Math.max(1, ...buckets.map((b) => b.total));
-  // Sütun genişliği: ekranı HISTORY_VISIBLE_COLS kovaya böl. Kova sayısı bundan
-  // AZSA (ör. sadece 4 hafta) mevcut kovalar konteyneri doldurur — aksi halde
-  // çubuklar sol kenara yapışıp sağda çirkin bir boşluk bırakıyordu (Puan
-  // grafiğindeki aynı düzeltme, bkz. ScoreLineChart).
+  // Column width: divide the screen into HISTORY_VISIBLE_COLS buckets. If
+  // there are FEWER buckets than that (e.g. only 4 weeks), the existing
+  // buckets fill the container — otherwise the bars stuck to the left edge
+  // and left an ugly gap on the right (same fix as in the Score chart, see
+  // ScoreLineChart).
   const colWidth = containerWidth > 0 ? containerWidth / Math.min(buckets.length, HISTORY_VISIBLE_COLS) : 0;
 
   return (
@@ -132,9 +134,9 @@ export function HistoryBars({
           <View style={styles.statsHistoryRow}>
             {buckets.map((b, i) => {
               const pct = b.total > 0 ? Math.max(6, Math.round((b.total / max) * 100)) : 0;
-              // Değer yazısı çubuğun İÇİNDE, tepeye yakın (kullanıcı isteği:
-              // "miktarlar kolonların içinde yazsa"). Çubuk bir satır sığdıramayacak
-              // kadar kısaysa yazı çubuğun ÜSTÜNE çıkar.
+              // Value text sits INSIDE the bar, near the top (user request:
+              // "have the amounts written inside the columns"). If the bar is
+              // too short to fit a line, the text moves ABOVE the bar.
               const barH = (HISTORY_TRACK_H * pct) / 100;
               const inside = barH >= HISTORY_VALUE_MIN_BAR;
               const valueTop = inside
@@ -159,8 +161,8 @@ export function HistoryBars({
                   {
                     width: colWidth,
                     top: valueTop,
-                    // Çubuğun üstünde zemin alışkanlık rengi; dışarıda ve soluk
-                    // (partial) çubukta zemin kartın kendisi.
+                    // Inside the bar the background is the habit color;
+                    // outside, and on a faded (partial) bar, the background is the card itself.
                     color: inside && !b.partial ? inkOn(color) : color,
                   },
                 ]}
@@ -209,14 +211,15 @@ export function HabitDarkStatsCard({
   const [scorePeriod, setScorePeriod] = useState<ChartPeriod>('day');
   const [historyPeriod, setHistoryPeriod] = useState<ChartPeriod>('week');
 
-  // Grafik artık yatayda kaydırılabilir (bkz. ScoreLineChart) — mevcut TÜM
-  // kova gösterilir, ekrana sığmayan kısım kaydırarak görülür; ayrı bir
-  // pencere kırpması gerekmiyor.
+  // The chart is now horizontally scrollable (see ScoreLineChart) — ALL
+  // existing buckets are shown, and whatever doesn't fit the screen is
+  // reached by scrolling; no separate window clipping is needed.
   const scoreBuckets = stats.series ? stats.series[scorePeriod] : [];
   const scoreUnit = t(PERIOD_UNIT_KEY[scorePeriod]);
-  // Etiket: sadece gün numarası, ay değiştiğinde bir kez ay adı da eklenir
-  // (historyBarLabel ile AYNI mantık — "Geçmiş" çubuklarındaki desenin aynısı,
-  // kullanıcı isteği: her noktada ayı tekrar etmesin, kalabalık olmasın).
+  // Label: just the day number, with the month name added once when the
+  // month changes (SAME logic as historyBarLabel — identical to the pattern
+  // in the "History" bars; user request: don't repeat the month at every
+  // point, don't clutter it).
   const scorePoints = scoreBuckets.map((b, i) => ({
     value: b.score,
     label: historyBarLabel(scorePeriod, b.date, i > 0 ? scoreBuckets[i - 1].date : null, lang),
@@ -295,9 +298,9 @@ export function HabitDarkStatsCard({
   );
 }
 
-// Ay takvimi: Pazartesi başlangıçlı hafta ızgarası, her hücrede gün numarası.
-// Gelecek günler (henüz yaşanmadı) "planlı değil" ile aynı nötr görünümde —
-// ayrı bir efsane girdisi gerektirmesin diye bilinçli olarak aynı stil.
+// Month calendar: Monday-first week grid, day number in each cell. Future
+// days (not yet happened) share the same neutral look as "not scheduled" —
+// deliberately the same style so it doesn't need a separate legend entry.
 export function MonthCalendar({
   weeks,
   color,

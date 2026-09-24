@@ -1,7 +1,7 @@
-// Özel saat seçici — native @react-native-community/datetimepicker'ın yerini
-// alır. İki mod: kaydırmalı "tekerlek" (saat/dakika, varsayılan) ve elle yazma
-// (klavye ikonuyla geçilir — hızlı, kesin bir saat girmek isteyenler için).
-// İki mod aynı hour/minute state'ini paylaşır; aralarında geçişte senkron kalır.
+// Custom time picker — replaces the native @react-native-community/datetimepicker.
+// Two modes: a scrollable "wheel" (hour/minute, default) and manual typing
+// (switched to via the keyboard icon — for those who want to enter a precise
+// time quickly). Both modes share the same hour/minute state; they stay in sync when switching.
 
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -18,7 +18,7 @@ interface Props {
   onClose: () => void;
   onConfirm: (date: Date) => void;
   title?: string;
-  minuteStep?: number; // varsayılan 1
+  minuteStep?: number; // default 1
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -43,8 +43,8 @@ export function TimePickerModal({ visible, value, onClose, onConfirm, title, min
     const m = value.getMinutes();
     return minuteStep > 1 ? Math.round(m / minuteStep) * minuteStep : m;
   });
-  // Elle yazma modunun taslak metinleri — kullanıcı yazarken (tek hane, boş vb.)
-  // ham haliyle tutulur; hour/minute'a ancak geçerli olunca yansır.
+  // Draft text for manual entry mode — kept as raw text while the user types
+  // (single digit, empty, etc.); only reflected into hour/minute once valid.
   const [hourText, setHourText] = useState(() => pad2(hour));
   const [minuteText, setMinuteText] = useState(() => pad2(minute));
 

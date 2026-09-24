@@ -1,9 +1,9 @@
-// "Bugün" sekmesi — günlük özet ekranı.
-// İki bölüm, alt alta: (1) o güne vadeli görevler, (2) günlük alışkanlıklar + seri.
-// Ekleme yok; görev/alışkanlık ekleme kendi sekmelerinde. Burası sadece
-// görüntüleme/işaretleme ekranı.
-// Tarihe dokununca takvim açılır; başka bir güne gidip o günü işaretleyebilirsin.
-// Mimari kural: SQL yok; yalnızca taskRepo / habitRepo çağrılır.
+// "Today" tab — the daily summary screen.
+// Two sections stacked: (1) tasks due that day, (2) daily habits + streak.
+// No adding here; task/habit adding lives on their own tabs. This screen is
+// only for viewing/checking off.
+// Tapping the date opens the calendar; you can jump to another day and check it off.
+// Architecture rule: no SQL; only taskRepo / habitRepo are called.
 
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -33,12 +33,12 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { Lang } from '@/i18n/translations';
 import { DATE_LOCALE, fullDateLabel, PRIORITY_COLOR, shortDate, type Colors } from '@/ui/theme';
 
-// Liste kartları tamamlanınca yeniden sıralanır (tamamlanan alta iner); her kart
-// bu layout geçişiyle sarıldığından konum değişimi yumuşakça animasyonlanır.
+// List cards re-sort once completed (completed items sink to the bottom); each
+// card is wrapped in this layout transition so the position change animates smoothly.
 const LIST_LAYOUT = LinearTransition.duration(260);
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-// Başlık: bugünse "Bugün" (çevrili), değilse o günün adı (örn. "Pazartesi").
+// Title: "Today" (translated) if it's today, otherwise that day's name (e.g. "Monday").
 function titleFor(ymd: string, today: string, lang: Lang, todayLabel: string): string {
   if (ymd === today) return todayLabel;
   const locale = DATE_LOCALE[lang];
@@ -50,11 +50,11 @@ type TypeFilter = 'all' | 'task' | 'habit';
 
 export default function TodayScreen() {
   const { colors, shared } = useTheme();
-  // Not: map değişkeni `t` (görev) ile çakışmasın diye i18n `tr` alınır.
+  // Note: i18n's `t` is aliased to `tr` so it doesn't clash with the `t` (task) map variable.
   const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
-  // selectedDate paylaşılır (AppData): merkezi ＋ menüsü buradan okuyup yeni
-  // görevi bakılan güne varsayılan tarihle ekler.
+  // selectedDate is shared (AppData): the central ＋ menu reads it from here to
+  // add a new task with the viewed day as its default date.
   const { user, selectedDate, setSelectedDate, hideCompleted } = useAppData();
   const today = todayDate();
 
@@ -64,8 +64,8 @@ export default function TodayScreen() {
 
   const { tasks, habits, subtaskCounts, reload } = useTodayData(user.id, selectedDate, today);
 
-  // Filtreler yalnızca görünümü daraltır — özet (DailySummary) ve gerçek
-  // "gün boş mu" durumu her zaman tam listeye göre hesaplanır.
+  // Filters only narrow the view — the summary (DailySummary) and the real
+  // "is the day empty" state are always computed against the full list.
   const showTasks = typeFilter !== 'habit';
   const showHabits = typeFilter !== 'task';
   const filteredTasks = showTasks
@@ -79,25 +79,25 @@ export default function TodayScreen() {
     !dayIsEmpty && filteredTasks.length === 0 && filteredHabits.length === 0;
 
   const isToday = selectedDate === today;
-  // Gelecek bir gün görüntüleniyorsa alışkanlık işaretlenemez — henüz yaşanmamış
-  // bir günü "yapıldı" saymak streak'i ve geçmişi anlamsızlaştırır.
+  // Habits can't be checked off while viewing a future day — counting an
+  // unlived day as "done" would make streaks and history meaningless.
   const isFuture = selectedDate > today;
 
-  // Bugünün üst özeti için tamamlanma sayıları.
+  // Completion counts for today's top summary.
   const habitsDone = habits.filter((h) => h.completed).length;
   const tasksDone = tasks.filter((t) => t.completed_at !== null).length;
 
-  // Tekrarlayan görev kartındaki "🔁 Her gün / Pzt·Çar·Cum / 3 günde bir ..."
-  // rozeti için etiket seti (bkz. helpers.buildScheduleLabels).
+  // Label set for the recurring-task card's "🔁 Every day / Mon·Wed·Fri /
+  // every 3 days ..." badge — see helpers.buildScheduleLabels.
   const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
   const toggleTask = (t: Task) => {
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
-    // Tekrarlayan görev "tamamla"da tamamlanmak yerine bir sonraki tarihe ileri
-    // sarabilir — bu durumda görev hâlâ tamamlanmamış ama yeni tarihlidir; karar
-    // güncel DB durumuna bakılarak verilir (bkz. refreshTaskReminders).
+    // Completing a recurring task may fast-forward it to its next date instead
+    // of being marked done — in that case the task is still not completed but
+    // has a new date; the decision is based on the current DB state (see refreshTaskReminders).
     refreshTaskReminders(t.id);
     reload();
   };
@@ -108,8 +108,8 @@ export default function TodayScreen() {
     habitRepo.toggleLog(h.id, selectedDate, completing);
     completing ? notifySuccess() : tapLight();
     reload();
-    // İşaretleme lokal reload kullanır (dataVersion artmaz); ana ekran widget'ını
-    // ayrıca tazele. refreshWidget her zaman BUGÜNÜ hesaplar (selectedDate değil).
+    // Checking off uses a local reload (dataVersion doesn't bump); also refresh
+    // the home screen widget. refreshWidget always computes for TODAY (not selectedDate).
     refreshWidget(user.id);
   };
 
@@ -121,8 +121,8 @@ export default function TodayScreen() {
     refreshWidget(user.id);
   };
 
-  // Klavyeden girilen mutlak değer — mevcut delta tabanlı incrementAmount'a
-  // fark hesaplanarak devredilir, ayrı bir repo fonksiyonu gerekmez.
+  // An absolute value typed on the keyboard — handed off to the existing
+  // delta-based incrementAmount by computing the difference; no separate repo function needed.
   const setHabitAmount = (h: HabitView, value: number) => {
     if (isFuture) return;
     habitRepo.incrementAmount(h.id, selectedDate, value - h.amount, h.target);
@@ -147,7 +147,7 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* Tarihe dokun -> takvim açılır (ikon yok, sadece metin) */}
+        {/* Tap the date -> calendar opens (no icon, just text) */}
         <Pressable onPress={() => setShowPicker(true)} hitSlop={6}>
           <Text style={[shared.subtitle, styles.dateLink, { textTransform: 'capitalize' }]}>
             {fullDateLabel(selectedDate, lang)}
@@ -161,7 +161,7 @@ export default function TodayScreen() {
           onConfirm={onPickDate}
         />
 
-        {/* Günün ilerleme özeti — yalnızca bugün için anlamlı. */}
+        {/* Progress summary for the day — only meaningful for today. */}
         {isToday && (
           <DailySummary
             habitsDone={habitsDone}
@@ -171,8 +171,8 @@ export default function TodayScreen() {
           />
         )}
 
-        {/* Tür filtresi — yalnızca liste görünümünü daraltır. "Tamamlananları
-            gizle" artık kalıcı bir tercih olarak Profil'de ayarlanır. */}
+        {/* Type filter — only narrows the list view. "Hide completed" is now
+            set as a persistent preference on Profile. */}
         {!dayIsEmpty && (
           <View style={styles.filterRow}>
             {(['all', 'task', 'habit'] as const).map((f) => {
@@ -196,8 +196,8 @@ export default function TodayScreen() {
           </View>
         )}
 
-        {/* Görevler ve alışkanlıklar tek liste halinde, ayrı başlık olmadan.
-            Görevde öncelik noktası, alışkanlıkta 🔥 seri ayırt edici işaret. */}
+        {/* Tasks and habits in a single list, no separate heading. A priority
+            dot marks a task, a 🔥 streak marks a habit. */}
         <View style={styles.list}>
           {dayIsEmpty ? (
             <EmptyState
@@ -260,7 +260,7 @@ export default function TodayScreen() {
 
               {filteredHabits.map((h) =>
                 h.kind === 'timer' ? (
-                  // Zamanlayıcı alışkanlık: salt-okunur ilerleme (Aşama B'de kontrol).
+                  // Timer habit: read-only progress (control is in Phase B).
                   <Animated.View
                     key={h.id}
                     layout={LIST_LAYOUT}
@@ -279,7 +279,7 @@ export default function TodayScreen() {
                     />
                   </Animated.View>
                 ) : h.target != null ? (
-                  // Nicel alışkanlık: sayaç ile miktar gir (gelecek günde devre dışı).
+                  // Numeric habit: enter an amount with the stepper (disabled on a future day).
                   <Animated.View
                     key={h.id}
                     layout={LIST_LAYOUT}
@@ -300,7 +300,7 @@ export default function TodayScreen() {
                     />
                   </Animated.View>
                 ) : (
-                  // İkili alışkanlık: karta dokununca işaretle (gelecek günde devre dışı).
+                  // Binary habit: tap the card to check it off (disabled on a future day).
                   <AnimatedPressable
                     key={h.id}
                     layout={LIST_LAYOUT}
@@ -315,8 +315,8 @@ export default function TodayScreen() {
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
                       {h.title}
                     </Text>
-                    {/* Kota alışkanlığı: haftalık ilerleme ("2/3"). Seri hafta
-                        bazında olduğundan madalya eşiği hafta×7 ile ölçeklenir. */}
+                    {/* Quota habit: weekly progress ("2/3"). Since the streak is
+                        weekly, the badge threshold is scaled by week×7. */}
                     {h.weekQuota && (
                       <Text style={styles.quotaChip}>
                         {h.weekQuota.done}/{h.weekQuota.target}
@@ -361,7 +361,7 @@ const makeStyles = (c: Colors) =>
     filterChipTextActive: { color: c.onAccent },
     list: { marginTop: 16 },
     subCount: { fontSize: 12, color: c.muted, marginTop: 3 },
-    // Kota alışkanlığının "2/3" haftalık ilerleme göstergesi (kartın sağında).
+    // The quota habit's "2/3" weekly progress indicator (on the right side of the card).
     quotaChip: {
       fontSize: 13,
       fontWeight: '800',

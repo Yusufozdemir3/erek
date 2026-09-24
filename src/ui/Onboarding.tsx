@@ -1,15 +1,16 @@
-// İlk açılış tanıtımı (onboarding) — 4 sayfalık kaydırmalı tanıtım, yalnızca
-// İLK açılışta gösterilir (bayrak AsyncStorage'da; uygulama silinince sıfırlanır).
-// OnboardingGate kök layout'ta Stack'in yanında durur: bayrak yüklenene kadar
-// hiçbir şey çizmez (açılışı geciktirmez), görülmemişse tam ekran Modal açar.
-// "Atla" her sayfada, son sayfada "Başla"; ikisi de bayrağı yazar.
+// First-launch onboarding — a 4-page swipeable intro, shown only on the FIRST
+// launch (flag lives in AsyncStorage; resets if the app is uninstalled).
+// OnboardingGate sits next to the Stack in the root layout: renders nothing until
+// the flag loads (doesn't delay startup), and opens a full-screen Modal if unseen.
+// "Skip" appears on every page, "Start" on the last one; both write the flag.
 //
-// GÖRSEL DİL: rengi TEK kaynaktan alır — colors.primary/primarySoft (kullanıcının
-// Profil'den seçtiği vurgu rengi). Sayfa başına farklı renk YOK bilerek: theme.ts
-// uygulamanın tek-vurgu, tutarlı "editorial" kimliğini özellikle savunuyor (bkz.
-// ACCENT_THEMES yorumu) — onboarding'i renk renk bir tanıtım şeridine çevirmek o
-// kimlikle çelişirdi. İkon rozeti + arka plan gradyanı AddSheet'teki soluk-zeminli
-// ikon kutusuyla aynı dilde ("premium" his, yeni bir görsel motif icat etmeden).
+// VISUAL LANGUAGE: color comes from a SINGLE source — colors.primary/primarySoft
+// (the accent color the user picked in Profile). Deliberately NO per-page color:
+// theme.ts specifically champions the app's single-accent, consistent "editorial"
+// identity (see the ACCENT_THEMES comment) — turning onboarding into a
+// multicolored promo reel would contradict that identity. The icon badge +
+// background gradient use the same language as AddSheet's faint-background icon
+// box ("premium" feel, without inventing a new visual motif).
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -29,11 +30,13 @@ import type { Colors } from '@/ui/theme';
 
 const SEEN_KEY = 'onboarding:done';
 
-// Metinler i18n anahtarı; render'da t() ile çevrilir. Sıra bilinçli: önce ürünün
-// çekirdeği (hepsi bir arada), sonra esnekliği (üç takip tipi + seri/puan), sonra
-// ayırt edici bir özellik (ana ekran widget'ı — eskiden hiçbir yerde anlatılmıyordu),
-// son olarak güven (veri kontrolü). "Neden bu uygulama" sorusuna giderek yaklaşan
-// bir sıra; kapanış hep güven notunda kalsın diye "Verilerin sende" son sayfada.
+// Texts are i18n keys; translated with t() at render time. The order is
+// deliberate: first the product's core (everything in one place), then its
+// flexibility (three tracking types + streaks/score), then a differentiating
+// feature (the home screen widget — previously never explained anywhere), and
+// finally trust (data control). An order that progressively answers "why this
+// app"; "your data stays with you" is last so the close always lands on the
+// trust note.
 const PAGES: { emoji: string; titleKey: string; bodyKey: string }[] = [
   { emoji: '📅', titleKey: 'onboarding.page1Title', bodyKey: 'onboarding.page1Body' },
   { emoji: '🔥', titleKey: 'onboarding.page2Title', bodyKey: 'onboarding.page2Body' },
@@ -57,11 +60,11 @@ function Onboarding({ onDone }: { onDone: () => void }) {
 
   return (
     <Modal visible animationType="fade" onRequestClose={onDone}>
-      {/* Vurgu renginin soluk tonundan zemine inen ince bir gradyan — düz renkten
-          daha canlı ama tema/vurgu rengi ne olursa olsun kendiliğinden uyar
-          (sabit bir renk yazılsaydı kullanıcının seçtiği vurgu/karanlık temayla
-          çatışabilirdi). locations ekranın alt yarısını düz zemine bırakır ki
-          metin ve düğme her zaman okunaklı kalsın. */}
+      {/* A subtle gradient from the accent color's soft tone down to the background —
+          more lively than a flat color, but it auto-adapts no matter what the
+          theme/accent color is (a hardcoded color could clash with the user's
+          chosen accent or a dark theme). `locations` leaves the bottom half of the
+          screen flat so text and the button always stay readable. */}
       <LinearGradient
         colors={[colors.primarySoft, colors.bg]}
         locations={[0, 0.6]}
@@ -117,26 +120,27 @@ function Onboarding({ onDone }: { onDone: () => void }) {
   );
 }
 
-// — SIRA: TANITIM ÖNCE, GİRİŞ SONRA —
-// Giriş kapısı (LoginGate) da kök layout'ta bağımsız bir Modal açıyor. İkisi
-// arasında hiçbir sıralama yoktu ve gerçek ilk açılışta ikisi aynı anda mount
-// olup giriş ekranı tanıtımın üstüne biniyordu. LoginGate artık bu bayrağa
-// bakıyor; tanıtım kapanır kapanmaz haberi olsun diye küçük bir bildirim var
-// (AsyncStorage'ı yoklamak yerine — bayrak zaten bu süreçte yazılıyor).
+// — ORDER: ONBOARDING FIRST, LOGIN SECOND —
+// The login gate (LoginGate) also opens an independent Modal in the root layout.
+// There used to be no ordering between the two, and on a real first launch both
+// mounted at the same time, with the login screen ending up on top of onboarding.
+// LoginGate now watches this flag; there's a small notification so it hears about
+// it the instant onboarding closes (instead of polling AsyncStorage — the flag is
+// already being written in this same process).
 export const ONBOARDING_SEEN_KEY = SEEN_KEY;
 
 type Listener = () => void;
 const doneListeners = new Set<Listener>();
 
-/** Tanıtım tamamlandığında (ya da atlandığında) haber verir; abonelikten çıkarır. */
+/** Notifies when onboarding completes (or is skipped); returns an unsubscribe function. */
 export function onOnboardingDone(fn: Listener): () => void {
   doneListeners.add(fn);
   return () => doneListeners.delete(fn);
 }
 
-// Kök layout'a konan kapı: bayrağı okur, görülmemişse tanıtımı gösterir.
+// Gate placed on the root layout: reads the flag, shows onboarding if unseen.
 export function OnboardingGate() {
-  const [seen, setSeen] = useState<boolean | null>(null); // null = henüz bilinmiyor
+  const [seen, setSeen] = useState<boolean | null>(null); // null = not known yet
 
   useEffect(() => {
     AsyncStorage.getItem(SEEN_KEY).then((v) => setSeen(v === '1'));
@@ -156,7 +160,7 @@ export function OnboardingGate() {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    // backgroundColor artık LinearGradient'te — screen yalnız flex:1 verir.
+    // backgroundColor now lives on the LinearGradient — screen only sets flex:1.
     screen: { flex: 1 },
     skip: { position: 'absolute', top: 56, right: 24, zIndex: 1 },
     skipText: { fontSize: 15, fontWeight: '600', color: c.muted },
@@ -167,8 +171,8 @@ const makeStyles = (c: Colors) =>
       paddingHorizontal: 36,
       paddingBottom: 40,
     },
-    // AddSheet'teki soluk-zeminli ikon kutusuyla aynı dil (optionIcon) — büyük
-    // emoji artık boşlukta asılı durmak yerine bir kimliğe/çerçeveye oturuyor.
+    // Same language as AddSheet's faint-background icon box (optionIcon) — the
+    // big emoji now sits within an identity/frame instead of floating in space.
     iconBadge: {
       width: 128,
       height: 128,
@@ -197,8 +201,9 @@ const makeStyles = (c: Colors) =>
       borderRadius: 14,
       alignItems: 'center',
       paddingVertical: 15,
-      // Hafif kaldırma — düğme artık düz zemin değil gradyan üstünde, ince bir
-      // gölge onu zeminden ayırır (iOS: shadow*, Android: elevation).
+      // A slight lift — the button now sits on a gradient instead of a flat
+      // background, so a subtle shadow separates it from the surface (iOS:
+      // shadow*, Android: elevation).
       shadowColor: c.primary,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.28,

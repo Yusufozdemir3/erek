@@ -1,54 +1,57 @@
-// Alışkanlık PUANININ saf matematiği — UI'sız, test edilebilir (timerLogic.ts /
-// goalProjection.ts ile aynı gerekçe). useHabitStats bunu çağırır.
+// The pure math behind the habit SCORE — no UI, testable (same rationale as
+// timerLogic.ts / goalProjection.ts). Called by useHabitStats.
 //
-// MODEL (2026-07-23, kullanıcı kararı): puan SIFIRDAN BAŞLAR ve KAZANILIR.
-// Yeni bir alışkanlık ilk gün kusursuz olsa bile %100 göstermez; her tamamlanan
-// kova puanı hedefe biraz daha yaklaştırır, kaçırılan kova geri çeker. Referans
-// davranış Loop Habit Tracker (kullanıcının beğendiği grafik).
+// MODEL (2026-07-23, user decision): the score STARTS AT ZERO and is EARNED.
+// A brand-new habit doesn't show 100% even if day one is perfect; each
+// completed bucket nudges the score a bit closer to the target, a missed
+// bucket pulls it back. The reference behavior is Loop Habit Tracker (whose chart the user liked).
 //
-// İki girdi kuralı:
-//   1) ratio = 0..1  -> kova EMA'yı günceller (yapıldı / kısmen yapıldı / kaçtı)
-//   2) ratio = null  -> NÖTR kova: puan güncellenmez, bir öncekiyle AYNI kalır.
-//      "Bugün bu alışkanlığın günü değildi" ile "yapman gerekiyordu, yapmadın"
-//      artık aynı sinyal DEĞİL. Nötr kova diziden atılmaz, çizgi kesintisiz
-//      aksın diye aynı puanla tekrar edilir (kullanıcı isteği: "grafik
-//      devamlılığı göstersin").
+// Two input rules:
+//   1) ratio = 0..1  -> the bucket updates the EMA (done / partially done / missed)
+//   2) ratio = null  -> NEUTRAL bucket: the score isn't updated, it stays THE
+//      SAME as the previous one. "Today wasn't this habit's day" is no longer
+//      the same signal as "you were supposed to do it and didn't." A neutral
+//      bucket isn't dropped from the array, it repeats the same score so the
+//      line flows without a break (user request: "the chart should show continuity").
 //
-// — TARİHÇE: neden yanlılık düzeltmesi YOK —
-// Bir ara (denetim #21) EMA `acc / (1-(1-alpha)^t)` ile normalize ediliyordu;
-// amacı "10 gündür kusursuz alışkanlık neden %51,6 gösteriyor" şikâyetiydi.
-// Yan etkisi: puan ilk kovada hemen %100'e fırlıyordu — yani kazanılan değil,
-// peşin verilen bir puan. Kullanıcı bunun yerine sıfırdan tırmanan puanı seçti,
-// düzeltme kaldırıldı. #21'in ASIL bulgusu (doğumdan önceki hayalet kovalar
-// puanı düşürüyordu) bu modelde kendiliğinden yok olur: baştaki sıfırlar puanı
-// zaten 0'da tutar, ilk gerçek kovadan itibaren tırmanış aynıdır. Kesme
-// (useHabitStats.trimLeading) artık yalnızca GÖRÜNÜM içindir (10 ay boş çubuk
-// göstermemek), matematiği etkilemez.
+// — HISTORY: why there's NO bias correction —
+// At one point (audit #21) the EMA was normalized with `acc / (1-(1-alpha)^t)`;
+// the goal was to address the complaint "why does a 10-day-perfect habit show
+// 51.6%." The side effect: the score would jump straight to 100% on the very
+// first bucket — i.e. a score handed out up front rather than earned. The
+// user chose the score that climbs from zero instead, and the correction was
+// removed. #21's ACTUAL finding (that ghost buckets before the habit's birth
+// were dragging the score down) disappears on its own under this model: the
+// leading zeros already keep the score at 0, so the climb from the first real
+// bucket onward is identical either way. Trimming
+// (useHabitStats.trimLeading) is now purely for DISPLAY (not showing 10
+// months of empty bars), it doesn't affect the math.
 //
-// BİLİNEN SONUÇ: "yeni ve kusursuz" ile "uzun süre batık, son 10 gündür
-// toparlanan" alışkanlık ilk haftalarda benzer puan gösterir. Puanın kazanılan
-// bir şey olmasının doğal bedeli — ayrıştırmak istersek Tamamlanma/seri
-// kartları bu ayrımı zaten veriyor.
+// KNOWN CONSEQUENCE: a "new and perfect" habit and a "long-struggling habit
+// that's been recovering for the last 10 days" will show similar scores in
+// the first weeks. This is the natural cost of the score being something
+// earned — if you want to tell them apart, the Completion/streak cards already provide that distinction.
 //
-// Katsayı 0.2 iken tek günün etkisi fazla hissediliyordu (kullanıcı geri
-// bildirimi) — 0.07'ye düşürüldü. Gün kovasında yarılanma ~9,6 gün.
+// At a coefficient of 0.2, a single day's impact felt too strong (user
+// feedback) — lowered to 0.07. Half-life in the Day bucket is ~9.6 days.
 export const SCORE_EMA_ALPHA = 0.07;
 
-// Hafta ve ay kovaları için TAKVİM-EŞDEĞERİ katsayılar. Üç sekmede de tek bir
-// alpha kullanmak, aynı alışkanlığı Gün'de %94 Hafta'da %58 gösteriyordu (aynı
-// ekranda çelişki — kullanıcı bu sınıf tutarsızlığı daha önce de bildirmişti).
-// Bir haftalık kova 7 günlük sönümlemeye, bir aylık kova 30 günlüğe denk gelsin:
+// CALENDAR-EQUIVALENT coefficients for the week and month buckets. Using a
+// single alpha across all three tabs made the same habit show 94% on Day but
+// 58% on Week (a contradiction on the same screen — users had reported this
+// class of inconsistency before). Make a weekly bucket correspond to 7 days
+// of decay, and a monthly bucket to 30 days:
 export const SCORE_EMA_ALPHA_WEEK = 1 - Math.pow(1 - SCORE_EMA_ALPHA, 7);
 export const SCORE_EMA_ALPHA_MONTH = 1 - Math.pow(1 - SCORE_EMA_ALPHA, 30);
 
-// NOT: Bir zamanlar SCORE_MIN_DAYS=7 kilidi vardı ("Puan 7 gün sonra açılır").
-// KALDIRILDI (2026-07-23): puan artık peşin verilmiyor, 0'dan tırmanıyor — ilk
-// günlerin düşük değeri yanıltıcı bir sayı değil, modelin kendisi. Kilit tam da
-// görülmek istenen tırmanışın başını gizliyordu.
+// NOTE: There used to be a SCORE_MIN_DAYS=7 lock ("Score unlocks after 7
+// days"). REMOVED (2026-07-23): the score is no longer handed out up front,
+// it climbs from 0 — a low value in the early days isn't a misleading number,
+// it's the model itself. The lock was hiding exactly the beginning of the climb it was meant to showcase.
 
-// Oran dizisi -> aynı uzunlukta 0..1 puan dizisi. Puan 0'dan başlar.
-// null = nötr kova (puan taşınır, EMA güncellenmez). Boş dizi boş döner.
-// alpha çağırana aittir (gün/hafta/ay için farklı — yukarıdaki sabitler).
+// Ratio array -> a score array of the same length, 0..1. The score starts at 0.
+// null = neutral bucket (score carries over, EMA isn't updated). An empty
+// array returns empty. alpha belongs to the caller (differs for day/week/month — the constants above).
 export function emaScores(
   ratios: Array<number | null>,
   alpha: number = SCORE_EMA_ALPHA

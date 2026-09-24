@@ -1,5 +1,5 @@
-// Migration sistemi testleri: tam şema kurulumu, sürüm damgası, idempotentlik
-// ve şemanın kritik kısıtları (UNIQUE, FK).
+// Migration system tests: full schema setup, version stamp, idempotency,
+// and the schema's critical constraints (UNIQUE, FK).
 
 import { getDb, runMigrations } from '../database';
 import { migrations } from '../migrations/001_initial';

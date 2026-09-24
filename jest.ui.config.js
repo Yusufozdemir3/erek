@@ -1,12 +1,13 @@
-// Bileşen (UI) testleri: gerçek React ağacını render eder (react-test-renderer +
-// @testing-library/react-native). jest-expo preset'i RN/expo modüllerini babel ile
-// dönüştürür ve doğru test ortamını kurar. Yalnızca *.ui.test.tsx dosyalarını koşar;
-// hızlı Node mantık testleri ayrı projededir (jest.logic.config.js).
+// Component (UI) tests: render the real React tree (react-test-renderer +
+// @testing-library/react-native). The jest-expo preset transforms RN/expo
+// modules with babel and sets up the right test environment. Only runs
+// *.ui.test.tsx files; the fast Node logic tests live in a separate project
+// (jest.logic.config.js).
 //
-// Native modül dublörleri src/test/setup-ui.tsx içinde (DateTimePicker, haptics,
-// bildirimler, expo-localization). expo-sqlite/crypto yine node tabanlı sahtelerle
-// eşlenir ki bileşen testleri gerçek repo davranışını (ör. alt görev → görev
-// tamamlanması) uçtan uca doğrulayabilsin.
+// Native module doubles live in src/test/setup-ui.tsx (DateTimePicker, haptics,
+// notifications, expo-localization). expo-sqlite/crypto are mapped to the same
+// node-based fakes so component tests can verify real repo behavior end-to-end
+// (e.g. subtask → task completion).
 /** @type {import('jest').Config} */
 module.exports = {
   displayName: 'ui',

@@ -1,10 +1,10 @@
-// Puan testleri. Model: puan SIFIRDAN başlar ve kazanılır; nötr (null) kova
-// puanı ne yükseltir ne düşürür (bkz. habitScore.ts başlığı).
+// Score tests. Model: the score STARTS AT ZERO and is earned; a neutral
+// (null) bucket neither raises nor lowers the score (see the header of habitScore.ts).
 //
-// Bu dosya iki eski hatanın da regresyon korumasıdır:
-//   (a) #21: doğumdan önceki kovaların puanı bastırması — sıfırdan-başlayan
-//       modelde kendiliğinden yok (baştaki sıfırlar puanı zaten 0'da tutar),
-//   (b) 2026-07-23: plansız günlerin "kaçırıldı" sayılması — artık null.
+// This file is regression protection for two past bugs:
+//   (a) #21: buckets before the habit's birth suppressing the score — gone on
+//       its own under the starts-at-zero model (the leading zeros already keep the score at 0),
+//   (b) 2026-07-23: unscheduled days being counted as "missed" — now null.
 
 import {
   SCORE_EMA_ALPHA,
@@ -14,7 +14,7 @@ import {
 } from '../habitScore';
 
 const last = (a: number[]) => a[a.length - 1];
-const pct = (x: number) => Math.round(x * 1000) / 10; // %XX.X
+const pct = (x: number) => Math.round(x * 1000) / 10; // XX.X%
 
 describe('emaScores — temel davranış', () => {
   it('boş dizi boş döner', () => {
@@ -55,7 +55,7 @@ describe('puan SIFIRDAN başlar ve kazanılır (kullanıcı kararı 2026-07-23)'
   });
 
   it('kusursuz gidişte puan %100\'e YAKINSAR ama aşmaz', () => {
-    expect(last(emaScores(Array(10).fill(1)))).toBeLessThan(0.6); // 10 gün: ~%51.6
+    expect(last(emaScores(Array(10).fill(1)))).toBeLessThan(0.6); // 10 days: ~51.6%
     expect(last(emaScores(Array(200).fill(1)))).toBeGreaterThan(0.99);
     expect(last(emaScores(Array(200).fill(1)))).toBeLessThanOrEqual(1);
   });
@@ -68,9 +68,9 @@ describe('puan SIFIRDAN başlar ve kazanılır (kullanıcı kararı 2026-07-23)'
 });
 
 describe('nötr kova (null) — plansız gün puanı düşürmez', () => {
-  // ÖLÇÜLEN HATA (2026-07-23): Pzt/Çar/Cum planlı, 90 gün hiç kaçırılmamış
-  // alışkanlık Gün sekmesinde %42.7 gösteriyordu — plansız 4 gün "yapmadın"
-  // sayıldığı için. Hafta/Ay sekmeleri aynı anda %100 diyordu.
+  // MEASURED BUG (2026-07-23): a habit scheduled Mon/Wed/Fri and never missed
+  // in 90 days was showing 42.7% on the Day tab — because the 4 unscheduled
+  // days were counted as "didn't do it." The Week/Month tabs said 100% at the same time.
   it('nötr kova puanı DEĞİŞTİRMEZ (bir öncekini tekrarlar)', () => {
     const scores = emaScores([1, null, null, null]);
     expect(scores[1]).toBe(scores[0]);
@@ -80,10 +80,10 @@ describe('nötr kova (null) — plansız gün puanı düşürmez', () => {
   it('haftada 3 planlı gün kusursuzsa, plansız günler puanı bastırmaz', () => {
     const ratios: Array<number | null> = [];
     for (let i = 0; i < 90; i++) {
-      const scheduled = [0, 2, 4].includes(i % 7); // Pzt/Çar/Cum
+      const scheduled = [0, 2, 4].includes(i % 7); // Mon/Wed/Fri
       ratios.push(scheduled ? 1 : null);
     }
-    // Eski davranış (null yerine 0) burada %42.7 veriyordu.
+    // The old behavior (0 instead of null) gave 42.7% here.
     expect(pct(last(emaScores(ratios)))).toBeGreaterThan(90);
   });
 
@@ -110,8 +110,8 @@ describe('emaScores — güncelliğe ağırlık verir (EMA olmanın anlamı)', (
 
   it('uzun kötü geçmiş + son 20 gün kusursuz, toparlanma görünür', () => {
     const score = last(emaScores([...Array(50).fill(0), ...Array(20).fill(1)]));
-    // 20 kusursuz gün sıfırdan belirgin biçimde tırmandırır (~%76.6) ama
-    // 50 günlük kötü geçmişin ardından tek başına tavan YAPMAZ.
+    // 20 perfect days climb noticeably from zero (~76.6%) but don't hit the
+    // ceiling on their own after a 50-day bad history.
     expect(score).toBeGreaterThan(0.5);
     expect(score).toBeLessThan(0.9);
   });
@@ -123,9 +123,9 @@ describe('emaScores — güncelliğe ağırlık verir (EMA olmanın anlamı)', (
 });
 
 describe('#21 regresyonu — hayalet kovalar artık puanı bozamaz', () => {
-  // Sıfırdan-başlayan modelde baştaki sıfırlar puanı 0'da tutar; ilk gerçek
-  // kovadan sonraki tırmanış kesilmiş diziyle BİREBİR aynıdır. Yani kesmenin
-  // (trimLeading) matematiksel bir etkisi kalmadı — yalnız görünüm için.
+  // Under the starts-at-zero model, the leading zeros keep the score at 0;
+  // the climb after the first real bucket is IDENTICAL to the trimmed array.
+  // So trimming (trimLeading) has no mathematical effect left — it's for display only.
   it('öne eklenen hayalet sıfırlar sonucu değiştirmez', () => {
     const kesilmis = last(emaScores(Array(10).fill(1)));
     const hayaletli = last(emaScores([...Array(80).fill(0), ...Array(10).fill(1)]));
@@ -140,11 +140,11 @@ describe('sabitler', () => {
   });
 
   it('hafta/ay alpha\'ları takvim-eşdeğeri: üç sekme aynı hızda sönümlenir', () => {
-    const gun = last(emaScores(Array(70).fill(1), SCORE_EMA_ALPHA));       // 70 gün
-    const hafta = last(emaScores(Array(10).fill(1), SCORE_EMA_ALPHA_WEEK)); // 10 hafta = 70 gün
+    const gun = last(emaScores(Array(70).fill(1), SCORE_EMA_ALPHA));       // 70 days
+    const hafta = last(emaScores(Array(10).fill(1), SCORE_EMA_ALPHA_WEEK)); // 10 weeks = 70 days
     expect(pct(hafta)).toBeCloseTo(pct(gun), 0);
 
-    const ay = last(emaScores(Array(4).fill(1), SCORE_EMA_ALPHA_MONTH));    // 4 ay = 120 gün
+    const ay = last(emaScores(Array(4).fill(1), SCORE_EMA_ALPHA_MONTH));    // 4 months = 120 days
     const gun120 = last(emaScores(Array(120).fill(1), SCORE_EMA_ALPHA));
     expect(pct(ay)).toBeCloseTo(pct(gun120), 0);
   });

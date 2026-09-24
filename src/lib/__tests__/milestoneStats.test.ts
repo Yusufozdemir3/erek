@@ -1,5 +1,6 @@
-// nextMilestoneStat testleri — hedef istatistiklerinin altındaki "sıradaki adım"
-// bölümü (kullanıcı kararı 2026-07-23: toplu adım temposu yerine tek eşik).
+// nextMilestoneStat tests — the "next milestone" section under the goal
+// statistics (user decision 2026-07-23: a single threshold instead of an
+// aggregate milestone pace).
 
 import { nextMilestoneStat } from '../milestoneStats';
 import type { GoalMilestone, MilestoneView } from '@/db';
@@ -21,7 +22,7 @@ function milestone(over: Partial<GoalMilestone> & { title: string }): GoalMilest
   };
 }
 
-// milestoneViews'in ürettiğine denk görünüm (miktarlı adım: current/amount).
+// The equivalent view of what milestoneViews would produce (amount-based milestone: current/amount).
 function view(m: GoalMilestone, currentValue: number): MilestoneView {
   if (m.amount == null || m.amount <= 0) {
     return { milestone: m, ratio: m.completed === 1 ? 1 : 0, reached: m.completed === 1 };
@@ -42,7 +43,7 @@ describe('nextMilestoneStat — hangi adım "sıradaki"', () => {
       milestone({ title: '100 km', amount: 100, position: 2 }),
     ];
     const stat = nextMilestoneStat(ms.map((m) => view(m, current)), current, TODAY);
-    expect(stat?.title).toBe('50 km'); // 20 aşıldı, sıradaki 50
+    expect(stat?.title).toBe('50 km'); // 20 was passed, next is 50
   });
 
   it('hiç adım yoksa null', () => {
@@ -88,10 +89,11 @@ describe('nextMilestoneStat — miktar alanları', () => {
   });
 
   it('mevcut değer adım hedefini aşsa bile kalan negatif olmaz', () => {
-    // Kümülatif eşik mantığında bu adım zaten "ulaşıldı" sayılırdı; savunma amaçlı.
+    // Under cumulative-threshold logic this milestone would already be
+    // counted "reached"; this test is defensive.
     const m = milestone({ title: '50 km', amount: 50 });
     const stat = nextMilestoneStat(
-      [{ milestone: m, ratio: 1, reached: false }], // bilerek tutarsız görünüm
+      [{ milestone: m, ratio: 1, reached: false }], // a deliberately inconsistent view
       80,
       TODAY
     )!;

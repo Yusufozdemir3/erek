@@ -1,38 +1,40 @@
-// Veritabanı bakımı — süresi dolmuş "mezar taşlarının" (tombstone) temizliği.
+// Database maintenance — cleanup of expired "tombstones".
 //
-// SORUN: silme bu uygulamada SOFT'tur (deleted_at damgalanır, satır kalır) ve
-// bu senkron için ŞART — silindiğini diğer cihaza ancak bir satır anlatabilir.
-// Ama hiçbir şey onları hiç TEMİZLEMİYORDU: satırlar sonsuza dek DB'de duruyor,
-// her tam yeniden senkronda yeniden push ediliyor ve `SELECT *` yapan sorguların
-// taradığı tabloyu büyütüyorlardı.
+// PROBLEM: deletion in this app is SOFT (deleted_at is stamped, the row
+// remains) and this is REQUIRED for sync — it's the only way to tell another
+// device that something was deleted. But nothing ever CLEANED them up:
+// rows sat in the DB forever, got re-pushed on every full re-sync, and grew
+// the table that `SELECT *` queries had to scan.
 //
-// En hızlı büyüyen kaynak hatırlatmalar: reminderRepo.replaceAll her kayıtta
-// mevcut satırları soft-delete edip yenilerini üretir, yani bir alışkanlığın
-// hatırlatma saatini 20 kez düzenlemek 20 ölü satır bırakır.
+// The fastest-growing source is reminders: reminderRepo.replaceAll soft-
+// deletes the existing rows on every edit and creates new ones, so editing a
+// habit's reminder time 20 times leaves 20 dead rows behind.
 //
-// KURAL: bir tombstone ancak (a) yeterince eskiyse VE (b) buluta gönderildiyse
-// (synced = 1) silinir. (b) olmadan, henüz iletilmemiş bir silme kaybolur ve
-// kayıt diğer cihazdan geri "dirilir".
+// RULE: a tombstone is only deleted once it's (a) old enough AND (b) already
+// pushed to the cloud (synced = 1). Without (b), a deletion that hasn't been
+// delivered yet would vanish and the record would "come back to life" from
+// another device.
 //
-// FK GÜVENLİĞİ: kısıtlar açık (PRAGMA foreign_keys = ON). Yaprak tablolar
-// koşulsuz temizlenir; EBEVEYN tablolar yalnızca onlara işaret eden HİÇBİR satır
-// kalmadıysa. Bu yüzden sıra da yapraktan ebeveyne doğrudur — aynı turda
-// çocukları temizlenen bir ebeveyn hemen uygun hale gelir.
+// FK SAFETY: constraints are on (PRAGMA foreign_keys = ON). Leaf tables are
+// cleaned unconditionally; PARENT tables only once NO row pointing at them
+// remains. That's why the order goes leaf-to-parent — a parent whose children
+// got cleaned in the same pass becomes eligible right away.
 //
-// BİLİNÇLİ SINIR: habit_logs'un deleted_at'i yok (hiç silinmez), dolayısıyla
-// logu olan silinmiş bir alışkanlığın satırı temizlenmez. Logları da silmek
-// mümkün ama bulutta karşılığı (tombstone) olmadığı için bir sonraki tam
-// çekişte geri gelir — churn'e değmez. Bu yüzden bilerek dokunulmuyor.
+// DELIBERATE LIMITATION: habit_logs has no deleted_at (never deleted), so a
+// deleted habit that has logs won't get its row cleaned up. Deleting the logs
+// too is possible, but since they have no cloud counterpart (tombstone) they'd
+// just come back on the next full pull — not worth the churn. So this is left
+// untouched on purpose.
 
 import { getDb } from './database';
 
-/** Bir tombstone'un silinebilmesi için geçmesi gereken süre. */
+/** How long a tombstone must age before it can be deleted. */
 export const TOMBSTONE_TTL_DAYS = 90;
 
-// Yaprak tablolar: kendilerine işaret eden başka tablo yok.
+// Leaf tables: no other table points at them.
 const LEAF_TABLES = ['subtasks', 'goal_milestones', 'goal_entries', 'reminders'];
 
-// Ebeveyn tablolar ve "bana işaret eden satır var mı" koşulları.
+// Parent tables and the "does anything still point at me" guard conditions.
 const PARENT_TABLES: { table: string; guards: string[] }[] = [
   {
     table: 'tasks',
@@ -64,8 +66,8 @@ function cutoffIso(days: number, now: number): string {
 }
 
 /**
- * Süresi dolmuş, buluta gönderilmiş tombstone'ları kalıcı olarak siler.
- * Silinen toplam satır sayısını döner. `now` testler için parametreli.
+ * Permanently deletes expired, already-cloud-pushed tombstones.
+ * Returns the total number of rows removed. `now` is parameterized for tests.
  */
 export function purgeOldTombstones(
   ttlDays: number = TOMBSTONE_TTL_DAYS,
@@ -78,7 +80,7 @@ export function purgeOldTombstones(
   const countRows = (sql: string, params: unknown[]): number =>
     db.getFirstSync<{ n: number }>(sql, params as any)?.n ?? 0;
 
-  // Önce yapraklar, sonra ebeveynler (aynı turda uygun hale gelsinler).
+  // Leaves first, then parents (so they become eligible within the same pass).
   for (const table of LEAF_TABLES) {
     const where = `deleted_at IS NOT NULL AND deleted_at < ? AND synced = 1`;
     removed += countRows(`SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`, [cutoff]);

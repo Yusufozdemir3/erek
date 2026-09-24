@@ -1,8 +1,9 @@
-// buildSeries (puan grafiğinin veri üretimi) testleri.
+// buildSeries (score chart data generation) tests.
 //
-// Kilitlenen kural (kullanıcı kararı 2026-07-23): grafik SADECE devamlılığı
-// gösterir — üç alışkanlık tipinde de tek soru vardır, "o gün tamamlandı mı?".
-// Puan 0'dan başlar, adım adım yükselir, adım adım düşer; plansız gün nötrdür.
+// Locked-in rule (user decision 2026-07-23): the chart shows CONTINUITY ONLY
+// — there's a single question across all three habit types, "was that day
+// completed?". The score starts at 0, climbs step by step, drops step by
+// step; an unscheduled day is neutral.
 
 import { buildSeries } from '@/lib/habitSeries';
 import type { Habit, HabitLog } from '@/db';
@@ -17,7 +18,7 @@ const baseHabit: Habit = {
   remind_at: null,
   icon: null,
   color: null,
-  schedule: null, // her gün
+  schedule: null, // every day
   target_amount: null,
   unit: null,
   start_date: null,
@@ -29,7 +30,7 @@ const baseHabit: Habit = {
   synced: 1,
 };
 
-// completedDates'teki günler tamamlanmış, diğer günler kaçırılmış sayılır.
+// Days in completedDates are considered completed, other days are considered missed.
 function logsFor(days: string[], completedDates: Set<string>, amount = 0): HabitLog[] {
   return days.map((d, i) => ({
     id: `log-${i}`,
@@ -62,7 +63,7 @@ describe('buildSeries — puan 0\'dan başlar, adım adım gider', () => {
 
   it('kaçırılan günlerde adım adım düşer', () => {
     const days = lastDays(30);
-    const completed = new Set(days.slice(0, 20)); // ilk 20 gün yapıldı, son 10 kaçtı
+    const completed = new Set(days.slice(0, 20)); // first 20 days done, last 10 missed
     const scores = dayScores(baseHabit, logsFor(days, completed));
     const tail = scores.slice(-10);
     for (let i = 1; i < tail.length; i++) {
@@ -72,8 +73,8 @@ describe('buildSeries — puan 0\'dan başlar, adım adım gider', () => {
 });
 
 describe('buildSeries — üç alışkanlık tipi AYNI çalışır', () => {
-  // Aynı tamamlanma deseni -> aynı puan. Nicel/zamanlayıcıda kısmi kredi YOK:
-  // gün ya tamamlandı (completed=1) ya tamamlanmadı.
+  // Same completion pattern -> same score. There's NO partial credit for
+  // numeric/timer: a day is either completed (completed=1) or not.
   it('ikili / nicel / zamanlayıcı aynı deseni aynı puanla gösterir', () => {
     const days = lastDays(15);
     const completed = new Set(days.filter((_, i) => i % 3 !== 0));
@@ -96,7 +97,7 @@ describe('buildSeries — üç alışkanlık tipi AYNI çalışır', () => {
     const days = lastDays(15);
     const numeric: Habit = { ...baseHabit, kind: 'numeric', target_amount: 8, unit: 'bardak' };
 
-    // Her gün 5/8 içilmiş: completed=0, amount=5 -> puan hiç yükselmemeli.
+    // Every day 5/8 was drunk: completed=0, amount=5 -> the score should never rise.
     const yarim = days.map((d, i) => ({
       id: `l${i}`,
       habit_id: 'h1',
@@ -114,13 +115,13 @@ describe('buildSeries — üç alışkanlık tipi AYNI çalışır', () => {
 describe('buildSeries — plansız gün nötr, çizgi kesintisiz', () => {
   const mwf: Habit = {
     ...baseHabit,
-    schedule: { freq: 'weekly', weekdays: [1, 3, 5] }, // Pzt/Çar/Cum
+    schedule: { freq: 'weekly', weekdays: [1, 3, 5] }, // Mon/Wed/Fri
   };
 
   it('plansız günler kova olarak KALIR (süreklilik korunur)', () => {
     const days = lastDays(21);
     const series = buildSeries(mwf, logsFor(days, new Set(days)));
-    // Kovalar günlük akmaya devam eder — plansız günler diziden atılmaz.
+    // Buckets keep flowing daily — unscheduled days aren't dropped from the array.
     expect(series!.day.length).toBeGreaterThan(10);
     expect(series!.day.some((b) => b.ratio === null)).toBe(true);
   });
@@ -137,7 +138,7 @@ describe('buildSeries — plansız gün nötr, çizgi kesintisiz', () => {
     const days = lastDays(60);
     const series = buildSeries(mwf, logsFor(days, new Set(days)))!;
     const son = series.day[series.day.length - 1].score;
-    // Eski davranışta (plansız gün = kaçırıldı) bu değer %42,7 civarında kalıyordu.
+    // Under the old behavior (unscheduled day = missed), this value would stay around 42.7%.
     expect(son).toBeGreaterThan(0.6);
   });
 });

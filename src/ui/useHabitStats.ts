@@ -1,7 +1,7 @@
-// Alışkanlık istatistik ekranının veri yükleme mantığı: özet sayılar
-// (güncel/en uzun seri, tamamlanma oranı, toplam miktar), gün/hafta/ay
-// tamamlama serileri (çubuk grafik) ve seri geçmişi.
-// Hepsi logsInRange/allLogs sorgularından türetilir.
+// Data loading logic for the habit stats screen: summary numbers (current/
+// longest streak, completion rate, total amount), day/week/month completion
+// series (bar chart), and streak history.
+// All derived from the logsInRange/allLogs queries.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -19,36 +19,36 @@ import {
 } from '@/lib/helpers';
 import { buildSeries, type HabitChartSeries } from '@/lib/habitSeries';
 
-// Puan grafiğinin veri üretimi ve tipleri lib/habitSeries.ts'e taşındı (saf
-// mantık, React'siz — testleri hızlı 'logic' projesinde koşsun diye). Ekranlar
-// bu tipleri buradan import etmeye devam edebilsin diye yeniden dışa açılıyor.
+// The score chart's data generation and types moved to lib/habitSeries.ts (pure
+// logic, no React dependency — so its tests run fast in the 'logic' project).
+// Re-exported from here so screens can keep importing these types from this file.
 export type { ChartBucket, HabitChartSeries } from '@/lib/habitSeries';
 
 const WINDOW_DAYS = 90;
 
-// "Hedef" karşılaştırması: içinde bulunulan gün/hafta/ay/yıl için TAM dönem
-// hedefi (gelecek günler dahil, "bu dönemi hep yapsaydın ne olurdu") ile
-// bugüne kadar biriken miktar. Kota alışkanlıkta 'today' satırı anlamsız
-// (tek günlük hedef yok) — buildGoalPeriods onu eler.
+// "Goal" comparison: the FULL period target for the current day/week/month/year
+// (future days included, "what would this be if you did this period entirely")
+// versus the amount accumulated so far. The 'today' row is meaningless for a
+// quota habit (no single-day target) — buildGoalPeriods filters it out.
 export interface GoalPeriodStat {
   key: 'today' | 'week' | 'month' | 'quarter' | 'year';
   done: number;
   goal: number;
 }
 
-// "Geçmiş" kartındaki bir kova (gün/hafta/ay) toplamı — yalnız nicel/zamanlayıcı
-// (target_amount'lı) alışkanlıkta anlamlı (ikilide "toplam miktar" kavramı yok).
-// partial=true ise kova ya bugünden/bu aydan önce hiç veri yokken başlıyor
-// (alışkanlığın ilk kovası) ya da hâlâ devam ediyor (henüz bitmedi) — UI bunu
-// soluk gösterir.
+// A bucket's (day/week/month) total on the "History" card — only meaningful for
+// numeric/timer (target_amount-having) habits (a binary habit has no concept of
+// "total amount"). If partial=true, the bucket either starts with no data
+// before today/this month (the habit's first bucket) or is still ongoing (not
+// finished yet) — the UI shows it faded.
 export interface BucketTotal {
   bucketStart: string;
   total: number;
   partial: boolean;
 }
 
-// "Geçmiş" kartının Gün/Hafta/Ay seçenekleri — CompletionChart'taki aynı üçlü
-// periyot deseni, ama oran değil GERÇEK TOPLAM miktar taşır.
+// The "History" card's Day/Week/Month options — the same three-way period
+// pattern as CompletionChart, but carries the ACTUAL TOTAL amount instead of a ratio.
 export interface HistoryTotals {
   day: BucketTotal[];
   week: BucketTotal[];
@@ -59,14 +59,15 @@ export interface HabitStats {
   habit: Habit | null;
   currentStreak: number;
   longestStreak: number;
-  totalAmount: number | null;  // nicel değilse (target_amount yoksa) null
-  // NOT: completionRate/scheduledCount/completedCount ve streaks KALDIRILDI —
-  // ömür boyu tamamlanma oranı Puan kartındaki EMA'nın kör bir kopyasıydı, seri
-  // geçmişi listesi de ekrandan çıktı (bkz. app/habit/[id].tsx). İkisinin de tek
-  // tüketicisi o ekrandı; alan kalsaydı her yüklemede boşa sorgu/döngü olurdu.
-  series: HabitChartSeries | null; // hiç log yoksa null
-  goalPeriods: GoalPeriodStat[]; // Bugün/Hafta/Ay/3 Ay/Yıl hedef karşılaştırması
-  historyTotals: HistoryTotals | null; // "Geçmiş" kartı — yalnız nicel/zamanlayıcıda dolu
+  totalAmount: number | null;  // null if not numeric (no target_amount)
+  // NOTE: completionRate/scheduledCount/completedCount and streaks were REMOVED —
+  // lifetime completion rate was a blind copy of the EMA on the score card, and
+  // the streak history list was also dropped from the screen (see
+  // app/habit/[id].tsx). Both had that screen as their only consumer; keeping
+  // the fields would have meant a wasted query/loop on every load.
+  series: HabitChartSeries | null; // null if there are no logs at all
+  goalPeriods: GoalPeriodStat[]; // Today/Week/Month/3 Months/Year goal comparison
+  historyTotals: HistoryTotals | null; // "History" card — populated only for numeric/timer habits
 }
 
 const EMPTY: HabitStats = {
@@ -79,14 +80,14 @@ const EMPTY: HabitStats = {
   historyTotals: null,
 };
 
-// Grafikler artık yatayda kaydırılabilir (bkz. habit/[id].tsx) — ekrana sığan
-// sayı azaldı ama kaydırarak ulaşılabilen aralık genişledi.
+// Charts are now horizontally scrollable (see habit/[id].tsx) — fewer fit on
+// screen at once, but the reachable range via scrolling has grown.
 const HISTORY_BUCKETS = 30;
 
-// "Geçmiş" kartının Gün/Hafta/Ay toplamları — yalnız target_amount'lı (nicel/
-// zamanlayıcı) alışkanlıkta anlamlı. Her periyotta son HISTORY_BUCKETS kova;
-// ekrana sığmayan kısım yatay kaydırmayla görülür (bkz. habit/[id].tsx
-// HistoryBars).
+// The "History" card's Day/Week/Month totals — only meaningful for a habit with
+// a target_amount (numeric/timer). The last HISTORY_BUCKETS buckets per period;
+// anything that doesn't fit on screen is reached by scrolling horizontally (see
+// habit/[id].tsx HistoryBars).
 function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): HistoryTotals | null {
   if (habit.target_amount == null || allLogs.length === 0) return null;
   const amountByDate = new Map(allLogs.map((l) => [l.log_date, l.amount ?? 0]));
@@ -103,16 +104,16 @@ function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): H
     return total;
   };
 
-  // — Gün: son HISTORY_BUCKETS gün —
+  // — Day: last HISTORY_BUCKETS days —
   const day: BucketTotal[] = lastDays(HISTORY_BUCKETS).map((ymd) => ({
     bucketStart: ymd,
     total: amountByDate.get(ymd) ?? 0,
     partial: ymd === today || ymd < firstLogDate,
   }));
 
-  // — Hafta: son HISTORY_BUCKETS hafta (Pazartesi başlangıçlı) —
+  // — Week: last HISTORY_BUCKETS weeks (Monday-first) —
   const monday = new Date(`${today}T00:00:00`);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // bu haftanın pazartesisi
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // this week's Monday
   const week: BucketTotal[] = [];
   for (let i = HISTORY_BUCKETS - 1; i >= 0; i--) {
     const start = new Date(monday);
@@ -128,7 +129,7 @@ function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): H
     });
   }
 
-  // — Ay: son HISTORY_BUCKETS takvim ayı —
+  // — Month: last HISTORY_BUCKETS calendar months —
   const now = new Date(`${today}T00:00:00`);
   const month: BucketTotal[] = [];
   for (let i = HISTORY_BUCKETS - 1; i >= 0; i--) {
@@ -146,8 +147,8 @@ function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): H
   return { day, week, month };
 }
 
-// Dönemin TAM (gelecek dahil) başlangıç/bitiş günü — bugünün içinde bulunduğu
-// gün/hafta/ay/yıl. Kota alışkanlıkta 'today' zaten üretilmez (bkz. çağıran).
+// The period's FULL (future included) start/end day — the day/week/month/year
+// today falls within. 'today' is never generated for a quota habit (see the caller).
 function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: string; end: string }[] {
   const weekStart = weekStartOf(today);
   const weekEndD = new Date(`${weekStart}T00:00:00`);
@@ -155,8 +156,8 @@ function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: s
   const t = new Date(`${today}T00:00:00`);
   const monthStart = toYmd(new Date(t.getFullYear(), t.getMonth(), 1));
   const monthEnd = toYmd(new Date(t.getFullYear(), t.getMonth() + 1, 0));
-  // "3 Ay": içinde bulunulan takvim çeyreği (Oca-Mar/Nis-Haz/Tem-Eyl/Eki-Ara) —
-  // yılın diğer dönemleriyle aynı "sabit takvim aralığı" mantığını korur.
+  // "3 Months": the current calendar quarter (Jan-Mar/Apr-Jun/Jul-Sep/Oct-Dec) —
+  // keeps the same "fixed calendar range" logic as the other periods of the year.
   const qStartMonth = Math.floor(t.getMonth() / 3) * 3;
   const quarterStart = toYmd(new Date(t.getFullYear(), qStartMonth, 1));
   const quarterEnd = toYmd(new Date(t.getFullYear(), qStartMonth + 3, 0));
@@ -169,10 +170,11 @@ function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: s
   ];
 }
 
-// Her dönem için: goal = dönemin TÜM planlı günlerinin hedefi (gelecek dahil,
-// "bu dönemi hep yapsaydın"), done = bugüne kadar biriken gerçek miktar.
-// Kota (haftada X kez) her gün "müsait" sayıldığından planlı-gün filtresi
-// uygulanmaz, hedef haftalık kotadan dönem uzunluğuna oranlanır.
+// For each period: goal = the target for ALL scheduled days in the period
+// (future included, "if you did this period entirely"), done = the actual
+// amount accumulated so far. Since a quota (X times a week) counts every day as
+// "available," the scheduled-day filter isn't applied; the target is scaled
+// from the weekly quota to the period's length instead.
 function buildGoalPeriods(habit: Habit, allLogs: HabitLog[], today: string): GoalPeriodStat[] {
   const logByDate = new Map(allLogs.map((l) => [l.log_date, l]));
   const perDayTarget = habit.target_amount ?? 1;
@@ -221,8 +223,9 @@ export function useHabitStats(habitId: string): HabitStats {
       return;
     }
 
-    // WINDOW_DAYS'lik pencere yalnız toplam miktar için okunur; planlı/tamamlanan
-    // gün sayımı ve tamamlanma oranı hesabı KALDIRILDI (bkz. HabitStats yorumu).
+    // The WINDOW_DAYS window is only read for the total amount; the
+    // scheduled/completed day counts and completion-rate calculation were
+    // REMOVED (see the HabitStats comment).
     const dates = lastDays(WINDOW_DAYS);
     const logs = habitRepo.logsInRange(habitId, dates[0]);
 
@@ -237,9 +240,9 @@ export function useHabitStats(habitId: string): HabitStats {
       currentStreak,
       longestStreak,
       totalAmount,
-      // Kilit KALDIRILDI (2026-07-23): puan artık 0'dan başlayıp adım adım
-      // tırmandığı için ilk günlerin düşük değeri yanıltıcı değil, modelin ta
-      // kendisi — gizlemek tam da görülmek istenen tırmanışı gizliyordu.
+      // Gate REMOVED (2026-07-23): since the score now starts at 0 and climbs
+      // step by step, the low value on early days isn't misleading — it IS the
+      // model; hiding it was hiding exactly the climb the user was meant to see.
       series: buildSeries(habit, allLogs),
       goalPeriods: buildGoalPeriods(habit, allLogs, todayDate()),
       historyTotals: buildHistoryTotals(habit, allLogs, todayDate()),

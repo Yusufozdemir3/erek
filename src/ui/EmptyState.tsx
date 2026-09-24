@@ -1,6 +1,6 @@
-// Listelerde kişilikli boş durum: büyük emoji + başlık + (isteğe bağlı) alt metin.
-// Dört sekmede (Bugün/Görevler/Alışkanlıklar/Hedefler) düz "Henüz X yok" metnini
-// değiştirir.
+// A characterful empty state for lists: a big emoji + title + (optional)
+// subtitle. Replaces the plain "No X yet" text on all four tabs
+// (Today/Tasks/Habits/Goals).
 
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';

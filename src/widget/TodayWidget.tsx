@@ -1,26 +1,27 @@
-// Ana ekran widget'ının GÖRÜNÜMÜ. react-native-android-widget'ın kendi
-// bileşenleriyle (FlexWidget/TextWidget) çizilir — RN View/StyleSheet DEĞİL;
-// bu bileşenler Android RemoteViews'e dönüştürülür. Renkler/veri snapshot'tan
-// gelir (bkz. widgetSnapshot.ts). Tüm karta OPEN_APP tıklaması bağlıdır: widget'a
-// dokununca uygulama açılır (varsayılan rota = Bugün sekmesi).
+// The VIEW of the home-screen widget. Rendered with
+// react-native-android-widget's own components (FlexWidget/TextWidget) — NOT
+// RN View/StyleSheet; these components get converted into Android
+// RemoteViews. Colors/data come from the snapshot (see widgetSnapshot.ts).
+// The whole card has an OPEN_APP click attached: tapping the widget opens the
+// app (the default route = the Today tab).
 //
-// ÖNEMLİ: Bu dosya react-native-android-widget'ı import eder; o paketin barrel'ı
-// Expo Go'da native modül yokken yüklenmemeli. Bu yüzden TodayWidget yalnızca
-// gerçek build'de (widgetData'daki lazy require + headless task handler)
-// yüklenir; uygulamanın normal ekran ağacından ASLA import edilmez.
+// IMPORTANT: this file imports react-native-android-widget; that package's
+// barrel must not load when there's no native module, i.e. in Expo Go. That's
+// why TodayWidget is only ever loaded in a real build (widgetData's lazy
+// require + the headless task handler); it is NEVER imported from the app's normal screen tree.
 
 import * as React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 import type { WidgetSnapshot } from './widgetSnapshot';
 
-// Kütüphane renkleri `#rrggbb` şablon tipinde ister; palet düz string tuttuğu için
-// tek noktadan güvenle daraltıyoruz.
+// The library wants colors as the `#rrggbb` template type; since the palette
+// keeps plain strings, we narrow it safely from a single spot.
 const hex = (s: string) => s as `#${string}`;
 
-// Widget'a sığması için en çok kaç satır gösterilsin; fazlası "+N" olarak özetlenir.
+// Max number of rows to show so it fits the widget; anything beyond is summarized as "+N".
 const MAX_ROWS = 7;
 
-// Uygulama hiç açılmadan widget eklenirse (snapshot yok) kullanılacak açık tema.
+// The light theme used if the widget is added before the app has ever been opened (no snapshot yet).
 const FALLBACK: WidgetSnapshot['colors'] = {
   bg: '#f8fafc',
   card: '#ffffff',
@@ -51,7 +52,7 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
         padding: 14,
       }}
     >
-      {/* Başlık + özet */}
+      {/* Title + summary */}
       <FlexWidget
         style={{
           width: 'match_parent',
@@ -74,7 +75,7 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
         )}
       </FlexWidget>
 
-      {/* Liste ya da boş durum */}
+      {/* List or empty state */}
       {visible.length === 0 ? (
         <TextWidget
           text={snapshot?.emptyLabel ?? ''}
@@ -91,11 +92,11 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
               marginTop: 10,
             }}
           >
-            {/* Renk noktası (alışkanlığın rengi) */}
+            {/* Color dot (the habit's color) */}
             <FlexWidget
               style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: hex(h.color) }}
             />
-            {/* Başlık — kalan alanı kaplar, taşınca kısaltılır */}
+            {/* Title — fills the remaining space, truncated if it overflows */}
             <FlexWidget style={{ flex: 1, marginLeft: 10, marginRight: 8 }}>
               <TextWidget
                 text={h.title}
@@ -104,7 +105,7 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
                 style={{ fontSize: 14, color: h.completed ? hex(c.faint) : hex(c.text) }}
               />
             </FlexWidget>
-            {/* Durum işareti */}
+            {/* Status mark */}
             <TextWidget
               text={h.completed ? '✓' : '○'}
               style={{

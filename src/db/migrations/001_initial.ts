@@ -1,11 +1,11 @@
-// Migration 001: İlk şema.
-// Her tabloda offline-first için kritik alanlar:
-//   updated_at  -> "son yazan kazanır" çakışma çözümü
-//   deleted_at  -> soft delete (silinen kayıt işaretlenir, gerçekten silinmez)
-//   synced      -> 0 ise buluta gönderilmeyi bekliyor
+// Migration 001: initial schema.
+// Every table has fields critical for offline-first:
+//   updated_at  -> "last writer wins" conflict resolution
+//   deleted_at  -> soft delete (a deleted record is flagged, never actually removed)
+//   synced      -> 0 means it's still waiting to be pushed to the cloud
 //
-// ID'ler TEXT (UUID) çünkü cihaz internetsizken kayıt üretebilmeli
-// ve bu ID buluttaki kayıtlarla çakışmamalı.
+// IDs are TEXT (UUID) because a device must be able to generate a record while
+// offline, and that ID must never collide with records in the cloud.
 
 export const migration001 = `
 CREATE TABLE IF NOT EXISTS users (
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   title        TEXT NOT NULL,
   due_date     TEXT,
   priority     TEXT NOT NULL DEFAULT 'medium',
-  recurrence   TEXT,                       -- JSON string ya da NULL
+  recurrence   TEXT,                       -- JSON string or NULL
   completed_at TEXT,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,
@@ -49,9 +49,9 @@ CREATE TABLE IF NOT EXISTS goals (
 CREATE TABLE IF NOT EXISTS habits (
   id         TEXT PRIMARY KEY NOT NULL,
   user_id    TEXT NOT NULL,
-  goal_id    TEXT,                         -- ileride bir hedefe bağlanabilir
+  goal_id    TEXT,                         -- can be linked to a goal later
   title      TEXT NOT NULL,
-  remind_at  TEXT,                         -- "08:30" gibi
+  remind_at  TEXT,                         -- e.g. "08:30"
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
   synced     INTEGER NOT NULL DEFAULT 0,
@@ -62,14 +62,14 @@ CREATE TABLE IF NOT EXISTS habits (
 CREATE TABLE IF NOT EXISTS habit_logs (
   id         TEXT PRIMARY KEY NOT NULL,
   habit_id   TEXT NOT NULL,
-  log_date   TEXT NOT NULL,                -- "2026-06-28"
+  log_date   TEXT NOT NULL,                -- e.g. "2026-06-28"
   completed  INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (habit_id) REFERENCES habits(id),
-  UNIQUE (habit_id, log_date)              -- bir gün için tek kayıt
+  UNIQUE (habit_id, log_date)              -- one record per day
 );
 
--- Sık yapılan sorgular için indeksler
+-- Indexes for frequent queries
 CREATE INDEX IF NOT EXISTS idx_tasks_user     ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_due      ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_habits_user    ON habits(user_id);
@@ -78,47 +78,48 @@ CREATE INDEX IF NOT EXISTS idx_logs_date      ON habit_logs(log_date);
 CREATE INDEX IF NOT EXISTS idx_goals_user     ON goals(user_id);
 `;
 
-// Migration 002: habit_logs'a senkron bayrağı.
-// habit_logs ilk şemada synced taşımıyordu; bulut senkronu için her log da
-// "gönderilmeyi bekliyor mu" bilgisini tutmalı. Mevcut loglar synced=0 başlar
-// ki ilk senkronda buluta gönderilsinler.
+// Migration 002: sync flag on habit_logs.
+// habit_logs didn't carry `synced` in the original schema; for cloud sync
+// every log also needs to track "is this waiting to be sent". Existing logs
+// start at synced=0 so they get pushed to the cloud on the first sync.
 export const migration002 = `
 ALTER TABLE habit_logs ADD COLUMN synced INTEGER NOT NULL DEFAULT 0;
 `;
 
-// Migration 003: alışkanlıklara görsel kimlik (emoji ikon + renk).
-// İkisi de opsiyonel (NULL) — mevcut alışkanlıklar varsayılan görünümde kalır.
+// Migration 003: visual identity for habits (emoji icon + color).
+// Both optional (NULL) — existing habits keep the default look.
 export const migration003 = `
 ALTER TABLE habits ADD COLUMN icon  TEXT;
 ALTER TABLE habits ADD COLUMN color TEXT;
 `;
 
-// Migration 004: alışkanlıklara sıklık/tekrar kuralı (schedule).
-// JSON (Recurrence) ya da NULL. NULL = her gün (mevcut davranış, geriye uyumlu).
+// Migration 004: recurrence/frequency rule (schedule) for habits.
+// JSON (Recurrence) or NULL. NULL = every day (existing behavior, backward compatible).
 export const migration004 = `
 ALTER TABLE habits ADD COLUMN schedule TEXT;
 `;
 
-// Migration 005: nicel takip. habits'e günlük hedef (target_amount) + birim (unit);
-// habit_logs'a o gün yapılan miktar (amount). target_amount NULL = ikili alışkanlık.
+// Migration 005: quantitative tracking. Adds a daily target (target_amount) +
+// unit to habits; adds the amount done that day (amount) to habit_logs.
+// target_amount NULL = binary habit.
 export const migration005 = `
 ALTER TABLE habits ADD COLUMN target_amount REAL;
 ALTER TABLE habits ADD COLUMN unit TEXT;
 ALTER TABLE habit_logs ADD COLUMN amount REAL NOT NULL DEFAULT 0;
 `;
 
-// Migration 006: alışkanlığa yaşam aralığı. start_date'ten önce ve end_date'ten
-// sonra alışkanlık "planlı" sayılmaz (görünmez, streak'i etkilemez). İkisi de
-// NULL olabilir: NULL start = baştan beri, NULL end = süresiz (mevcut davranış).
+// Migration 006: habit lifespan. Before start_date and after end_date, a habit
+// isn't considered "scheduled" (invisible, doesn't affect streaks). Both can
+// be NULL: NULL start = since the beginning, NULL end = indefinite (existing behavior).
 export const migration006 = `
 ALTER TABLE habits ADD COLUMN start_date TEXT;
 ALTER TABLE habits ADD COLUMN end_date TEXT;
 `;
 
-// Migration 007: alt görevler (basit checklist). Kendi tarihi/önceliği yok —
-// yalnızca başlık + tamamlandı. position = oluşturma sırası (updated_at toggle
-// ile değiştiği için sıralamada kullanılamaz). Senkron alanları diğer
-// tablolarla aynı desen (updated_at LWW + soft delete + synced bayrağı).
+// Migration 007: subtasks (a simple checklist). No date/priority of their
+// own — just a title + completed. position = creation order (can't use
+// updated_at for ordering since toggling changes it). Sync fields follow the
+// same pattern as the other tables (updated_at LWW + soft delete + synced flag).
 export const migration007 = `
 CREATE TABLE IF NOT EXISTS subtasks (
   id         TEXT PRIMARY KEY NOT NULL,
@@ -134,44 +135,45 @@ CREATE TABLE IF NOT EXISTS subtasks (
 CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id);
 `;
 
-// Migration 008: alışkanlık tipi (kind). 'binary' (yaptım/yapmadım) |
-// 'numeric' (miktar hedefi) | 'timer' (geri sayım: target_amount = hedef SANİYE,
-// habit_logs.amount = o gün biriken saniye; amount >= target olunca tamamlandı).
-// Mevcut alışkanlıklar geriye dönük damgalanır: target_amount>0 ise 'numeric',
-// değilse 'binary' (varsayılan). Böylece eski davranış birebir korunur.
+// Migration 008: habit type (kind). 'binary' (did/didn't) | 'numeric' (an
+// amount target) | 'timer' (countdown: target_amount = target SECONDS,
+// habit_logs.amount = accumulated seconds that day; completed once amount >= target).
+// Existing habits are stamped retroactively: 'numeric' if target_amount>0,
+// otherwise 'binary' (the default). This preserves the old behavior exactly.
 export const migration008 = `
 ALTER TABLE habits ADD COLUMN kind TEXT NOT NULL DEFAULT 'binary';
 UPDATE habits SET kind = 'numeric' WHERE target_amount IS NOT NULL AND target_amount > 0;
 `;
 
-// Migration 009: göreve bitiş saati. due_date başlangıç/vade saatini gömer;
-// end_time o günün bitiş saatini "HH:MM" olarak tutar (aynı gün). NULL =
-// bitiş saati yok (mevcut davranış). Yalnız bir başlangıç saati varken anlamlı.
+// Migration 009: end time for a task. due_date embeds the start/due time;
+// end_time holds that same day's end time as "HH:MM" (same day). NULL = no
+// end time (existing behavior). Only meaningful when there's already a start time.
 export const migration009 = `
 ALTER TABLE tasks ADD COLUMN end_time TEXT;
 `;
 
-// Migration 010: bağlı hedefe katkı biçimi. goal_contribution NULL/'per_completion'
-// (mevcut davranış: tamamlanan gün başına +1) | 'amount' (o gün yapılan miktar ×
-// goal_factor hedefe eklenir — birim uyuşmazlığında kullanıcı çarpanı kendi girer,
-// ör. 1 bardak = 0.25 litre). goal_factor varsayılan 1 (birimler zaten aynıysa
-// dokunulmaz). Yalnızca numeric/timer + bir hedefe bağlı alışkanlıkta anlamlı;
-// ikili alışkanlıkta "miktar" kavramı yok, hep per_completion sayılır.
+// Migration 010: contribution shape toward a linked goal. goal_contribution
+// NULL/'per_completion' (existing behavior: +1 per completed day) | 'amount'
+// (that day's amount × goal_factor is added to the goal — for a unit
+// mismatch the user sets their own multiplier, e.g. 1 cup = 0.25 liters).
+// goal_factor defaults to 1 (untouched when the units already match). Only
+// meaningful for a numeric/timer habit linked to a goal; a binary habit has no
+// concept of "amount", it's always treated as per_completion.
 export const migration010 = `
 ALTER TABLE habits ADD COLUMN goal_contribution TEXT;
 ALTER TABLE habits ADD COLUMN goal_factor REAL NOT NULL DEFAULT 1;
 `;
 
-// Migration 011: hedefler yeniden şekillendi. 'deadline' tipi ayrı bir tip olmaktan
-// çıkar — ARTIK HER hedefin (numeric dahil) bir deadline'ı olabilir (deadline
-// kolonu zaten vardı, yalnızca tek tipe özel kullanılıyordu). goal_type'ın ikinci
-// değeri 'milestone' olur (görev/alt görev mantığının aynısı: parçalara/adımlara
-// bölünebilen hedef). Mevcut 'deadline' tipi kayıtlar 'milestone'a çevrilir —
-// deadline değerleri zaten dolu olduğundan veri kaybı yok.
-// completed_at: yalnızca 'milestone' hedeflerde elle/otomatik (tüm adımlar
-// tamamlanınca) işaretlenir. 'numeric' hedef tamamlanmayı current_value >=
-// target_value'dan türetmeye devam eder (dokunulmadı, completed_at hep NULL kalır).
-// goal_milestones: subtasks ile birebir aynı desen (başlık+tamamlandı+sıra).
+// Migration 011: goals reshaped. The 'deadline' type stops being its own type
+// — NOW EVERY goal (including numeric) can have a deadline (the deadline
+// column already existed, it was just used only by one type). goal_type's
+// second value becomes 'milestone' (identical logic to task/subtask: a goal
+// that can be broken into parts/steps). Existing 'deadline'-type records are
+// converted to 'milestone' — no data loss since deadline values were already populated.
+// completed_at: only ever set manually/automatically (once all milestones are
+// done) for 'milestone' goals. A 'numeric' goal still derives completion from
+// current_value >= target_value (untouched, completed_at always stays NULL).
+// goal_milestones: the exact same pattern as subtasks (title+completed+position).
 export const migration011 = `
 ALTER TABLE goals ADD COLUMN completed_at TEXT;
 UPDATE goals SET goal_type = 'milestone' WHERE goal_type = 'deadline';
@@ -189,12 +191,13 @@ CREATE TABLE IF NOT EXISTS goal_milestones (
 CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal ON goal_milestones(goal_id);
 `;
 
-// Migration 012: hedef girdi geçmişi. Hedefin 'Genel' sekmesinde kullanıcı serbest
-// bir miktar yazıp "Ekle"ye bastığında current_value zaten güncellenir (goalRepo.
-// addProgress); bu tablo YALNIZCA "ne zaman ne kadar eklendi" günlüğünü tutar ki
-// kullanıcı geçmişini görebilsin — current_value ASLA bu tablodan türetilmez (tek
-// doğru kaynak goals.current_value'dur). goal_milestones ile birebir aynı desen
-// (updated_at hem oluşturma hem silinme damgası, deleted_at + synced).
+// Migration 012: goal entry history. When the user types a free-form amount on
+// the goal's 'Overview' tab and taps "Add", current_value is already updated
+// (goalRepo.addProgress); this table ONLY logs "how much was added when" so
+// the user can see their history — current_value is NEVER derived from this
+// table (the single source of truth is goals.current_value). Same exact
+// pattern as goal_milestones (updated_at doubles as both creation and deletion
+// timestamp, plus deleted_at + synced).
 export const migration012 = `
 CREATE TABLE IF NOT EXISTS goal_entries (
   id         TEXT PRIMARY KEY NOT NULL,
@@ -208,44 +211,49 @@ CREATE TABLE IF NOT EXISTS goal_entries (
 CREATE INDEX IF NOT EXISTS idx_goal_entries_goal ON goal_entries(goal_id);
 `;
 
-// Migration 013: hedef adımlarına miktar + son tarih, hedeflere hatırlatma saati.
-// goal_milestones.amount: SAYISAL hedeflerde adım bir "ara eşik"tir — adımın
-// yüzdesi hedefin current_value'sundan KÜMÜLATİF türetilir (adımlar sırayla
-// dolar), elle işaretlenmez (bkz. goalMilestoneRepo.milestoneViews). 'milestone'
-// tipi hedeflerde amount NULL kalır, checkbox davranışı değişmez.
-// goal_milestones.due_date: her iki tipte de opsiyonel adım son tarihi.
-// goals.remind_at: "HH:MM" — hedefe günlük giriş hatırlatması (habits.remind_at
-// deseni; bkz. notifications.scheduleGoalReminder).
+// Migration 013: amount + due date for goal milestones, reminder time for goals.
+// goal_milestones.amount: for NUMERIC goals a milestone is a "threshold" — its
+// percentage is derived CUMULATIVELY from the goal's current_value (milestones
+// fill in order), never checked off manually (see
+// goalMilestoneRepo.milestoneViews). For 'milestone'-type goals, amount stays
+// NULL and the checkbox behavior is unchanged.
+// goal_milestones.due_date: an optional milestone due date, for both types.
+// goals.remind_at: "HH:MM" — a daily entry reminder for the goal (the same
+// pattern as habits.remind_at; see notifications.scheduleGoalReminder).
 export const migration013 = `
 ALTER TABLE goal_milestones ADD COLUMN amount REAL;
 ALTER TABLE goal_milestones ADD COLUMN due_date TEXT;
 ALTER TABLE goals ADD COLUMN remind_at TEXT;
 `;
 
-// Migration 014: görevlere AYRI hatırlatma saati (tasks.remind_at "HH:MM").
-// Eskiden görev hatırlatması örtüktü: due_date'e SAAT gömülüyse o saatte bildirim
-// kurulurdu, ayrı bir kontrol yoktu. Artık hatırlatma açıkça remind_at ile
-// belirlenir (habits.remind_at deseni) ve son tarihin kendi saatinden BAĞIMSIZDIR
-// (görev 14:00'te vadeli olup 09:00'da hatırlatabilir). due_date'in saati yalnız
-// görüntü/sıralama içindir (TimeBadge, DUE_ORDER_SQL); bildirimi artık o belirlemez.
-// GERİYE UYUM: saatli mevcut görevler eskiden gömülü saatte bildirim aldığı için
-// remind_at o saatle doldurulur — hatırlatmaları kesilmesin.
+// Migration 014: a SEPARATE reminder time for tasks (tasks.remind_at "HH:MM").
+// Task reminders used to be implicit: if a time was embedded in due_date, a
+// notification was scheduled at that time — there was no separate control.
+// Now the reminder is explicitly set via remind_at (the habits.remind_at
+// pattern) and is INDEPENDENT of the due date's own time (a task can be due at
+// 14:00 but remind at 09:00). due_date's time is now purely for display/
+// sorting (TimeBadge, DUE_ORDER_SQL); it no longer drives the notification.
+// BACKWARD COMPAT: existing tasks with a time used to get notified at that
+// embedded time, so remind_at is backfilled with that same time — their
+// reminders shouldn't get cut off.
 export const migration014 = `
 ALTER TABLE tasks ADD COLUMN remind_at TEXT;
 UPDATE tasks SET remind_at = substr(due_date, 12, 5)
   WHERE due_date IS NOT NULL AND length(due_date) > 10;
 `;
 
-// Migration 015: hedeflere AÇIK başlangıç tarihi (goals.start_date "YYYY-MM-DD").
-// Eskiden "kaç gün oldu" (daysElapsed, goalProjection.ts) İLK GİRDİNİN tarihinden
-// türetiliyordu — hedefi bugün açıp bugün 3 girdi eklersen daysElapsed=0/1 çıkar,
-// ama avgDaily hep last7Total/7'ye bölündüğü için (henüz yaşanmamış günler de
-// paydaya girer) günlük hızın yanlışlıkla küçük görünürdü (3 girdi/gün yerine
-// 3/7≈0.4). Artık start_date açık bir alan: yeni hedefler oluşturulduğunda
-// bugünle doldurulur (goalRepo.create), avgDaily'nin penceresi GERÇEK yaşanan
-// gün sayısıyla sınırlanır (bkz. goalProjection.ts). Mevcut hedefler NULL
-// başlar — varsa en eski girdisinin tarihiyle geriye dönük doldurulur (yoksa
-// NULL kalır, goalProjection zaten girdisiz hedefte hiçbir şey üretmiyor).
+// Migration 015: an EXPLICIT start date for goals (goals.start_date "YYYY-MM-DD").
+// "Days elapsed" (daysElapsed, goalProjection.ts) used to be derived from the
+// date of the FIRST entry — if you created a goal today and added 3 entries
+// today, daysElapsed comes out 0/1, but since avgDaily always divides
+// last7Total by 7 (even days that haven't happened yet count in the
+// denominator), the daily pace would look artificially small (3
+// entries/day instead of 3/7≈0.4). Now start_date is an explicit field: new
+// goals are stamped with today on creation (goalRepo.create), and avgDaily's
+// window is bounded by the ACTUAL number of days lived (see
+// goalProjection.ts). Existing goals start at NULL — backfilled with their
+// earliest entry's date if one exists (otherwise stays NULL; goalProjection
+// already produces nothing for an entry-less goal anyway).
 export const migration015 = `
 ALTER TABLE goals ADD COLUMN start_date TEXT;
 UPDATE goals SET start_date = (
@@ -253,13 +261,14 @@ UPDATE goals SET start_date = (
 ) WHERE start_date IS NULL;
 `;
 
-// Migration 016: çoklu hatırlatma. habits/tasks/goals.remind_at (tekil "HH:MM")
-// yerine bir varlığın SIFIR ya da DAHA FAZLA hatırlatma saati olabilsin diye
-// ayrı bir reminders tablosu (subtasks/goal_milestones ile aynı desen; sahiplik
-// entity_type+entity_id üzerinden, RLS ebeveyn tablo gibi değil kendi başına —
-// bkz. supabase/schema.sql). Eski remind_at değeri olan her kayıt için TEK bir
-// satır geriye dönük eklenir (veri kaybı yok); remind_at kolonları DB'de kalır
-// ama artık hiçbir kod tarafından okunmaz/yazılmaz (bkz. notifications.ts).
+// Migration 016: multiple reminders. Instead of a single habits/tasks/
+// goals.remind_at ("HH:MM"), an entity can now have ZERO OR MORE reminder
+// times, via a separate reminders table (same pattern as subtasks/
+// goal_milestones; ownership via entity_type+entity_id rather than a parent
+// table, standing on its own — see supabase/schema.sql). Every record that had
+// an old remind_at value gets exactly ONE row backfilled (no data loss); the
+// remind_at columns stay in the DB but are no longer read/written by any code
+// (see notifications.ts).
 export const migration016 = `
 CREATE TABLE IF NOT EXISTS reminders (
   id          TEXT PRIMARY KEY NOT NULL,
@@ -285,16 +294,16 @@ SELECT lower(hex(randomblob(16))), 'goal', id, remind_at, updated_at, NULL, 0
 FROM goals WHERE remind_at IS NOT NULL;
 `;
 
-// Migration 017: migration016'nın ürettiği hatırlatma id'lerini kanonik UUID
-// biçimine çevirir. Sorun: `lower(hex(randomblob(16)))` 32 karakter TİRESİZ metin
-// üretiyor; Supabase'deki reminders.id ise `uuid` kolonu — push'ta kabul edip
-// pull'da TİRELİ kanonik biçimde geri veriyor. Yerelde o tireli id bulunamayınca
-// aynı hatırlatma İKİNCİ satır olarak ekleniyor ve bildirim iki kez çalıyordu.
-// (Senkron tarafında ikinci savunma olarak reminders'a naturalKey verildi;
-// bkz. src/sync/syncEngine.ts.)
+// Migration 017: converts the reminder IDs produced by migration016 into the
+// canonical UUID format. Problem: `lower(hex(randomblob(16)))` produces a
+// 32-character DASH-LESS string; Supabase's reminders.id is a `uuid` column —
+// it accepts it on push but returns it in the DASHED canonical form on pull.
+// When the dashed ID isn't found locally, the same reminder gets inserted as a
+// SECOND row and the notification fired twice. (As a second line of defense on
+// the sync side, reminders were also given a naturalKey; see src/sync/syncEngine.ts.)
 //
-// synced=0: düzeltilen satır bir sonraki turda yeniden push edilir. Bulut zaten
-// kanonik biçimi sakladığı için bu upsert aynı satıra denk gelir (kopya üretmez).
+// synced=0: the corrected row gets re-pushed on the next round. Since the
+// cloud already holds the canonical form, this upsert lands on the same row (no duplicate produced).
 export const migration017 = `
 UPDATE reminders
 SET id = substr(id, 1, 8) || '-' || substr(id, 9, 4) || '-' || substr(id, 13, 4)
@@ -303,55 +312,59 @@ SET id = substr(id, 1, 8) || '-' || substr(id, 9, 4) || '-' || substr(id, 13, 4)
 WHERE length(id) = 32 AND id NOT LIKE '%-%';
 `;
 
-// Migration 018: goal_contribution/goal_factor buluta HİÇ gitmemişti.
-// Sorun: iki kolon migration010'da yerel şemaya eklendi ama senkron motorunun
-// habits kolon listesine (src/sync/syncEngine.ts) ve bulut şemasına
-// (supabase/schema.sql) eklenmedi. Sonuç sessizdi: alışkanlığı kuran cihazda
-// "4 bardak = 1 litre" doğru çalışıyor, aynı hesaptaki İKİNCİ cihaza satır
-// goal_contribution=NULL, goal_factor=1 (SQLite DEFAULT) olarak iniyordu. O
-// cihazda alışkanlığı işaretlemek hedefe 0.25 yerine +1 yazıyor, alışkanlık
-// orada bir kez düzenlenirse yanlış değer LWW ile İLK cihaza da geri taşınıp
-// doğru ayarı eziyordu.
+// Migration 018: goal_contribution/goal_factor never made it to the cloud AT ALL.
+// Problem: the two columns were added to the local schema in migration010, but
+// never added to the sync engine's habits column list (src/sync/syncEngine.ts)
+// or the cloud schema (supabase/schema.sql). The result was silent: on the
+// device that set up the habit, "4 cups = 1 liter" worked correctly, but the
+// row landing on a SECOND device on the same account came down with
+// goal_contribution=NULL, goal_factor=1 (the SQLite DEFAULT). Checking off the
+// habit on that device wrote +1 to the goal instead of 0.25, and if the habit
+// ever got edited there, the wrong value would get carried BACK to the FIRST
+// device via LWW, overwriting the correct setting.
 //
-// Şema değişikliği YOK — kolonlar zaten yerelde var. Tek yaptığı, artık
-// senkronlanan bu iki alanın mevcut satırlar için de buluta çıkmasını sağlamak:
-// synced=1 kalmış satırlar bir daha hiç push edilmezdi, yani düzeltme yalnız
-// bundan sonra DEĞİŞEN alışkanlıklara uygulanırdı. habits tablosu küçük olduğu
-// için tümünü yeniden bekletmenin maliyeti ihmal edilebilir.
+// NO schema change here — the columns already exist locally. All this does is
+// make sure these now-synced fields also go out to the cloud for existing
+// rows: rows that stayed synced=1 would otherwise never be pushed again, i.e.
+// the fix would only apply to habits CHANGED from now on. The habits table is
+// small, so re-queuing all of them is a negligible cost.
 //
-// DİKKAT: bu sürüm dağıtılmadan ÖNCE supabase/schema.sql yeniden çalıştırılmalı
-// (iki kolonun bulut karşılığı orada). Aksi halde push "Could not find the
-// 'goal_contribution' column" ile patlar — syncEngine.schemaHint bu durumda
-// kullanıcıya ne yapılacağını söyler.
+// NOTE: supabase/schema.sql must be re-run BEFORE this version ships (that's
+// where the two columns' cloud counterparts live). Otherwise the push fails
+// with "Could not find the 'goal_contribution' column" — syncEngine.schemaHint
+// tells the user what to do in that case.
 export const migration018 = `
 UPDATE habits SET synced = 0;
 `;
 
-// Migration 019: hedef ilerlemesi artık TÜRETİLİYOR — çok cihazda kaybolmasın.
+// Migration 019: goal progress is now DERIVED — so it doesn't get lost across
+// multiple devices.
 //
-// SORUN: goals.current_value sıradan bir kolondu ve senkronda son-yazan-kazanır
-// ile taşınıyordu. goal_entries ise EKLEME-YALNIZ bir tablo ve her satırı ayrı
-// ayrı senkronlanıyor. Cihaz A'da +5 km, cihaz B'de +3 km girilirse iki GİRDİ de
-// her cihaza ulaşıyor ama current_value yalnız son senkronlayanın değerini
-// alıyordu: kullanıcı aynı ekranda hem "5 / 100 km" hem de "+5 km, +3 km"
-// geçmişini görüyor, 3 km sessizce kayboluyordu.
+// PROBLEM: goals.current_value was a plain column carried by sync with
+// last-writer-wins. goal_entries, on the other hand, is an APPEND-ONLY table
+// and each row syncs independently. If device A enters +5 km and device B
+// enters +3 km, both ENTRIES reach each device, but current_value only picked
+// up whichever device synced last: the user would see both "5 / 100 km" AND
+// the "+5 km, +3 km" history on the same screen, with the 3 km silently
+// disappearing.
 //
-// ÇÖZÜM: current_value = value_baseline + (aktif girdilerin toplamı), 0 tabanlı.
-//   - GİRDİLER toplamsaldır ve kendi id'leriyle senkronlanır → iki cihazın
-//     katkısı çakışmadan BİRLEŞİR (kaybolan taraf kalmaz).
-//   - value_baseline, girdilerle temsil EDİLMEYEN her şeyi tutar: bu migration'dan
-//     önceki birikmiş değer + kullanıcının "Mevcut değer"i elle değiştirmesi.
-//     Bu alan son-yazan-kazanır kalır ve doğrusu budur: elle yapılan açık bir
-//     üzerine yazma zaten "son yazan kazansın" demektir.
-//   - current_value KOLON olarak kalır (önbellek): her okuyucu (liste kartları,
-//     istatistik, ara-eşik adımları, projeksiyon) olduğu gibi çalışmaya devam eder.
+// FIX: current_value = value_baseline + (sum of active entries), 0-based.
+//   - ENTRIES are additive and sync by their own ids -> two devices'
+//     contributions MERGE without conflict (no side gets lost).
+//   - value_baseline holds everything NOT represented by entries: the
+//     accumulated value from before this migration, plus the user manually
+//     editing "Current value". This field stays last-writer-wins, and
+//     correctly so: an explicit manual overwrite already means "let the last
+//     writer win".
+//   - current_value REMAINS a column (a cache): every reader (list cards,
+//     stats, threshold milestones, projection) keeps working unchanged.
 //
-// GERİYE UYUM: baseline, mevcut değerden girdilerin toplamı çıkarılarak doldurulur.
-// Yani bu migration hiçbir hedefin görünen değerini DEĞİŞTİRMEZ — yalnız aynı
-// sayıyı bundan sonra birleşebilir iki parçaya ayırır. Girdisi olmayan eski
-// hedeflerde baseline doğrudan mevcut değere eşit olur.
+// BACKWARD COMPAT: baseline is backfilled by subtracting the sum of entries
+// from the current value. So this migration does NOT change any goal's
+// visible value — it only splits the same number into two pieces that can
+// merge from now on. For an old goal with no entries, baseline simply equals the current value.
 //
-// synced=0: yeni kolonun buluta çıkması için hedefler bir kez yeniden gönderilir.
+// synced=0: goals are re-sent once so the new column reaches the cloud.
 export const migration019 = `
 ALTER TABLE goals ADD COLUMN value_baseline REAL NOT NULL DEFAULT 0;
 UPDATE goals SET value_baseline = current_value - COALESCE((
@@ -361,7 +374,7 @@ UPDATE goals SET value_baseline = current_value - COALESCE((
 UPDATE goals SET synced = 0;
 `;
 
-// Migration listesi - sırayla çalışır. Yeni şema değişikliği = yeni eleman.
+// Migration list - runs in order. A new schema change = a new element.
 export const migrations = [
   { version: 1, sql: migration001 },
   { version: 2, sql: migration002 },

@@ -1,18 +1,20 @@
-// Hedef form ALANLARI — hem oluşturma (AddSheet) hem düzenleme (app/goal/[id].tsx
-// 'Düzenle' sekmesi) tarafından paylaşılır (Habit/TaskForm ile aynı desen). Alanlar, durum ve
-// doğrulama burada; kalıcılık (create/update), milestone checklist bölümü ve
-// modal/sheet kabuğu çağırana aittir. onSubmit son (dönüştürülmüş) değerleri
-// yukarı verir.
+// Goal form FIELDS — shared by both creation (AddSheet) and editing (the
+// 'Edit' tab of app/goal/[id].tsx) (same pattern as Habit/TaskForm). Fields,
+// state and validation live here; persistence (create/update), the milestone
+// checklist section, and the modal/sheet shell belong to the caller. onSubmit
+// hands the final (converted) values up.
 //
-// goal_type artık iki değer alır: 'numeric' (ilerleme çubuğu) | 'milestone'
-// (görev/alt görev mantığıyla aynı — adımlara bölünebilir). Tip yalnız
-// OLUŞTURMADA seçilir (goalType prop verilmezse üstte chip ile), düzenlemede
-// SABİTTİR (goalType prop verilir) — tip değişimi alanları tutarsız bırakır.
-// Deadline artık HER iki tipte de var ve ZORUNLU (bkz. TaskForm'daki son tarih
-// kararının aynısı) — varsayılan bugün, kaldırma seçeneği yok.
-// Milestone'lar subtasklarla birebir aynı iki-modlu desen: oluşturmada taslak
-// (enableMilestoneDraft), düzenlemede anında yazılan checklist (children).
-// Mimari kural: SQL yok — yalnızca çağıran repo yazar.
+// goal_type now takes two values: 'numeric' (progress bar) | 'milestone'
+// (same logic as tasks/subtasks — can be split into steps). The type is only
+// chosen at CREATION (via a chip at the top, if the goalType prop isn't
+// passed), and is FIXED during editing (goalType prop is passed) — changing
+// the type would leave fields inconsistent.
+// Deadline now exists in BOTH types and is REQUIRED (same decision as
+// TaskForm's due date) — defaults to today, no option to remove it.
+// Milestones follow the exact same two-mode pattern as subtasks: a draft at
+// creation (enableMilestoneDraft), an instantly-written checklist at editing
+// (children).
+// Architecture rule: no SQL — only the caller's repo writes.
 
 import { useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -27,12 +29,12 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { makeGoalFormStyles } from '@/ui/goalFormStyles';
 import { longDateLabel, shortDate } from '@/ui/theme';
 
-// Oluşturmada eklenen taslak adım. Eskiden düz `string` (yalnız başlık) idi:
-// hedef DETAY ekranındaki adım editörü miktar ve son tarih de alabildiği için
-// aynı şeyin iki farklı hâli oluşuyordu (kullanıcı geri bildirimi). Alanlar
-// goal_milestones'ın kendi sütunlarıyla birebir; amount SANİYE cinsindendir
-// (zaman birimli hedefte dakika girilir, burada çevrilir — detay ekranındaki
-// addMilestone ile aynı kural).
+// A draft step added at creation time. Used to be a plain `string` (title
+// only): since the step editor on the goal DETAIL screen could also take an
+// amount and due date, the same thing existed in two different forms (user
+// feedback). Fields map 1:1 to goal_milestones' own columns; amount is in
+// SECONDS (time-unit goals take minutes as input and convert here — same rule
+// as addMilestone on the detail screen).
 export interface DraftMilestone {
   title: string;
   amount: number | null;
@@ -44,22 +46,23 @@ export interface GoalFormValues {
   goal_type: GoalType;
   target_value: number | null;
   unit: string | null;
-  // Yalnız düzenleme + numeric'te anlamlı; oluşturmada null (repo 0 varsayar).
+  // Only meaningful for editing + numeric; null at creation (repo defaults to 0).
   current_value: number | null;
   deadline: string;
-  remind_times: string[]; // günlük giriş hatırlatma saatleri (0 ya da daha fazla)
-  // Yalnız numeric'te anlamlı (tempo/projeksiyon sıfır günü — goalProjection.ts);
-  // milestone hedefte null (o tipte tempo hesabı yok).
+  remind_times: string[]; // daily-entry reminder times (0 or more)
+  // Only meaningful for numeric (the tempo/projection zero day — goalProjection.ts);
+  // null for milestone goals (no tempo calc for that type).
   start_date: string | null;
-  milestones?: DraftMilestone[]; // yalnız enableMilestoneDraft'ta doldurulur
-  // Yalnız düzenleme + numeric'te anlamlı: "Mevcut değer" elle değiştirilirse
-  // farkı goal_entries'e de yazıp tempo/projeksiyona dahil et mi? Varsayılan
-  // false (salt düzeltme — bkz. GoalForm'daki checkbox açıklaması).
+  milestones?: DraftMilestone[]; // only populated when enableMilestoneDraft
+  // Only meaningful for editing + numeric: when "Current value" is changed by
+  // hand, should the diff also be written to goal_entries and factored into
+  // tempo/projection? Defaults to false (a pure correction — see the checkbox
+  // description in GoalForm).
   log_manual_change?: boolean;
 }
 
 interface Props {
-  goalType?: GoalType; // sabit verilirse (düzenleme) tip değişmez; verilmezse chip ile seçilir
+  goalType?: GoalType; // if fixed (editing), the type doesn't change; if omitted, chosen via a chip
   initial?: Partial<{
     title: string;
     target_value: number | null;
@@ -73,8 +76,8 @@ interface Props {
   onSubmit: (values: GoalFormValues) => void;
   onDelete?: () => void;
   autoFocusTitle?: boolean;
-  children?: ReactNode; // düzenlemede milestone checklist (anında yazılır)
-  enableMilestoneDraft?: boolean; // oluşturmada taslak milestone editörü
+  children?: ReactNode; // milestone checklist during editing (written instantly)
+  enableMilestoneDraft?: boolean; // the draft milestone editor at creation
 }
 
 const TYPE_OPTIONS: { value: GoalType; labelKey: string }[] = [
@@ -99,10 +102,10 @@ export function GoalForm({
 
   const [title, setTitle] = useState(initial?.title ?? '');
   const [goalType, setGoalType] = useState<GoalType>(fixedType ?? 'numeric');
-  // Sayısal hedefte birim türü: 'amount' (serbest birim metni) | 'time' (süre —
-  // target/current_value SANİYE saklanır, giriş dakika olarak yapılır; bkz.
-  // helpers.TIME_UNIT). Yalnız OLUŞTURMADA seçilir (goalType'ın kendisi gibi) —
-  // düzenlemede değiştirmek mevcut current_value'nun birimini kaydırırdı.
+  // Unit type for a numeric goal: 'amount' (free-form unit text) | 'time'
+  // (duration — target/current_value stored in SECONDS, entered in minutes;
+  // see helpers.TIME_UNIT). Only chosen at CREATION (like goalType itself) —
+  // changing it during editing would shift the unit of the existing current_value.
   const initialIsTime = isTimeUnit(initial?.unit);
   const [unitMode, setUnitMode] = useState<'amount' | 'time'>(initialIsTime ? 'time' : 'amount');
   const [target, setTarget] = useState(
@@ -116,25 +119,26 @@ export function GoalForm({
       ? String(initialIsTime ? initial.current_value / 60 : initial.current_value)
       : ''
   );
-  // "Mevcut değer"i elle değiştirmek varsayılan olarak salt DÜZELTMEdir (tempo/
-  // projeksiyonu etkilemez); kullanıcı geriye dönük gerçek ilerleme giriyorsa
-  // bunu işaretleyip farkı girdi geçmişine de yazdırabilir (bkz. dosya sonu handleEditSubmit).
+  // Manually editing "Current value" is a pure CORRECTION by default (doesn't
+  // affect tempo/projection); if the user is entering real retroactive
+  // progress, they can check this to also write the diff into the entry
+  // history (see handleEditSubmit at the end of the file).
   const [logManualChange, setLogManualChange] = useState(false);
-  // Her hedefte artık zorunlu bir son tarih var — oluşturmada bugün varsayılan
-  // (TaskForm'daki due date kararının aynısı), düzenlemede mevcut değer.
+  // Every goal now has a required deadline — defaults to today at creation
+  // (same decision as TaskForm's due date), keeps the existing value when editing.
   const [deadline, setDeadline] = useState(initial?.deadline ?? todayDate());
-  // Günlük giriş hatırlatma saatleri — HabitForm'daki çoklu hatırlatma deseni.
+  // Daily-entry reminder times — the same multi-reminder pattern as HabitForm.
   const [remindTimes, setRemindTimes] = useState<string[]>(initial?.remind_times ?? []);
-  // Tempo/projeksiyon hesabının sıfır günü (bkz. goalProjection.ts) — yalnız
-  // numeric'te anlamlı. Oluşturmada bugün varsayılan (tam da tasarım kararı:
-  // "bugün açtığım hedefin ilk günü bugün").
+  // The zero day for the tempo/projection calculation (see goalProjection.ts) —
+  // only meaningful for numeric. Defaults to today at creation (exactly the
+  // design decision: "the goal I open today has today as its first day").
   const [startDate, setStartDate] = useState(initial?.start_date ?? todayDate());
   const [showPicker, setShowPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [draftMilestones, setDraftMilestones] = useState<DraftMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState('');
-  // Miktar/tarih, detay ekranındaki (app/goal/[id].tsx) kademeli çiplerin
-  // aynısı: başlık satırı sade kalsın, ekstralar bir dokunuş uzakta olsun.
+  // Amount/date, the same progressive chips as the detail screen
+  // (app/goal/[id].tsx): keep the title row plain, extras a tap away.
   const [newMilestoneAmount, setNewMilestoneAmount] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState<string | null>(null);
   const [showMilestoneAmount, setShowMilestoneAmount] = useState(false);
@@ -143,13 +147,14 @@ export function GoalForm({
   const addDraftMilestone = () => {
     const m = newMilestone.trim();
     if (!m) return;
-    // Miktar yalnız sayısal hedefte anlamlı (detay ekranındaki addMilestone ile
-    // AYNI kural): doluysa adım kendi bağımsız eşiği olur, boşsa checklist maddesi.
+    // Amount is only meaningful for numeric goals (the SAME rule as
+    // addMilestone on the detail screen): if filled in, the step becomes its
+    // own independent threshold; if empty, it's a plain checklist item.
     const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
     const amount =
       goalType === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
         ? isTime
-          ? Math.round(parsedAmount * 60) // dakika girilir, saniye saklanır
+          ? Math.round(parsedAmount * 60) // entered in minutes, stored in seconds
           : parsedAmount
         : null;
     setDraftMilestones((prev) => [...prev, { title: m, amount, due_date: newMilestoneDate }]);
@@ -161,9 +166,9 @@ export function GoalForm({
   const removeDraftMilestone = (i: number) =>
     setDraftMilestones((prev) => prev.filter((_, idx) => idx !== i));
 
-  // Sayısal hedefte miktar+birim zorunlu — aksi halde target_value/unit null
-  // kalıp ilerleme çubuğu hiç anlamlı olmayan, "hedefsiz" bir hedef oluşurdu
-  // (HabitForm'daki nicel alışkanlık kuralıyla aynı, bkz. trackingTargetValid).
+  // For a numeric goal, amount+unit are required — otherwise target_value/unit
+  // would stay null, creating a "goalless" goal whose progress bar is
+  // meaningless (same rule as the numeric habit in HabitForm, see trackingTargetValid).
   const isTime = goalType === 'numeric' && unitMode === 'time';
   const targetNumPreview = parseFloat(target.replace(',', '.'));
   const canSubmit =
@@ -178,8 +183,8 @@ export function GoalForm({
     const numeric = goalType === 'numeric';
     const targetNum = parseFloat(target.replace(',', '.'));
     const currentNum = parseFloat(current.replace(',', '.'));
-    // Süre modunda dakika olarak girilir, saniyeye çevrilip saklanır (habit
-    // timer'daki aynı desen).
+    // In duration mode it's entered in minutes and converted to seconds for
+    // storage (the same pattern as the habit timer).
     const targetVal = Number.isFinite(targetNum) ? (isTime ? Math.round(targetNum * 60) : targetNum) : null;
     const currentVal = Number.isFinite(currentNum) ? (isTime ? Math.round(currentNum * 60) : currentNum) : null;
     onSubmit({
@@ -201,7 +206,7 @@ export function GoalForm({
 
   return (
     <>
-      {/* Başlık */}
+      {/* Title */}
       <Text style={styles.label}>{t('goal.titleShort')}</Text>
       <TextInput
         style={styles.input}
@@ -216,7 +221,7 @@ export function GoalForm({
         {title.length}/{TITLE_MAX_LEN}
       </Text>
 
-      {/* Tip — yalnız oluşturmada seçilir; düzenlemede SABİT (salt gösterim) */}
+      {/* Type — only chosen at creation; FIXED during editing (display only) */}
       {fixedType ? (
         <Text style={styles.typeTag}>
           {t(fixedType === 'numeric' ? 'goal.typeNumeric' : 'goal.typeMilestone')}
@@ -243,11 +248,11 @@ export function GoalForm({
         </>
       )}
 
-      {/* Sayısal alanlar */}
+      {/* Numeric fields */}
       {goalType === 'numeric' && (
         <>
-          {/* Birim türü — yalnız oluşturmada seçilir (goalType gibi SABİT olur;
-              düzenlemede değiştirmek mevcut current_value'nun birimini kaydırırdı). */}
+          {/* Unit type — only chosen at creation (FIXED like goalType;
+              changing it during editing would shift the unit of the existing current_value). */}
           {!isEditing && (
             <>
               <Text style={styles.label}>{t('goal.unitTypeLabel')}</Text>
@@ -332,10 +337,11 @@ export function GoalForm({
                 placeholderTextColor={colors.faint}
                 maxLength={NUMBER_MAX_LEN}
               />
-              {/* Varsayılan: bu alan salt DÜZELTMEdir, tempo/projeksiyonu etkilemez
-                  (bkz. GoalFormValues.log_manual_change yorumu). İşaretlenirse fark
-                  girdi geçmişine de yazılır — geriye dönük gerçek ilerleme girme
-                  senaryosu için (ör. birkaç gündür loglanmamış okuma). */}
+              {/* Default: this field is a pure CORRECTION, doesn't affect
+                  tempo/projection (see the GoalFormValues.log_manual_change
+                  comment). If checked, the diff is also written to the entry
+                  history — for retroactive real-progress entry scenarios
+                  (e.g. reading that hasn't been logged for a few days). */}
               <Pressable
                 style={styles.checkRow}
                 onPress={() => setLogManualChange((v) => !v)}
@@ -352,9 +358,10 @@ export function GoalForm({
             </>
           )}
 
-          {/* Tempo/projeksiyon hesabının sıfır günü — "Son 7 gün" ortalaması vb.
-              bu tarihten bugüne geçen gerçek gün sayısıyla sınırlanır (bkz.
-              goalProjection.ts). Bugünden ileri bir tarih seçilemez. */}
+          {/* The zero day for the tempo/projection calculation — things like the
+              "Last 7 days" average are capped by the actual number of days
+              elapsed since this date (see goalProjection.ts). A date later than
+              today can't be picked. */}
           <Text style={styles.label}>{t('goal.startDateLabel')}</Text>
           <View style={styles.row}>
             <Pressable
@@ -376,7 +383,7 @@ export function GoalForm({
         </>
       )}
 
-      {/* Son tarih — artık her iki tipte de zorunlu, kaldırılamaz */}
+      {/* Deadline — now required in both types, cannot be removed */}
       <Text style={styles.label}>{t('goal.deadlineLabel')}</Text>
       <View style={styles.row}>
         <Pressable
@@ -396,20 +403,22 @@ export function GoalForm({
         onConfirm={onPickDate}
       />
 
-      {/* Günlük giriş hatırlatmaları — isteğe bağlı, birden fazla eklenebilir
-          ("şu hedefe giriş yapmayı unutma" bildirimi bu saatlerde gelir). */}
+      {/* Daily-entry reminders — optional, multiple can be added ("don't forget
+          to log this goal" notifications arrive at these times). */}
       <ReminderListEditor label={t('goal.remindLabel')} times={remindTimes} onChange={setRemindTimes} />
 
-      {/* Düzenlemede milestone checklist (anında yazılır, parent sağlar) — artık kullanılmıyor:
-          adımlar app/goal/[id].tsx'te ayrı bir 'Adımlar' sekmesinde yönetiliyor. */}
+      {/* Milestone checklist during editing (written instantly, provided by the
+          parent) — no longer used: steps are now managed in a separate 'Steps'
+          tab in app/goal/[id].tsx. */}
       {goalType === 'milestone' && children}
 
-      {/* Oluşturmada taslak adım editörü (hedef yazılınca birlikte oluşur).
-          Detay ekranındaki (app/goal/[id].tsx) adım editörüyle EŞİTLENDİ:
-          - artık HER İKİ hedef tipinde de görünür (adımlar ikisinde de geçerli;
-            eskiden yalnız 'milestone' tipte açılıyordu, oysa sayısal hedefe de
-            sonradan adım eklenebiliyordu — aynı şeyin iki farklı hâliydi),
-          - başlık satırı sade, miktar/tarih kademeli çiplerde. */}
+      {/* The draft step editor at creation (created together with the goal
+          when submitted). BROUGHT IN SYNC with the step editor on the detail
+          screen (app/goal/[id].tsx):
+          - now visible for BOTH goal types (steps are valid for both; it used
+            to only open for 'milestone' type, yet a step could later be added
+            to a numeric goal too — the same thing existing in two different forms),
+          - title row stays plain, amount/date live in progressive chips. */}
       {enableMilestoneDraft && (
         <>
           <Text style={styles.label}>{t('goal.milestonesOptional')}</Text>
@@ -515,7 +524,7 @@ export function GoalForm({
         </>
       )}
 
-      {/* Eylemler — Sil yalnız düzenlemede (onDelete varsa) */}
+      {/* Actions — Delete only during editing (when onDelete is provided) */}
       <View style={styles.actions}>
         {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
         <Pressable

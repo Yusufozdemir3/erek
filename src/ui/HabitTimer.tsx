@@ -1,10 +1,12 @@
-// Zamanlayıcı alışkanlığın kart üzerindeki kontrolü.
-// Canlı sayaç "m:ss / m:ss" + Başlat/Duraklat düğmesi + (ilerleme varken) Sıfırla.
-// Çalışan durum ve tik TimerProvider'dan gelir; hedefe ulaşınca ✓ rozeti görünür
-// ama zamanlayıcı DURMAZ, kullanıcı hedefi aşarak çalışmaya devam edebilir.
-// `editable` yalnızca bugün için true (geçmiş gün salt-okunur).
-// Değer metnine dokununca (timer çalışmıyorken) dakika olarak el ile girilebilir —
-// AmountStepper'daki "klavyeden gir" desenin aynısı, saniyeye çevrilip onSet'e geçilir.
+// The on-card control for a timer habit.
+// A live counter "m:ss / m:ss" + Start/Pause button + (once there's progress) Reset.
+// Running state and ticks come from TimerProvider; once the target is reached
+// a ✓ badge appears but the timer does NOT stop — the user can keep running
+// past the target.
+// `editable` is only true for today (a past day is read-only).
+// Tapping the value text (while the timer isn't running) lets you enter
+// minutes by hand — the same "type it on the keyboard" pattern as
+// AmountStepper, converted to seconds and passed to onSet.
 
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -17,13 +19,13 @@ import type { Colors } from './theme';
 
 interface Props {
   habitId: string;
-  amount: number;      // o gün DB'de biriken saniye (anlık görüntü)
-  target: number;      // hedef saniye
-  editable?: boolean;  // bugün mü — kontroller yalnız o zaman görünür
-  onSet?: (totalSeconds: number) => void; // klavyeden girilen mutlak süre (saniye)
+  amount: number;      // seconds accumulated in the DB for that day (a snapshot)
+  target: number;      // target in seconds
+  editable?: boolean;  // is it today — controls only appear then
+  onSet?: (totalSeconds: number) => void; // absolute duration entered from the keyboard (seconds)
 }
 
-// Saniyeyi dakikaya çevirip tam sayıysa ondalıksız gösterir (AmountStepper.fmt ile aynı desen).
+// Converts seconds to minutes and shows it without decimals if it's a whole number (same pattern as AmountStepper.fmt).
 function fmtMinutes(totalSeconds: number): string {
   const mins = totalSeconds / 60;
   return mins % 1 === 0 ? String(mins) : mins.toFixed(1);
@@ -35,14 +37,13 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
   const styles = makeStyles(colors);
   const timer = useTimer();
   const running = timer.isRunning('habit', habitId);
-  // Çalışıyorsa canlı değer; değilse DB'deki birikmiş miktar.
+  // The live value while running; otherwise the accumulated amount in the DB.
   const live = running ? timer.liveSeconds('habit', habitId) ?? amount : amount;
   const reached = target > 0 && live >= target;
 
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
-  // AmountStepper'daki gibi: onBlur + onSubmitEditing aynı oturumda iki kez
-  // commit etmesin diye tek seferlik bayrak.
+  // Same as AmountStepper: a one-shot flag so onBlur + onSubmitEditing don't commit twice in the same session.
   const committedRef = useRef(false);
 
   const startEdit = () => {
@@ -81,8 +82,8 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
         </Pressable>
       )}
 
-      {/* Hedefe ulaşınca ✓ rozeti görünür ama kontroller kaybolmaz — kullanıcı
-          isterse hedefi aşarak çalışmaya devam edebilir. */}
+      {/* Once the target is reached a ✓ badge appears but the controls don't
+          disappear — the user can keep running past the target if they want. */}
       {reached && <Text style={styles.doneCheck}>✓</Text>}
       {editable && (
         <Pressable

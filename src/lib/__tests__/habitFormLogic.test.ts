@@ -1,6 +1,6 @@
-// habitFormLogic testleri — bu dönüşümler HabitForm'un submit'inin içinde
-// gömülüyken HİÇ test edilmiyordu (denetim H1+F1). Kilitlenen sözleşme:
-// geçersiz girdi hata değil, güvenli varsayılan.
+// habitFormLogic tests — these transforms had NEVER been tested while
+// embedded inside HabitForm's submit (audit H1+F1). Locked-in contract:
+// invalid input is not an error, it's a safe default.
 
 import {
   buildSchedule,

@@ -1,21 +1,23 @@
-// Android'in "zorla koyu" (force dark) özelliğini KAPATIR.
+// DISABLES Android's "force dark" feature.
 //
-// NEDEN: Uygulama kendi temasını kendi yönetiyor (Profil > Görünüm: Açık/Koyu/
-// Sistem + koyu stili + vurgu rengi; bkz. src/ui/ThemeProvider.tsx). Ama native
-// Android teması Theme.AppCompat.Light.NoActionBar ve API 29+'ta böyle "açık"
-// temalı uygulamalarda android:forceDarkAllowed VARSAYILAN olarak true. Telefon
-// koyu moddayken OS uygulamanın açık zeminlerini ZORLA karartıyor — kullanıcı
-// Profil'den "Açık"ı seçse bile ekran koyu kalıyordu (vurgu renkleri açık
-// paletine geçtiği için "yarı açık/yarı koyu" tuhaf bir hâl oluşuyordu).
-// MIUI/Xiaomi bunu özellikle agresif uyguluyor; stock/emülatörde varsayılan
-// kapalı olduğu için gözden kaçmıştı (emülatörde `setprop debug.hwui.force_dark
-// true` ile birebir üretildi).
+// WHY: The app manages its own theme (Profile > Appearance: Light/Dark/System
+// + dark style + accent color; see src/ui/ThemeProvider.tsx). But the native
+// Android theme is Theme.AppCompat.Light.NoActionBar, and on API 29+
+// android:forceDarkAllowed DEFAULTS to true for apps with a "light" theme
+// like this one. When the phone is in dark mode, the OS FORCIBLY darkens the
+// app's light surfaces — the screen stayed dark even if the user picked
+// "Light" in Profile (since accent colors still switched to the light
+// palette, it produced an odd "half light/half dark" look). MIUI/Xiaomi
+// applies this especially aggressively; it went unnoticed on stock/emulator
+// because it's off there by default (reproduced exactly on the emulator with
+// `setprop debug.hwui.force_dark true`).
 //
-// Bu plugin AppTheme'e android:forceDarkAllowed=false ekler → OS asla karartmaz,
-// açık/koyu tamamen ThemeProvider'ın kontrolünde kalır.
+// This plugin adds android:forceDarkAllowed=false to AppTheme → the OS never
+// darkens anything, light/dark stays entirely under ThemeProvider's control.
 //
-// NOT: android/ klasörü git'te izlenmiyor (prebuild üretir). Bu yüzden düzeltme
-// elle styles.xml'e değil BURAYA yazıldı — her prebuild'de otomatik uygulanır.
+// NOTE: the android/ folder isn't tracked in git (prebuild generates it). So
+// this fix was written HERE rather than by hand-editing styles.xml — it's
+// applied automatically on every prebuild.
 
 const { withAndroidStyles, AndroidConfig } = require('@expo/config-plugins');
 

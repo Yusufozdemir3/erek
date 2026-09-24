@@ -1,10 +1,11 @@
-// GoalStatsTab testleri — denetim bulgusu H1+F1'in kesiştiği yer: bu içerik
-// app/goal/[id].tsx'in içinde gömülüyken TEST EDİLEMİYORDU (rota dosyaları
-// hiçbir jest projesinin kapsamında değil). Ayrı bileşene çıkınca 'ui' projesi
-// onu doğrudan render edebiliyor.
+// GoalStatsTab tests — where audit findings H1+F1 intersect: this content
+// COULDN'T BE TESTED while embedded inside app/goal/[id].tsx (route files
+// aren't in scope for any jest project). Once split into its own component,
+// the 'ui' project can render it directly.
 //
-// Kilitlenen davranışlar: sonuç bandının üç tonu, sayısal/adım tipine göre
-// hangi kartların çıktığı, gecikme durumunda kırmızı kart, sıradaki adım bloğu.
+// Behaviors locked in: the three tones of the verdict banner, which cards
+// show up depending on numeric/milestone type, the red card when overdue,
+// the next-milestone block.
 
 import { render, screen } from '@testing-library/react-native';
 import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';
@@ -15,8 +16,8 @@ import type { GoalStats } from '@/ui/useGoalStats';
 
 const styles = makeGoalStyles(lightColors);
 
-// Çeviri dublörü: anahtarı aynen döndürür (metin değil ANAHTAR aranır — sözlük
-// değişince test kırılmasın, davranış test edilsin).
+// Translation double: returns the key as-is (the KEY is asserted on, not the
+// text — so the test tests behavior, not the dictionary, and won't break when it changes).
 const t = (key: string, params?: Record<string, string | number>) =>
   params ? `${key}:${JSON.stringify(params)}` : key;
 
@@ -27,7 +28,7 @@ const goal: Goal = {
   goal_type: 'numeric',
   target_value: 200,
   current_value: 50,
-  // Girdisi olmayan hedefte tüm değer baseline'dadır (bkz. migration019).
+  // For a goal with no entries, the entire value sits in the baseline (see migration019).
   value_baseline: 50,
   unit: 'sayfa',
   deadline: '2026-08-30',

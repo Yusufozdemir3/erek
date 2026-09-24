@@ -1,16 +1,16 @@
-// Hedef DETAY ekranı — sekmeli: Genel · İstatistik · Adımlar · Düzenle.
-// Eskiden düzenleme ayrı bir modalda (GoalEditModal) açılıyordu; artık bu
-// ekranın bir sekmesi — tek doğru kaynak/tek yer, bakım maliyeti düşük.
-// Adımlar (goal_milestones) artık HER İKİ hedef tipinde de opsiyonel bir
-// checklist olarak eklenebilir — 'milestone' tipte otomatik tamamlama
-// mantığını sürdürür, 'numeric' tipte salt organizasyonel bir yardımcıdır
-// (numeric hedefin tamamlanması hep current_value>=target_value'dan gelir).
-// Tüm veri GİRİŞİ ("entry") Genel sekmesinde yapılır: numeric hedefte
-// +1/+5/−1 sayacı, milestone hedefte elle tamamlandı işaretleme — liste
-// ekranı (goals.tsx) artık salt-okunur bir özet/gezinme yüzeyi.
-// "Hedefler" sekmesinden üç şekilde açılır: başlığa dokun (edit sekmesi), swipe
-// düzenle (edit sekmesi), 📊 ikonu (stats sekmesi); yoksa varsayılan Genel'dir.
-// Mimari kural: SQL yok; yalnızca useGoalStats + goalRepo/goalMilestoneRepo çağrılır.
+// Goal DETAIL screen — tabbed: Overview · Stats · Milestones · Edit.
+// Editing used to open in a separate modal (GoalEditModal); it's now a tab on
+// this screen — one single source of truth, lower maintenance cost.
+// Milestones (goal_milestones) can now be added as an optional checklist on
+// BOTH goal types — for 'milestone' type it keeps its automatic-completion
+// logic, for 'numeric' type it's purely an organizational aid (a numeric
+// goal's completion always comes from current_value>=target_value).
+// ALL data ENTRY ("entry") happens on the Overview tab: a +1/+5/−1 counter for
+// numeric goals, manual "mark completed" for milestone goals — the list screen
+// (goals.tsx) is now a read-only summary/navigation surface.
+// Opens from the "Goals" tab in three ways: tap the title (edit tab), swipe to
+// edit (edit tab), the 📊 icon (stats tab); otherwise defaults to Overview.
+// Architecture rule: no SQL; only useGoalStats + goalRepo/goalMilestoneRepo are called.
 
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -45,35 +45,36 @@ export default function GoalDetailScreen() {
   const stats = useGoalStats(id);
   const [activeTab, setActiveTab] = useState<GoalTab>((tab as GoalTab) || 'overview');
   const [newMilestone, setNewMilestone] = useState('');
-  // Yeni adımın opsiyonel miktarı (yalnız sayısal hedefte görünür) ve son tarihi.
+  // The new milestone's optional amount (only shown for a numeric goal) and due date.
   const [newMilestoneAmount, setNewMilestoneAmount] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState<string | null>(null);
   const [showMilestoneDatePicker, setShowMilestoneDatePicker] = useState(false);
-  // Miktar alanı varsayılan olarak KAPALI (çip hâlinde) — çipe basınca açılır.
+  // The amount field is COLLAPSED by default (as a chip) — tapping the chip expands it.
   const [showMilestoneAmount, setShowMilestoneAmount] = useState(false);
-  // Genel sekmesindeki serbest miktar girişi ("kaç {unit} ekledin?").
+  // Free-form amount input on the Overview tab ("how much {unit} did you add?").
   const [entryText, setEntryText] = useState('');
 
   const goal = stats.goal;
 
-  // — Genel sekmesi: veri girişi ("entry") — kullanıcı istediği miktarı yazar,
-  // "Ekle" ile o an biriken ilerlemeye eklenir (goalRepo.addProgress bir DELTA'dır,
-  // mutlak değer değil — negatif yazarak düzeltme de yapılabilir). Günlük kaydını
-  // addProgress'in kendisi düşer (bağlı alışkanlık katkıları da böylece geçmişe
-  // girer; bkz. goalRepo.addProgress).
-  // Tamamlanma durumu değişmiş olabilecek her mutasyondan sonra hatırlatmaları
-  // güncel duruma göre yeniden kur: scheduleGoalReminders tamamlanan/hatırlatmasız
-  // hedefte kendiliğinden yalnız iptal eder (cancel-then-maybe-schedule deseni).
-  // İzin reddi (ok=false) burada SESSİZCE geçilir (her giriş/adım değişiminde
-  // uyarı göstermek rahatsız edici olurdu) — yalnızca handleEditSubmit (kullanıcı
-  // hatırlatmayı bilerek değiştirdiği an) sonucu kontrol edip uyarı gösterir.
-  // Gerçek bir hata (rejection) en azından console.warn ile görünür kalır —
-  // eskiden tamamen yutuluyordu.
+  // — Overview tab: data entry ("entry") — the user types whatever amount they
+  // want, and "Add" applies it as a DELTA on top of the accumulated progress
+  // (goalRepo.addProgress is a delta, not an absolute value — entering a
+  // negative number also works as a correction). addProgress itself logs the
+  // daily entry (so linked-habit contributions land in the history too; see
+  // goalRepo.addProgress).
+  // After any mutation that may have changed completion status, rebuild
+  // reminders from the current state: scheduleGoalReminders already just
+  // cancels on its own for a completed/reminder-less goal (cancel-then-maybe-
+  // schedule pattern). A permission denial (ok=false) is SILENTLY ignored here
+  // (showing a warning on every entry/milestone change would be annoying) —
+  // only handleEditSubmit (the moment the user deliberately changes the
+  // reminder) checks the result and shows a warning. A real error (rejection)
+  // stays at least visible via console.warn — it used to be swallowed entirely.
   const refreshReminder = (): Promise<boolean> => {
     const g = goalRepo.getById(id);
     if (!g) return Promise.resolve(true);
     return scheduleGoalReminders(g, reminderRepo.listByEntity('goal', id)).catch((e) => {
-      console.warn('[Bildirim] Hedef hatırlatması güncellenemedi:', e);
+      console.warn('[Notification] Failed to update goal reminder:', e);
       return true;
     });
   };
@@ -82,11 +83,11 @@ export default function GoalDetailScreen() {
     if (!goal) return;
     const parsed = parseFloat(entryText.replace(',', '.'));
     if (!Number.isFinite(parsed) || parsed === 0) return;
-    // Süre-ölçümlü hedefte dakika girilir, saniye saklanır (target/current_value
-    // ile aynı birim — bkz. GoalForm'daki aynı desen).
+    // For a time-measured goal, minutes are entered but seconds are stored
+    // (same unit as target/current_value — see the identical pattern in GoalForm).
     const amount = isTimeUnit(goal.unit) ? Math.round(parsed * 60) : parsed;
-    // Girdi kaydını addProgress'in kendisi yazar (gerçekleşen farkla) — burada
-    // ayrıca goalEntryRepo.create çağırmak ÇİFT kayıt olurdu.
+    // addProgress itself writes the entry record (with the actual applied
+    // difference) — calling goalEntryRepo.create here too would DOUBLE-log it.
     goalRepo.addProgress(goal.id, amount);
     const g = goalRepo.getById(goal.id);
     g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
@@ -103,7 +104,7 @@ export default function GoalDetailScreen() {
     stats.reload();
   };
 
-  // — Adımlar sekmesi: mutasyonlar (eskiden GoalEditModal'da) —
+  // — Milestones tab: mutations (used to live in GoalEditModal) —
   const syncGoalCompletion = () => {
     if (!goal) return;
     const { done, total } = goalMilestoneRepo.countForGoal(goal.id);
@@ -122,19 +123,20 @@ export default function GoalDetailScreen() {
   };
   const refreshMilestones = () => {
     syncGoalCompletion();
-    refreshReminder(); // adımlar hedefi tamamlamış/geri açmış olabilir
+    refreshReminder(); // milestones may have completed or reopened the goal
     stats.reload();
   };
   const addMilestone = () => {
     const v = newMilestone.trim();
     if (!v || !goal) return;
-    // Miktar yalnız sayısal hedefte anlamlı; doluysa adım kendi bağımsız
-    // hedefi olur (girişlerle dolar, işaretlenmez), boşsa sıradan checklist maddesi.
+    // The amount is only meaningful for a numeric goal; if filled in, the
+    // milestone becomes its own independent target (filled by entries, never
+    // checked off manually) — otherwise it's an ordinary checklist item.
     const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
     const amount =
       goal.goal_type === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
         ? isTimeUnit(goal.unit)
-          ? Math.round(parsedAmount * 60) // dakika girilir, saniye saklanır
+          ? Math.round(parsedAmount * 60) // minutes are entered, seconds are stored
           : parsedAmount
         : null;
     goalMilestoneRepo.create(goal.id, v, { amount, due_date: newMilestoneDate });
@@ -144,8 +146,8 @@ export default function GoalDetailScreen() {
     setShowMilestoneAmount(false);
     refreshMilestones();
   };
-  // Yalnız checklist (miktarsız) adımlar elle işaretlenir; ara-eşik adımının
-  // durumu girişlerden türetilir (bkz. milestoneViews).
+  // Only checklist (amount-less) milestones are checked off manually; a
+  // threshold milestone's state is derived from entries (see milestoneViews).
   const toggleMilestone = (m: GoalMilestone) => {
     goalMilestoneRepo.setCompleted(m.id, m.completed === 0);
     refreshMilestones();
@@ -155,16 +157,17 @@ export default function GoalDetailScreen() {
     refreshMilestones();
   };
 
-  // — Düzenle sekmesi —
-  // "Mevcut değer"i elle değiştirmek VARSAYILAN olarak salt DÜZELTMEdir — tempo/
-  // projeksiyon (goalProjection.ts) girdi geçmişinden beslendiği için oraya
-  // yazılmaz. Kullanıcı GoalForm'daki "İlerleme geçmişine de ekle" kutusunu
-  // işaretlerse fark bir girdi olarak düşer.
-  // KARARIN KENDİSİ ARTIK REPO'DA (goalRepo.update'in log_manual_change alanı):
-  // current_value girdilerden türetildiği için (bkz. migration019) "baseline'a mı
-  // girdiye mi yazılacak" sorusunun tek bir doğru cevabı var ve ikisi aynı anda
-  // yapılamaz. Burada ayrıca girdi yazmak toplamı current_value'dan koparıyor,
-  // değer bir sonraki senkron turunda kendiliğinden sıçrıyordu.
+  // — Edit tab —
+  // Manually changing "Current value" is a pure CORRECTION by DEFAULT — tempo/
+  // projection (goalProjection.ts) is fed from the entry history, so it isn't
+  // written there. If the user checks GoalForm's "Also add to progress
+  // history" box, the difference is logged as an entry instead.
+  // THE DECISION ITSELF NOW LIVES IN THE REPO (goalRepo.update's
+  // log_manual_change field): since current_value is derived from entries (see
+  // migration019), the question "does this go to the baseline or to an entry"
+  // has exactly one correct answer, and both can't happen at once. Writing an
+  // entry here as well used to detach the total from current_value, and the
+  // value would jump on its own on the next sync round.
   const handleEditSubmit = (values: GoalFormValues) => {
     if (!goal) return;
     goalRepo.update(goal.id, {
@@ -178,8 +181,8 @@ export default function GoalDetailScreen() {
         : {}),
     });
     reminderRepo.replaceAll('goal', goal.id, values.remind_times);
-    // Kullanıcı hatırlatmayı BİLEREK değiştirdiği an — izin reddiyse uyar
-    // (habit/task düzenleme panelleriyle aynı desen).
+    // The moment the user DELIBERATELY changed the reminder — warn on
+    // permission denial (same pattern as the habit/task edit panels).
     refreshReminder().then((ok) => {
       if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
     });
@@ -193,7 +196,7 @@ export default function GoalDetailScreen() {
     router.back();
   };
 
-  // Adımlar sekmesi artık her iki hedef tipinde de var (bkz. dosya başı yorumu).
+  // The Milestones tab now exists for both goal types (see the file-header comment).
   const TABS: { key: GoalTab; labelKey: string; icon: keyof typeof Feather.glyphMap }[] = [
     { key: 'overview', labelKey: 'goal.tabOverview', icon: 'home' },
     { key: 'stats', labelKey: 'goal.tabStats', icon: 'bar-chart-2' },
@@ -220,7 +223,7 @@ export default function GoalDetailScreen() {
           <>
             <Text style={shared.greeting}>{goal.title}</Text>
 
-            {/* Sekme çubuğu */}
+            {/* Tab bar */}
             <View style={styles.tabBar}>
               {TABS.map((tb) => {
                 const active = activeTab === tb.key;
@@ -239,7 +242,7 @@ export default function GoalDetailScreen() {
               })}
             </View>
 
-            {/* — GENEL — */}
+            {/* — OVERVIEW — */}
             {activeTab === 'overview' && (
               <View>
                 {stats.completed && (
@@ -262,8 +265,9 @@ export default function GoalDetailScreen() {
                             goal.target_value != null ? ` / ${fmtAmount(goal.target_value)}` : ''
                           }${goal.unit ? ` ${goal.unit}` : ''}`}
                     </Text>
-                    {/* Veri girişi burada — kullanıcı istediği miktarı yazıp Ekle'ye basar
-                        (bkz. dosya başı yorumu). Negatif yazarak düzeltme de yapılabilir. */}
+                    {/* Data entry lives here — the user types an amount and
+                        taps Add (see the file-header comment). Entering a
+                        negative number also works as a correction. */}
                     <View style={styles.entryInputRow}>
                       <TextInput
                         style={styles.entryInput}
@@ -280,7 +284,7 @@ export default function GoalDetailScreen() {
                       </Pressable>
                     </View>
 
-                    {/* Girdi geçmişi — kullanıcının tarihiyle görebilmesi için (bkz. dosya başı yorumu). */}
+                    {/* Entry history — so the user can see it with dates (see the file-header comment). */}
                     {stats.entries.length > 0 && (
                       <View style={styles.entryHistory}>
                         <Text style={styles.entryHistoryTitle}>{t('goal.entryHistory')}</Text>
@@ -309,7 +313,7 @@ export default function GoalDetailScreen() {
                       {stats.milestonesDone}/{stats.milestonesTotal}{' '}
                       {t('goal.milestoneCountSuffix', { n: stats.milestonesTotal })}
                     </Text>
-                    {/* Elle tamamlandı işaretleme — adımlar varsa Adımlar sekmesiyle senkron kalır. */}
+                    {/* Manual "mark completed" toggle — stays in sync with the Milestones tab when there are milestones. */}
                     <Pressable
                       style={[styles.completeToggleBtn, stats.completed && styles.completeToggleBtnDone]}
                       onPress={toggleGoalCompleted}
@@ -340,18 +344,20 @@ export default function GoalDetailScreen() {
               </View>
             )}
 
-            {/* — İSTATİSTİK — üstte tek sonuç bandı, altında kompakt üst satır ve
-                başlıklı gruplar (gereken tempo / senin tempon). Onlarca eşit kutu
-                yerine hiyerarşi: göz önce "yetişecek miyim?" cevabına gider. */}
+            {/* — STATS — a single result band at the top, a compact summary
+                row below it and labeled groups (required pace / your pace).
+                Hierarchy instead of dozens of equal boxes: the eye goes
+                straight to "will I make it?" first. */}
             {activeTab === 'stats' && (
               <GoalStatsTab goal={goal} stats={stats} t={t} lang={lang} styles={styles} />
             )}
 
-            {/* — ADIMLAR — iki kip: sayısal hedefte miktarlı adım = KENDİ
-                BAĞIMSIZ hedefi (ör. "ilk 5km"/"ilk 20km"/"ilk 50km" — hepsi
-                current_value'dan aynı anda dolar, İŞARETLENEMEZ, yüzde barı
-                gösterir); miktarsız adım = elle işaretlenen checklist (subtask
-                deseni). Bkz. goalMilestoneRepo.milestoneViews. */}
+            {/* — MILESTONES — two modes: on a numeric goal, an amount-bearing
+                milestone = its OWN INDEPENDENT target (e.g. "first 5km"/"first
+                20km"/"first 50km" — all fill from current_value simultaneously,
+                CANNOT be checked off, and show a percentage bar); an
+                amount-less milestone = a manually checked checklist item
+                (subtask pattern). See goalMilestoneRepo.milestoneViews. */}
             {activeTab === 'milestones' && (
               <View>
                 {stats.milestoneViews.map((v) => {
@@ -422,13 +428,14 @@ export default function GoalDetailScreen() {
                   );
                 })}
 
-                {/* Ekleme satırı KADEMELİ: varsayılan hâli yalnız başlık + ＋.
-                    Eskiden miktar kutusu ve tarih düğmesi de aynı satırdaydı ve
-                    sabit genişlikleri (76+~40+44+boşluklar ≈ 184px) yüzünden asıl
-                    alan olan başlığa ~135px kalıyordu — tarih seçilince ~105px
-                    (kullanıcı geri bildirimi: "sade değil"). Artık ikisi de
-                    başlığa yazılmaya başlanınca alttaki çip satırında beliriyor:
-                    yaygın durum (başlık yaz, Enter) tek temiz satır kalıyor. */}
+                {/* The add row is PROGRESSIVE: by default it's just a title
+                    field + ＋. It used to also have the amount box and date
+                    button on the same row, and their fixed widths
+                    (76+~40+44+gaps ≈ 184px) left only ~135px for the title
+                    field itself — down to ~105px once a date was picked (user
+                    feedback: "not clean"). Now both appear in the chip row
+                    below only once you start typing a title: the common case
+                    (type a title, hit Enter) stays a single clean row. */}
                 <View style={styles.milestoneAddRow}>
                   <TextInput
                     style={styles.milestoneInput}
@@ -450,9 +457,9 @@ export default function GoalDetailScreen() {
                     <Text style={styles.milestoneAddText}>＋</Text>
                   </Pressable>
                 </View>
-                {/* Çipler: başlık boşken gizli — AMA doldurulmuş bir miktar/tarih
-                    varsa görünür kalır, yoksa kullanıcı başlığı silince girdiği
-                    değer görünmez şekilde taşınırdı. */}
+                {/* Chips: hidden while the title is empty — BUT stay visible if
+                    an amount/date is already filled in, otherwise clearing the
+                    title would silently discard the value the user had entered. */}
                 {(newMilestone.trim().length > 0 || newMilestoneDate != null || newMilestoneAmount.length > 0) && (
                   <View style={styles.milestoneChipRow}>
                     {goal.goal_type === 'numeric' &&
@@ -504,10 +511,10 @@ export default function GoalDetailScreen() {
                     </Pressable>
                   </View>
                 )}
-                {/* Uygulamanın kendi tarih seçicisi — eskiden burada native
-                    DateTimePicker vardı ve aynı iş (adıma son tarih verme)
-                    oluşturma ekranında DatePickerModal, burada sistem takvimiyle
-                    yapılıyordu. Tek seçici: her yerde aynı görünüm/davranış. */}
+                {/* The app's own date picker — this used to be the native
+                    DateTimePicker, with the same job (giving a milestone a due
+                    date) done by DatePickerModal on the creation screen but by
+                    the system calendar here. One picker: the same look/behavior everywhere. */}
                 <DatePickerModal
                   visible={showMilestoneDatePicker}
                   value={new Date(`${newMilestoneDate ?? todayDate()}T00:00:00`)}
@@ -520,7 +527,7 @@ export default function GoalDetailScreen() {
               </View>
             )}
 
-            {/* — DÜZENLE — */}
+            {/* — EDIT — */}
             {activeTab === 'edit' && (
               <GoalForm
                 key={goal.id}

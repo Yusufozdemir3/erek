@@ -1,16 +1,16 @@
-// goalEntryRepo testleri: girdi geçmişi yalnızca bir GÜNLÜKTÜR — goals.current_value'yu
-// ASLA değiştirmez (bkz. dosya başı yorumu), yalnızca "ne zaman ne kadar eklendi"
-// kaydını tutar. subtaskRepo/goalMilestoneRepo ile aynı desen.
+// goalEntryRepo tests: entry history is only a LOG — it NEVER mutates
+// goals.current_value (see the file-header comment there), it just keeps a
+// record of "how much was added when". Same pattern as subtaskRepo/goalMilestoneRepo.
 
 import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
 
-// updated_at milisaniye çözünürlüklü; art arda iki create aynı milisaniyeye
-// düşerse listByGoal'ın ORDER BY updated_at DESC'i (ikincil bir sıra anahtarı
-// olmadığından) "en yeni önce" garantisi vermez. Sıralamayı test eden
-// senaryolarda gerçek bir saat farkı olsun diye kısa bir bekleme kullanılır.
+// updated_at has millisecond resolution; if two consecutive creates land in
+// the same millisecond, listByGoal's ORDER BY updated_at DESC (having no
+// secondary sort key) doesn't guarantee "newest first". Scenarios that test
+// ordering use a short wait to force a real time gap.
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 let goalId: string;
@@ -46,7 +46,7 @@ describe('create / listByGoal', () => {
     const before = goalRepo.getById(goalId)!.current_value;
     goalEntryRepo.create(goalId, 40);
     const after = goalRepo.getById(goalId)!.current_value;
-    expect(after).toBe(before); // 0'dan değişmedi
+    expect(after).toBe(before); // unchanged from 0
   });
 
   it('farklı hedeflerin girdilerini karıştırmaz', () => {
@@ -67,19 +67,19 @@ describe('goalRepo.addProgress ile entegrasyon', () => {
   it('addProgress her çağrıda GERÇEKLEŞEN farkı (0 tabanı sonrası) girdi olarak yazar', async () => {
     goalRepo.addProgress(goalId, 95); // 0 -> 95
     await tick();
-    goalRepo.addProgress(goalId, -120); // 95 - 120 = -25 -> 0 tabanı, gerçek fark -95
+    goalRepo.addProgress(goalId, -120); // 95 - 120 = -25 -> clamped to 0, actual delta -95
 
     const entries = goalEntryRepo.listByGoal(goalId);
-    expect(entries.map((e) => e.amount)).toEqual([-95, 95]); // en yeniden en eskiye
+    expect(entries.map((e) => e.amount)).toEqual([-95, 95]); // newest to oldest
     expect(goalRepo.getById(goalId)!.current_value).toBe(0);
   });
 
   it('hedef dolu olsa bile ekleme UYGULANIR ve girdi yazılır (tavan yok)', async () => {
-    goalRepo.addProgress(goalId, 100); // hedefi doldur
+    goalRepo.addProgress(goalId, 100); // fill the goal
     await tick();
     const beforeCount = goalEntryRepo.listByGoal(goalId).length;
 
-    // Hedef bir SINIR değil EŞİK: üstüne çalışmak da kaydedilir.
+    // The target is a THRESHOLD, not a CAP: overshooting it is still recorded.
     expect(goalRepo.addProgress(goalId, 10)).toBe(10);
 
     expect(goalEntryRepo.listByGoal(goalId).length).toBe(beforeCount + 1);
@@ -90,7 +90,7 @@ describe('goalRepo.addProgress ile entegrasyon', () => {
     goalRepo.addProgress(goalId, 100);
     const beforeCount = goalEntryRepo.listByGoal(goalId).length;
 
-    goalRepo.addProgress(goalId, 0); // hiçbir şey değişmiyor
+    goalRepo.addProgress(goalId, 0); // nothing changes
 
     expect(goalEntryRepo.listByGoal(goalId).length).toBe(beforeCount);
   });

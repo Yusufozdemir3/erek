@@ -1,10 +1,11 @@
-// HabitForm bileşen testi — bu formun daha önce hiç UI testi yoktu (en karmaşık
-// paylaşılan form: sihirbaz modu, 4 sıklık kipi, 3 takip tipi, hedefe bağlama).
-// Çoğu senaryo DÜZENLEME moduyla (stepped=false, kind sabit) test edilir — tüm
-// alanlar tek seferde göründüğü için sihirbaz gezinmesi gerekmez (HabitEditModal
-// deseni). Sihirbaz gezinmesi ayrıca iki testle (oluşturma, stepped=true) kapsanır.
-// goalRepo.listByUser gerçek DB okuduğundan (hedefe bağlama alanı) resetTestDb
-// kullanılır — TaskEditModal.ui.test.tsx ile aynı desen.
+// HabitForm component test — this form previously had no UI test at all (the
+// most complex shared form: wizard mode, 4 frequency modes, 3 tracking types,
+// linking to a goal). Most scenarios are tested in EDIT mode (stepped=false,
+// fixed kind) — since all fields show at once, no wizard navigation is needed
+// (the HabitEditModal pattern). Wizard navigation is separately covered by
+// two tests (creation, stepped=true). Since goalRepo.listByUser reads the
+// real DB (the goal-linking field), resetTestDb is used — same pattern as
+// TaskEditModal.ui.test.tsx.
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { goalRepo, habitRepo, userRepo } from '@/db';
@@ -60,14 +61,14 @@ describe('HabitForm — düzenleme modu (stepped=false), ikili (binary)', () => 
   });
 
   it('belirli günler seçilince haftalık Recurrence üretir (bugün Pazartesi sabitlendi)', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-03-02T12:00:00')); // Pazartesi
+    jest.useFakeTimers().setSystemTime(new Date('2026-03-02T12:00:00')); // Monday
     const onSubmit = jest.fn();
     const { getByText, getByPlaceholderText } = await renderUI(
       <HabitForm userId={userId} kind="binary" submitLabel="Kaydet" onSubmit={onSubmit} />
     );
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'Koşu');
-    fireEvent.press(getByText('Belirli günler')); // bugün (Pzt) otomatik seçili gelir
-    fireEvent.press(getByText('Çar')); // Çarşamba'yı da ekle
+    fireEvent.press(getByText('Belirli günler')); // today (Mon) comes pre-selected automatically
+    fireEvent.press(getByText('Çar')); // also add Wednesday
     fireEvent.press(getByText('Kaydet'));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ schedule: { freq: 'weekly', weekdays: [1, 3] } })
@@ -82,7 +83,7 @@ describe('HabitForm — düzenleme modu (stepped=false), ikili (binary)', () => 
     );
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'Yüzme');
     fireEvent.press(getByText('X günde bir'));
-    fireEvent.changeText(getByDisplayValue('2'), '3'); // varsayılan "2" metin kutusu
+    fireEvent.changeText(getByDisplayValue('2'), '3'); // default "2" text box
     fireEvent.press(getByText('Kaydet'));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ schedule: expect.objectContaining({ freq: 'interval', every: 3 }) })
@@ -96,7 +97,7 @@ describe('HabitForm — düzenleme modu (stepped=false), ikili (binary)', () => 
     );
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'Spor salonu');
     fireEvent.press(getByText('Haftada X kez'));
-    fireEvent.changeText(getByDisplayValue('3'), '4'); // varsayılan "3" metin kutusu
+    fireEvent.changeText(getByDisplayValue('3'), '4'); // default "3" text box
     fireEvent.press(getByText('Kaydet'));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ schedule: { freq: 'weekly', timesPerWeek: 4 } })
@@ -183,7 +184,7 @@ describe('HabitForm — hedefe bağlama', () => {
     fireEvent.press(await findByText(`🎯 ${goal.title}`));
     fireEvent.press(getByText('Yaptığım miktar'));
     fireEvent.changeText(getByPlaceholderText('birim (bardak)'), 'bardak');
-    // "Kaç bardak bir litre eder?" — 4 bardak = 1 litre → goal_factor = 1/4 = 0.25 (matematiksel ters).
+    // "How many cups make a liter?" — 4 cups = 1 liter → goal_factor = 1/4 = 0.25 (the mathematical inverse).
     fireEvent.changeText(getByPlaceholderText('1'), '4');
     fireEvent.press(getByText('Kaydet'));
     expect(onSubmit).toHaveBeenCalledWith(
@@ -198,9 +199,9 @@ describe('HabitForm — sihirbaz modu (stepped=true, oluşturma)', () => {
     const { getByText } = await renderUI(
       <HabitForm userId={userId} submitLabel="Ekle" stepped onSubmit={onSubmit} />
     );
-    // İlk adım: tip kartları. "İleri" düğmesi disabled (kind seçilmeden).
+    // First step: type cards. The "Next" button is disabled (no kind selected yet).
     fireEvent.press(getByText('İleri'));
-    expect(getByText('Basit (tik)')).toBeTruthy(); // hâlâ tip adımındayız
+    expect(getByText('Basit (tik)')).toBeTruthy(); // still on the type step
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -213,8 +214,8 @@ describe('HabitForm — sihirbaz modu (stepped=true, oluşturma)', () => {
     fireEvent.press(getByText('İleri')); // -> identity
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'Erken kalk');
     fireEvent.press(getByText('İleri')); // -> schedule
-    fireEvent.press(getByText('İleri')); // -> reminder (binary + hedefsiz: tracking adımı yok)
-    expect(getByText('Ekle')).toBeTruthy(); // son adım
+    fireEvent.press(getByText('İleri')); // -> reminder (binary + goalless: no tracking step)
+    expect(getByText('Ekle')).toBeTruthy(); // last step
     fireEvent.press(getByText('Ekle'));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Erken kalk', kind: 'binary' }));
   });

@@ -1,9 +1,9 @@
-// Widget'ın arka plan (headless) görev işleyicisi. Android widget olayları
-// (eklendi/güncelle/yeniden boyutlandı) tetiklendiğinde çalışır; AsyncStorage'daki
-// hazır snapshot'ı okuyup widget'ı çizer. SQLite'a DOKUNMAZ (headless bağlamda
-// güvenilir değil) — snapshot'ı uygulama süreci (widgetData.refreshWidget) üretir.
+// The widget's background (headless) task handler. Runs when an Android
+// widget event fires (added/update/resized); reads the ready-made snapshot
+// from AsyncStorage and renders the widget. Does NOT touch SQLite (unreliable
+// in a headless context) — the snapshot is produced by the app process (widgetData.refreshWidget).
 //
-// index.js'te YALNIZCA gerçek build'de (native modül varken) kaydedilir.
+// Registered in index.js ONLY in a real build (when the native module exists).
 
 import * as React from 'react';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
@@ -19,8 +19,8 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
       props.renderWidget(<TodayWidget snapshot={snapshot} />);
       break;
     }
-    // WIDGET_CLICK: kök 'OPEN_APP' tıklaması uygulamayı native tarafta açar,
-    // işleyiciye düşmez. WIDGET_DELETED: yapılacak bir şey yok.
+    // WIDGET_CLICK: the root 'OPEN_APP' click opens the app on the native
+    // side and never reaches the handler. WIDGET_DELETED: nothing to do.
     default:
       break;
   }

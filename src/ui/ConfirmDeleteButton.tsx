@@ -1,7 +1,7 @@
-// İki adımlı silme onayı: ilk basış onaya alır, ikinci basış siler.
-// Task/Habit/Goal düzenleme panellerinin üçünde de birebir aynı desendi;
-// tek bileşende toplanmış. Panel her kapanıp açıldığında (parent unmount eder)
-// kendi state'i sıfırlanır — ayrı bir reset mekanizması gerekmez.
+// Two-step delete confirmation: the first press arms it, the second deletes.
+// This was the exact same pattern in all three of the Task/Habit/Goal edit
+// panels; consolidated into a single component. Its own state resets every
+// time the panel closes and reopens (the parent unmounts it) — no separate reset mechanism needed.
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';

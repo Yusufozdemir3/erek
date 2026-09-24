@@ -1,11 +1,13 @@
-// Hedef DETAY ekranının İSTATİSTİK sekmesi — app/goal/[id].tsx'ten AYRILDI.
-// Ekran dosyası dört sekmeyi, form durumunu, mutasyonları ve bu görselleştirmeyi
-// birlikte taşıyordu (~1080 satır); bu sekme salt-okunurdur (hiçbir mutasyon
-// yapmaz, yalnız useGoalStats'in ürettiğini çizer), o yüzden ilk ayrılan o oldu.
+// The STATS tab of the goal DETAIL screen — SPLIT OUT of app/goal/[id].tsx.
+// The screen file carried all four tabs, form state, mutations, and this
+// visualization together (~1080 lines); this tab is read-only (performs no
+// mutations, only renders what useGoalStats produces), which is why it was
+// the first to be split out.
 //
-// Bölüm sırası bilinçli: en üstte tek cümlelik SONUÇ bandı ("yetişecek miyim?"),
-// altında bir bakışta durum, sonra "gereken tempo" ve "senin temponun" grupları
-// yan yana okunacak şekilde, en altta sıradaki adım.
+// The section order is deliberate: a single-sentence VERDICT banner at the
+// top ("will I make it in time?"), then an at-a-glance status, then the
+// "required pace" and "your pace" groups meant to be read side by side,
+// and the next milestone at the bottom.
 
 import { Text, View } from 'react-native';
 import { diffDays } from '@/lib/helpers';
@@ -19,11 +21,11 @@ import type { GoalStats } from '@/ui/useGoalStats';
 type Lang = 'tr' | 'en' | 'de';
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
-// İstatistik sekmesinin en üstündeki tek "sonuç" bandı — kullanıcının asıl
-// merak ettiği "yetişecek miyim?" sorusunu 6 kutuyu birleştirmeden tek cümleyle
-// yanıtlar. Yalnız sayısal hedefte ve tempo/son tarih verisi varken üretilir;
-// yoksa null (bant gösterilmez). tone renk verir: good=yeşil, bad=kırmızı,
-// neutral=vurgu.
+// The single "verdict" banner at the top of the stats tab — answers the
+// user's real question ("will I make it in time?") in one sentence instead
+// of making them piece it together from 6 boxes. Only produced for numeric
+// goals when pace/deadline data is available; otherwise null (banner isn't
+// shown). tone drives the color: good=green, bad=red, neutral=accent.
 type Verdict = { text: string; sub?: string; tone: 'good' | 'bad' | 'neutral' };
 export function buildVerdict(
   goal: { goal_type: string; deadline: string | null; unit: string | null },
@@ -34,11 +36,11 @@ export function buildVerdict(
   if (goal.goal_type !== 'numeric') return null;
   if (stats.completed) return { text: t('goalStats.verdictDone'), tone: 'good' };
 
-  // Gerçek tempodan tahmini bitiş var: son tarihle kıyasla.
+  // There's a projected finish date from the actual pace: compare it against the deadline.
   if (stats.projectedFinishDate) {
     const finish = shortDate(stats.projectedFinishDate, lang);
     if (goal.deadline) {
-      const gap = diffDays(stats.projectedFinishDate, goal.deadline); // >0 = erken
+      const gap = diffDays(stats.projectedFinishDate, goal.deadline); // >0 = early
       if (gap > 0) return { text: t('goalStats.verdictEarly', { date: finish, n: gap }), tone: 'good' };
       if (gap === 0) return { text: t('goalStats.verdictOnTime', { date: finish }), tone: 'good' };
       return {
@@ -53,7 +55,7 @@ export function buildVerdict(
     return { text: t('goalStats.verdictFinish', { date: finish }), tone: 'neutral' };
   }
 
-  // Henüz girdi yok ama gereken tempo hesaplanabiliyor: yalnız gerekliliği söyle.
+  // No entries yet, but the required pace can be computed: just state the requirement.
   if (stats.dailyPace != null && goal.deadline) {
     return {
       text: t('goalStats.verdictNeed', { amount: fmtGoalValue(stats.dailyPace, goal.unit) }),
@@ -98,7 +100,7 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
           ) : null;
         })()}
 
-        {/* Üst satır — bir bakışta "neredeyim": ilerleme, kalan, son tarih, kalan gün */}
+        {/* Top row — at-a-glance "where am I": progress, remaining, deadline, days left */}
         <View style={styles.statsGrid}>
           {goal.goal_type === 'numeric' && (
             <>
@@ -127,7 +129,7 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
           ) : null}
         </View>
 
-        {/* Gereken tempo — app'in senden istediği (son tarihe yetişmek için) */}
+        {/* Required pace — what the app needs from you (to hit the deadline) */}
         {goal.goal_type === 'numeric' && stats.dailyPace != null && (
           <>
             <StatGroupTitle label={t('goalStats.groupRequiredPace')} styles={styles} />
@@ -147,7 +149,7 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
           </>
         )}
 
-        {/* Senin temponun — gerçekte yaptığın; üstteki grupla kıyaslanır */}
+        {/* Your pace — what you're actually doing; compared against the group above */}
         {goal.goal_type === 'numeric' && stats.avgDaily != null && (
           <>
             <StatGroupTitle label={t('goalStats.groupYourPace')} styles={styles} />
@@ -164,9 +166,9 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
                   styles={styles}
                 />
               )}
-              {/* "Bu hızla hangi tarihte bitiririm" — bantta cümle olarak
-                  da geçiyor ama kullanıcı bunu kart olarak da istedi
-                  (bant tek bakışlık yorum, kart ölçüm). */}
+              {/* "At this pace, what date will I finish" — also appears as a
+                  sentence in the banner, but the user also wanted it as a card
+                  (the banner is a one-glance comment, the card is a measurement). */}
               {stats.projectedFinishDate != null && (
                 <StatCard
                   label={t('goalStats.projectedFinishLabel')}
@@ -174,8 +176,9 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
                   styles={styles}
                 />
               )}
-              {/* "Bu hızla seçilen son tarihte miktar ne olur" — son tarih
-                  geçtiyse tahmin değil GERÇEKLEŞEN değer (goalProjection). */}
+              {/* "At this pace, what will the amount be by the chosen deadline" —
+                  if the deadline has passed, this is the ACTUAL value, not a
+                  projection (goalProjection). */}
               {stats.projectedAtDeadline != null && (
                 <StatCard
                   label={t('goalStats.projectedAtDeadlineLabel')}
@@ -202,12 +205,13 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
           </>
         )}
 
-        {/* SIRADAKİ ADIM — adımı olan HER hedefte görünür, tipe
-            bakılmaksızın. Toplu tempo (gün/adım, adım/hafta) bilerek
-            KALDIRILDI: kullanıcının sorusu "toplamda kaç adım kaldı"
-            değil, "şimdi neye çalışıyorum ve yetişiyor muyum".
-            Miktarsız (checklist) adımda hedef/kalan kartları çıkmaz —
-            o adımın sayısal bir eşiği yoktur. */}
+        {/* NEXT MILESTONE — shown for EVERY goal that has milestones,
+            regardless of type. Aggregate pace (days/milestone,
+            milestones/week) was deliberately REMOVED: the user's question
+            isn't "how many milestones are left in total" but "what am I
+            working on right now and am I on track". A milestone without an
+            amount (checklist) shows no target/remaining cards — that
+            milestone has no numeric threshold. */}
         {stats.milestonesTotal > 0 && (
           <>
             <StatGroupTitle label={t('goalStats.groupMilestones')} styles={styles} />

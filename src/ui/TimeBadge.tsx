@@ -1,5 +1,5 @@
-// Görev saatini kartın en solunda küçük bir rozet olarak gösterir.
-// Hem "Bugün" hem "Görevler" ekranında, saati olan görevlerde kullanılır.
+// Shows the task time as a small badge on the far left of the card.
+// Used on both the "Today" and "Tasks" screens, for tasks that have a time.
 
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -28,6 +28,6 @@ const makeStyles = (c: Colors) =>
       marginRight: 10,
     },
     text: { fontSize: 12, fontWeight: '700', color: c.primary },
-    // Bitiş saati: başlangıcın altında daha soluk ikinci satır.
+    // End time: a fainter second line below the start time.
     end: { fontSize: 10, fontWeight: '600', color: c.primary, opacity: 0.7, marginTop: 1 },
   });

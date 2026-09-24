@@ -1,7 +1,8 @@
-// Profil ekranı (modal) — görünüm (tema) + hesap bağlama + bulut senkron durumu.
-// Eski "Ayarlar" sekmesinin içeriği; sekme kaldırılınca ekran başlıklarındaki
-// 👤 ikonundan açılan modal'a taşındı. Başlığı kök layout'taki native header verir.
-// Senkron yapılandırılmamışsa (.env boş) nasıl kurulacağını anlatır.
+// Profile screen (modal) — appearance (theme) + account linking + cloud sync status.
+// Content that used to live in the old "Settings" tab; once that tab was removed,
+// it moved into the modal opened from the 👤 icon in screen headers. The header
+// title comes from the root layout's native header.
+// If sync isn't configured (.env empty), it explains how to set it up.
 
 import { useCallback, useState } from 'react';
 import {
@@ -43,26 +44,29 @@ export default function ProfileScreen() {
   const { colors, scheme, mode, setMode, accent, setAccent, darkStyle, setDarkStyle } = useTheme();
   const { t, lang, setLang } = useI18n();
   const styles = makeStyles(colors);
-  // Senkron durumu AppData'da tutulur, burada DEĞİL: turların çoğu bu ekran hiç
-  // açılmadan çalışıyor (açılış + ön plana gelme). Yerel bir kopya tutmak, o
-  // otomatik turların sonucunu görünmez bırakırdı — düzeltilen sorun tam da buydu.
+  // Sync status is kept in AppData, NOT here: most sync runs happen without this
+  // screen ever opening (startup + foregrounding). Keeping a local copy would
+  // have hidden the result of those automatic runs — that was exactly the bug
+  // that got fixed.
   const { user, refreshUser, hideCompleted, setHideCompleted, syncResult, lastSyncAt, syncing, syncNow } =
     useAppData();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // Titreşim tercihi; cache açılışta yüklendiği için (bkz. _layout) ilk değer doğru.
+  // Haptics preference; the cache is loaded at startup (see _layout), so the
+  // initial value here is correct right away.
   const [haptics, setHaptics] = useState(isHapticsEnabled);
 
-  // Titreşimi aç/kapa — kapatınca dokunuşlar anında sessizleşir (cache önce yazılır).
+  // Toggle haptics on/off — turning it off silences touches immediately (cache
+  // is written first).
   const toggleHaptics = (value: boolean) => {
     setHaptics(value);
     setHapticsEnabled(value).catch(() => {});
-    if (value) tapLight(); // açarken tek örnek titreşim: kullanıcı ne açtığını hisseder
+    if (value) tapLight(); // one sample buzz when turning it on so the user feels what they just enabled
   };
 
-  // E-posta hesabıyla bağlı mı? (anonim oturum "bağlı" sayılmaz)
+  // Is the account linked to an email? (an anonymous session doesn't count as "linked")
   const linked = authUser != null && !authUser.isAnonymous && authUser.email != null;
 
   useFocusEffect(
@@ -81,16 +85,16 @@ export default function ProfileScreen() {
       setAuthUser(null);
       setSignedIn(false);
     } catch (e) {
-      // Çıkış hatası kritik değil; durum bir sonraki odaklanmada tazelenir.
-      console.warn('[Hesap] Çıkış sırasında hata:', e);
+      // A sign-out error isn't critical; the status refreshes on the next focus.
+      console.warn('[Account] Error during sign-out:', e);
     } finally {
       setSigningOut(false);
     }
   };
 
-  // Hesap silme: geri alınamaz — native onay diyaloğu ile iki adımlı.
-  // Bulut hesabı + buluttaki tüm veri silinir; CİHAZDAKİ veri kalır ve
-  // kullanıcı anonim/yerel moda döner (çıkışla aynı yerel son durum).
+  // Account deletion: irreversible — two-step with a native confirmation dialog.
+  // The cloud account plus all cloud data is deleted; ON-DEVICE data remains and
+  // the user falls back to anonymous/local mode (same local end state as signing out).
   const confirmDeleteAccount = () => {
     Alert.alert(
       t('profile.deleteAccount'),
@@ -126,7 +130,7 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {/* Görünüm (tema) */}
+      {/* Appearance (theme) */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('profile.appearance')}</Text>
         <View style={styles.segRow}>
@@ -147,8 +151,8 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.hint}>{t('profile.systemHint')}</Text>
 
-        {/* Koyu tema stili — sıcak mürekkep / tam siyah (AMOLED). Işık temada da
-            seçilebilir kalır; koyu tema aktifleşince etkisini gösterir. */}
+        {/* Dark theme style — warm ink / true black (AMOLED). Stays selectable
+            in light theme too; it takes effect once dark theme is active. */}
         <Text style={styles.subCardTitle}>{t('profile.darkStyle')}</Text>
         <View style={styles.segRow}>
           {(
@@ -173,7 +177,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Vurgu (marka) rengi */}
+      {/* Accent (brand) color */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('profile.accentColor')}</Text>
         <View style={styles.accentRow}>
@@ -201,7 +205,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Dil */}
+      {/* Language */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('profile.language')}</Text>
         <View style={styles.segRow}>
@@ -222,7 +226,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Bugün ekranı tercihleri */}
+      {/* Today screen preferences */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('profile.todayScreen')}</Text>
         <View style={styles.switchRow}>
@@ -237,8 +241,8 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>{t('profile.hideCompletedHint')}</Text>
       </View>
 
-      {/* Titreşim (uygulama içi dokunsal geri bildirim) — bildirim titreşiminden
-          AYRI: bu, işaretleme/+−/zamanlayıcı gibi dokunuşlarda hissedilen tepki. */}
+      {/* Haptics (in-app tactile feedback) — SEPARATE from notification vibration:
+          this is the feedback you feel on touches like checking off/+−/timer. */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('profile.haptics')}</Text>
         <View style={styles.switchRow}>
@@ -253,8 +257,8 @@ export default function ProfileScreen() {
         <Text style={styles.hint}>{t('profile.hapticsHint')}</Text>
       </View>
 
-      {/* Bildirimler — içerik kendi sayfasında (ses/titreşim ayrı denetimlerle
-          büyüdü). Ok'lu satıra dokununca açılır. */}
+      {/* Notifications — content lives on its own page now (grew once sound/
+          vibration got separate controls). Tapping the arrow row opens it. */}
       <Pressable
         style={[styles.card, styles.navRow, { marginTop: 16 }]}
         onPress={() => router.push('/notifications')}
@@ -265,8 +269,8 @@ export default function ProfileScreen() {
         <Feather name="chevron-right" size={20} color={colors.faint} />
       </Pressable>
 
-      {/* Hesap + Bulut senkron — kapalı test (MVP) sürümünde gizli.
-          Parola sıfırlama eklenince ACCOUNTS_ENABLED true yapılacak. */}
+      {/* Account + Cloud sync — hidden in the closed test (MVP) build.
+          Will be set to ACCOUNTS_ENABLED = true once password reset ships. */}
       {ACCOUNTS_ENABLED && (
         <>
       <View style={[styles.card, { marginTop: 16 }]}>
@@ -311,9 +315,10 @@ export default function ProfileScreen() {
         ) : (
           <>
             <Text style={styles.muted}>{t('profile.notLinkedBody')}</Text>
-            {/* Giriş artık YALNIZ Google ile (bkz. ui/LoginScreen.tsx). Açılış
-                kapısını "Şimdilik geç" ile atlayan kullanıcının giriş yolu burası.
-                E-posta+parola ekranı (/account) silinmedi, sadece bağlantısı yok. */}
+            {/* Sign-in is now GOOGLE-ONLY (see ui/LoginScreen.tsx). This is the
+                sign-in path for a user who skipped the opening gate with "Skip
+                for now". The email+password screen (/account) wasn't deleted,
+                it's just unlinked. */}
             <Pressable
               style={styles.syncBtn}
               onPress={() => router.push('/login')}
@@ -344,10 +349,10 @@ export default function ProfileScreen() {
               </Text>
             </View>
 
-            {/* SON YEDEK — kullanıcı için tek gerçekten anlamlı sinyal:
-                "buluttaki kopyam ne kadar eski?". Uygulama yeniden başlasa da
-                korunur (bkz. AppData.LAST_SYNC_KEY). ↑/↓ sayıları yalnızca o
-                turun ayrıntısı; bu satır durumun kendisi. */}
+            {/* LAST BACKUP — the one signal that's genuinely meaningful to the
+                user: "how stale is my cloud copy?". It survives app restarts
+                (see AppData.LAST_SYNC_KEY). The ↑/↓ counts are only that run's
+                detail; this line is the status itself. */}
             {signedIn && (
               <View style={[styles.statusRow, styles.statusRowSpaced]}>
                 <Text style={styles.muted}>{t('profile.lastBackup')}</Text>
@@ -365,10 +370,10 @@ export default function ProfileScreen() {
                 })}
               </Text>
             )}
-            {/* Hata artık KALICI: açılışta ya da ön plana gelirken çalışan
-                otomatik turun hatası da buraya düşer (eskiden hiçbir yere
-                düşmüyordu). Sahiplik çakışmasının kendi anlaşılır metni var —
-                ham Postgres mesajı kullanıcıya hiçbir şey anlatmıyor. */}
+            {/* The error is now PERSISTENT: an error from an automatic run at
+                startup or when foregrounding lands here too (it used to go
+                nowhere). Ownership conflicts get their own readable message —
+                the raw Postgres message tells the user nothing. */}
             {syncResult?.status === 'error' && (
               <Text style={styles.errText}>
                 {syncResult.ownershipConflict
@@ -418,10 +423,10 @@ const makeStyles = (c: Colors) =>
       padding: 16,
     },
     cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12 },
-    // Başka sayfaya götüren ok'lu satır (ör. Bildirimler). cardTitle'ın alt
-    // boşluğunu satır içinde sıfırlarız ki başlık dikey ortalı dursun.
+    // Arrow row that navigates to another page (e.g. Notifications). We reset
+    // cardTitle's bottom margin inline so the title stays vertically centered.
     navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    // Kart içi ikinci başlık (ör. Görünüm kartındaki "Koyu tema stili").
+    // Secondary in-card heading (e.g. "Dark theme style" inside the Appearance card).
     subCardTitle: { fontSize: 13, fontWeight: '700', color: c.muted, marginTop: 16, marginBottom: 10 },
     muted: { fontSize: 14, color: c.muted, lineHeight: 20 },
     hint: { fontSize: 12, color: c.faint, marginTop: 10 },
@@ -435,7 +440,7 @@ const makeStyles = (c: Colors) =>
     statusValue: { fontSize: 14, fontWeight: '700', color: c.text },
     okText: { fontSize: 13, color: c.done, fontWeight: '600', marginTop: 12 },
     errText: { fontSize: 13, color: c.danger, fontWeight: '600', marginTop: 12 },
-    // Tema seçici segmenti.
+    // Theme selector segment.
     segRow: { flexDirection: 'row', gap: 8 },
     segBtn: {
       flex: 1,
@@ -449,7 +454,7 @@ const makeStyles = (c: Colors) =>
     segBtnOn: { backgroundColor: c.primary, borderColor: c.primary },
     segText: { fontSize: 14, fontWeight: '700', color: c.muted },
     segTextOn: { color: c.onAccent },
-    // Vurgu rengi seçici — renkli daireler + altında kısa isim.
+    // Accent color picker — colored circles with a short name underneath.
     accentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
     accentItem: { alignItems: 'center', width: 64 },
     accentSwatch: {

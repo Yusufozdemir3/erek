@@ -1,7 +1,7 @@
-// "Alışkanlıklar" sekmesi — tüm alışkanlıklar, bugünkü işaret, seri ve son 7 günün
-// geçmişi. Kutuya dokununca bugünü işaretler/geri alır.
-// Ekleme burada yok: sekme çubuğundaki ＋ menüsünden yapılır.
-// Mimari kural: SQL yok; yalnızca habitRepo çağrılır.
+// "Habits" tab — all habits, today's check mark, streak, and the last 7 days'
+// history. Tapping the box checks off/undoes today.
+// No adding here: that happens from the ＋ menu in the tab bar.
+// Architecture rule: no SQL; only habitRepo is called.
 
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -30,8 +30,8 @@ export default function HabitsScreen() {
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const { user } = useAppData();
-  const [editing, setEditing] = useState<Habit | null>(null); // null = panel kapalı
-  // Aynı anda yalnızca bir kartın swipe aksiyonları açık kalsın.
+  const [editing, setEditing] = useState<Habit | null>(null); // null = panel closed
+  // Only one card's swipe actions may be open at a time.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   const { today, habits, reload } = useHabitsData(user.id);
@@ -59,12 +59,13 @@ export default function HabitsScreen() {
   };
 
   const removeHabit = (h: HabitListItem) => {
-    // Hatırlatma SATIRLARINI habitRepo.softDelete temizler; burada iptal edilen
-    // OS'un bildirim kuyruğundaki tetikleyiciler. cancelByPrefix native listeyi
-    // okuduğu için reddedebilir — yakalanmazsa "unhandled rejection" olur.
+    // habitRepo.softDelete cleans up the reminder ROWS; what's cancelled here
+    // is the trigger sitting in the OS's notification queue. cancelByPrefix
+    // reads the native list, so it can reject — if not caught this becomes an
+    // "unhandled rejection".
     habitRepo.softDelete(h.id);
     cancelHabitReminders(h.id).catch((e) =>
-      console.warn('[Bildirim] Silinen alışkanlığın hatırlatmaları iptal edilemedi:', e)
+      console.warn('[Notification] Failed to cancel reminders for deleted habit:', e)
     );
     reload();
   };
@@ -95,11 +96,11 @@ export default function HabitsScreen() {
               editA11yLabel={t('common.editA11y', { title: h.title })}
               deleteA11yLabel={t('common.deleteA11y', { title: h.title })}
             >
-            {/* marginBottom kaldırıldı (0) — bkz. tasks.tsx'teki aynı düzeltme yorumu. */}
+            {/* marginBottom removed (0) — see the same fix comment in tasks.tsx. */}
             <View style={[shared.card, styles.habitCard, styles.noMargin]}>
               <View style={styles.habitTop}>
-                {/* Nicel alışkanlıkta daire yalnızca durum gösterir (dokunmaz);
-                    ikili alışkanlıkta daireye dokununca bugünü işaretler. */}
+                {/* For a numeric habit the circle is only a status indicator
+                    (not tappable); for a binary habit, tapping the circle checks off today. */}
                 {h.target != null ? (
                   <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                 ) : (
@@ -113,7 +114,7 @@ export default function HabitsScreen() {
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                   </Pressable>
                 )}
-                {/* Başlığa dokununca düzenleme paneli açılır */}
+                {/* Tapping the title opens the edit panel */}
                 <Pressable
                   style={styles.titleArea}
                   onPress={() => openEdit(h)}
@@ -161,7 +162,7 @@ export default function HabitsScreen() {
                   )
                 )}
               </View>
-              {/* Son 7 gün — dokununca istatistik ekranı açılır */}
+              {/* Last 7 days — tapping it opens the stats screen */}
               <Pressable
                 style={styles.week}
                 onPress={() => router.push({ pathname: '/habit/[id]', params: { id: h.id } })}

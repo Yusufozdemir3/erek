@@ -1,11 +1,11 @@
-// Saf mantık + repository + sync testleri Node ortamında koşar (hızlı, native yok).
-// Native modüller test dublörleriyle değiştirilir (moduleNameMapper):
-//   - expo-sqlite  -> node:sqlite tabanlı in-memory sahte (gerçek SQL davranışı)
+// Pure logic + repository + sync tests run in a Node environment (fast, no native).
+// Native modules are swapped for test doubles (moduleNameMapper):
+//   - expo-sqlite  -> a node:sqlite-based in-memory fake (real SQL behavior)
 //   - expo-crypto  -> node:crypto randomUUID
-//   - async-storage -> paketin resmi jest mock'u
-//   - google-signin -> yerel dublör (paket ESM yayınlıyor, Node projesi ayrıştıramaz)
-// Bileşen (UI) testleri AYRI projede (jest.ui.config.js) jest-expo ile koşar;
-// bu proje onları görmezden gelir (*.ui.test.tsx).
+//   - async-storage -> the package's official jest mock
+//   - google-signin -> a local stub (the package ships ESM, which the Node project can't parse)
+// Component (UI) tests run in a SEPARATE project (jest.ui.config.js) with jest-expo;
+// this project ignores them (*.ui.test.tsx).
 /** @type {import('jest').Config} */
 module.exports = {
   displayName: 'logic',
@@ -16,7 +16,7 @@ module.exports = {
     '^.+\\.tsx?$': [
       'ts-jest',
       {
-        // Proje tsconfig'i Metro'ya göre (bundler/esnext); Jest CJS ister.
+        // The project's tsconfig targets Metro (bundler/esnext); Jest needs CJS.
         tsconfig: {
           module: 'commonjs',
           moduleResolution: 'node',

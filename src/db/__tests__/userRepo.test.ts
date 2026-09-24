@@ -1,4 +1,4 @@
-// userRepo testleri: anonim başlangıç + hesap yükseltme/düşürme akışı.
+// userRepo tests: anonymous startup + account upgrade/downgrade flow.
 
 import { getDb } from '../database';
 import { userRepo } from '../repositories/userRepo';

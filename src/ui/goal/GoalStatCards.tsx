@@ -1,7 +1,8 @@
-// Hedef İstatistik sekmesinin küçük sunum bileşenleri — app/goal/[id].tsx'ten
-// AYRILDI. Hiçbiri durum tutmaz, veri okumaz; yalnız verilen prop'u çizer.
-// `styles` prop'u ekranın stil fabrikasından gelir (bkz. goalStyles.ts) —
-// bileşenler kendi StyleSheet'ini üretmez ki tema/ölçü tek yerden yönetilsin.
+// Small presentational components for the Goal Stats tab — SPLIT OUT of
+// app/goal/[id].tsx. None of them hold state or read data; they just render
+// the given props. The `styles` prop comes from the screen's style factory
+// (see goalStyles.ts) — components don't create their own StyleSheet so
+// theme/sizing stays managed from a single place.
 
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';

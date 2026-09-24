@@ -1,10 +1,11 @@
-// Alışkanlığın GÖRÜNÜMÜ: emoji/ikon ızgarası + renk paleti. HabitForm'dan
-// AYRILDI (denetim bulgusu H1). Formdaki tek gerçekten bağımsız blok buydu —
-// yalnız iki değer okur, iki setter çağırır; sihirbazın adım durumuna, doğrulama
-// kurallarına ya da submit'e hiç dokunmaz.
+// The habit's APPEARANCE: emoji/icon grid + color palette. SPLIT OUT of
+// HabitForm (audit finding H1). This was the only truly independent block in
+// the form — it just reads two values and calls two setters; it never
+// touches the wizard's step state, validation rules, or submit.
 //
-// Seçili olana tekrar basmak seçimi KALDIRIR (ikisi de opsiyonel: ikon yoksa
-// varsayılan glif, renk yoksa DEFAULT_HABIT_COLOR kullanılır).
+// Tapping the already-selected option REMOVES the selection (both are
+// optional: no icon falls back to the default glyph, no color falls back to
+// DEFAULT_HABIT_COLOR).
 
 import { Pressable, Text, View } from 'react-native';
 import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
@@ -16,7 +17,7 @@ export interface HabitAppearancePickerProps {
   onIconChange: (icon: string | null) => void;
   color: string | null;
   onColorChange: (color: string | null) => void;
-  /** Seçili ikonun vurgu rengi — renk seçilmemişse varsayılan alışkanlık rengi. */
+  /** Accent color of the selected icon — the default habit color if none is selected. */
   previewColor: string;
   colors: Colors;
   styles: HabitFormStyles;

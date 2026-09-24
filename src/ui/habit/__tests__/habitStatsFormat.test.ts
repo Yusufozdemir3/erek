@@ -1,6 +1,7 @@
-// habitStatsFormat testleri — bu biçimlendiriciler app/habit/[id].tsx'in içinde
-// gömülüyken test EDİLEMİYORDU (rota dosyaları jest projelerinin kapsamında
-// değil; denetim H1+F1). Ayrı modüle çıkınca 'logic' projesi doğrudan koşuyor.
+// habitStatsFormat tests — these formatters COULDN'T BE TESTED while embedded
+// inside app/habit/[id].tsx (route files aren't in scope for the jest
+// projects; audit H1+F1). Once split into their own module, the 'logic'
+// project runs them directly.
 
 import {
   fmtAmount,

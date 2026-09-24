@@ -1,10 +1,10 @@
-// Testlerde @react-native-google-signin/google-signin yerine geçer
-// (jest.logic.config.js moduleNameMapper). Gerçek paket ESM yayınladığı için
-// Node projesinde ayrıştırılamıyor; ayrıca native modül isterdi.
+// Replaces @react-native-google-signin/google-signin in tests
+// (jest.logic.config.js moduleNameMapper). The real package ships ESM, so it
+// can't be parsed in a Node project; it would also require a native module.
 //
-// Varsayılan davranış "iptal": Google girişini KULLANAN bir test yazılırsa
-// GoogleSignin.signIn'i kendi dublörüyle değiştirmesi gerekir (jest.spyOn).
-// Böylece dublör sessizce "başarılı giriş" uydurmuş olmaz.
+// The default behavior is "cancelled": a test that USES Google sign-in must
+// replace GoogleSignin.signIn with its own stand-in (jest.spyOn). This way
+// the stand-in never silently fakes a "successful sign-in".
 
 export interface MockSignInResponse {
   type: 'success' | 'cancelled';

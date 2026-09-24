@@ -1,12 +1,12 @@
-// Görev düzenleme paneli (sayfayı ortalayan modal).
-// "Bugün"/"Görevler" ekranında bir göreve dokununca açılır. Başlık, öncelik, son
-// tarih ve saat alanları ortak TaskForm bileşeninde; burası yalnızca modal kabuğu
-// + kalıcılık (update/delete) ve alt görev (checklist) bölümü.
-// Not: başlık/öncelik/tarih "Kaydet" ile yazılır; alt görevler ise ANINDA yazılır
-// (checklist davranışı) — her değişiklikte onChanged tetiklenir ki arkadaki
-// listedeki "1/3 alt görev" rozeti güncel kalsın. Oluşturma tarafı (AddSheet) aynı
-// TaskForm'u kullanır ama alt görev bölümü olmadan.
-// Mimari kural: SQL yok - yalnızca taskRepo/subtaskRepo çağrılır.
+// Task edit panel (a modal that centers the page).
+// Opens when a task is tapped on the "Today"/"Tasks" screen. Title, priority, due
+// date, and time fields live in the shared TaskForm component; this file is just
+// the modal shell + persistence (update/delete) and the subtask (checklist) section.
+// Note: title/priority/date are written on "Save"; subtasks are written
+// IMMEDIATELY (checklist behavior) — onChanged fires on every change so the
+// "1/3 subtasks" badge on the list behind it stays current. The creation side
+// (AddSheet) uses the same TaskForm but without the subtask section.
+// Architectural rule: no SQL - only taskRepo/subtaskRepo are called.
 
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -22,9 +22,9 @@ import type { Colors } from '@/ui/theme';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 
 interface Props {
-  task: Task | null; // null = panel kapalı
+  task: Task | null; // null = panel closed
   onClose: () => void;
-  onChanged: () => void; // kaydet/sil sonrası parent listeyi tazelesin
+  onChanged: () => void; // let the parent refresh the list after save/delete
 }
 
 export function TaskEditModal({ task, onClose, onChanged }: Props) {
@@ -34,7 +34,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
 
-  // Panel her açıldığında alt görevleri seçilen görevden yükle.
+  // Load subtasks for the selected task every time the panel opens.
   useEffect(() => {
     if (task) {
       setSubtasks(subtaskRepo.listByTask(task.id));
@@ -44,9 +44,9 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
   if (!task) return null;
 
-  // Tüm alt görevler tamamlanınca ana görevi otomatik tamamlar; biri geri
-  // açılırsa (ya da yeni tamamlanmamış alt görev eklenirse) ana görevi de geri
-  // açar. Alt görevi olmayan bir görevde bu kural hiç devreye girmez.
+  // Auto-completes the parent task once all subtasks are done; if one is
+  // reopened (or a new incomplete subtask is added), reopens the parent too.
+  // This rule never kicks in for a task with no subtasks.
   const syncParentCompletion = () => {
     const { done, total } = subtaskRepo.countForTask(task.id);
     if (total === 0) return;
@@ -57,20 +57,20 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
     if (shouldBeCompleted && !isCompleted) {
       taskRepo.setCompleted(task.id, true);
       notifySuccess();
-      // Tekrarlayan görev ileri sarmış olabilir (hâlâ tamamlanmamış ama yeni
-      // tarihli) — karar güncel DB durumuna bakılarak verilir.
+      // A recurring task may have advanced (still not completed, but with a new
+      // date) — the decision is made by looking at the current DB state.
       refreshTaskReminders(task.id);
     } else if (!shouldBeCompleted && isCompleted) {
       taskRepo.setCompleted(task.id, false);
       tapLight();
-      // Geri açıldı — vadesi geçmemişse hatırlatmalar dönsün (aynı fonksiyon:
-      // görev artık tamamlanmamış olduğu için yeniden kurar).
+      // Reopened — reminders should return if it's not yet overdue (same
+      // function: reschedules since the task is no longer completed).
       refreshTaskReminders(task.id);
     }
   };
 
-  // Alt görev değişiklikleri anında yazılır; hem panel içi liste hem arkadaki
-  // ekran (rozet sayıları) tazelenir.
+  // Subtask changes are written immediately; both the in-panel list and the
+  // screen behind it (badge counts) get refreshed.
   const refreshSubtasks = () => {
     syncParentCompletion();
     setSubtasks(subtaskRepo.listByTask(task.id));
@@ -104,7 +104,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       recurrence: values.recurrence,
     });
     const reminders = reminderRepo.replaceAll('task', task.id, values.remind_times);
-    // Tarih/saat/hatırlatma değişmiş olabilir — hatırlatmalar güncel değere göre yeniden kurulur.
+    // Date/time/reminders may have changed — reminders are rescheduled based on the current values.
     const updated = taskRepo.getById(task.id);
     if (updated) {
       scheduleTaskReminders(updated, reminders).then((ok) => {
@@ -118,7 +118,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const handleDelete = () => {
     taskRepo.softDelete(task.id);
     cancelTaskReminders(task.id).catch((e) =>
-      console.warn('[Bildirim] Silinen görevin hatırlatmaları iptal edilemedi:', e)
+      console.warn('[Notification] Failed to cancel reminders for deleted task:', e)
     );
     onChanged();
     onClose();
@@ -127,7 +127,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   return (
     <ModalCard visible onClose={onClose}>
       <Text style={styles.heading}>{tr('task.edit')}</Text>
-      {/* key: farklı göreve geçince form taze başlangıç değerleriyle kurulur */}
+      {/* key: when switching to a different task, the form is remounted with fresh initial values */}
       <TaskForm
         key={task.id}
         initial={{
@@ -142,7 +142,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
         onSubmit={handleSave}
         onDelete={handleDelete}
       >
-            {/* Alt görevler — anında kaydedilir (Kaydet beklemez) */}
+            {/* Subtasks — saved immediately (doesn't wait for Save) */}
             <Text style={styles.label}>{tr('task.subtasks')}</Text>
             {subtasks.map((s) => {
               const done = s.completed === 1;

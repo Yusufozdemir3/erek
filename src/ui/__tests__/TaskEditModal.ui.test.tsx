@@ -1,20 +1,20 @@
-// TaskEditModal bileşen testi — bu oturumun en önemli özelliği: alt görevler
-// tamamlanınca ana görev OTOMATİK tamamlanır; biri geri açılınca ana görev de
-// geri açılır. Gerçek repo (in-memory SQLite dublörü) ile uçtan uca doğrulanır;
-// yalnızca bildirim yan etkisi mock'lanır.
+// TaskEditModal component test — this session's most important feature: the
+// parent task is AUTOMATICALLY completed when all subtasks are completed;
+// reopening one also reopens the parent task. Verified end-to-end with the
+// real repo (in-memory SQLite double); only the notification side effect is mocked.
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { subtaskRepo, taskRepo, userRepo } from '@/db';
 
-// Bu suite gerçek SQLite + tam render yapıyor; jest paralel yükü altında
-// varsayılan 5sn timeout ara sıra sıyrılıyordu (mantık hatası değil, yavaşlık).
+// This suite does real SQLite + a full render; under jest's parallel load the
+// default 5s timeout was occasionally getting hit (not a logic bug, just slowness).
 jest.setTimeout(20000);
 import { todayDate } from '@/lib/helpers';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { renderUI } from '@/test/renderWithProviders';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 
-// Bildirim yan etkisi bu testin konusu değil — sessiz dublör.
+// The notification side effect isn't the subject of this test — a silent double.
 jest.mock('@/lib/notifications', () => ({
   scheduleTaskReminders: jest.fn(() => Promise.resolve(true)),
   cancelTaskReminders: jest.fn(() => Promise.resolve()),
@@ -42,13 +42,13 @@ describe('TaskEditModal — alt görev / ana görev senkronu', () => {
       <TaskEditModal task={taskRepo.getById(task.id)} onClose={jest.fn()} onChanged={onChanged} />
     );
 
-    // İlk alt görevi işaretle → 1/2, ana görev hâlâ açık.
+    // Check off the first subtask → 1/2, parent task still open.
     await act(async () => {
       fireEvent.press(getAllByRole('checkbox')[0]);
     });
     expect(taskRepo.getById(task.id)!.completed_at).toBeNull();
 
-    // İkinci alt görevi de işaretle → 2/2, ana görev otomatik tamamlanır.
+    // Check off the second subtask too → 2/2, parent task auto-completes.
     await act(async () => {
       fireEvent.press(getAllByRole('checkbox')[1]);
     });
@@ -58,7 +58,7 @@ describe('TaskEditModal — alt görev / ana görev senkronu', () => {
 
   it('bir alt görev geri açılınca ana görev de geri açılır', async () => {
     const { task, subs } = taskWithSubtasks(['Alt 1', 'Alt 2']);
-    // Başlangıç durumu: her ikisi tamam + ana görev tamamlanmış.
+    // Initial state: both done + parent task completed.
     subtaskRepo.setCompleted(subs[0].id, true);
     subtaskRepo.setCompleted(subs[1].id, true);
     taskRepo.setCompleted(task.id, true);
@@ -68,7 +68,7 @@ describe('TaskEditModal — alt görev / ana görev senkronu', () => {
     );
     expect(taskRepo.getById(task.id)!.completed_at).not.toBeNull();
 
-    // Bir alt görevi geri aç → ana görev de geri açılmalı.
+    // Reopen one subtask → the parent task must reopen too.
     await act(async () => {
       fireEvent.press(getAllByRole('checkbox')[0]);
     });
@@ -81,7 +81,7 @@ describe('TaskEditModal — alt görev / ana görev senkronu', () => {
     const { queryAllByRole } = await renderUI(
       <TaskEditModal task={taskRepo.getById(task.id)} onClose={jest.fn()} onChanged={onChanged} />
     );
-    // Hiç alt görev (checkbox) yok; görev kendiliğinden tamamlanmamış kalır.
+    // No subtasks (checkboxes) at all; the task stays not-completed on its own.
     expect(queryAllByRole('checkbox')).toHaveLength(0);
     expect(taskRepo.getById(task.id)!.completed_at).toBeNull();
   });

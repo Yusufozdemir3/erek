@@ -1,64 +1,67 @@
-// Puan grafiği — SVG YOK, tamamen düz React Native View'larıyla çizilir
-// (kullanıcı isteği). Grafik "basamaklı" (step) olduğu için her parça zaten
-// eksen-hizalı bir dikdörtgen: yatay parça + dikey parça. Çapraz çizgi
-// gerektiren eski 'line' varyantı KALDIRILDI — hiç kullanılmıyordu (tek çağıran
-// habit/[id].tsx, hep variant="step" veriyordu); View'larla çapraz çizgi ancak
-// döndürme hilesiyle olurdu ve karşılığı yoktu. Gerekirse git geçmişinden alınır.
+// Score chart — NO SVG, drawn entirely with plain React Native Views (per user
+// request). Since the chart is "stepped," each segment is already an
+// axis-aligned rectangle: a horizontal piece + a vertical piece. The old 'line'
+// variant, which needed diagonal strokes, was REMOVED — it was never used (the
+// only caller, habit/[id].tsx, always passed variant="step"); a diagonal line
+// with Views would only be possible via a rotation trick and wasn't worth it.
+// Can be recovered from git history if ever needed.
 //
-// ÖLÇÜ BİRİMİ: hepsi doğrudan piksel (dp). Eskiden bir SVG viewBox'ı vardı ve
-// viewBox oranı ile çizim kutusunun oranı uyuşmadığı için preserveAspectRatio
-// varsayılanı ("xMidYMid meet") tüm grafiği %68'e küçültüp ortalıyordu — yanlarda
-// ölü boşluk, 8px yerine 5.4px yazılar, noktalardan kayan alt eksen etiketleri.
-// Ölçek katmanı olmadığı için o sınıf hata artık mümkün değil: ne yazarsan o.
+// UNIT: everything is in raw pixels (dp). There used to be an SVG viewBox, and
+// since the viewBox's aspect ratio didn't match the drawing box's, the default
+// preserveAspectRatio ("xMidYMid meet") shrank the whole chart to 68% and
+// centered it — dead space on the sides, 5.4px text instead of 8px, and bottom
+// axis labels drifting away from their points. With no scaling layer, that whole
+// class of bug is no longer possible: what you write is what you get.
 //
-// YERLEŞİM: iki parça yan yana. SOLDA yüzde ekseni (%0..%100) — SABİT, ScrollView'ın
-// DIŞINDA; SAĞDA kaydırılabilir çizim alanı. Eskiden eksen de kaydırma alanının
-// içindeydi ve geçmişe kaydırırken yüzdeler ekrandan çıkıp grafik ölçeksiz
-// kalıyordu (kullanıcı isteği: "yüzdeleri sol başa sabitle, sadece günler
-// hareket etsin"). Bu yüzden çizim alanının x koordinatları 0'dan başlar —
-// eksen genişliği (AXIS_W) çizime dahil DEĞİL.
+// LAYOUT: two parts side by side. LEFT is the percentage axis (%0..%100) — FIXED,
+// OUTSIDE the ScrollView; RIGHT is the scrollable plot area. The axis used to be
+// inside the scroll area too, and scrolling into the past would push the
+// percentages off-screen, leaving the chart without a scale (user request: "pin
+// the percentages to the left, only the days should move"). That's why the plot
+// area's x coordinates start at 0 — the axis width (AXIS_W) is NOT part of the plot.
 //
-// Az nokta varken (ör. sadece 4 hafta) nokta aralığı KONTEYNERİ DOLDURACAK
-// şekilde esner — aksi halde grafik sol kenara yapışıp sağda çirkin bir boşluk
-// bırakıyordu (kullanıcı geri bildirimi). Nokta sayısı arttıkça aralık asgari
-// genişliğe (POINT_SPACING_MIN) düşer ve ScrollView devreye girip kaydırma başlar.
+// With few points (e.g. only 4 weeks), point spacing stretches to FILL the
+// container — otherwise the chart would hug the left edge and leave an ugly gap
+// on the right (user feedback). As the point count grows, spacing shrinks down to
+// the minimum width (POINT_SPACING_MIN) and the ScrollView kicks in to scroll.
 
 import { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, ScrollView, Text, View } from 'react-native';
 import { AXIS_W, chartLayout } from '@/ui/scoreChartLayout';
 
-// ÖLÇEK: referans Loop Habit Tracker'ın puan grafiği (kullanıcı videosu). Eski
-// değerler (110px yükseklik, 8px yazı) yanındaki "Geçmiş" kartına göre basık
-// kalıyor ve telefonda yazılar okunmuyordu (kullanıcı geri bildirimi: "ekrana
-// tam oturmuyor, yazılar çok küçük"). Loop'ta çizim alanı ~145dp, eksen/gün
-// yazıları ~10dp; buradaki sayılar onun oranlarına denk gelir.
-// POINT_SPACING_MIN / AXIS_W / LABEL_W_MAX -> scoreChartLayout.ts (yerleşim
-// hesabıyla aynı yerde dursunlar diye).
-// Yüzde yazısı ile çizim alanı arasındaki boşluk. Yazılar şeridin SAĞINA
-// yaslı (sayıların sağ kenarları hizalı okunur); bu payı büyütmek onları
-// topluca sola kaydırır — 6 iken çizgiye fazla yapışıklardı (kullanıcı isteği).
+// SCALE: reference is the Loop Habit Tracker's score chart (from a user video).
+// The old values (110px height, 8px text) looked squashed next to the "History"
+// card and the text was unreadable on a phone (user feedback: "doesn't fit the
+// screen right, text is too small"). Loop's plot area is ~145dp, axis/day labels
+// ~10dp; the numbers here match its proportions.
+// POINT_SPACING_MIN / AXIS_W / LABEL_W_MAX -> scoreChartLayout.ts (kept together
+// with the layout math).
+// Gap between the percentage label and the plot area. Labels are right-aligned
+// within the strip (so the numbers' right edges line up); enlarging this margin
+// shifts them all further left — at 6 they hugged the line too closely (user request).
 const AXIS_GAP = 14;
-// Çizim alanının yüksekliği ve içindeki %100 / %0 çizgilerinin y'si.
-// Y_BASE'in altında kalan boşluk, alt eksen etiket satırıyla arasındaki nefes payı.
+// Height of the plot area and the y position of the %100 / %0 lines within it.
+// The space below Y_BASE is breathing room before the bottom axis label row.
 const CHART_H = 172;
 const Y_TOP = 12;
 const Y_BASE = 156;
-// Alt eksen etiket kutusunun genişliği: nokta aralığından geniş olamaz (yoksa
-// komşu etiketler çakışır) ama az noktada aralık çok açıldığında da bu kadarla
-// sınırlı kalır — etiket her hâlükârda kendi noktasının ÜSTÜNE ortalanır.
+// Width of the bottom axis label box: can't be wider than the point spacing (or
+// neighboring labels would overlap), but is also capped at this value when
+// spacing stretches wide with few points — either way, the label is always
+// centered directly OVER its own point.
 const LABEL_ROW_H = 16;
 const LABEL_FONT = 10;
 const AXIS_FONT = 10;
 const AXIS_LINE_H = 12;
 const GRID_STEPS = [0, 20, 40, 60, 80, 100];
-const STROKE = 2.5; // çizgi kalınlığı
+const STROKE = 2.5; // line thickness
 const DOT_R = 3.5;
-const DOT_R_LAST = 5; // son nokta vurgulu
-const PARTIAL_OPACITY = 0.4; // bitmemiş kova: soluk
-const DASH_LEN = 4; // bitmemiş kuyruk: 4px çizgi / 3px boşluk
+const DOT_R_LAST = 5; // last point is emphasized
+const PARTIAL_OPACITY = 0.4; // unfinished bucket: faded
+const DASH_LEN = 4; // unfinished tail: 4px dash / 3px gap
 const DASH_GAP = 3;
 
-// Mutlak konumlu bir dikdörtgen (çizgi parçası). Tüm çizim bunlardan oluşur.
+// An absolutely positioned rectangle (a line segment). The entire drawing is made of these.
 interface Rect {
   left: number;
   top: number;
@@ -66,9 +69,9 @@ interface Rect {
   height: number;
 }
 
-// İki nokta arasındaki BASAMAK: önce a.y seviyesinde yatay git, sonra b.x'te
-// dikey in/çık. Dikey parça iki ucundan STROKE/2 taşırılır — köşede boşluk
-// kalmasın (SVG'deki strokeLinejoin="round" karşılığı).
+// The STEP between two points: go horizontal at a.y's level first, then move
+// vertically up/down at b.x. The vertical segment overhangs by STROKE/2 on both
+// ends so no gap is left at the corner (the equivalent of SVG's strokeLinejoin="round").
 function stepRects(a: { x: number; y: number }, b: { x: number; y: number }): Rect[] {
   return [
     { left: a.x, top: a.y - STROKE / 2, width: b.x - a.x, height: STROKE },
@@ -81,8 +84,8 @@ function stepRects(a: { x: number; y: number }, b: { x: number; y: number }): Re
   ];
 }
 
-// Bir parçayı kesikli çizgiye böler (SVG'deki strokeDasharray="4,3" karşılığı).
-// Uzun ekseni boyunca DASH_LEN uzunluğunda parçalar, aralarında DASH_GAP.
+// Splits a segment into a dashed line (the equivalent of SVG's strokeDasharray="4,3").
+// DASH_LEN-long pieces along the segment's long axis, with DASH_GAP between them.
 function dashRects(seg: Rect): Rect[] {
   const horizontal = seg.width >= seg.height;
   const len = horizontal ? seg.width : seg.height;
@@ -99,11 +102,11 @@ function dashRects(seg: Rect): Rect[] {
 }
 
 export interface ScoreLineChartProps {
-  /** Her nokta için 0..1 değer + alt eksende gösterilecek kısa etiket.
-   *  partial=true: bu nokta henüz BİTMEMİŞ bir kovaya ait (bugün / süren
-   *  hafta-ay) — soluk/kesikli çizilir, "Geçmiş" kartındaki partial kovalarla
-   *  aynı görsel dil (kullanıcı geri bildirimi: bitmemiş dönem bitmiş gibi
-   *  görünüyordu). */
+  /** A 0..1 value per point + a short label shown on the bottom axis.
+   *  partial=true: this point belongs to a bucket that is NOT YET FINISHED
+   *  (today / the ongoing week-month) — drawn faded/dashed, the same visual
+   *  language as the partial buckets on the "History" card (user feedback: an
+   *  unfinished period looked like it had already finished). */
   points: { value: number; label: string; partial?: boolean }[];
   color: string;
   gridColor: string;
@@ -116,33 +119,35 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
   const onLayout = (e: LayoutChangeEvent) => setContainerWidth(e.nativeEvent.layout.width);
 
   const scrollRef = useRef<ScrollView>(null);
-  // Yalnız İLK ölçümde sona kaydır — onContentSizeChange her yeniden
-  // render'da (ör. üst ekran odaklandığında stats yenilenince) tekrar
-  // tetiklenebiliyordu ve kullanıcı elle kaydırırken görünümü geri
-  // "sağa" çekip kaydırmayı bozuyordu (kullanıcı geri bildirimi).
+  // Only auto-scroll to the end on the FIRST measurement — onContentSizeChange
+  // could re-fire on every re-render (e.g. when stats refresh on screen focus),
+  // and would yank the view back "to the right" while the user was scrolling
+  // manually, breaking their scroll (user feedback).
   const didAutoScroll = useRef(false);
-  // ...AMA periyot sekmesi (Gün/Hafta/Ay) değişince bileşen yeniden mount
-  // OLMUYOR, sadece nokta sayısı değişiyor. Bayrak açık kaldığı için kaydırma
-  // atlanıyor ve kullanıcı yeni grafiğin ortasında/solunda kalıyordu; "en
-  // güncel veri sağda" garantisi ilk sekme değişiminde bozuluyordu. Nokta
-  // sayısı değiştiğinde bayrağı sıfırlıyoruz — yenilenen stats aynı sayıda
-  // kova döndürdüğü için elle kaydırma yine bozulmaz.
+  // ...BUT the component doesn't remount when the period tab (Day/Week/Month)
+  // changes, only the point count changes. Since the flag stayed set, the
+  // auto-scroll was skipped and the user was left in the middle/left of the new
+  // chart; the "latest data on the right" guarantee broke on the very first tab
+  // switch. We reset the flag whenever the point count changes — since refreshed
+  // stats return the same number of buckets otherwise, manual scrolling still
+  // isn't disrupted.
   useEffect(() => {
     didAutoScroll.current = false;
   }, [n]);
 
   if (n === 0) return <View onLayout={onLayout} />;
 
-  // Yerleşim matematiği saf modülde (test edilebilir): scoreChartLayout.ts
+  // Layout math lives in a pure module (testable): scoreChartLayout.ts
   const { spacing, labelW, plotW, xAt } = chartLayout(n, containerWidth);
   const yAt = (v: number) => Y_BASE - Math.max(0, Math.min(1, v)) * (Y_BASE - Y_TOP);
   const coords = points.map((p, i) => ({ x: xAt(i), y: yAt(p.value) }));
 
-  // Son nokta bitmemiş bir kovaya (bugün / süren hafta-ay) aitse, ona giden
-  // son parça ayrı, soluk/kesikli bir "kuyruk" olarak çizilir — ana çizgi
-  // ondan önce biter. Tek noktalık grafikte kuyruk için ikinci nokta yok.
+  // If the last point belongs to an unfinished bucket (today / the ongoing
+  // week-month), the final segment leading to it is drawn separately as a
+  // faded/dashed "tail" — the main line stops before it. In a single-point
+  // chart there's no second point for a tail.
   const lastIsPartial = n > 1 && points[n - 1].partial === true;
-  const lineEnd = lastIsPartial ? n - 1 : n; // ana çizginin dahil ettiği nokta sayısı
+  const lineEnd = lastIsPartial ? n - 1 : n; // number of points included in the main line
 
   const solidRects: Rect[] = [];
   for (let i = 1; i < lineEnd; i++) solidRects.push(...stepRects(coords[i - 1], coords[i]));
@@ -154,9 +159,9 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
     <View onLayout={onLayout}>
       {containerWidth > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-          {/* SABİT sol eksen — kaydırma alanının dışında, hep görünür. Yüzde
-              yazıları çizim alanıyla AYNI yAt() formülünü kullanır, ikisi de
-              CHART_H yüksekliğinde; satırlar birebir hizalı kalır. */}
+          {/* FIXED left axis — outside the scroll area, always visible. The
+              percentage labels use the SAME yAt() formula as the plot area, both
+              at CHART_H height; the rows stay pixel-aligned. */}
           <View style={{ width: AXIS_W, height: CHART_H }}>
             {GRID_STEPS.map((g) => (
               <Text
@@ -176,11 +181,12 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
               </Text>
             ))}
           </View>
-          {/* En güncel veri (sağ uç) varsayılan görünüm — açılışta otomatik oraya
-              kaydırılır, kullanıcı geçmişe gitmek için SOLA kaydırır.
-              nestedScrollEnabled: bu yatay ScrollView, ekranı saran DİKEY ScrollView'ın
-              İÇİNDE — Android'de bu olmadan dış kaydırma parmak hareketini kapıp
-              yatay kaydırmayı "takılıyor/tepki vermiyor" gibi hissettiriyordu. */}
+          {/* The most recent data (right edge) is the default view — it
+              auto-scrolls there on open, and the user scrolls LEFT to go back in
+              history. nestedScrollEnabled: this horizontal ScrollView is INSIDE
+              the VERTICAL ScrollView wrapping the screen — on Android, without
+              this the outer scroll would capture the swipe gesture and horizontal
+              scrolling would feel "stuck/unresponsive". */}
           <ScrollView
             ref={scrollRef}
             horizontal
@@ -194,9 +200,9 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
           >
             <View>
               <View style={{ width: plotW, height: CHART_H }}>
-                {/* Izgara çizgileri çizim alanının İÇİNDE kalır (eksen yazıları
-                    dışarıda): yatay çizgiler tüm içerik genişliğini kapladığı
-                    için kaydırırken sabit duruyormuş gibi görünür. */}
+                {/* Grid lines stay INSIDE the plot area (axis labels are
+                    outside): since the horizontal lines span the full content
+                    width, they appear to stay fixed while scrolling. */}
                 {GRID_STEPS.map((g) => (
                   <View
                     key={g}
@@ -238,16 +244,17 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
                   );
                 })}
               </View>
-              {/* Etiketler noktalarla HİZALI olmalı. Eskiden bu satır x=0'dan
-                  başlayan bir flex row'du ve her etiket kendi `spacing` kutusunda
-                  ortalanıyordu — yani etiket i'nin merkezi (i+0.5)*spacing'e
-                  düşüyor, oysa nokta i xAt(i) konumunda. Sabit bir kayma vardı
-                  (nokta 12 Tem'i gösterirken altında 11 Tem yazıyordu). Artık her
-                  etiket mutlak konumla tam kendi noktasının üstüne ortalanıyor;
-                  kutu genişliği LABEL_W_MAX ile sınırlı olduğu için aralık çok
-                  açıldığında da etiket noktadan kopmuyor. Mutlak konum ayrıca
-                  taşan uç etiketlerin ScrollView içerik genişliğini büyütmesini
-                  engelliyor. */}
+              {/* Labels must stay ALIGNED with the points. This row used to be a
+                  flex row starting at x=0, with each label centered in its own
+                  `spacing` box — meaning label i's center landed at
+                  (i+0.5)*spacing, while point i sits at xAt(i). There was a
+                  constant drift (point showing Jul 12 had Jul 11 written under
+                  it). Now every label is absolutely positioned and centered
+                  directly over its own point; since the box width is capped at
+                  LABEL_W_MAX, the label doesn't drift away from the point even
+                  when spacing stretches wide. Absolute positioning also prevents
+                  overflowing edge labels from inflating the ScrollView's content
+                  width. */}
               <View style={{ width: plotW, height: LABEL_ROW_H }}>
                 {points.map((p, i) => (
                   <Text
@@ -257,8 +264,8 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
                       left: xAt(i) - labelW / 2,
                       width: labelW,
                       fontSize: LABEL_FONT,
-                      // Satır yüksekliği kutuyla eşit — Android'de yazı tipi
-                      // metrikleri LABEL_ROW_H'ı aşarsa etiket alttan kırpılıyor.
+                      // Line height matches the box — on Android, if the font
+                      // metrics exceed LABEL_ROW_H the label gets clipped at the bottom.
                       lineHeight: LABEL_ROW_H,
                       fontWeight: '600',
                       color: labelColor,

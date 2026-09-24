@@ -1,8 +1,8 @@
-// Hedef girdi geçmişi (GoalEntry) repository — goalMilestoneRepo ile aynı desen.
-// UI asla SQL görmez - sadece bu fonksiyonları çağırır.
-// ÖNEMLİ: bu tablo yalnızca bir GÜNLÜKTÜR. goal.current_value tek doğru kaynak
-// olmaya devam eder (goalRepo.addProgress ile güncellenir); buradaki kayıtlar
-// yalnızca "ne zaman ne kadar eklendi" geçmişini kullanıcıya göstermek içindir.
+// Goal entry history (GoalEntry) repository — the same pattern as goalMilestoneRepo.
+// UI never sees SQL - it only calls these functions.
+// IMPORTANT: this table is only a LOG. goal.current_value remains the single
+// source of truth (updated via goalRepo.addProgress); records here exist only
+// to show the user the "how much was added when" history.
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -20,8 +20,8 @@ function rowToEntry(row: any): GoalEntry {
 }
 
 export const goalEntryRepo = {
-  // Yeni girdi kaydı (yalnız günlük — current_value'yu değiştirmez, çağıran
-  // ayrıca goalRepo.addProgress çağırmalı).
+  // New entry record (log only — doesn't change current_value; the caller
+  // must also call goalRepo.addProgress).
   create(goalId: string, amount: number): GoalEntry {
     const db = getDb();
     const id = newId();
@@ -34,7 +34,7 @@ export const goalEntryRepo = {
     return { id, goal_id: goalId, amount, updated_at: now, deleted_at: null, synced: 0 };
   },
 
-  // Bir hedefin girdi geçmişi, en yeniden en eskiye.
+  // A goal's entry history, newest first.
   listByGoal(goalId: string): GoalEntry[] {
     const db = getDb();
     const rows = db.getAllSync<any>(

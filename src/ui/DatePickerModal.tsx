@@ -1,7 +1,7 @@
-// Özel takvim tarih seçici — native @react-native-community/datetimepicker'ın
-// yerini alır. Ay ızgarası + ay gezinme + "Bugün" kısayolu. Bir güne dokununca
-// hemen seçilip kapanır (ekstra "Tamam" adımı yok — tek dokunuşluk akış).
-// Görsel kabuk ModalCard ile aynı ortalanmış kart deseni.
+// Custom calendar date picker — replaces the native
+// @react-native-community/datetimepicker. Month grid + month navigation +
+// "Today" shortcut. Tapping a day picks it and closes immediately (no extra
+// "OK" step — a single-tap flow). Visually the same centered-card pattern as ModalCard.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -22,7 +22,7 @@ interface Props {
   title?: string;
 }
 
-const WEEKDAY_LETTERS_START_MONDAY = [1, 2, 3, 4, 5, 6, 0]; // JS getDay() sırası, Pzt başlangıç
+const WEEKDAY_LETTERS_START_MONDAY = [1, 2, 3, 4, 5, 6, 0]; // JS getDay() order, starting Monday
 
 function startOfDay(d: Date): Date {
   const out = new Date(d);
@@ -30,11 +30,11 @@ function startOfDay(d: Date): Date {
   return out;
 }
 
-// Ayın 1'inden başlayarak 6 hafta (42 gün) ızgarası — önceki/sonraki aydan
-// taşan günler de dahil, takvim hep tam dikdörtgen kalsın diye.
+// A 6-week (42-day) grid starting from the 1st of the month — including
+// overflow days from the previous/next month, so the calendar always stays a full rectangle.
 function buildMonthGrid(monthAnchor: Date): Date[] {
   const first = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
-  const firstWeekday = (first.getDay() + 6) % 7; // Pazartesi = 0
+  const firstWeekday = (first.getDay() + 6) % 7; // Monday = 0
   const gridStart = new Date(first);
   gridStart.setDate(first.getDate() - firstWeekday);
   return Array.from({ length: 42 }, (_, i) => {
@@ -58,7 +58,7 @@ export function DatePickerModal({
   const styles = makeStyles(colors);
   const [monthAnchor, setMonthAnchor] = useState(() => new Date(value.getFullYear(), value.getMonth(), 1));
 
-  // Modal her açılışta seçili tarihin ayına dönsün (kapalıyken değer değişmiş olabilir).
+  // The modal should return to the selected date's month on every open (the value may have changed while closed).
   useEffect(() => {
     if (visible) setMonthAnchor(new Date(value.getFullYear(), value.getMonth(), 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,7 +76,7 @@ export function DatePickerModal({
   });
 
   const weekdayLabels = WEEKDAY_LETTERS_START_MONDAY.map((wd) => {
-    const sample = new Date(2024, 0, 7 + wd); // 2024-01-07 bir Pazar; +wd ile o haftanın günü
+    const sample = new Date(2024, 0, 7 + wd); // 2024-01-07 is a Sunday; +wd gives that week's day
     return sample.toLocaleDateString(DATE_LOCALE[lang], { weekday: 'narrow' });
   });
 

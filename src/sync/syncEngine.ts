@@ -1,24 +1,24 @@
-// Senkron motoru — offline-first, son-yazan-kazanır (updated_at).
+// Sync engine — offline-first, last-writer-wins (updated_at).
 //
-// Akış:
-//   1) ensureSignedIn -> hesap uid'si; giriş yoksa null döner ve senkron
-//      'disabled' ile çıkar (anonim oturum AÇILMAZ — bkz. sync/auth.ts).
-//   2) PUSH: her tabloda synced=0 satırları Supabase'e upsert et, synced=1 yap
-//   3) PULL: son senkrondan beri değişen uzak satırları çek, updated_at'e göre
-//      yereldekinden yeniyse uygula (silme dahil), synced=1 olarak yaz.
-//      habit_logs'ta id farklı olsa bile (habit_id, log_date) çakışan kayıtlar
-//      son-yazan-kazanır ile TEK kayda birleştirilir (naturalKey).
+// Flow:
+//   1) ensureSignedIn -> the account uid; if not signed in, returns null and
+//      sync exits with 'disabled' (an anonymous session is NEVER opened — see sync/auth.ts).
+//   2) PUSH: upsert every table's synced=0 rows to Supabase, then mark synced=1
+//   3) PULL: fetch remote rows changed since the last sync, apply them (including
+//      deletes) if newer than the local one per updated_at, and write synced=1.
+//      In habit_logs, rows that collide on (habit_id, log_date) even with a
+//      different id are merged into a SINGLE record via last-writer-wins (naturalKey).
 //
-// Zaman damgaları iki farklı iş görür, karıştırmayın:
-//   - updated_at        : İSTEMCİ saati. Yalnız son-yazan-kazanır kıyası içindir.
-//   - server_updated_at : SUNUCU saati (trigger). Yalnız pull filtresi + filigran.
-// Filigran tablo başınadır (sync:lastPulledAt:<tablo>).
+// Timestamps serve two different purposes — don't mix them up:
+//   - updated_at        : the CLIENT clock. Only used for the last-writer-wins comparison.
+//   - server_updated_at : the SERVER clock (trigger). Only used for the pull filter + watermark.
+// The watermark is per table (sync:lastPulledAt:<table>).
 //
-// Kimlik eşleme: yerel cihaz user_id'si korunur; push'ta user_id -> uid,
-// pull'da user_id -> yerel id çevrilir. Böylece yerel veriyi yeniden yazmadan
-// RLS (auth.uid() = user_id) sağlanır.
+// Identity mapping: the local device's user_id is preserved; on push, user_id
+// is converted to the uid, and on pull, user_id is converted to the local id.
+// This satisfies RLS (auth.uid() = user_id) without ever rewriting local data.
 //
-// FK sırası önemli: goals -> habits -> tasks -> habit_logs (ebeveyn önce).
+// FK order matters: goals -> habits -> tasks -> habit_logs (parent first).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDb } from '../db/database';
@@ -28,42 +28,44 @@ import { ensureSignedIn } from './auth';
 import { reassignLocalIds } from './localIds';
 
 export interface TableCfg {
-  table: string;       // yerel = uzak tablo adı
-  cols: string[];      // senkronlanan kolonlar (yerel-only 'synced' hariç)
-  hasUserId: boolean;  // user_id sınırda çevrilecek mi
-  // Yerel UNIQUE kısıtı taşıyan "doğal anahtar" kolonları. İki cihaz aynı
-  // mantıksal kaydı ayrı id'lerle üretebilir (ör. aynı alışkanlık aynı gün iki
-  // cihazda işaretlenirse). Pull bu kolonlara göre çakışan kaydı bulup
-  // son-yazan-kazanır ile birleştirir; yoksa INSERT yerel UNIQUE kısıtına
-  // çarpar ve senkron o satırda kalıcı olarak kilitlenirdi.
+  table: string;       // the local = remote table name
+  cols: string[];      // the synced columns (excludes the local-only 'synced')
+  hasUserId: boolean;  // whether user_id is converted at the boundary
+  // The "natural key" columns backed by a local UNIQUE constraint. Two devices
+  // can produce the same logical record under different ids (e.g. the same
+  // habit checked on the same day on two devices). Pull finds the colliding
+  // record by these columns and merges it via last-writer-wins; otherwise the
+  // INSERT would hit the local UNIQUE constraint and permanently lock sync on that row.
   naturalKey?: string[];
-  // Uzaktan NULL gelirse kullanılacak değerler. Yalnız yerelde NOT NULL olan
-  // kolonlar için gerekli: upsertLocal boş değeri `?? null` ile yazar ve NOT NULL
-  // kısıtına çarparsa pull FIRLATIR — yani tek bir eksik alan o kullanıcının
-  // senkronunu KALICI olarak kırar (her tur aynı satırda patlar). Bulut şeması
-  // doğru kurulduğunda bu durum oluşmaz; buradaki savunma, elle düzenlenmiş ya
-  // da eski bir bulut şemasında tek satırın her şeyi kilitlemesini engeller.
+  // Values to use when the remote value is NULL. Only needed for columns that
+  // are NOT NULL locally: upsertLocal writes an empty value via `?? null`, and
+  // if that hits the NOT NULL constraint, the pull THROWS — meaning a single
+  // missing field PERMANENTLY breaks that user's sync (failing on the same row
+  // every round). This shouldn't happen with a correctly set up cloud schema;
+  // this defense just keeps a hand-edited or stale cloud schema from letting one row lock up everything.
   defaults?: Record<string, unknown>;
 }
 
-// FK bağımlılığına göre sıralı (ebeveyn önce).
+// Ordered by FK dependency (parent first).
 //
-// DIŞA AÇIK ÇÜNKÜ TEST EDİLİYOR: bu liste ELLE bakılıyor ve yerel şemayla bağı
-// derleyici tarafından denetlenmiyor. Bir migration yeni kolon eklerken burayı
-// güncellemeyi unutmak SESSİZ veri kaybı üretir — kolon push'ta hiç gönderilmez,
-// pull'da hiç yazılmaz, iki cihaz arasında o alan sessizce ıraksar. Tam olarak bu
-// oldu: goal_contribution/goal_factor (migration010) aylarca bu listede yoktu ve
-// birim çarpanlı hedef katkısı ikinci cihazda varsayılana düşüyordu.
-// __tests__/syncColumnParity.test.ts bu listeyi PRAGMA table_info ile karşılaştırır;
-// yeni kolon ekleyip burayı unutursan test kırılır.
+// EXPORTED BECAUSE IT'S TESTED: this list is maintained BY HAND, and its link
+// to the local schema isn't checked by the compiler. Forgetting to update it
+// when a migration adds a new column produces SILENT data loss — the column
+// is never sent on push, never written on pull, and that field silently
+// diverges between two devices. This exact thing happened:
+// goal_contribution/goal_factor (migration010) were missing from this list
+// for months, and a unit-multiplier goal contribution fell back to the
+// default on a second device.
+// __tests__/syncColumnParity.test.ts compares this list against PRAGMA
+// table_info; if you add a column and forget this list, that test fails.
 export const TABLES: TableCfg[] = [
   {
     table: 'goals',
-    // current_value artık TÜRETİLMİŞ bir önbellek (= value_baseline + girdiler
-    // toplamı, bkz. migration019). Yine de senkronlanıyor: eski sürümdeki
-    // istemciler onu okuyor ve pull sonrası zaten yeniden hesaplanıyor
-    // (goalRepo.recomputeAllFromEntries). Çakışmasız birleşen asıl veri
-    // goal_entries satırlarıdır.
+    // current_value is now a DERIVED cache (= value_baseline + the sum of
+    // entries, see migration019). It's still synced: older clients read it,
+    // and it gets recomputed right after pull anyway
+    // (goalRepo.recomputeAllFromEntries). The data that actually merges
+    // without conflict is the goal_entries rows.
     cols: ['id', 'user_id', 'title', 'goal_type', 'target_value', 'current_value', 'value_baseline', 'unit', 'deadline', 'completed_at', 'remind_at', 'start_date', 'updated_at', 'deleted_at'],
     hasUserId: true,
     defaults: { current_value: 0, value_baseline: 0 },
@@ -71,24 +73,25 @@ export const TABLES: TableCfg[] = [
   {
     table: 'goal_milestones',
     cols: ['id', 'goal_id', 'title', 'completed', 'position', 'amount', 'due_date', 'updated_at', 'deleted_at'],
-    hasUserId: false, // sahiplik ebeveyn hedef üzerinden (RLS de öyle)
+    hasUserId: false, // ownership flows through the parent goal (RLS too)
     defaults: { completed: 0, position: 0 },
   },
   {
     table: 'goal_entries',
     cols: ['id', 'goal_id', 'amount', 'updated_at', 'deleted_at'],
-    hasUserId: false, // sahiplik ebeveyn hedef üzerinden (RLS de öyle)
+    hasUserId: false, // ownership flows through the parent goal (RLS too)
   },
   {
     table: 'habits',
-    // goal_contribution/goal_factor (migration010) bu listeye SONRADAN eklendi —
-    // eksik oldukları sürece bağlı hedefe "miktar × çarpan" katkısı yalnız onu
-    // kuran cihazda doğruydu; ikinci cihaz NULL/1 varsayılanını görüp hedefe
-    // yanlış ilerleme yazıyordu (bkz. migration018 + syncColumnParity testi).
+    // goal_contribution/goal_factor (migration010) were added to this list
+    // LATER — while missing, the "amount × factor" contribution to a linked
+    // goal was only correct on the device that created it; a second device
+    // saw the NULL/1 default and wrote the wrong progress to the goal
+    // (see migration018 + the syncColumnParity test).
     cols: ['id', 'user_id', 'goal_id', 'title', 'kind', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'start_date', 'end_date', 'goal_contribution', 'goal_factor', 'updated_at', 'deleted_at'],
     hasUserId: true,
-    // Yerelde NOT NULL olan kolonlar — uzaktan boş gelirse şemanın kendi
-    // varsayılanına düş, satırı (ve onunla tüm senkronu) düşürme.
+    // Columns that are NOT NULL locally — if empty from remote, fall back to
+    // the schema's own default instead of dropping the row (and with it, all of sync).
     defaults: { kind: 'binary', goal_factor: 1 },
   },
   {
@@ -100,104 +103,110 @@ export const TABLES: TableCfg[] = [
   {
     table: 'reminders',
     cols: ['id', 'entity_type', 'entity_id', 'time', 'updated_at', 'deleted_at'],
-    hasUserId: false, // sahiplik entity_type'a bağlı ebeveyn (habit/task/goal) üzerinden (RLS de öyle)
-    // Yerelde UNIQUE kısıtı YOK ama mantıksal olarak bir varlığın aynı saatte iki
-    // hatırlatması olamaz (form da eklemez). Doğal anahtar olmadan id'si farklı
-    // gelen aynı hatırlatma İKİNCİ satır olarak eklenir -> bildirim iki kez çalar.
+    hasUserId: false, // ownership flows through the entity_type parent (habit/task/goal) (RLS too)
+    // There's NO local UNIQUE constraint, but logically an entity can't have
+    // two reminders at the same time (the form doesn't add one either).
+    // Without the natural key, the same reminder arriving with a different id
+    // gets added as a SECOND row -> the notification fires twice.
     naturalKey: ['entity_type', 'entity_id', 'time'],
   },
   {
     table: 'habit_logs',
     cols: ['id', 'habit_id', 'log_date', 'completed', 'amount', 'updated_at'],
     hasUserId: false,
-    naturalKey: ['habit_id', 'log_date'], // yerel: UNIQUE(habit_id, log_date)
+    naturalKey: ['habit_id', 'log_date'], // local: UNIQUE(habit_id, log_date)
     defaults: { completed: 0, amount: 0 },
   },
   {
     table: 'subtasks',
     cols: ['id', 'task_id', 'title', 'completed', 'position', 'updated_at', 'deleted_at'],
-    hasUserId: false, // sahiplik ebeveyn görev üzerinden (RLS de öyle)
+    hasUserId: false, // ownership flows through the parent task (RLS too)
     defaults: { completed: 0, position: 0 },
   },
 ];
 
-// ESKİ tek-global filigran. Artık yazılmaz; yalnızca "varsa temizle" geçişinde
-// okunur (bkz. migrateWatermarks).
+// The OLD single-global watermark. No longer written; only ever read during
+// the "clear it if present" migration (see migrateWatermarks).
 const LEGACY_LAST_PULLED_KEY = 'sync:lastPulledAt';
 
-// Filigran artık TABLO BAŞINA tutulur. Tek global filigran şu sessiz veri kaybını
-// üretiyordu: tüm tablolar aynı `since` ile çekilip filigran TÜM tabloların
-// maksimumuna set ediliyordu; bir tablonun daha eski zaman damgalı satırı sonraki
-// turda `since`in gerisinde kalıp bir daha HİÇ çekilmiyordu.
+// The watermark is now kept PER TABLE. A single global watermark used to
+// produce this silent data loss: all tables were pulled with the same
+// `since`, and the watermark was set to the MAX across all tables; a table
+// whose row had an older timestamp then fell behind `since` on the next round
+// and was NEVER pulled again.
 const watermarkKey = (table: string) => `sync:lastPulledAt:${table}`;
 
 const EPOCH = '1970-01-01T00:00:00.000Z';
 
-// Pull filtresi/filigranı SUNUCU zaman damgasına bakar (trigger'la yazılır, bkz.
-// supabase/schema.sql). `updated_at` istemci saatinden geldiği için ileri saatli
-// bir cihaz filigranı zehirleyip aradaki tüm satırları atlatabiliyordu. Son-yazan-
-// kazanır kıyası hâlâ `updated_at` ile yapılır (kaydın gerçekten ne zaman
-// değiştiğini o söyler); sunucu damgası yalnızca "neyi çektim" defteridir.
+// The pull filter/watermark looks at the SERVER timestamp (written by
+// trigger, see supabase/schema.sql). Since `updated_at` comes from the client
+// clock, a device with a clock set ahead could poison the watermark and skip
+// every row in between. The last-writer-wins comparison is still done with
+// `updated_at` (it tells us when the record actually changed); the server
+// timestamp is only the "what I've pulled" ledger.
 const SERVER_TS_COL = 'server_updated_at';
 
-// Filigran ilerletilirken geriye bırakılan GÜVENLİK PAYI.
+// The SAFETY MARGIN left behind when advancing the watermark.
 //
-// server_updated_at trigger'da now() ile yazılır ve Postgres'te now() TRANSACTION
-// BAŞLANGIÇ zamanıdır. Yani geç başlayıp erken commit eden bir işlem, erken
-// başlayıp geç commit edenden BÜYÜK bir damga taşıyabilir. Filigranı "gördüğüm en
-// büyük damga"ya çekmek, o aradaki satırı kalıcı olarak atlamak demekti: bir daha
-// hiç `> since` olmaz, yani sessiz veri kaybı.
+// server_updated_at is written in the trigger with now(), and in Postgres
+// now() is the TRANSACTION START time. So a transaction that starts late but
+// commits early can carry a LARGER timestamp than one that started early but
+// commits late. Setting the watermark to "the largest timestamp I've seen"
+// would mean permanently skipping the row in between: it would never satisfy
+// `> since` again, i.e. silent data loss.
 //
-// Bu, uzun süre görünmedi çünkü her girişte çalışan tam yeniden senkron (tüm
-// filigranları sıfırlayan) kaybı tesadüfen onarıyordu. O tur artık yalnız gerçekten
-// gerektiğinde çalıştığı için (bkz. LoginScreen: 'same' hesapta atlanır) açığın
-// kendisi kapatılmalıydı — pay bırakmak, pull idempotent olduğu için (son-yazan-
-// kazanır) yalnızca birkaç saniyelik satırın yeniden okunması anlamına gelir.
+// This went unnoticed for a long time because the full resync that ran on
+// every login (resetting all watermarks) accidentally healed the loss. Now
+// that round only runs when actually needed (see LoginScreen: skipped for a
+// 'same' account), the gap itself had to be closed — leaving a margin just
+// means a few seconds' worth of rows get re-read, which is harmless since pull is idempotent (last-writer-wins).
 const WATERMARK_SAFETY_MS = 5_000;
 
-// Supabase tek yanıtta en fazla 1000 satır döndürür; fazlası sayfalanarak çekilir.
+// Supabase returns at most 1000 rows per response; anything beyond that is paginated.
 const PULL_PAGE_SIZE = 1000;
 
-// Push da parti parti gider. Pull'dan KÜÇÜK bilerek: pull'da sınır sunucunun
-// yanıt tavanı, push'ta ise İSTEK GÖVDESİNİN mobil şebekede zaman aşımına
-// uğramadan gidebilmesi. Eskiden parti yoktu — bekleyen TÜM satırlar tek
-// upsert'te gidiyordu ve şu kalıcı kilitlenmeyi üretebiliyordu: prepareFullResync
-// (her girişte çalışır) tüm satırları synced=0 yapar; yıllardır kullanan birinde
-// bu binlerce satır demektir. Tek dev istek zaman aşımına düşerse HİÇBİR satır
-// synced=1 olmaz (hep-ya-hiç), sonraki tur aynı dev isteği yeniden dener ve
-// senkron bir daha asla ilerlemez. Parti başına işaretleme yapıldığı için artık
-// başarılı partiler kalıcıdır: yeniden deneme yalnızca kalanı gönderir.
+// Push also goes out in batches, deliberately SMALLER than pull's: on pull the
+// limit is the server's response cap, while on push it's how big the REQUEST
+// BODY can be before timing out on a mobile network. There used to be no
+// batching — ALL pending rows went out in a single upsert, which could
+// produce this permanent lockup: prepareFullResync (runs on every login)
+// marks every row synced=0; for a long-time user that's thousands of rows. If
+// that one giant request times out, NO row becomes synced=1 (all-or-nothing),
+// the next round retries the same giant request, and sync never makes
+// progress again. Because marking happens per batch, successful batches are
+// now permanent: a retry only sends what's left.
 const PUSH_PAGE_SIZE = 250;
 
-// Bu cihazdaki verinin HANGİ bulut hesabına ait olduğu. Başarılı ilk senkrondan
-// sonra yazılır ve hesap değişimini tespit etmenin tek güvenilir yoludur:
-// yerel id'ler hesap değişince DEĞİŞMEZ, dolayısıyla A hesabına gönderilmiş bir
-// satır B hesabıyla push edilmeye çalışıldığında RLS'in USING koşuluna takılır
-// ve senkron kalıcı kilitlenir (sahada görüldü, 2026-07-23). Bu bayrak sayesinde
-// çakışma OLUŞMADAN önce kullanıcıya "birleştir mi, değiştir mi" sorulur.
+// WHICH cloud account this device's data belongs to. Written after the first
+// successful sync, and the only reliable way to detect an account switch:
+// local ids DON'T change when the account changes, so a row that was pushed
+// to account A gets caught by RLS's USING clause when a push is attempted
+// under account B, permanently locking sync (seen in the field, 2026-07-23).
+// This flag lets the user be asked "merge or replace?" BEFORE the conflict ever happens.
 const OWNER_UID_KEY = 'sync:ownerUid';
 
-let inFlight = false; // aynı anda iki senkron çalışmasın
+let inFlight = false; // don't let two syncs run at once
 
 export interface SyncResult {
-  // 'busy' HATA DEĞİLDİR: o an başka bir tur sürüyor demektir. Ayrı bir durum
-  // olması şart — otomatik tetikleyiciler (açılış + ön plana gelme) elle
-  // başlatılan turla çakışabiliyor ve 'error' dönseydi kullanıcıya gerçek bir
-  // sorun yokken hata gösterilir, daha kötüsü ekrandaki gerçek hata ezilirdi.
+  // 'busy' is NOT an error: it means another round is currently running. This
+  // needs to be its own state — automatic triggers (startup + coming to the
+  // foreground) can collide with a manually started round, and returning
+  // 'error' would show the user an error when nothing is actually wrong, and
+  // worse, would clobber the real error already on screen.
   status: 'ok' | 'disabled' | 'error' | 'busy';
   pushed?: number;
   pulled?: number;
   at?: number;        // epoch ms
-  message?: string;   // hata mesajı
-  /** true ise hata, veri sahipliği çakışmasıdır (bkz. isOwnershipConflict). */
+  message?: string;   // error message
+  /** If true, the error is a data-ownership conflict (see isOwnershipConflict). */
   ownershipConflict?: boolean;
 }
 
-// Bir giriş denemesinin yerel veri açısından ne anlama geldiği:
-//   'fresh'  — bu cihazın verisi hiçbir hesaba gönderilmemiş; doğrudan bu hesaba
-//              yüklenebilir (anonim kullanımdan hesaba geçişin normal yolu).
-//   'same'   — zaten bu hesaba aitti; sıradan senkron.
-//   'switch' — veri BAŞKA bir hesaba ait; kullanıcı "birleştir/değiştir" seçmeli.
+// What a sign-in attempt means with respect to local data:
+//   'fresh'  — this device's data hasn't been pushed to any account yet; it
+//              can be uploaded straight to this one (the normal path from anonymous use into an account).
+//   'same'   — it already belonged to this account; a normal sync.
+//   'switch' — the data belongs to a DIFFERENT account; the user must choose "merge/replace".
 export type SignInKind = 'fresh' | 'same' | 'switch';
 
 export async function getSyncOwner(): Promise<string | null> {
@@ -208,17 +217,17 @@ export async function setSyncOwner(uid: string): Promise<void> {
   await AsyncStorage.setItem(OWNER_UID_KEY, uid);
 }
 
-// Giriş yapılacak hesabın yerel veriyle ilişkisini sınıflandırır.
+// Classifies the account being signed into relative to local data.
 export async function classifySignIn(uid: string): Promise<SignInKind> {
   const owner = await getSyncOwner();
   if (owner === null) return 'fresh';
   return owner === uid ? 'same' : 'switch';
 }
 
-// Postgres'in RLS reddini tanır. Push, upsert(onConflict: id) olduğu için var
-// olan satırı GÜNCELLEMEYE çalışır; satır başka bir uid'e aitse USING koşulu
-// engeller. Ham mesaj kullanıcıya hiçbir şey anlatmadığından (ve çözümü de
-// söylemediğinden) çağıran bunu yakalayıp anlaşılır bir seçim sunar.
+// Recognizes a Postgres RLS rejection. Since push is upsert(onConflict: id),
+// it tries to UPDATE an existing row; if the row belongs to a different uid,
+// the USING clause blocks it. The raw message tells the user nothing (and no
+// way to fix it), so the caller catches this and offers an understandable choice.
 export function isOwnershipConflict(message: string): boolean {
   return (
     message.includes('row-level security') ||
@@ -228,8 +237,8 @@ export function isOwnershipConflict(message: string): boolean {
 
 const ts = (s: string | null | undefined): number => (s ? new Date(s).getTime() : 0);
 
-// Filigranın yazılacak değeri: görülen en büyük damga eksi güvenlik payı, ama
-// asla geriye gitmeden (bkz. WATERMARK_SAFETY_MS).
+// The value to write for the watermark: the largest timestamp seen, minus the
+// safety margin, but never moving it backward (see WATERMARK_SAFETY_MS).
 function nextWatermark(maxServerTs: string, since: string): string {
   const t = ts(maxServerTs);
   if (!t) return since;
@@ -237,13 +246,13 @@ function nextWatermark(maxServerTs: string, since: string): string {
   return ts(rewound) > ts(since) ? rewound : since;
 }
 
-// Bulut şeması istemcinin beklediği kolonları taşımıyorsa PostgREST'in ham
-// mesajı ("Could not find the 'x' column ... in the schema cache") kullanıcıya
-// hiçbir şey anlatmaz ve çözümü de söylemez. İstemciye kolon EKLENDİĞİNDE
-// (ör. migration018 + goal_contribution/goal_factor) supabase/schema.sql'in
-// yeniden çalıştırılması ŞART; aksi halde push o tabloda kalıcı olarak patlar.
-// Pull tarafında zaten aynı ipucu vardı — push tarafında yoktu ve asıl bu
-// sıradaki sürümde tetiklenecek olan yol push.
+// If the cloud schema doesn't carry the columns the client expects,
+// PostgREST's raw message ("Could not find the 'x' column ... in the schema
+// cache") tells the user nothing and no way to fix it. Whenever a column is
+// ADDED on the client (e.g. migration018 + goal_contribution/goal_factor),
+// re-running supabase/schema.sql is MANDATORY; otherwise push permanently
+// fails on that table. The pull side already had this same hint — the push
+// side didn't, and push is exactly the path that will actually fire on the next release.
 function schemaHint(message: string): string {
   const stale =
     message.includes('schema cache') ||
@@ -252,7 +261,7 @@ function schemaHint(message: string): string {
   return stale ? ` (Supabase şeması eski görünüyor — supabase/schema.sql'i yeniden çalıştırın)` : '';
 }
 
-// Tüm filigranları siler (hesap değişimi / tam yeniden senkron).
+// Clears all watermarks (account switch / full resync).
 async function clearWatermarks(): Promise<void> {
   await AsyncStorage.multiRemove([
     LEGACY_LAST_PULLED_KEY,
@@ -260,20 +269,21 @@ async function clearWatermarks(): Promise<void> {
   ]);
 }
 
-// Tek-global filigrandan tablo-başına filigrana geçiş. Eski anahtarı tablolara
-// KOPYALAMIYORUZ bilerek: eski şema zaten bazı tabloların satırlarını atlamış
-// olabilir, o değeri devralmak kaybı kalıcılaştırırdı. Bunun yerine eski anahtar
-// silinir ve tablolar bir kez epoch'tan çekilir (pull idempotent: son-yazan-kazanır,
-// yerelde daha yeni olan satır ezilmez) — atlanmış satırlar böyle iyileşir.
+// Migrates from the single-global watermark to per-table watermarks. We
+// deliberately do NOT copy the old key's value onto the tables: the old
+// scheme may already have skipped some tables' rows, and inheriting that
+// value would make the loss permanent. Instead the old key is deleted and
+// tables are pulled once from epoch (pull is idempotent: last-writer-wins, a
+// row that's newer locally isn't overwritten) — this is how skipped rows recover.
 async function migrateWatermarks(): Promise<void> {
   await AsyncStorage.removeItem(LEGACY_LAST_PULLED_KEY);
 }
 
-// Hesap değiştiğinde (giriş / çıkış) çağrılır. Tüm yerel satırları "gönderilmeyi
-// bekliyor" (synced=0) yapar ve pull filigranını sıfırlar. Böylece:
-//   - yerel veri yeni uid altına yeniden yüklenir (yeni hesabın yedeği olur),
-//   - yeni hesabın bulutta zaten olan tüm verisi baştan çekilir.
-// Bir sonraki runSync bu işi yapar.
+// Called when the account changes (sign-in / sign-out). Marks all local rows
+// "waiting to be sent" (synced=0) and resets the pull watermark. This way:
+//   - local data gets re-uploaded under the new uid (becoming that account's backup),
+//   - all of the new account's existing cloud data is pulled from scratch.
+// The next runSync does the actual work.
 export async function prepareFullResync(): Promise<void> {
   const db = getDb();
   for (const cfg of TABLES) {
@@ -282,35 +292,36 @@ export async function prepareFullResync(): Promise<void> {
   await clearWatermarks();
 }
 
-// — HESAP DEĞİŞİMİNİN İKİ ÇÖZÜM YOLU —
-// İkisi de yalnız hazırlıktır: veriyi asıl taşıyan bir sonraki runSync'tir.
+// — TWO WAYS TO RESOLVE AN ACCOUNT SWITCH —
+// Both are only preparation: the next runSync is what actually moves the data.
 //
-// BİRLEŞTİR (fork): yerel veri YENİ hesaba da girsin isteniyor. Satırlara yeni
-// id verilir (bkz. localIds.ts) — böylece push, var olan satırı güncellemeye
-// çalışmaz, EKLER; eski hesabın buluttaki satırlarına dokunulmaz ve RLS
-// çakışması matematiksel olarak imkânsız hale gelir. Yerel veri korunur.
+// MERGE (fork): local data should also go into the NEW account. Rows get new
+// ids (see localIds.ts) — so the push doesn't try to update an existing row,
+// it INSERTS one; the old account's cloud rows are left untouched and an RLS
+// conflict becomes mathematically impossible. Local data is preserved.
 export async function prepareMergeIntoAccount(): Promise<void> {
   reassignLocalIds();
   await prepareFullResync();
-  // Zamanlayıcı durumu eski alışkanlık id'sini tutuyor; kimlikler değiştiği için
-  // artık hiçbir satıra denk gelmez -> commit ederse veri kaybolur. Sıfırla.
+  // Timer state holds the old habit id; since identities changed it no longer
+  // matches any row -> committing it would lose data. Reset it.
   await AsyncStorage.removeItem('timer:active');
 }
 
-// DEĞİŞTİR: cihaz, girilen hesabın aynası olsun isteniyor. Yerel veri SİLİNİR
-// ve o hesabın bulut verisi baştan indirilir. Geri alınamaz — çağıran onay
-// almadan kullanmamalı.
+// REPLACE: the device should mirror the account being signed into. Local data
+// is DELETED and that account's cloud data is downloaded from scratch.
+// Irreversible — the caller must not use this without confirmation.
 export async function prepareReplaceWithAccount(): Promise<void> {
   await clearLocalData();
   await AsyncStorage.removeItem('timer:active');
 }
 
-// Yerel kullanıcı VERİSİNİ tamamen siler (users/yerel kimlik korunur) ve pull
-// filigranını sıfırlar. "Hesap DEĞİŞTİRME" semantiği içindir: farklı bir hesaba
-// geçerken yereli temizleyip o hesabın bulut verisini baştan indirmek için —
-// prepareFullResync'in (BİRLEŞTİRME: yereli de yukarı iter) aksine yereli yok eder.
-// Yalnız "değiştir" akışında çağrılmalı; yanlış kullanımda veri kaybı olur.
-// FK güvenliği: çocuk tablolar önce silinsin diye TABLES ters sırada gezilir.
+// Completely deletes the local user's DATA (users/the local identity is
+// preserved) and resets the pull watermark. Exists for the "REPLACE account"
+// semantics: for switching to a different account, wiping local data and
+// downloading that account's cloud data from scratch — the opposite of
+// prepareFullResync (MERGE: pushes local data up too), which wipes local
+// data instead. Must only be called from the "replace" flow; misuse causes data loss.
+// FK safety: TABLES is walked in reverse order so child tables are deleted first.
 export async function clearLocalData(): Promise<void> {
   const db = getDb();
   db.execSync('BEGIN;');
@@ -326,22 +337,22 @@ export async function clearLocalData(): Promise<void> {
   await clearWatermarks();
 }
 
-// Bir tablonun bekleyen (synced=0) satırlarını buluta PARTİ PARTİ gönderir.
-// Her partinin işaretlemesi kendi isteği başarılı olur olmaz yapılır; böylece
-// ortada bir parti patlarsa öncekiler kalıcı olur ve yeniden deneme yalnızca
-// kalanı gönderir (bkz. PUSH_PAGE_SIZE).
+// Sends a table's pending (synced=0) rows to the cloud in BATCHES.
+// Each batch is marked as soon as its own request succeeds; that way, if a
+// batch in the middle fails, the earlier ones stay permanent and a retry only
+// sends what's left (see PUSH_PAGE_SIZE).
 async function pushTable(cfg: TableCfg, uid: string): Promise<number> {
   const db = getDb();
   let pushed = 0;
-  // İMLEÇLİ SAYFALAMA. Eskiden bekleyen TÜM satırlar tek SELECT ile belleğe
-  // alınıp sonra dilimleniyordu: istek partili ama bellek değildi. Tam yeniden
-  // senkronda (her satır synced=0) bu, tüm habit_logs'un aynı anda JS yığınına
-  // kopyalanması demekti.
+  // CURSOR-BASED PAGINATION. It used to load ALL pending rows into memory
+  // with a single SELECT and then slice them: the request was batched but
+  // memory wasn't. On a full resync (every row synced=0), that meant copying
+  // the entirety of habit_logs into the JS heap at once.
   //
-  // Neden `id > cursor` de LIMIT'in tek başına değil: bir satır push sırasında
-  // düzenlenirse updated_at değişir, işaretleme onu synced=1 YAPMAZ (kasıtlı) ve
-  // düz `WHERE synced = 0 LIMIT n` sorgusu aynı satırı sonsuza dek yeniden
-  // seçerdi. İmleç ilerlemeyi garantiler; o satır bir sonraki TURDA gider.
+  // Why `id > cursor` and not just LIMIT: if a row gets edited during push,
+  // its updated_at changes, and marking it does NOT set synced=1 (on purpose)
+  // — a plain `WHERE synced = 0 LIMIT n` query would keep reselecting the same
+  // row forever. The cursor guarantees progress; that row goes out on the next ROUND instead.
   let cursor = '';
   for (;;) {
     const batch = db.getAllSync<any>(
@@ -353,12 +364,12 @@ async function pushTable(cfg: TableCfg, uid: string): Promise<number> {
     cursor = batch[batch.length - 1].id;
     const payload = batch.map((r) => (cfg.hasUserId ? { ...r, user_id: uid } : r));
     const { error } = await supabase!.from(cfg.table).upsert(payload, { onConflict: 'id' });
-    // Fırlatmadan önce yapılmış işaretlemeler DURUR — kasıtlı: gerçekten buluta
-    // ulaşmış satırları tekrar göndermenin anlamı yok.
+    // Markings made before a throw STAY — deliberate: there's no point
+    // resending rows that already reached the cloud.
     if (error) throw new Error(`${cfg.table} push: ${error.message}${schemaHint(error.message)}`);
 
-    // Yalnızca gönderdiğimiz haliyle aynı kalan satırları synced=1 yap.
-    // updated_at değişmişse (arada düzenlenmiş) dokunma; sonraki turda gider.
+    // Only mark synced=1 the rows that are still exactly as we sent them.
+    // If updated_at changed (edited in the meantime), leave it alone; it goes out next round.
     for (const r of batch) {
       db.runSync(
         `UPDATE ${cfg.table} SET synced = 1 WHERE id = ? AND updated_at = ?`,
@@ -370,7 +381,7 @@ async function pushTable(cfg: TableCfg, uid: string): Promise<number> {
   return pushed;
 }
 
-// Yerele upsert (uzaktan gelen satır). synced=1 yazılır (uzakla aynı durumda).
+// Upserts into local storage (a row coming from remote). Writes synced=1 (same state as remote).
 function upsertLocal(cfg: TableCfg, obj: any): void {
   const db = getDb();
   const allCols = [...cfg.cols, 'synced'];
@@ -379,7 +390,7 @@ function upsertLocal(cfg: TableCfg, obj: any): void {
     .map((c) => `${c} = excluded.${c}`)
     .concat('synced = excluded.synced')
     .join(', ');
-  // `defaults` yalnız yerelde NOT NULL olan kolonlar için devreye girer (bkz. TableCfg).
+  // `defaults` only kicks in for columns that are NOT NULL locally (see TableCfg).
   const vals = cfg.cols.map((c) => obj[c] ?? cfg.defaults?.[c] ?? null).concat(1);
   db.runSync(
     `INSERT INTO ${cfg.table} (${allCols.join(', ')}) VALUES (${placeholders})
@@ -388,13 +399,13 @@ function upsertLocal(cfg: TableCfg, obj: any): void {
   );
 }
 
-// Tek bir uzak satırı son-yazan-kazanır kuralıyla yerele uygular.
-// Uygulandıysa true, yerel daha yeni olduğu için atlandıysa false döner.
+// Applies a single remote row locally under the last-writer-wins rule.
+// Returns true if applied, false if skipped because the local one is newer.
 function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
   const db = getDb();
   const mapped = cfg.hasUserId ? { ...r, user_id: localUserId } : r;
 
-  // 1) Aynı id yerelde varsa: klasik son-yazan-kazanır (eşitlikte yerel kalır).
+  // 1) If the same id exists locally: classic last-writer-wins (local wins on a tie).
   const byId = db.getFirstSync<any>(
     `SELECT updated_at FROM ${cfg.table} WHERE id = ?`,
     [r.id]
@@ -405,9 +416,9 @@ function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
     return true;
   }
 
-  // 2) id yerelde yok ama doğal anahtar çakışıyorsa: iki cihaz aynı mantıksal
-  // kaydı ayrı id'lerle üretmiş demektir. Kazanan updated_at ile seçilir;
-  // uzak kazanırsa yereldeki rakip satır silinip uzak olan yazılır.
+  // 2) The id doesn't exist locally, but the natural key collides: two devices
+  // produced the same logical record under different ids. The winner is
+  // chosen by updated_at; if remote wins, the local rival row is deleted and the remote one is written.
   if (cfg.naturalKey) {
     const where = cfg.naturalKey.map((k) => `${k} = ?`).join(' AND ');
     const rival = db.getFirstSync<any>(
@@ -424,18 +435,18 @@ function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
   return true;
 }
 
-// Son senkrondan beri değişen uzak satırları çekip son-yazan-kazanır uygular.
-// Gördüğü en büyük updated_at'i döner (yeni filigran).
+// Pulls remote rows changed since the last sync and applies last-writer-wins.
+// Returns the largest updated_at seen (the new watermark).
 //
-// Sayfalama şart: yanıt 1000 satırda kırpılırsa ve filigran yine de ilerlerse,
-// kırpılan satırlar bir daha HİÇ çekilmez (sessiz veri kaybı). Bu yüzden tüm
-// sayfalar bitene kadar döngü sürer.
+// Pagination is mandatory: if the response gets cut off at 1000 rows and the
+// watermark still advances, the cut-off rows are NEVER pulled again (silent
+// data loss). Hence the loop runs until all pages are exhausted.
 async function pullTable(cfg: TableCfg, localUserId: string, since: string): Promise<{ count: number; maxServerTs: string }> {
   let maxServerTs = since;
   let count = 0;
 
   for (let from = 0; ; from += PULL_PAGE_SIZE) {
-    // Sunucu damgası eşit satırlarda sayfa sınırı kararlı olsun diye id ikincil anahtar.
+    // id is the secondary sort key so the page boundary stays stable for rows with an equal server timestamp.
     const { data, error } = await supabase!
       .from(cfg.table)
       .select([...cfg.cols, SERVER_TS_COL].join(','))
@@ -443,7 +454,7 @@ async function pullTable(cfg: TableCfg, localUserId: string, since: string): Pro
       .order(SERVER_TS_COL, { ascending: true })
       .order('id', { ascending: true })
       .range(from, from + PULL_PAGE_SIZE - 1);
-    // Kolon yoksa şema eskidir: supabase/schema.sql yeniden çalıştırılmalı (bkz. schemaHint).
+    // A missing column means a stale schema: supabase/schema.sql needs a rerun (see schemaHint).
     if (error) throw new Error(`${cfg.table} pull: ${error.message}${schemaHint(error.message)}`);
 
     for (const remote of data ?? []) {
@@ -452,14 +463,14 @@ async function pullTable(cfg: TableCfg, localUserId: string, since: string): Pro
       if (ts(r[SERVER_TS_COL]) > ts(maxServerTs)) maxServerTs = r[SERVER_TS_COL];
     }
 
-    // Dolu olmayan sayfa = son sayfa.
+    // A page that isn't full = the last page.
     if (!data || data.length < PULL_PAGE_SIZE) break;
   }
 
   return { count, maxServerTs };
 }
 
-// Tam senkron turu: push hepsi, sonra pull hepsi.
+// A full sync round: push everything, then pull everything.
 export async function runSync(localUserId: string): Promise<SyncResult> {
   if (!supabase) return { status: 'disabled' };
   if (inFlight) return { status: 'busy', message: 'Senkron zaten sürüyor' };
@@ -468,11 +479,11 @@ export async function runSync(localUserId: string): Promise<SyncResult> {
     const uid = await ensureSignedIn();
     if (!uid) return { status: 'disabled' };
 
-    // 1) PUSH (ebeveyn önce)
+    // 1) PUSH (parent first)
     let pushed = 0;
     for (const cfg of TABLES) pushed += await pushTable(cfg, uid);
 
-    // 2) PULL (ebeveyn önce, FK için) — her tablo KENDİ filigranından sürer.
+    // 2) PULL (parent first, for FK) — each table advances from its OWN watermark.
     await migrateWatermarks();
     let pulled = 0;
     for (const cfg of TABLES) {
@@ -485,16 +496,16 @@ export async function runSync(localUserId: string): Promise<SyncResult> {
       }
     }
 
-    // 3) Hedef ilerlemesini girdilerden YENİDEN TÜRET. Uzaktan gelen
-    // current_value, diğer cihazın girdilerini görmeyen eski bir önbellektir;
-    // son-yazan-kazanır ona uygulanınca bu cihazın katkısı sessizce kayboluyordu.
-    // Girdiler kendi id'leriyle ayrı ayrı senkronlandığı için toplam artık
-    // çakışmasız birleşir (bkz. migration019 + goalRepo.recomputeAllFromEntries).
-    // Pull'dan SONRA olmalı: uzak girdilerin hepsi yerele indikten sonra hesaplanır.
+    // 3) RE-DERIVE goal progress from entries. The current_value coming from
+    // remote is a stale cache that doesn't see the other device's entries;
+    // applying last-writer-wins to it silently erased this device's
+    // contribution. Since entries are synced individually by their own ids,
+    // the total now merges without conflict (see migration019 +
+    // goalRepo.recomputeAllFromEntries). Must run AFTER pull: it's computed once all remote entries have landed locally.
     goalRepo.recomputeAllFromEntries();
 
-    // Buradan sonra bu cihazın verisi bu hesaba aittir; hesap değişimi ancak
-    // bu bayrak sayesinde çakışma OLUŞMADAN fark edilebilir.
+    // From here on, this device's data belongs to this account; an account
+    // switch can only be noticed BEFORE the conflict happens because of this flag.
     await setSyncOwner(uid);
     return { status: 'ok', pushed, pulled, at: Date.now() };
   } catch (e) {

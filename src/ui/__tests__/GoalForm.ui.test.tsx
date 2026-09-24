@@ -1,10 +1,10 @@
-// GoalForm bileşen testi — bu oturumda eklenen iki özelliği kapsar:
-//  (1) Çoklu hatırlatma (remind_times) — ReminderListEditor ile birden fazla saat.
-//  (2) "Mevcut değer" elle düzenlemesi için "İlerleme geçmişine de ekle" onay
-//      kutusu (log_manual_change) — varsayılan KAPALI, yalnız düzenleme + sayısal
-//      hedefte görünür (bkz. GoalForm.tsx dosya başı yorumu).
-// Ayrıca tip seçimi (sayısal/parçalı) ve zorunlu son tarih davranışını da kapsar
-// (bu bileşenin daha önce hiç UI testi yoktu).
+// GoalForm component test — covers two features added in this session:
+//  (1) Multiple reminders (remind_times) — several times via ReminderListEditor.
+//  (2) The "Also add to progress history" checkbox for manually editing
+//      "Current value" (log_manual_change) — OFF by default, only shown when
+//      editing a numeric goal (see the file-header comment in GoalForm.tsx).
+// It also covers type selection (numeric/milestone) and the required-deadline
+// behavior (this component previously had no UI test at all).
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { GoalForm } from '@/ui/GoalForm';
@@ -41,8 +41,8 @@ describe('GoalForm — oluşturma', () => {
         goal_type: 'numeric',
         target_value: 100,
         unit: 'sayfa',
-        deadline: todayDate(), // zorunlu son tarih, varsayılan bugün
-        current_value: null, // oluşturmada hep null
+        deadline: todayDate(), // deadline is required, defaults to today
+        current_value: null, // always null at creation
       })
     );
   });
@@ -55,7 +55,7 @@ describe('GoalForm — oluşturma', () => {
     fireEvent.changeText(getByPlaceholderText('Hedef başlığı (örn. 100 km koş)'), 'Ev taşı');
     fireEvent.press(getByText('Parçalı'));
 
-    // Sayısal alanlar artık YOK.
+    // The numeric fields are now GONE.
     expect(() => getByPlaceholderText('örn. 100')).toThrow();
 
     fireEvent.changeText(getByPlaceholderText('Adım ekle…'), 'Kutuları topla');
@@ -68,8 +68,8 @@ describe('GoalForm — oluşturma', () => {
         target_value: null,
         unit: null,
         start_date: null,
-        // Taslak adım artık düz metin değil, {başlık, miktar, son tarih}:
-        // oluşturma ekranı detay ekranındaki adım editörüyle eşitlendi.
+        // The draft milestone is no longer plain text but {title, amount, due date}:
+        // the creation screen was brought in line with the milestone editor on the detail screen.
         milestones: [{ title: 'Kutuları topla', amount: null, due_date: null }],
       })
     );
@@ -84,7 +84,7 @@ describe('GoalForm — oluşturma', () => {
     fireEvent.changeText(getByPlaceholderText('örn. 100'), '100');
     fireEvent.changeText(getByPlaceholderText('km, kitap'), 'sayfa');
 
-    // Başlık yazılmadan çipler görünmez (kademeli satır).
+    // Chips don't show up before a title is typed (staged row).
     expect(() => getByLabelText('Miktar')).toThrow();
     fireEvent.changeText(getByPlaceholderText('Adım ekle…'), 'İlk 50 sayfa');
     fireEvent.press(getByLabelText('Miktar'));
@@ -129,7 +129,7 @@ describe('GoalForm — oluşturma', () => {
     const { queryByText, getByPlaceholderText } = await renderUI(
       <GoalForm submitLabel="Ekle" onSubmit={jest.fn()} />
     );
-    expect(() => getByPlaceholderText('örn. 40')).toThrow(); // "Mevcut değer" placeholder'ı
+    expect(() => getByPlaceholderText('örn. 40')).toThrow(); // the "Current value" placeholder
     expect(queryByText('Bu değişikliği ilerleme geçmişine de ekle')).toBeNull();
   });
 });
@@ -150,7 +150,7 @@ describe('GoalForm — düzenleme (sayısal, "Mevcut değer" + ilerleme geçmiş
     const { getByText, getByPlaceholderText } = await renderUI(
       <GoalForm goalType="numeric" initial={initial} submitLabel="Kaydet" onSubmit={onSubmit} />
     );
-    // "Mevcut değer"i 55'e çek — onay kutusuna dokunulmadı.
+    // Pull "Current value" to 55 — the checkbox is left untouched.
     fireEvent.changeText(getByPlaceholderText('örn. 40'), '55');
     fireEvent.press(getByText('Kaydet'));
     expect(onSubmit).toHaveBeenCalledWith(
@@ -193,7 +193,7 @@ describe('GoalForm — düzenleme (sayısal, "Mevcut değer" + ilerleme geçmiş
       <GoalForm goalType="numeric" initial={initial} submitLabel="Kaydet" onSubmit={jest.fn()} onDelete={onDelete} />
     );
     fireEvent.press(getByText('Sil'));
-    expect(onDelete).not.toHaveBeenCalled(); // ilk basış yalnızca onaya alır
+    expect(onDelete).not.toHaveBeenCalled(); // the first press only arms confirmation
     fireEvent.press(getByText('Silmek için tekrar bas'));
     expect(onDelete).toHaveBeenCalledTimes(1);
   });

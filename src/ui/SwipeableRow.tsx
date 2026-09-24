@@ -1,15 +1,15 @@
-// Sola kaydırınca sağda Düzenle+Sil aksiyonları açılan satır sarmalayıcı.
-// Görevler/Alışkanlıklar/Hedefler listelerinde kullanılır — "Bugün" ekranında
-// BİLİNÇLİ OLARAK yok (orada kart zaten dokununca işaretliyor, swipe çakışırdı).
-// Yeni native bağımlılık EKLENMEDİ: react-native-gesture-handler kurulu değildi,
-// eklemek yeniden native build gerektirirdi. Bunun yerine çekirdek React Native
-// PanResponder + Animated (transform: translateX) ile, mevcut Expo Go/derlenmiş
-// APK'da anında test edilebilecek şekilde kuruldu.
+// Row wrapper that reveals Edit+Delete actions on the right when swiped left.
+// Used in the Tasks/Habits/Goals lists — DELIBERATELY absent on the "Today"
+// screen (there the card already toggles on tap, which would conflict with swipe).
+// NO new native dependency was ADDED: react-native-gesture-handler wasn't
+// installed, and adding it would require a fresh native build. Instead this is
+// built with core React Native PanResponder + Animated (transform: translateX),
+// so it's testable immediately in the existing Expo Go / compiled APK.
 //
-// Silme ikinci dokunuşla onaylanır (ConfirmDeleteButton ile aynı güvenlik
-// deseni — uygulamanın her yerinde tek-dokunuşla silme YOK). Aynı anda yalnızca
-// bir satır açık kalsın diye açık/kapalı durumu PARENT'ta tutulur (isOpen/
-// onOpenChange) — yeni bir satır açılınca öncekiler otomatik kapanır.
+// Delete is confirmed with a second tap (same safety pattern as
+// ConfirmDeleteButton — the app has NO single-tap deletes anywhere). Open/closed
+// state is kept in the PARENT (isOpen/onOpenChange) so only one row stays open at
+// a time — opening a new row automatically closes the previous ones.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
@@ -45,20 +45,21 @@ export function SwipeableRow({
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const translateX = useRef(new Animated.Value(0)).current;
-  // Gesture callback'leri ilk render'da donduğu için `isOpen` prop'unu taze
-  // tutmak üzere ref'e aynalanır (klasik PanResponder+useRef bayatlık sorunu).
+  // Since gesture callbacks freeze at the first render, the `isOpen` prop is
+  // mirrored into a ref to keep it fresh (the classic PanResponder+useRef
+  // staleness issue).
   const isOpenRef = useRef(isOpen);
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
-  const offsetRef = useRef(0); // gesture başlarken translateX'in dinlenme değeri
+  const offsetRef = useRef(0); // translateX's resting value when the gesture starts
   const [armed, setArmed] = useState(false);
 
   const animateTo = (value: number) => {
     Animated.spring(translateX, { toValue: value, useNativeDriver: true, bounciness: 0 }).start();
   };
 
-  // Dışarıdan (başka bir satır açılınca) kapatılırsa senkron ol.
+  // Stay in sync if closed externally (another row was opened).
   useEffect(() => {
     if (!isOpen) {
       animateTo(0);
@@ -126,8 +127,8 @@ export function SwipeableRow({
         {...panResponder.panHandlers}
       >
         {children}
-        {/* Açıkken kart üstüne dokunmak (kenarlar dahil) satırı kapatır, alttaki
-            düzenleme dokunuşuna sızmaz. */}
+        {/* While open, tapping the card (including its edges) closes the row and
+            doesn't leak through to the edit tap underneath. */}
         {isOpen && <Pressable style={StyleSheet.absoluteFill} onPress={close} />}
       </Animated.View>
     </View>
@@ -136,8 +137,8 @@ export function SwipeableRow({
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    // overflow:'hidden' KRİTİK — yoksa aksiyon paneli kart kapalıyken bile
-    // kenarlardan taşıp görünür (bildirilen görsel bozukluk buydu).
+    // overflow:'hidden' is CRITICAL — without it, the action panel peeks out from
+    // the edges even while the card is closed (this was the reported visual glitch).
     container: { overflow: 'hidden', borderRadius: 14 },
     sliding: { width: '100%' },
     actions: {

@@ -1,4 +1,4 @@
-// taskRepo testleri: CRUD ve sıralama (önce tarih/saat, sonra öncelik).
+// taskRepo tests: CRUD and ordering (date/time first, then priority).
 
 import { taskRepo } from '../repositories/taskRepo';
 import { subtaskRepo } from '../repositories/subtaskRepo';
@@ -17,12 +17,12 @@ function createTask(extra: Partial<Parameters<typeof taskRepo.create>[0]> = {}) 
   return taskRepo.create({ user_id: userId, title: 'Görev', ...extra });
 }
 
-// "Görevler" ekranının sorgusu. Tamamlanan görev listeden hiç düşmediği için
-// liste yıllar içinde sınırsız büyüyordu (ve hepsi aynı anda çiziliyordu);
-// artık AKTİF görevlerin tamamı + yalnız son N günde tamamlananlar gelir.
+// The query behind the "Tasks" screen. Completed tasks never dropped from the list,
+// so it grew unbounded over the years (and all of it rendered at once);
+// now it returns all ACTIVE tasks + only those completed within the last N days.
 describe('listForScreen / countCompletedBefore', () => {
-  // completed_at'e doğrudan yazıyoruz: setCompleted her zaman "şimdi"yi damgalar,
-  // testin ise geçmişte tamamlanmış bir görev üretmesi gerek.
+  // We write directly to completed_at: setCompleted always stamps "now",
+  // but the test needs to produce a task completed in the past.
   function completeAt(id: string, iso: string): void {
     const { getDb } = require('../database');
     getDb().runSync(`UPDATE tasks SET completed_at = ? WHERE id = ?`, [iso, id]);
@@ -76,7 +76,7 @@ describe('listForScreen / countCompletedBefore', () => {
     completeAt(recent.id, '2026-06-15T10:00:00.000Z');
 
     expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(2);
-    expect(active.completed_at).toBeNull(); // aktif görev sayıma hiç girmez
+    expect(active.completed_at).toBeNull(); // an active task never enters the count
   });
 
   it('silinen görev ne listede ne sayımda yer alır', () => {
@@ -95,7 +95,7 @@ describe('create / getById / softDelete', () => {
     expect(taskRepo.getById(task.id)).toEqual(task);
     expect(task.priority).toBe('medium');
     expect(task.due_date).toBeNull();
-    expect(task.remind_at).toBeNull(); // varsayılan hatırlatma yok
+    expect(task.remind_at).toBeNull(); // no reminder by default
   });
 
   it('remind_at oluşturmada yazılır ve güncellemede değişir/temizlenir', () => {
@@ -143,9 +143,9 @@ describe('listByUser — sıralama: saatliler üstte (kendi içi saate göre), s
   });
 
   it('saatli görevler kendi aralarında SAATE göre sıralanır (öncelik etkisiz)', () => {
-    // Saati erken ama önceliği düşük olan, saati geç ama önceliği yüksek
-    // olandan önce gelmeli — öncelik yalnızca "saatli mi değil mi" kümesini
-    // değil, aynı saatteki eşitlikleri ayırt eder.
+    // The one with an earlier time but lower priority should come before
+    // the one with a later time but higher priority — priority only breaks
+    // ties within the same time, not the "timed vs. untimed" grouping.
     const earlyLow = createTask({ title: 'Erken düşük', due_date: '2026-07-05T09:00:00', priority: 'low' });
     const lateHigh = createTask({ title: 'Geç yüksek', due_date: '2026-07-05T18:00:00', priority: 'high' });
     const ids = taskRepo.listByUser(userId).map((t) => t.id);
@@ -217,9 +217,9 @@ describe('setCompleted — tekrar (recurrence)', () => {
     const task = createTask({ due_date: today, recurrence: { freq: 'daily' } });
     taskRepo.setCompleted(task.id, true);
     const after = taskRepo.getById(task.id)!;
-    // Tamamlanmadı — ilerledi.
+    // Not completed — it advanced instead.
     expect(after.completed_at).toBeNull();
-    // Yeni tarih bugünden KESİN sonra (bugünden düşer, sonraki tekrarda görünür).
+    // The new date is STRICTLY after today (drops off today, reappears on the next occurrence).
     expect(after.due_date! > today).toBe(true);
   });
 

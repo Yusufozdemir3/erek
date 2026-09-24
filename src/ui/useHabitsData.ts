@@ -1,6 +1,6 @@
-// "Alışkanlıklar" ekranının veri yükleme mantığı: her alışkanlık için bugünkü
-// durum, seri ve son 7 günün geçmişi. Ekrandan ayrı tutulur ki habits.tsx
-// yalnızca render'dan sorumlu kalsın.
+// Data loading logic for the "Habits" screen: today's status, streak, and the
+// last 7 days' history for each habit. Kept separate from the screen so
+// habits.tsx stays responsible only for rendering.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -12,7 +12,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { Lang } from '@/i18n/translations';
 import { shortDate } from '@/ui/theme';
 
-// "5 Tem → 20 Tem" / "5 Tem →" / "→ 20 Tem"; ikisi de boşsa null.
+// "Jul 5 → Jul 20" / "Jul 5 →" / "→ Jul 20"; null if both are empty.
 function periodLabel(start: string | null, end: string | null, lang: Lang): string | null {
   if (!start && !end) return null;
   return `${start ? shortDate(start, lang) : ''} → ${end ? shortDate(end, lang) : ''}`.trim();
@@ -22,22 +22,22 @@ export interface HabitListItem {
   id: string;
   title: string;
   kind: HabitKind;
-  reminderTimes: string[]; // "HH:MM" hatırlatma saatleri (0 ya da daha fazla)
+  reminderTimes: string[]; // "HH:MM" reminder times (0 or more)
   icon: string | null;
   color: string | null;
-  days: string | null;     // "Pzt·Çar·Cum" (belirli günlerse), her günse null
-  period: string | null;   // "5 Tem → 20 Tem" (başlangıç/bitiş varsa), yoksa null
-  target: number | null;   // nicel hedef; null = ikili
+  days: string | null;     // "Mon·Wed·Fri" (if specific days), null if every day
+  period: string | null;   // "Jul 5 → Jul 20" (if start/end set), otherwise null
+  target: number | null;   // numeric target; null = binary
   unit: string | null;
-  goalTitle: string | null; // bağlı hedefin başlığı (varsa), yoksa null
-  amount: number;          // bugün yapılan miktar
+  goalTitle: string | null; // linked goal's title (if any), otherwise null
+  amount: number;          // amount done today
   completedToday: boolean;
   streak: number;
-  week: boolean[]; // son 7 gün, en eskiden bugüne
+  week: boolean[]; // last 7 days, oldest to today
 }
 
 export function useHabitsData(userId: string) {
-  // dataVersion: merkezi ＋ menüsünden ekleme yapılınca artar (bkz. useTodayData).
+  // dataVersion: increments when something is added via the central ＋ menu (see useTodayData).
   const { dataVersion } = useAppData();
   const { t, lang } = useI18n();
   const today = todayDate();
@@ -46,13 +46,13 @@ export function useHabitsData(userId: string) {
   const reload = useCallback(() => {
     const week = lastDays(7);
     const labels = buildScheduleLabels(t, (md) => shortDate(`2000-${md}`, lang));
-    // Bağlı hedef başlıklarını tek sorguda map'le (alışkanlık başına ayrı sorgu yok).
+    // Map linked goal titles in a single query (no separate query per habit).
     const goalTitles = new Map(goalRepo.listByUser(userId).map((g) => [g.id, g.title]));
-    // Hatırlatma saatlerini tek sorguda topla (alışkanlık başına ayrı sorgu yok).
+    // Collect reminder times in a single query (no separate query per habit).
     const reminderMap = reminderRepo.mapByType('habit');
-    // O GÜNÜN durumu ve HAFTANIN şeridi artık ikişer değil TOPLAM iki sorgu:
-    // eskiden alışkanlık başına recentLogs + getAmountOn atılıyordu, yani liste
-    // uzadıkça doğrusal büyüyen bir N+1 vardı ve her işaretlemede baştan koşuyordu.
+    // TODAY's status and the WEEK strip are now just TWO queries total instead
+    // of two per habit: it used to fire recentLogs + getAmountOn per habit, an
+    // N+1 that grew linearly with the list and re-ran from scratch on every toggle.
     const list = habitRepo.listByUser(userId);
     const ids = list.map((h) => h.id);
     const dayStates = habitRepo.getDayStates(ids, today);
@@ -75,7 +75,7 @@ export function useHabitsData(userId: string) {
           goalTitle: h.goal_id ? goalTitles.get(h.goal_id) ?? null : null,
           amount: state?.amount ?? 0,
           completedToday: state?.completed ?? false,
-          // Alışkanlık elimizde — currentStreak'in kendi getById'sini atlıyoruz.
+          // We already have the habit — skip currentStreak's own getById.
           streak: habitRepo.currentStreak(h.id, h),
           week: week.map((d) => completed.has(d)),
         };

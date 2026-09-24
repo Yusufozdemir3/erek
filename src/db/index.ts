@@ -1,5 +1,5 @@
-// Veri katmanının tek giriş noktası.
-// UI sadece buradan import eder:
+// The single entry point of the data layer.
+// UI only ever imports from here:
 //   import { db, taskRepo, habitRepo } from '@/db';
 
 import { runMigrations } from './database';
@@ -33,17 +33,17 @@ export type {
   ReminderEntityType,
 } from '../types/models';
 
-// Uygulama açılışında bir kez çağrılır. Şemayı kurar, anonim kullanıcıyı garantiler.
+// Called once at app startup. Sets up the schema, guarantees the anonymous user.
 export async function initDataLayer() {
   await runMigrations();
   const user = userRepo.getOrCreateLocal();
-  // Süresi dolmuş silme kayıtlarını temizle (bkz. maintenance.ts). Açılışı
-  // ASLA engellememeli: bir bakım işi yüzünden uygulama açılmaması, çözdüğü
-  // sorundan çok daha kötü olurdu.
+  // Clean up expired tombstone records (see maintenance.ts). Must NEVER block
+  // startup: the app failing to open because of a maintenance task would be
+  // far worse than the problem it fixes.
   try {
     purgeOldTombstones();
   } catch (e) {
-    console.warn('[DB] Eski silme kayıtları temizlenemedi:', e);
+    console.warn('[DB] Failed to purge old tombstone records:', e);
   }
   return { user };
 }

@@ -1,6 +1,7 @@
-// AmountStepper bileşen testi (nicel alışkanlık −/＋ sayacı + klavyeden giriş).
-// Bu, "değer metnine dokun → klavyeden mutlak değer gir" deseninin regresyon
-// ağıdır (aynı desen HabitTimer'a da taşındı). Erişim: providers (tema/dil).
+// AmountStepper component test (numeric habit −/+ counter + keyboard entry).
+// This is the regression net for the "tap the value text → enter an absolute
+// value via keyboard" pattern (the same pattern was also ported to
+// HabitTimer). Access: providers (theme/language).
 
 import { fireEvent } from '@testing-library/react-native';
 import { AmountStepper } from '@/ui/AmountStepper';
@@ -31,7 +32,7 @@ describe('AmountStepper', () => {
     const { getByText, getByDisplayValue } = await renderUI(
       <AmountStepper amount={3} target={8} unit={null} onDec={jest.fn()} onInc={jest.fn()} onSet={onSet} />
     );
-    fireEvent.press(getByText('3/8')); // düzenleme moduna geç (mevcut değer '3')
+    fireEvent.press(getByText('3/8')); // switch to edit mode (current value is '3')
     const input = getByDisplayValue('3');
     fireEvent.changeText(input, '5');
     fireEvent(input, 'submitEditing');
@@ -59,7 +60,7 @@ describe('AmountStepper', () => {
     fireEvent.press(getByLabelText('Miktarı artır'));
     fireEvent.press(getByText('3/8'));
     expect(onInc).not.toHaveBeenCalled();
-    expect(queryByDisplayValue('3')).toBeNull(); // düzenleme açılmadı
+    expect(queryByDisplayValue('3')).toBeNull(); // edit mode didn't open
     expect(onSet).not.toHaveBeenCalled();
   });
 });

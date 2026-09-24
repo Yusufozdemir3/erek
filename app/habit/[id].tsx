@@ -1,11 +1,11 @@
-// Alışkanlık istatistik ekranı — özet sayılar, Hedef/Puan/Geçmiş kartı,
-// aylık takvim + en altta rozetler.
-// "Alışkanlıklar" sekmesinde bir kartın haftalık geçmiş şeridine dokununca açılır.
-// Mimari kural: SQL yok; yalnızca useHabitStats (habitRepo üzerinden) çağrılır.
+// Habit stats screen — summary numbers, Goal/Score/History card, monthly
+// calendar, and badges at the bottom.
+// Opens from the "Habits" tab when tapping a card's weekly history strip.
+// Architecture rule: no SQL; only useHabitStats (via habitRepo) is called.
 //
-// Bu dosya yalnız SAYFA İSKELETİ: veri yükleme, başlık, bölümlerin sırası.
-// Bölümlerin kendisi src/ui/habit/HabitStatsSections.tsx'te, biçimlendiriciler
-// habitStatsFormat.ts'te, stiller habitStatsStyles.ts'te (denetim bulgusu H1).
+// This file is ONLY the PAGE SKELETON: data loading, header, section order.
+// The sections themselves live in src/ui/habit/HabitStatsSections.tsx,
+// formatters in habitStatsFormat.ts, styles in habitStatsStyles.ts (audit finding H1).
 
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -31,13 +31,13 @@ export default function HabitStatsScreen() {
   const stats = useHabitStats(id);
   const calendar = useHabitCalendar(id);
   const habitColor = stats.habit?.color ?? DEFAULT_HABIT_COLOR;
-  // Kota (haftada X kez) alışkanlıkta seriler HAFTA bazındadır: etiket/birim
-  // farklı, rozet eşikleri (gün cinsinden) hafta×7 ile karşılaştırılır.
+  // For a quota habit (X times a week), streaks are counted in WEEKS: the
+  // label/unit differs, and badge thresholds (in days) are compared against week×7.
   const isQuota = isQuotaSchedule(stats.habit?.schedule ?? null);
   const streakDays = isQuota ? stats.longestStreak * 7 : stats.longestStreak;
-  // Kazanılan rozetler + sıradaki eşik. İlerleme 0'dan sıradaki eşiğe göre
-  // ölçülür (bir önceki eşikten değil): "kalan gün" sayısıyla aynı doğrusal
-  // ölçek, çubuk ile yazı birbirini doğruluyor.
+  // Earned badges + the next threshold. Progress is measured from 0 to the next
+  // threshold (not from the previous one): the same linear scale as the "days
+  // left" number, so the bar and the text agree with each other.
   const earnedBadges = STREAK_MILESTONES.filter((m) => streakDays >= m.days);
   const nextBadge = STREAK_MILESTONES.find((m) => streakDays < m.days) ?? null;
   const badgePct = nextBadge ? Math.min(100, Math.round((streakDays / nextBadge.days) * 100)) : 100;
@@ -73,13 +73,14 @@ export default function HabitStatsScreen() {
                 value={String(stats.longestStreak)}
                 styles={styles}
               />
-              {/* "Tamamlanma %" KALDIRILDI: ömür boyu ortalama olduğu için
-                  alışkanlık yaşlandıkça donuyordu (iyi de kötü de bir hafta
-                  sayıyı kıpırdatmıyor) — Puan kartındaki EMA aynı soruya trendle
-                  cevap veriyor, ikisi yan yana kafa karıştırıyordu. */}
+              {/* "Completion %" REMOVED: being a lifetime average, it froze as
+                  the habit aged (neither a good nor a bad week could move it) —
+                  the EMA in the Score card answers the same question with a
+                  trend, and having both side by side was confusing. */}
             </View>
 
-            {/* Hedef/Puan/Geçmiş — tek koyu kart (Claude Design mockup'ının portu, bkz. HabitDarkStatsCard). */}
+            {/* Goal/Score/History — a single dark card (ported from the Claude
+                Design mockup, see HabitDarkStatsCard). */}
             <View style={{ marginTop: 12 }}>
               <HabitDarkStatsCard
                 stats={stats}
@@ -92,13 +93,14 @@ export default function HabitStatsScreen() {
               />
             </View>
 
-            {/* "Seri geçmişi" (en uzun 3 seri) KALDIRILDI: üstteki özet zaten
-                güncel + en uzun seriyi veriyordu, bölüm yalnız 2. ve 3. en uzunu
-                ekliyordu; hemen altındaki Takvim aynı geçmişi çok daha zengin
-                gösteriyor. Kalan bölümler kendi `styles.card` kutusunda — ekrandaki
-                istatistik blokları TUTARLI şekilde kutulu/ayrık. */}
+            {/* "Streak history" (top 3 longest streaks) REMOVED: the summary
+                above already gives the current + longest streak, and that
+                section only added the 2nd and 3rd longest; the Calendar right
+                below shows the same history far more richly. The remaining
+                sections each sit in their own `styles.card` box — the stat
+                blocks on screen are CONSISTENTLY boxed/separated. */}
 
-            {/* Tam takvim — ay ay gezinilebilir. */}
+            {/* Full calendar — navigable month by month. */}
             <View style={[styles.card, { marginTop: 12 }]}>
               <Text style={styles.cardLabel}>{t('stats.calendar')}</Text>
               <View style={[styles.calHead, { marginTop: 12 }]}>
@@ -138,13 +140,14 @@ export default function HabitStatsScreen() {
               <MonthCalendar weeks={calendar.weeks} color={habitColor} styles={styles} />
             </View>
 
-            {/* Rozetler — en uzun seri eşiği geçtiyse kazanılmış sayılır (seri
-                düşse bile madalya kalır). Eskiden 4 eşiğin TAMAMI vitrindeydi,
-                kilitliler soluk: içerik üstteki "En uzun seri" sayısından zaten
-                türetilebiliyordu ve yeni kullanıcıyı 4 soluk madalya karşılıyordu.
-                Artık yalnız kazanılanlar + SIRADAKİ eşik ilerleme çubuğuyla —
-                mesaj "yapmadıkların"dan "az kaldı"ya döndü (aynı ekrandaki Hedef
-                kartının dili). */}
+            {/* Badges — counted as earned once the longest streak clears the
+                threshold (the medal stays even if the streak later drops). It
+                used to show ALL 4 thresholds at once, with locked ones faded:
+                that content was already derivable from the "Longest streak"
+                number above, and it greeted a new user with 4 faded medals.
+                Now it's just the earned ones + a progress bar toward the NEXT
+                threshold — the message shifted from "what you haven't done" to
+                "almost there" (same language as the Goal card on this screen). */}
             <View style={[styles.card, { marginTop: 12 }]}>
               <Text style={styles.cardLabel}>{t('stats.badges')}</Text>
               {earnedBadges.length > 0 && (

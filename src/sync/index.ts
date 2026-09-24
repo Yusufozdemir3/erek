@@ -1,5 +1,5 @@
-// Senkron katmanının tek giriş noktası.
-// UI buradan import eder: import { runSync, isSyncConfigured } from '@/sync';
+// The single entry point of the sync layer.
+// The UI imports from here: import { runSync, isSyncConfigured } from '@/sync';
 
 export { supabase, isSyncConfigured } from './supabase';
 export {
@@ -22,7 +22,7 @@ export {
   runSync,
   prepareFullResync,
   clearLocalData,
-  // Hesap değişimi: sınıflandırma + iki çözüm yolu (bkz. syncEngine başlığı).
+  // Account switching: classification + the two resolution paths (see the syncEngine header).
   classifySignIn,
   getSyncOwner,
   setSyncOwner,

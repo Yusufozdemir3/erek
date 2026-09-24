@@ -1,7 +1,8 @@
-// notificationPrefs testleri — özellikle 'sound' → 'sound' + 'vibration' ayrımının
-// GERİYE UYUMU: eskiden tek 'notif:sound' anahtarı hem sesi hem titreşimi yönetiyordu.
-// 'notif:vibration' hiç yazılmamışsa titreşim eski sound değerini miras almalı ki
-// combined'ı kapatmış kullanıcıda titreşim de kapalı gelsin.
+// notificationPrefs tests — especially the BACKWARD COMPATIBILITY of the
+// 'sound' → 'sound' + 'vibration' split: the single 'notif:sound' key used to
+// control both sound and vibration. If 'notif:vibration' was never written,
+// vibration should inherit the old sound value, so a user who had turned off
+// the combined switch also gets vibration off.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getNotificationPrefs, setCustomSound, setNotificationPref } from '../notificationPrefs';
@@ -27,10 +28,10 @@ describe('getNotificationPrefs', () => {
   });
 
   it('vibration yazılmamış + eski sound=kapalı ise titreşim de kapalı gelir', async () => {
-    await AsyncStorage.setItem('notif:sound', '0'); // eski combined-off kullanıcısı
+    await AsyncStorage.setItem('notif:sound', '0'); // an old combined-off user
     const p = await getNotificationPrefs();
     expect(p.sound).toBe(false);
-    expect(p.vibration).toBe(false); // miras alındı
+    expect(p.vibration).toBe(false); // inherited
   });
 
   it('vibration açıkça yazılmışsa sound’dan bağımsızdır', async () => {

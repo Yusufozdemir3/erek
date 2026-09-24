@@ -1,12 +1,13 @@
-// Bildirimler ekranı (modal) — eskiden Profil'deki "Bildirimler" kartıydı; ses ve
-// titreşim ayrı denetimler haline gelince (bkz. notificationPrefs + kanal mimarisi)
-// kart şişti ve kendi sayfasına taşındı. Profil'den ok'lu bir satırla açılır.
-// Başlığı kök layout'taki native header verir.
+// Notifications screen (modal) — used to be the "Notifications" card on Profile;
+// once sound and vibration became separate controls (see notificationPrefs +
+// channel architecture) the card got too big and moved to its own page. Opened
+// from Profile via an arrow row. The header title comes from the root layout's
+// native header.
 //
-// Bir tercih değişince ilgili tüm hatırlatmalar DB baz alınarak HEMEN yeniden
-// kurulur: ses/titreşim değişimi de dahil, çünkü Android'de kanal (dolayısıyla
-// ses/titreşim) bildirime schedule ANINDA gömülür — yeniden kurmak eski kanaldan
-// yeni kanala taşır.
+// When a preference changes, all related reminders are IMMEDIATELY rebuilt
+// from the DB: this includes sound/vibration changes, because on Android the
+// channel (and therefore sound/vibration) gets baked into the notification AT
+// SCHEDULE TIME — rebuilding moves it from the old channel to the new one.
 
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -31,7 +32,7 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { type Colors } from '@/ui/theme';
 
-// Hatırlatma türü satırları (ana anahtar kapalıyken hepsi soluk + disabled).
+// Reminder type rows (all faded + disabled while the master switch is off).
 const TYPE_ROWS: { key: BoolPrefKey; labelKey: string }[] = [
   { key: 'habitReminders', labelKey: 'profile.notifHabitReminders' },
   { key: 'taskReminders', labelKey: 'profile.notifTaskReminders' },
@@ -50,18 +51,18 @@ export default function NotificationsScreen() {
     getNotificationPrefs().then(setPrefs);
   }, []);
 
-  // Ses/titreşim/özel-ses değişince tüm hatırlatmaları DB'yi baz alarak yeniden
-  // kurar (scheduleX'in kendi cancel-then-maybe-schedule mantığı açma/kapamayı
-  // ve kanal değişimini otomatik halleder).
+  // When sound/vibration/custom-sound changes, rebuild all reminders from the
+  // DB (scheduleX's own cancel-then-maybe-schedule logic handles on/off and
+  // channel changes automatically).
   const rescheduleAll = () => {
     rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
-      console.warn('[Bildirim] Tercih sonrası yeniden kurulum başarısız:', e)
+      console.warn('[Notification] Failed to rebuild after preference change:', e)
     );
     rescheduleAllTaskReminders(taskRepo.listByUser(user.id)).catch((e) =>
-      console.warn('[Bildirim] Tercih sonrası görev yeniden kurulumu başarısız:', e)
+      console.warn('[Notification] Failed to rebuild task reminders after preference change:', e)
     );
     rescheduleAllGoalReminders(goalRepo.listByUser(user.id)).catch((e) =>
-      console.warn('[Bildirim] Tercih sonrası hedef yeniden kurulumu başarısız:', e)
+      console.warn('[Notification] Failed to rebuild goal reminders after preference change:', e)
     );
   };
 
@@ -71,8 +72,8 @@ export default function NotificationsScreen() {
     rescheduleAll();
   };
 
-  // Cihazın zil sesi seçicisini açar; seçim yapılırsa (Sessiz dahil) kaydeder
-  // ve hatırlatmaları yeniden kurar. İptalde hiçbir şey değişmez.
+  // Opens the device's ringtone picker; if a choice is made (including Silent)
+  // it's saved and reminders are rebuilt. Nothing changes on cancel.
   const choosePickedSound = async () => {
     const result = await pickNotificationSound(prefs.customSoundUri);
     if (result.canceled) return;
@@ -92,7 +93,7 @@ export default function NotificationsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {/* Ana anahtar + hatırlatma türleri */}
+      {/* Master switch + reminder types */}
       <View style={styles.card}>
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>{t('profile.notifEnabled')}</Text>
@@ -121,8 +122,8 @@ export default function NotificationsScreen() {
         ))}
       </View>
 
-      {/* Ses ve titreşim — AYRI iki anahtar. Android'de her kombinasyon ayrı bir
-          bildirim kanalına gider (bkz. notifications.ts). */}
+      {/* Sound and vibration — two SEPARATE switches. On Android, every
+          combination maps to its own notification channel (see notifications.ts). */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('notifications.soundVibrationTitle')}</Text>
         <View style={[styles.switchRow, off && styles.rowDisabled]}>
@@ -148,9 +149,9 @@ export default function NotificationsScreen() {
         <Text style={styles.hint}>{t('notifications.soundVibrationHint')}</Text>
       </View>
 
-      {/* Özel bildirim sesi — Android'e özgü (bkz. ringtonePicker.ts +
-          customNotificationChannel.ts). Sistem sesi seçici bir native modül
-          gerektirir; henüz derlenmemiş bir build'de/iOS'ta gizli kalır. */}
+      {/* Custom notification sound — Android-specific (see ringtonePicker.ts +
+          customNotificationChannel.ts). The system sound picker requires a
+          native module; it stays hidden on a build that hasn't compiled it yet, or on iOS. */}
       {Platform.OS === 'android' && (
         <View style={[styles.card, { marginTop: 16 }, off && styles.rowDisabled]}>
           <Text style={styles.cardTitle}>{t('notifications.customSoundTitle')}</Text>

@@ -1,30 +1,32 @@
-// HabitForm'un SAF dönüşümleri — form durumundan (metin kutuları, kip seçimleri)
-// veritabanı alanlarına giden hesaplar. src/ui/HabitForm.tsx'in submit'inin
-// içinde gömülüydü: 980 satırlık bir bileşenin ortasında, hiçbir testin
-// göremediği yerde (denetim bulgusu H1 + F1). React'e bağlı olmadıkları için
-// buraya alındılar (lib/timerLogic.ts, lib/goalProjection.ts ile aynı gerekçe).
+// PURE transforms for HabitForm — computations from form state (text inputs,
+// mode selections) to database fields. Used to be embedded inside
+// src/ui/HabitForm.tsx's submit: buried in the middle of a 980-line component
+// where no test could reach it (audit findings H1 + F1). Moved here because
+// they have no React dependency (same rationale as lib/timerLogic.ts,
+// lib/goalProjection.ts).
 //
-// ORTAK KURAL: geçersiz/boş girdi HATA DEĞİL, güvenli varsayılana düşer —
-// kullanıcı yarım bıraktığı bir alan yüzünden kaydetmekten alıkonmaz.
+// SHARED RULE: invalid/empty input is NOT an error, it falls back to a safe
+// default — the user is never blocked from saving just because they left a
+// field half-filled.
 
 import { todayDate } from '@/lib/helpers';
 import type { HabitKind, Recurrence } from '@/db';
 
-// Formdaki dört sıklık kipi. 'daily' = her gün (Recurrence null'a karşılık gelir).
+// The four frequency modes in the form. 'daily' = every day (corresponds to Recurrence null).
 export type FreqMode = 'daily' | 'days' | 'interval' | 'quota';
 
 export interface ScheduleInput {
   freqMode: FreqMode;
-  weekdays: number[]; // 'days' kipinde seçili günler (0=Pazar)
-  everyNText: string; // 'interval' kipinde "kaç günde bir"
-  quotaText: string; // 'quota' kipinde "haftada kaç kez"
-  startDate: string | null; // 'interval' çapası için (yoksa bugün)
-  previousSchedule: Recurrence | null; // düzenlemede mevcut çapa korunsun diye
+  weekdays: number[]; // selected days in 'days' mode (0=Sunday)
+  everyNText: string; // "every how many days" in 'interval' mode
+  quotaText: string; // "how many times per week" in 'quota' mode
+  startDate: string | null; // for the 'interval' anchor (defaults to today)
+  previousSchedule: Recurrence | null; // so the existing anchor is preserved when editing
 }
 
-// Sıklık kipini Recurrence'a çevirir. Geçersiz/boş girdiler "her gün"e (null)
-// düşer: belirli günlerde hiç gün seçilmemişse, aralıkta sayı < 2 ise, kotada
-// sayı 1-7 dışındaysa.
+// Converts the frequency mode to a Recurrence. Invalid/empty inputs fall back
+// to "every day" (null): when no days are selected in the specific-days mode,
+// when the interval number is < 2, or when the quota number is outside 1-7.
 export function buildSchedule(input: ScheduleInput): Recurrence | null {
   const { freqMode, weekdays, everyNText, quotaText, startDate, previousSchedule } = input;
 
@@ -35,8 +37,9 @@ export function buildSchedule(input: ScheduleInput): Recurrence | null {
   if (freqMode === 'interval') {
     const n = parseInt(everyNText, 10);
     if (Number.isFinite(n) && n >= 2) {
-      // Çapa (referans günü): düzenlemede mevcut çapa korunur ki planlı günler
-      // kaymasın; oluşturmada başlangıç tarihi (yoksa bugün) çapadır.
+      // Anchor (reference day): when editing, the existing anchor is kept so
+      // scheduled days don't shift; when creating, the anchor is the start
+      // date (defaults to today).
       const anchor =
         previousSchedule?.freq === 'interval' && previousSchedule.anchor
           ? previousSchedule.anchor
@@ -56,8 +59,9 @@ export function buildSchedule(input: ScheduleInput): Recurrence | null {
   return null;
 }
 
-// Hedef/birim tipe göre: numeric = miktar+birim, timer = DAKİKA girilir SANİYE
-// saklanır (habit_logs.amount da saniye biriktirir), binary = ikisi de null.
+// Depending on the target/unit type: numeric = amount+unit, timer = entered
+// in MINUTES but stored in SECONDS (habit_logs.amount also accumulates in
+// seconds), binary = both null.
 export function buildTarget(
   kind: HabitKind,
   targetText: string,
@@ -77,15 +81,16 @@ export function buildTarget(
   return { target_amount: null, unit: null };
 }
 
-// Kullanıcı "kaç {alışkanlık birimi} bir {hedef birimi} eder" oranını girer
-// (ör. 4 sayfa = 1 bölüm); DB'de saklanan goal_factor bunun TERSİDİR (0.25 —
-// hedefe eklenecek gerçek çarpan). Geçersiz girdi 1'e düşer (birebir katkı).
+// The user enters the ratio "how many {habit units} make one {goal unit}"
+// (e.g. 4 pages = 1 chapter); the goal_factor stored in the DB is the INVERSE
+// of this (0.25 — the actual multiplier to add to the goal). Invalid input
+// falls back to 1 (one-to-one contribution).
 export function ratioToGoalFactor(ratioText: string): number {
   const parsed = parseFloat(ratioText.replace(',', '.'));
   return Number.isFinite(parsed) && parsed > 0 ? 1 / parsed : 1;
 }
 
-// Bitiş başlangıçtan önce olamaz; olduysa başlangıca çekilir (tek günlük aralık).
+// End date cannot precede the start date; if it does, it's pulled to the start date (single-day range).
 export function clampEndDate(startDate: string | null, endDate: string | null): string | null {
   return endDate && startDate && endDate < startDate ? startDate : endDate;
 }

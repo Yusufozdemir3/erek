@@ -1,9 +1,9 @@
-// translateAuthError: Supabase'in İngilizce hata mesajlarını i18n anahtarına eşler.
-// Asıl konu son satırdaki eski geniş kural — bkz. o testin açıklaması.
+// translateAuthError: maps Supabase's English error messages to an i18n key.
+// The main subject is the old overly-broad rule near the end — see that test's description.
 
 import { translateAuthError } from '../authErrors';
 
-const t = (key: string) => key; // dublör: anahtarı aynen döndürür
+const t = (key: string) => key; // stub: returns the key as-is
 
 describe('translateAuthError', () => {
   it('bilinen Supabase mesajlarını doğru anahtara eşler', () => {
@@ -28,13 +28,13 @@ describe('translateAuthError', () => {
     expect(translateAuthError(new Error('Network request failed'), t)).toBe('account.errNetwork');
   });
 
-  // Eski kural `m.includes('invalid')` idi ve sıfırlama koduyla hiç ilgisi
-  // olmayan bir "invalid ..." mesajını da yanlışlıkla "kod geçersiz" gösterirdi.
+  // The old rule was `m.includes('invalid')`, and it would wrongly show
+  // "invalid code" for an "invalid ..." message totally unrelated to the reset code.
   it('sıfırlama akışıyla İLGİSİZ bir "invalid" mesajını yanlış eşlemez', () => {
     const result = translateAuthError(new Error('Invalid request payload'), t);
     expect(result).not.toBe('account.errCodeInvalid');
-    // Bilinen hiçbir kalıba uymuyor — ham mesaj olduğu gibi gösterilir (translate()
-    // ile aynı "son çare" felsefesi: boş metin yerine anlaşılır bir şey).
+    // Doesn't match any known pattern — the raw message is shown as-is (same
+    // "last resort" philosophy as translate(): something understandable instead of empty text).
     expect(result).toBe('Invalid request payload');
   });
 

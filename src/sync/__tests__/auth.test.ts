@@ -1,13 +1,13 @@
-// auth testleri: SENKRON YALNIZCA GİRİŞ YAPILMIŞ BİR HESAPLA ÇALIŞIR.
+// auth tests: SYNC ONLY WORKS WITH A SIGNED-IN ACCOUNT.
 //
-// 2026-07-30'a kadar ensureSignedIn oturum bulamayınca signInAnonymously
-// çağırıyordu. ACCOUNTS_ENABLED açıldığında bu, kullanıcı giriş ekranını
-// "Şimdilik geç" ile atlasa bile açılıştaki runSync'in TÜM yerel veriyi anonim
-// bir bulut hesabına yüklemesi anlamına geliyordu — gizlilik politikası §1 ve
-// giriş ekranındaki söz ('login.localNote') bunun tersini vaat ediyor.
+// Until 2026-07-30, ensureSignedIn called signInAnonymously whenever it found
+// no session. Once ACCOUNTS_ENABLED was turned on, that meant that even if the
+// user dismissed the login screen with "Skip for now", the runSync at startup
+// would upload ALL local data to an anonymous cloud account — the opposite of
+// what privacy policy §1 and the login screen's promise ('login.localNote') guarantee.
 //
-// Buradaki testlerin ASIL işi o davranışın sessizce geri gelmesini engellemek:
-// hiçbir yol signInAnonymously çağırmamalı (afterEach'teki genel koruma).
+// The REAL job of the tests here is to keep that behavior from silently
+// coming back: no path should ever call signInAnonymously (the blanket guard in afterEach).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -37,7 +37,7 @@ jest.mock('../supabase', () => ({
   },
 }));
 
-// jest.mock'tan SONRA import edilmeli ki taklit devreye girsin.
+// Must be imported AFTER jest.mock so the mock takes effect.
 import {
   deleteAccountAndData,
   ensureSignedIn,
@@ -69,9 +69,9 @@ beforeEach(async () => {
   mockVerifyOtp.mockResolvedValue({ error: null });
 });
 
-// GENEL KORUMA: hiçbir test, hiçbir yol anonim oturum açmamalı. Bu tek satır,
-// dosyadaki her senaryoyu aynı anda "sessiz bulut yüklemesi" regresyonuna karşı
-// kilitler — yeni bir akış eklenirken de geçerli kalır.
+// BLANKET GUARD: no test, no path should ever sign in anonymously. This one
+// line locks every scenario in this file against the "silent cloud upload"
+// regression at once — and stays in effect as new flows get added.
 afterEach(() => {
   expect(mockSignInAnonymously).not.toHaveBeenCalled();
 });
@@ -94,8 +94,8 @@ describe('ensureSignedIn — oturum AÇMAZ, yalnızca var olanı kullanır', () 
   });
 
   it('KALINTI anonim oturumu kullanmaz: kapatır ve null döner', async () => {
-    // Eski sürümün otomatik açtığı oturum. Kullanmak, kaldırdığımız sessiz
-    // yüklemeyi sürdürmek olurdu.
+    // The session the old version opened automatically. Using it would mean
+    // continuing the silent upload we removed.
     mockGetSession.mockResolvedValue(sessionOf('anon-kalinti', true));
 
     expect(await ensureSignedIn()).toBeNull();
@@ -106,14 +106,15 @@ describe('ensureSignedIn — oturum AÇMAZ, yalnızca var olanı kullanır', () 
     mockGetSession.mockResolvedValue(sessionOf('anon-kalinti', true));
     mockSignOut.mockRejectedValue(new Error('ağ yok'));
 
-    // Kapatma başarısız olsa da uid dönmüyoruz: push yapılmaz, kalıcı zarar yok.
+    // Even if signing out fails, we still don't return a uid: no push happens, no lasting harm.
     await expect(ensureSignedIn()).resolves.toBeNull();
   });
 
   it('kalıntı anonim oturum, sahiplik damgasına DOKUNMAZ', async () => {
-    // Damga silinseydi sonraki gerçek giriş "fresh" sayılır, yerel satırlar eski
-    // anonim uid'ye ait bulut satırlarını güncellemeye çalışır ve RLS'e takılırdı.
-    // Damga kalınca giriş doğru şekilde "hesap değişimi" olarak sınıflanır.
+    // If the marker were erased, the next real sign-in would be classified as
+    // "fresh", local rows would try to update cloud rows belonging to the old
+    // anonymous uid, and hit RLS. Keeping the marker classifies the sign-in
+    // correctly as an "account switch".
     await AsyncStorage.setItem(OWNER_UID_KEY, 'anon-kalinti');
     mockGetSession.mockResolvedValue(sessionOf('anon-kalinti', true));
 
@@ -128,12 +129,12 @@ describe('çıkış', () => {
     await signOutAccount();
 
     expect(mockSignOut).toHaveBeenCalledTimes(1);
-    // Oturum düştüğü için ensureSignedIn null döner — ayrı bir bayrağa gerek yok.
+    // Since the session is gone, ensureSignedIn returns null — no separate flag is needed.
     expect(await ensureSignedIn()).toBeNull();
   });
 
   it('signOutAccount çıkış hatasını fırlatır (çağıran haberdar olsun)', async () => {
-    mockSignOut.mockResolvedValue({ error: new Error('ağ yok') });
+    mockSignOut.mockResolvedValue({ error: new Error('ağ yok') }); // "no network"
     await expect(signOutAccount()).rejects.toThrow('ağ yok');
   });
 });
@@ -161,8 +162,8 @@ describe('hesap silme', () => {
   });
 
   it('silme başarılı ama yerel signOut fırlatırsa YUTULUR', async () => {
-    // Sunucuda kullanıcı silindiği için yerel çıkış geçersiz-token hatası verebilir.
-    mockSignOut.mockRejectedValue(new Error('token geçersiz'));
+    // Since the user was deleted server-side, the local sign-out may error with an invalid-token error.
+    mockSignOut.mockRejectedValue(new Error('token geçersiz')); // "invalid token"
 
     await expect(deleteAccountAndData()).resolves.toBeUndefined();
     expect(await AsyncStorage.getItem(OWNER_UID_KEY)).toBeNull();

@@ -1,28 +1,30 @@
-// Metro config — TEK özelleştirme: WEB platformunda, gerçek web desteği olmayan
-// bazı native paketleri yerel dublörlere yönlendirir. Android/iOS ETKİLENMEZ —
-// bu yönlendirme yalnızca platform==='web' iken devreye girer, gerçek native
-// modüller orada dokunulmadan kullanılmaya devam eder.
+// Metro config — ONE customization: on the WEB platform, redirects a few
+// native packages that have no real web support to local stubs. Android/iOS
+// are NOT AFFECTED — this redirection only kicks in when platform==='web';
+// the real native modules keep being used untouched everywhere else.
 //
-// NEDEN web önizlemesi: uygulama yalnızca Android'de yayınlanıyor. Bu dosya
-// yalnızca UI/stil değişikliklerini ~9 dakikalık native Gradle build beklemeden
-// Browser pane'de görebilmek için var — uygulamayı web'de işlevsel çalıştırmak için DEĞİL.
+// WHY a web preview: the app is only published on Android. This file exists
+// solely so UI/style changes can be checked in the Browser pane without
+// waiting through a ~9-minute native Gradle build — NOT to make the app
+// functionally work on web.
 //
-// LİSTE NEDEN BÜYÜYEBİLİR: her paket kendi nedeniyle burada —
-//   expo-sqlite                   → web/wasm derlemesi hiç yok, import anında
-//                                    çöküyordu ("Cannot find native module").
-//   react-native-google-mobile-ads → pakette web desteği YOK; iç modül grafiği
-//                                    Metro'yu daha BUNDLING aşamasında durduruyor
-//                                    (bir dosyayı bulamıyor) — bu try/catch ile
-//                                    yakalanamayan bir hata sınıfı, tek çözüm
-//                                    modülü hiç bu paketten çözmemek.
-// Yeni bir native bağımlılık web'de aynı şekilde patlarsa buraya bir satır daha
-// eklenir; native/iOS davranışı yine ASLA etkilenmez.
+// WHY THE LIST CAN GROW: each package is here for its own reason —
+//   expo-sqlite                   → has no web/wasm build at all, it crashed
+//                                    immediately on import ("Cannot find native module").
+//   react-native-google-mobile-ads → has NO web support in the package; its
+//                                    internal module graph stops Metro during
+//                                    the BUNDLING stage itself (can't find a
+//                                    file) — a class of error try/catch can't
+//                                    catch, the only fix is to never resolve
+//                                    the module from this package at all.
+// If a new native dependency breaks the same way on web, add one more line
+// here; native/iOS behavior is still NEVER affected.
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// moduleName -> web'de kullanılacak yerel dublörün yolu.
+// moduleName -> path to the local stub to use on web.
 const WEB_STUBS = {
   'expo-sqlite': 'src/web/expoSqliteWebStub.ts',
   'react-native-google-mobile-ads': 'src/web/googleMobileAdsWebStub.ts',

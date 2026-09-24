@@ -1,7 +1,7 @@
-// Ortadaki ＋ sekmesinin rota dosyası. Gerçek bir ekran DEĞİL: _layout.tsx
-// tabBarButton'ı tamamen değiştirdiği için buraya normalde hiç gelinmez
-// (buton navigasyon yerine AddSheet açar). Derin bağlantı gibi bir yolla
-// yine de gelinirse Bugün'e yönlendirir.
+// Route file for the middle ＋ tab. NOT a real screen: _layout.tsx completely
+// replaces its tabBarButton, so this is normally never reached at all (the
+// button opens AddSheet instead of navigating). If it's still reached somehow
+// (e.g. a deep link), redirect to Today.
 
 import { Redirect } from 'expo-router';
 

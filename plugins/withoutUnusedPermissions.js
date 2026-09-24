@@ -1,23 +1,25 @@
-// Birleştirilmiş (merged) release manifest'inde kod tabanında HİÇ kullanılmayan
-// üç izin çıkıyordu (ultra-detaylı inceleme, P1 #5):
-//   - android.permission.SYSTEM_ALERT_WINDOW ("diğer uygulamaların üzerinde
-//     göster") — expo-dev-client'ın kendi manifest'inden geliyor, yalnız onun
-//     geliştirme menüsü için; release build'de anlamsız VE Play'in özel olarak
-//     izlediği hassas bir izin (overlay saldırıları için kullanılabiliyor).
+// The merged release manifest ended up with three permissions that are NEVER
+// used anywhere in the codebase (ultra-detailed review finding, P1 #5):
+//   - android.permission.SYSTEM_ALERT_WINDOW ("display over other apps") —
+//     comes from expo-dev-client's own manifest, only needed for its dev
+//     menu; meaningless in a release build AND a sensitive permission Play
+//     specifically flags (it can be used for overlay attacks).
 //   - android.permission.READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE —
-//     expo-file-system'den geliyor; o paket yalnız expo-asset'in ikon
-//     fontlarını yükleyebilmesi için var, dosya sistemine kullanıcı verisi
-//     yazılmıyor. WRITE_EXTERNAL_STORAGE zaten API 33+'ta işlevsiz, salt gürültü.
+//     come from expo-file-system; that package is only there so expo-asset
+//     can load icon fonts, no user data is written to the file system.
+//     WRITE_EXTERNAL_STORAGE is already a no-op on API 33+, pure noise.
 //
-// Manifest merger, kütüphane manifest'lerinden gelen izinleri tools:node="remove"
-// ile ana manifest'ten ÇIKARABİLİR (withPermissions'ın eklemenin tersi). Bu
-// üçü burada çıkarılır — "önce cihazında, gizliliğe saygılı" konumlandıran bir
-// uygulamanın kurulumda "diğer uygulamaların üzerinde göster" istemesi hem
-// mağaza incelemesinde soru işareti hem kullanıcı güvenini kırıcı.
+// The manifest merger can REMOVE permissions coming from library manifests
+// from the main manifest via tools:node="remove" (the opposite of
+// withPermissions adding one). These three are removed here — an app that
+// positions itself as "on-device first, privacy-respecting" asking to
+// "display over other apps" at install time is both a red flag in store
+// review and damaging to user trust.
 //
-// NOT: android/ klasörü git'te izlenmiyor (prebuild üretir). Bu yüzden düzeltme
-// elle AndroidManifest.xml'e değil BURAYA yazıldı — her prebuild'de otomatik
-// uygulanır (withForceDarkDisabled ile aynı gerekçe).
+// NOTE: the android/ folder isn't tracked in git (prebuild generates it). So
+// this fix was written HERE rather than by hand-editing AndroidManifest.xml —
+// it's applied automatically on every prebuild (same rationale as
+// withForceDarkDisabled).
 
 const { withAndroidManifest } = require('@expo/config-plugins');
 

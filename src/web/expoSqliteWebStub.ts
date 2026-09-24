@@ -1,16 +1,16 @@
-// WEB-YALNIZ dublör — expo-sqlite'ın yerine geçer (bkz. metro.config.js).
+// WEB-ONLY stand-in — replaces expo-sqlite (see metro.config.js).
 //
-// expo-sqlite 15.x'te web/wasm derlemesi YOK (paket içinde .web.js yok, browser
-// alanı yok). Web'de import etmek modül-yükleme anında patlıyor ("Cannot find
-// native module 'ExpoSQLite'") — uygulamanın TÜMÜ tek bir ekran bile açılmadan
-// çöküyordu. Metro yalnızca platform==='web' iken buraya yönlendiriyor; Android/
-// iOS derlemeleri bu dosyaya hiç dokunmaz, gerçek native modülü kullanmaya devam eder.
+// expo-sqlite 15.x has NO web/wasm build (no .web.js in the package, no
+// browser field). Importing it on web throws at module-load time ("Cannot
+// find native module 'ExpoSQLite'") — the ENTIRE app was crashing before even
+// a single screen could open. Metro only routes here when platform==='web';
+// Android/iOS builds never touch this file and keep using the real native module.
 //
-// BU GERÇEK BİR VERİTABANI DEĞİL: her okuma boş döner (null/[]), her yazma no-op'tur.
-// Amaç yalnızca uygulamanın açılıp ekranların (stil/yerleşim/gezinme) Browser
-// pane'de görülebilmesi — gerçek build almadan görsel değişiklikleri kontrol etmek
-// için. Veri akışlarını (senkron, streak hesabı, vb.) test etmek için DEĞİL; onun
-// için gerçek cihaz build'i şart.
+// THIS IS NOT A REAL DATABASE: every read returns empty (null/[]), every
+// write is a no-op. The only goal is for the app to open so screens
+// (styling/layout/navigation) can be viewed in the Browser pane — to check
+// visual changes without doing a real build. NOT for testing data flows
+// (sync, streak computation, etc.); a real device build is required for that.
 
 function stubDb() {
   return {

@@ -1,25 +1,28 @@
-// Yerel bildirim katmanı — expo-notifications sarmalayıcısı.
-// Alışkanlıkların remind_at saatine göre GÜNLÜK tekrarlayan yerel bildirim kurar.
+// Local notification layer — wrapper around expo-notifications.
+// Schedules a DAILY-repeating local notification based on each habit's remind_at time.
 //
-// Tasarım kararı: her bildirimin identifier'ı alışkanlığın id'sidir. Böylece
-// programlama/iptal deterministiktir ve ayrı bir notification_id saklamaya
-// (şema değişikliği) gerek kalmaz. Aynı id ile yeniden programlamak öncekini değiştirir.
+// Design decision: each notification's identifier is the habit's id. That
+// makes scheduling/canceling deterministic and avoids needing to store a
+// separate notification_id (a schema change). Rescheduling with the same id
+// replaces the previous one.
 //
-// Mimari: bu modül bir yan etki katmanıdır; UI bunu repository çağrılarından
-// ayrı olarak çağırır. Veri için tek doğru kaynak yine SQLite (habitRepo).
+// Architecture: this module is a side-effect layer; the UI calls it
+// separately from repository calls. The single source of truth for data is
+// still SQLite (habitRepo).
 //
-// ⚠ BİLİNEN SINIR — iOS TETİKLEYİCİ BÜTÇESİ (henüz çözülmedi):
-// Bir hatırlatma TEK bir tetikleyici değildir: haftalık sıklıkta seçili gün
-// sayısı kadar (5 gün = 5 tetikleyici), "her X günde bir"de 8 tane kurulur.
-// iOS'ta bekleyen yerel bildirim tavanı 64'tür ve aşıldığında fazlası SESSİZCE
-// düşer — kullanıcı hatırlatmasının neden çalmadığını anlayamaz. Android'de
-// böyle sert bir tavan yok.
-// Şu anki azaltma: varlık başına hatırlatma sayısı sınırlı (bkz.
-// ui/formLimits.MAX_REMINDERS_PER_ENTITY), yani en kötü durum belirgin biçimde
-// küçüldü. TAM çözüm, tüm varlıkların tetikleyicilerini sayıp bütçeyi en yakın
-// zamanlılara ayıran GLOBAL bir programlayıcıdır; iOS henüz yayınlanmadığı ve
-// bütçenin gerçek cihazda ölçülmesi gerektiği için bilerek ertelendi.
-// iOS yayına alınmadan ÖNCE bu not ele alınmalı.
+// KNOWN LIMITATION — iOS TRIGGER BUDGET (not yet solved):
+// A reminder is not a SINGLE trigger: in weekly frequency it's one trigger
+// per selected day (5 days = 5 triggers), and "every X days" schedules 8 of
+// them. iOS caps pending local notifications at 64, and anything beyond that
+// SILENTLY gets dropped — the user has no way to know why their reminder
+// didn't fire. Android has no such hard cap.
+// Current mitigation: the number of reminders per entity is capped (see
+// ui/formLimits.MAX_REMINDERS_PER_ENTITY), which significantly shrinks the
+// worst case. The FULL fix would be a GLOBAL scheduler that counts triggers
+// across all entities and allocates the budget to the nearest-in-time ones;
+// deliberately deferred since iOS hasn't shipped yet and the budget needs to
+// be measured on a real device.
+// This note must be addressed BEFORE iOS goes live.
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,10 +36,11 @@ import { getNotificationPrefs, soundContent, type NotificationPrefs } from '@/li
 import { ensureCustomSoundChannel } from '@/lib/customNotificationChannel';
 import type { Lang } from '@/i18n/translations';
 
-// Uygulama ön plandayken de bildirimin görünmesini sağlar. Bir kez kurulur.
-// Ses tercihi burada da (ön plan bildirimi) uygulanır; ana anahtar kapalıysa
-// uyarı tamamen gizlenir (arka plandaki schedule fonksiyonları zaten kurmaz,
-// ama bu handler yalnızca zaten kurulmuş/gelen bir bildirim içindir).
+// Ensures the notification is shown even while the app is in the foreground.
+// Set up once. The sound preference is also applied here (foreground
+// notification); if the master switch is off, the alert is fully hidden (the
+// schedule functions in the background already don't schedule one, but this
+// handler is only for a notification that's already scheduled/incoming).
 export function setNotificationHandler(): void {
   Notifications.setNotificationHandler({
     handleNotification: async () => {
@@ -50,14 +54,17 @@ export function setNotificationHandler(): void {
   });
 }
 
-// KANAL MİMARİSİ (Android): API 26+'ta ses ve titreşim bildirimin değil KANALIN
-// özelliğidir ve kanal bir kez oluşturulduktan sonra kod ile değiştirilemez
-// (yalnız kullanıcı sistem ayarından). Bu yüzden ses×titreşim'in dört
-// kombinasyonu için dört ayrı kanal tutuyoruz; her bildirim tercihe göre
-// channelIdFor ile doğru kanala yönlendirilir. Tercih değişince yeni kurulan
-// bildirimler yeni kanala gider (mevcut zamanlanmışlar reschedule ile taşınır).
-// (Silinip aynı id ile yeniden oluşturmak Android'de kullanıcının eski ayarını
-// GERİ getirir — bu yüzden dört kanal kalıcı, seçim schedule anında yapılır.)
+// CHANNEL ARCHITECTURE (Android): on API 26+, sound and vibration are
+// properties of the CHANNEL, not the notification, and once a channel is
+// created it cannot be modified in code (only by the user via system
+// settings). So we keep four separate channels for the four combinations of
+// sound×vibration; each notification is routed to the right channel via
+// channelIdFor based on the preference. When the preference changes, newly
+// scheduled notifications go to the new channel (existing scheduled ones are
+// moved via reschedule).
+// (Deleting and recreating with the same id RESTORES the user's old setting
+// on Android — so the four channels are permanent, and the choice is made at
+// schedule time.)
 const REMINDER_CHANNELS = {
   soundVibration: 'reminders-sv',
   soundOnly: 'reminders-s',
@@ -67,10 +74,11 @@ const REMINDER_CHANNELS = {
 
 const VIBRATION_PATTERN = [0, 250, 250, 250];
 
-// Tercihe göre hangi kanala yönlendirileceği (yalnız Android'de anlamlı).
-// Özel ses seçiliyse (ve ses açıksa) native modülle (bkz. customNotificationChannel.ts)
-// o URI'ye bağlı bir kanal oluşturulur/doğrulanır; native modül yoksa (Expo Go /
-// henüz derlenmemiş build) sabit kanallara düşülür.
+// Which channel to route to based on preference (only meaningful on Android).
+// If a custom sound is selected (and sound is on), a channel bound to that URI
+// is created/verified via the native module (see customNotificationChannel.ts);
+// if the native module isn't available (Expo Go / not-yet-compiled build), it
+// falls back to the fixed channels.
 function channelIdFor(prefs: NotificationPrefs, lang: Lang): string {
   if (prefs.sound && prefs.customSoundUri) {
     const name = translate(lang, prefs.vibration ? 'notif.channelCustomSoundVibration' : 'notif.channelCustomSound');
@@ -83,9 +91,10 @@ function channelIdFor(prefs: NotificationPrefs, lang: Lang): string {
   return REMINDER_CHANNELS.silent;
 }
 
-// Android'de bildirimlerin gösterilebilmesi için kanal şarttır. Açılışta dört
-// kombinasyon kanalı da kurulur (idempotent). Eski tekil 'habit-reminders'
-// kanalı temizlenir (artık kullanılmıyor; sistem ayarında kalıntı görünmesin).
+// A channel is required for notifications to display on Android. All four
+// combination channels are set up on startup (idempotent). The old single
+// 'habit-reminders' channel is cleaned up (no longer used; so it doesn't show
+// up as a leftover in system settings).
 export async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   const lang = await getStoredLang();
@@ -122,7 +131,7 @@ export async function ensureAndroidChannel(): Promise<void> {
   await Notifications.deleteNotificationChannelAsync('habit-reminders').catch(() => {});
 }
 
-// İzin ister (zaten verilmişse tekrar sormaz). Verildiyse true döner.
+// Requests permission (won't ask again if already granted). Returns true if granted.
 export async function ensurePermission(): Promise<boolean> {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
@@ -131,7 +140,7 @@ export async function ensurePermission(): Promise<boolean> {
   return req.granted;
 }
 
-// "08:30" -> { hour: 8, minute: 30 }; geçersizse null.
+// "08:30" -> { hour: 8, minute: 30 }; null if invalid.
 function parseHm(hm: string): { hour: number; minute: number } | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(hm);
   if (!m) return null;
@@ -141,17 +150,19 @@ function parseHm(hm: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
-// TOPLU YENİDEN PROGRAMLAMA BAĞLAMI — yalnız rescheduleAll* geçişlerinde kullanılır.
+// BATCH RESCHEDULE CONTEXT — only used in rescheduleAll* passes.
 //
-// Sorun: her scheduleX çağrısı önce cancelX yapar, o da "kurulu bildirimlerin
-// TAMAMINI" native köprüden çeker. Açılışta bu, hatırlatması olan HER alışkanlık,
-// HER görev ve HER hedef için ayrı ayrı tekrarlanıyordu — 80 varlıklı bir
-// kullanıcıda 80 tam liste taraması + 80 tercih okuması + 80 dil okuması, hepsi
-// seri. Bağlam bir kez kurulup aşağı geçirilince tur başına BİRE iner.
+// Problem: every scheduleX call first does a cancelX, which pulls "ALL
+// currently scheduled notifications" from the native bridge. On startup this
+// was repeating separately for EVERY habit, EVERY task and EVERY goal that
+// has a reminder — for a user with 80 entities, that's 80 full list scans +
+// 80 preference reads + 80 language reads, all sequential. Once the context
+// is built once and passed down, it drops to ONE per pass.
 //
-// Anlık görüntünün "bayatlaması" sorun DEĞİL: her önek tek bir varlığa aittir ve
-// her varlık turda bir kez işlenir, yani bir varlığın iptali yalnızca ÖNCEDEN
-// var olan tetikleyicilerini arar — tur sırasında kurduklarımızı değil.
+// The snapshot going "stale" is NOT a problem: each prefix belongs to exactly
+// one entity and each entity is processed once per pass, so canceling an
+// entity only looks for its PRE-EXISTING triggers — not ones we scheduled
+// during this pass.
 interface RescheduleCtx {
   scheduled: { identifier: string }[];
   prefs: NotificationPrefs;
@@ -167,13 +178,14 @@ async function buildRescheduleCtx(): Promise<RescheduleCtx> {
   return { scheduled, prefs, lang };
 }
 
-// Tüm zamanlanmış bildirimleri tarayıp identifier'ı verilen önekle başlayanları
-// iptal eder. ÇOKLU hatırlatmada her hatırlatmanın kendi id'si (ve haftalık/
-// aralıklı sıklıkta ek son ekler) olduğundan, "hangi id'ler kurulu olabilir"
-// listesini önceden bilmek imkansız — Expo'nun kendi kayıtlarını sorup önekle
-// eşleşenleri silmek tek güvenilir yol (subtask/milestone silmede id üretmenin
-// simetriği: burada da "ne varsa temizle, yeniden kur" deseni).
-// ctx verilirse liste yeniden çekilmez (bkz. RescheduleCtx).
+// Scans all scheduled notifications and cancels the ones whose identifier
+// starts with the given prefix. Since MULTIPLE reminders each have their own
+// id (plus extra suffixes for weekly/interval frequency), it's impossible to
+// know in advance which ids might be scheduled — querying Expo's own records
+// and deleting the ones matching the prefix is the only reliable way
+// (symmetric to id generation when deleting subtasks/milestones: the same
+// "wipe whatever's there, rebuild" pattern applies here too).
+// If ctx is provided, the list isn't re-fetched (see RescheduleCtx).
 async function cancelByPrefix(prefix: string, ctx?: RescheduleCtx): Promise<void> {
   const all = ctx?.scheduled ?? (await Notifications.getAllScheduledNotificationsAsync());
   const matching = all.filter((n) => n.identifier.startsWith(prefix));
@@ -182,44 +194,45 @@ async function cancelByPrefix(prefix: string, ctx?: RescheduleCtx): Promise<void
       try {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       } catch {
-        // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+        // may throw if there's no scheduled notification — harmless.
       }
     })
   );
 }
 
-// Bir alışkanlık için TÜM hatırlatmalarını kurar (0 ya da daha fazla saat).
-// Sıklığa göre: her gün ise her hatırlatma için tek DAILY tetikleyici; belirli
-// günler ise her hatırlatma × her seçili gün için ayrı WEEKLY tetikleyici;
-// "her X günde bir" ise her hatırlatma için sıradaki planlı günlere tek seferlik
-// DATE tetikleyicileri. İzin yoksa (ve en az bir hatırlatma kurulacaksa) false döner.
+// Schedules ALL reminders for a habit (0 or more times). Depending on
+// frequency: every day means a single DAILY trigger per reminder; specific
+// days means a separate WEEKLY trigger per reminder × per selected day;
+// "every X days" means one-off DATE triggers per reminder for the upcoming
+// scheduled days. Returns false if permission is missing (and at least one
+// reminder would need to be scheduled).
 export async function scheduleHabitReminders(
   habit: Habit,
   reminders: Reminder[],
   ctx?: RescheduleCtx
 ): Promise<boolean> {
-  // Önce bu alışkanlığa ait TÜM eski tetikleyicileri temizle (saat/gün/liste
-  // değişmiş ya da tamamen kaldırılmış olabilir).
+  // First clear ALL old triggers for this habit (time/days/list may have
+  // changed, or may have been removed entirely).
   await cancelHabitReminders(habit.id, ctx);
 
   if (reminders.length === 0) return true;
 
-  // YAŞAM ARALIĞI KONTROLÜ. Yerel bildirim tetikleyicileri başlangıç/bitiş
-  // tarihini bilmez (DAILY/WEEKLY sonsuza dek tekrar eder), o yüzden aralık her
-  // programlamada burada denetlenir — kaydetmede ve her toplu yeniden kurulumda.
+  // LIFETIME RANGE CHECK. Local notification triggers don't know about
+  // start/end dates (DAILY/WEEKLY repeat forever), so the range is checked
+  // here on every scheduling pass — both on save and on every batch reschedule.
   const today = todayDate();
-  // Bitmiş alışkanlık: kurulmaz (yukarıdaki cancel eskisini de temizledi).
+  // Finished habit: not scheduled (the cancel above already cleared old ones).
   if (habit.end_date && habit.end_date < today) return true;
-  // HENÜZ BAŞLAMAMIŞ alışkanlık: kurulmaz. Eskiden yalnız bitiş tarihi
-  // bakılıyordu ve "1 Eylül'de başlasın" diyen kullanıcı BUGÜNDEN itibaren
-  // bildirim alıyordu — üstelik alışkanlık listelerde daha görünmüyorken
-  // (useTodayData aynı aralığı zaten süzüyor), yani uygulama kendisiyle
-  // çelişiyordu. Başlangıç günü geldiğinde toplu yeniden kurulum devreye girer
-  // (bkz. rescheduleEverything: açılışta ve gün dönümünde çalışır).
+  // NOT-YET-STARTED habit: not scheduled. Used to only check the end date,
+  // and a user who said "start on Sept 1" would get notifications starting
+  // TODAY — even while the habit wasn't showing up in lists yet (useTodayData
+  // already filters the same range), i.e. the app was contradicting itself.
+  // Once the start day arrives, the batch reschedule kicks in (see
+  // rescheduleEverything: runs on startup and at day rollover).
   if (habit.start_date && habit.start_date > today) return true;
 
   const prefs = ctx?.prefs ?? (await getNotificationPrefs());
-  if (!prefs.enabled || !prefs.habitReminders) return true; // kullanıcı bu türü kapatmış
+  if (!prefs.enabled || !prefs.habitReminders) return true; // user turned this type off
 
   const granted = await ensurePermission();
   if (!granted) return false;
@@ -236,13 +249,13 @@ export async function scheduleHabitReminders(
 
   for (const reminder of reminders) {
     const time = parseHm(reminder.time);
-    if (!time) continue; // bozuk saat — sessizce atla
+    if (!time) continue; // malformed time — skip silently
     const base = `habit:${habit.id}:${reminder.id}`;
 
     if (sched?.freq === 'interval') {
-      // Expo'da "her N günde bir" tekrarlayan tetikleyici yok; sıradaki 8 planlı
-      // gün tek seferlik DATE tetikleyicisiyle kurulur (base#i0..i7). Her açılışta
-      // rescheduleAllReminders baştan kurduğu için pencere sürekli ileri kayar.
+      // Expo has no repeating "every N days" trigger; the next 8 scheduled
+      // days get one-off DATE triggers (base#i0..i7). Since rescheduleAllReminders
+      // rebuilds from scratch on every startup, the window keeps sliding forward.
       const cursor = new Date(`${todayDate()}T00:00:00`);
       let scheduledCount = 0;
       for (let i = 0; scheduledCount < 8 && i < 1462; i++) {
@@ -262,14 +275,14 @@ export async function scheduleHabitReminders(
         cursor.setDate(cursor.getDate() + 1);
       }
     } else if (weekdays.length > 0) {
-      // Belirli günler: her seçili gün için ayrı haftalık tetikleyici.
+      // Specific days: a separate weekly trigger per selected day.
       for (const wd of weekdays) {
         await Notifications.scheduleNotificationAsync({
           identifier: `${base}#${wd}`,
           content,
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-            weekday: wd + 1, // expo: 1=Pazar ... 7=Cumartesi (JS getDay 0=Pazar)
+            weekday: wd + 1, // expo: 1=Sunday ... 7=Saturday (JS getDay 0=Sunday)
             hour: time.hour,
             minute: time.minute,
             channelId,
@@ -277,7 +290,7 @@ export async function scheduleHabitReminders(
         });
       }
     } else {
-      // Her gün (schedule yok ya da daily).
+      // Every day (no schedule, or daily).
       await Notifications.scheduleNotificationAsync({
         identifier: base,
         content,
@@ -293,23 +306,23 @@ export async function scheduleHabitReminders(
   return true;
 }
 
-// Bir alışkanlığın TÜM hatırlatmalarını iptal eder (kaç tane olursa olsun,
-// hangi sıklık son ekiyle kurulmuş olursa olsun — bkz. cancelByPrefix).
+// Cancels ALL reminders of a habit (regardless of how many, or which
+// frequency suffix they were scheduled with — see cancelByPrefix).
 export async function cancelHabitReminders(habitId: string, ctx?: RescheduleCtx): Promise<void> {
   await cancelByPrefix(`habit:${habitId}:`, ctx);
 }
 
-// ZAMANLAYICI (alışkanlık kind='timer' ya da süre-ölçümlü hedef): hedef süreye
-// ulaşınca haber veren tek seferlik yerel bildirim. identifier = `timer:${id}`
-// (habit/goal id'leri UUID olduğundan aynı ad alanını paylaşmaları çakışma
-// yaratmaz; günlük hatırlatma id'leriyle de çakışmaz). Süre başlarken kurulur;
-// duraklat/bitir/sıfırla'da iptal edilir. İzin yoksa sessizce geçer (zamanlayıcı
-// yine çalışır, sadece bildirim olmaz).
+// TIMER (habit kind='timer' or a duration-tracked goal): a one-off local
+// notification announcing when the target duration is reached. identifier =
+// `timer:${id}` (since habit/goal ids are UUIDs, sharing the namespace causes
+// no collision; also doesn't collide with daily reminder ids). Scheduled when
+// the timer starts; canceled on pause/finish/reset. Silently skipped if
+// permission is missing (the timer still runs, there's just no notification).
 export async function scheduleTimerDone(id: string, title: string, secondsFromNow: number): Promise<void> {
   await cancelTimerDone(id);
   if (secondsFromNow <= 0) return;
   const prefs = await getNotificationPrefs();
-  if (!prefs.enabled || !prefs.timerDone) return; // kullanıcı bu türü kapatmış
+  if (!prefs.enabled || !prefs.timerDone) return; // user turned this type off
   const granted = await ensurePermission();
   if (!granted) return;
   const lang = await getStoredLang();
@@ -332,34 +345,34 @@ export async function cancelTimerDone(id: string): Promise<void> {
   try {
     await Notifications.cancelScheduledNotificationAsync(`timer:${id}`);
   } catch {
-    // programlanmış bildirim yoksa hata fırlatabilir — önemsiz.
+    // may throw if there's no scheduled notification — harmless.
   }
 }
 
-// Açılışta tüm aktif hatırlatmaları yeniden programlar.
-// Cihaz yeniden başlatma / uygulama güncellemesi programlanmış bildirimleri
-// temizleyebildiği için tek doğru kaynak (DB) baz alınarak yeniden kurulur.
-// İzin akışını açılışta tetiklememek için izin YOKSA sessizce çıkar.
+// Reschedules all active reminders on startup.
+// Since a device reboot / app update can clear scheduled notifications, they
+// are rebuilt from the single source of truth (DB). Exits silently if
+// permission is NOT granted, to avoid triggering the permission flow on startup.
 export async function rescheduleAllReminders(habits: Habit[]): Promise<void> {
   const map = reminderRepo.mapByType('habit');
   const withReminder = habits.filter((h) => (map.get(h.id)?.length ?? 0) > 0);
   if (withReminder.length === 0) return;
 
   const perm = await Notifications.getPermissionsAsync();
-  if (!perm.granted) return; // açılışta izin istemeyiz; kullanıcı saat kurunca istenir
+  if (!perm.granted) return; // don't request permission on startup; asked when the user sets a time
 
-  // Tarama + tercih + dil TUR BAŞINA bir kez (bkz. RescheduleCtx).
+  // Scan + preferences + language ONCE PER PASS (see RescheduleCtx).
   const ctx = await buildRescheduleCtx();
   for (const h of withReminder) {
     await scheduleHabitReminders(h, map.get(h.id) ?? [], ctx);
   }
 }
 
-// GÖREV hatırlatması: TÜM hatırlatma saatleri, son tarihin GÜNÜNDE o saatte
-// tek seferlik bildirim kurar (identifier: `task:${id}:${reminderId}`, habit/
-// timer id'leriyle çakışmaz). Saat son tarihin kendi saatinden BAĞIMSIZDIR.
-// Hatırlatmasız, son tarihsiz, tamamlanmış ya da hatırlatma anı geçmiş görevlerde
-// mevcut bildirimler iptal edilir, yeni kurulmaz.
+// TASK reminder: schedules a one-off notification for EACH reminder time, ON
+// the due date, at that time (identifier: `task:${id}:${reminderId}`, doesn't
+// collide with habit/timer ids). The time is INDEPENDENT of the due date's own
+// time. For tasks with no reminder, no due date, already completed, or whose
+// reminder moment has passed, existing notifications are canceled and none are scheduled.
 export async function scheduleTaskReminders(
   task: Task,
   reminders: Reminder[],
@@ -368,10 +381,10 @@ export async function scheduleTaskReminders(
   await cancelTaskReminders(task.id, ctx);
 
   if (task.completed_at) return true;
-  if (reminders.length === 0 || !task.due_date) return true; // hatırlatma ya da son tarih yok
+  if (reminders.length === 0 || !task.due_date) return true; // no reminder or no due date
 
   const prefs = ctx?.prefs ?? (await getNotificationPrefs());
-  if (!prefs.enabled || !prefs.taskReminders) return true; // kullanıcı bu türü kapatmış
+  if (!prefs.enabled || !prefs.taskReminders) return true; // user turned this type off
 
   const granted = await ensurePermission();
   if (!granted) return false;
@@ -380,11 +393,11 @@ export async function scheduleTaskReminders(
   const channelId = channelIdFor(prefs, lang);
   for (const reminder of reminders) {
     const time = parseHm(reminder.time);
-    if (!time) continue; // bozuk saat — sessizce atla
+    if (!time) continue; // malformed time — skip silently
     const when = new Date(`${task.due_date.slice(0, 10)}T00:00:00`);
     if (Number.isNaN(when.getTime())) continue;
     when.setHours(time.hour, time.minute, 0, 0);
-    if (when.getTime() <= Date.now()) continue; // hatırlatma anı geçmiş
+    if (when.getTime() <= Date.now()) continue; // reminder moment has passed
 
     await Notifications.scheduleNotificationAsync({
       identifier: `task:${task.id}:${reminder.id}`,
@@ -407,19 +420,20 @@ export async function cancelTaskReminders(taskId: string, ctx?: RescheduleCtx): 
   await cancelByPrefix(`task:${taskId}:`, ctx);
 }
 
-// Bir görevin hatırlatmalarını GÜNCEL DB durumuna göre yeniden kurar ya da iptal
-// eder. Neden ayrı bir fonksiyon: tekrarlayan görev "tamamla"da tamamlanmak
-// YERİNE bir sonraki tarihe ileri sarabilir (bkz. taskRepo.setCompleted), yani
-// "bu görev artık tamamlandı mı" sorusunun cevabı ancak yazma işleminden SONRA
-// tekrar okunarak bilinir. Bu karar üç ekranda (Bugün, Görevler, düzenleme
-// paneli) birebir aynı beş satır olarak kopyalanmıştı ve dördünde de dönen söz
-// yakalanmıyordu — reddedildiğinde "unhandled rejection" oluyordu.
+// Reschedules or cancels a task's reminders based on the CURRENT DB state.
+// Why a separate function: on "complete" a recurring task might fast-forward
+// to the next date INSTEAD of actually completing (see taskRepo.setCompleted),
+// meaning the answer to "is this task now completed" can only be known by
+// reading again AFTER the write. This logic had been copy-pasted verbatim as
+// the same five lines across three screens (Today, Tasks, the edit sheet),
+// and none of the four call sites handled the returned promise — rejecting it
+// caused an "unhandled rejection".
 //
-// HİÇBİR KOŞULDA REDDETMEZ: bu bir yan etkidir, kullanıcının yaptığı işaretleme
-// işlemi bildirim katmanı yüzünden hata veriyormuş gibi görünmemeli. İzin reddi
-// de burada sessizdir (her işaretlemede izin uyarısı göstermek rahatsız edici
-// olurdu — uyarı yalnızca kullanıcı hatırlatmayı BİLEREK değiştirdiğinde çıkar,
-// bkz. TaskForm/AddSheet kaydetme yolları).
+// NEVER REJECTS UNDER ANY CONDITION: this is a side effect, and the user's
+// checkbox action shouldn't appear to fail just because of the notification
+// layer. Permission denial is also silent here (showing a permission warning
+// on every checkbox toggle would be annoying — the warning only appears when
+// the user DELIBERATELY changes a reminder, see the TaskForm/AddSheet save paths).
 export async function refreshTaskReminders(taskId: string): Promise<void> {
   try {
     const task = taskRepo.getById(taskId);
@@ -433,10 +447,10 @@ export async function refreshTaskReminders(taskId: string): Promise<void> {
   }
 }
 
-// HEDEF hatırlatması: TÜM hatırlatma saatleri her gün "hedefe giriş yapmayı
-// unutma" bildirimi kurar (identifier: `goal:${id}:${reminderId}` — habit/task/
-// timer id'leriyle çakışmaz). Tamamlanan ya da son tarihi geçen hedefte
-// kurulmaz, varsa eskiler iptal edilir.
+// GOAL reminder: schedules a daily "don't forget to log your goal"
+// notification for EACH reminder time (identifier: `goal:${id}:${reminderId}`
+// — doesn't collide with habit/task/timer ids). Not scheduled for a completed
+// goal or one past its deadline; existing ones are canceled if present.
 export async function scheduleGoalReminders(
   goal: Goal,
   reminders: Reminder[],
@@ -445,11 +459,11 @@ export async function scheduleGoalReminders(
   await cancelGoalReminders(goal.id, ctx);
 
   if (reminders.length === 0) return true;
-  if (goalRepo.isCompleted(goal)) return true; // bitmiş hedefe hatırlatma kurulmaz
-  if (goal.deadline && goal.deadline < todayDate()) return true; // süresi geçmiş
+  if (goalRepo.isCompleted(goal)) return true; // no reminder for a completed goal
+  if (goal.deadline && goal.deadline < todayDate()) return true; // deadline passed
 
   const prefs = ctx?.prefs ?? (await getNotificationPrefs());
-  if (!prefs.enabled || !prefs.goalReminders) return true; // kullanıcı bu türü kapatmış
+  if (!prefs.enabled || !prefs.goalReminders) return true; // user turned this type off
 
   const granted = await ensurePermission();
   if (!granted) return false;
@@ -458,7 +472,7 @@ export async function scheduleGoalReminders(
   const channelId = channelIdFor(prefs, lang);
   for (const reminder of reminders) {
     const time = parseHm(reminder.time);
-    if (!time) continue; // bozuk saat — sessizce atla
+    if (!time) continue; // malformed time — skip silently
     await Notifications.scheduleNotificationAsync({
       identifier: `goal:${goal.id}:${reminder.id}`,
       content: {
@@ -481,7 +495,7 @@ export async function cancelGoalReminders(goalId: string, ctx?: RescheduleCtx): 
   await cancelByPrefix(`goal:${goalId}:`, ctx);
 }
 
-// Açılışta tüm hedef hatırlatmalarını yeniden kurar (bkz. rescheduleAllReminders).
+// Reschedules all goal reminders on startup (see rescheduleAllReminders).
 export async function rescheduleAllGoalReminders(goals: Goal[]): Promise<void> {
   const map = reminderRepo.mapByType('goal');
   const withReminder = goals.filter((g) => (map.get(g.id)?.length ?? 0) > 0);
@@ -496,9 +510,9 @@ export async function rescheduleAllGoalReminders(goals: Goal[]): Promise<void> {
   }
 }
 
-// Açılışta tüm saatli, tamamlanmamış, vadesi geçmemiş görev hatırlatmalarını
-// yeniden kurar (bkz. rescheduleAllReminders — aynı gerekçe: cihaz/uygulama
-// yeniden başlaması programlanmış bildirimleri temizleyebilir).
+// Reschedules all timed, incomplete, not-yet-overdue task reminders on
+// startup (see rescheduleAllReminders — same rationale: a device/app restart
+// can clear scheduled notifications).
 export async function rescheduleAllTaskReminders(tasks: Task[]): Promise<void> {
   const map = reminderRepo.mapByType('task');
   const withTime = tasks.filter((t) => !t.completed_at && t.due_date && (map.get(t.id)?.length ?? 0) > 0);
@@ -513,14 +527,14 @@ export async function rescheduleAllTaskReminders(tasks: Task[]): Promise<void> {
   }
 }
 
-// TEK SEFERLİK GEÇİŞ: eski tekil remind_at şeması (identifier = bare habitId /
-// `task:${id}` / `goal:${id}`, olası #weekday / #i{n} son ekleriyle) yeni çoklu
-// hatırlatma önekiyle (`habit:${id}:${reminderId}` vb.) UYUŞMUYOR — yeni
-// cancelByPrefix eskileri asla bulamaz, sessizce kalıcı yetim kalırlardı (eski
-// içerikle sonsuza dek çalmaya devam ederler). Bu yüzden bir kerelik: tüm
-// zamanlanmış bildirimler nuke edilir; hemen ardından çağrılan rescheduleAll*
-// güncel DB durumundan yeni şemayla baştan kurar (veri kaybı yok, yalnız OS'un
-// bildirim kuyruğu temizlenir).
+// ONE-TIME MIGRATION: the old single remind_at schema (identifier = bare
+// habitId / `task:${id}` / `goal:${id}`, with possible #weekday / #i{n}
+// suffixes) DOESN'T MATCH the new multi-reminder prefix (`habit:${id}:${reminderId}`
+// etc.) — the new cancelByPrefix would never find the old ones, leaving them
+// permanently orphaned (they'd keep firing forever with stale content). So,
+// once: all scheduled notifications get nuked; the rescheduleAll* calls that
+// follow immediately after rebuild from the current DB state under the new
+// schema (no data loss, only the OS's notification queue is cleared).
 const MIGRATED_KEY = 'notif:migratedMultiReminder';
 export async function migrateToMultiReminderIfNeeded(): Promise<void> {
   const done = await AsyncStorage.getItem(MIGRATED_KEY);
@@ -529,22 +543,22 @@ export async function migrateToMultiReminderIfNeeded(): Promise<void> {
   await AsyncStorage.setItem(MIGRATED_KEY, '1');
 }
 
-// ÜÇ VARLIK TÜRÜNÜN HATIRLATMALARINI GÜNCEL DB DURUMUNDAN BAŞTAN KURAR.
+// REBUILDS THE REMINDERS OF ALL THREE ENTITY TYPES FROM THE CURRENT DB STATE.
 //
-// Neden tek fonksiyon: aynı üçlü çağrı açılışta (AppData), gün dönümünde
-// (AppData'nın ön plan tetikleyicisi) ve hesap değişiminden sonra (LoginScreen)
-// tekrarlanıyordu; üç kopyanın da kendi hata yakalaması vardı ve biri unutulursa
-// sessizce "unhandled rejection" oluyordu.
+// Why a single function: this same triple call was being repeated on startup
+// (AppData), at day rollover (AppData's foreground trigger), and after
+// account switching (LoginScreen); each of the three copies had its own error
+// handling, and if one was forgotten it silently produced an "unhandled rejection".
 //
-// NEDEN GÜN DÖNÜMÜNDE DE ÇAĞRILMALI: hatırlatmaların geçerliliği TARİHE bağlı
-// (alışkanlığın başlangıç/bitiş tarihi, görevin son tarihi, hedefin deadline'ı)
-// ama kurulan OS tetikleyicileri tarih bilmez — DAILY/WEEKLY sonsuza dek tekrar
-// eder. Eskiden yeniden kurulum YALNIZCA süreç yeniden başladığında çalışıyordu;
-// Android süreci günlerce canlı tuttuğu için bitmiş bir alışkanlık ya da süresi
-// geçmiş bir hedef haftalarca bildirim atmaya devam edebiliyordu (ve yeni
-// başlayan bir alışkanlık da hiç başlamıyordu).
+// WHY IT ALSO NEEDS TO RUN AT DAY ROLLOVER: reminder validity depends on DATE
+// (the habit's start/end date, the task's due date, the goal's deadline), but
+// the scheduled OS triggers don't know about dates — DAILY/WEEKLY repeat
+// forever. Rescheduling used to run ONLY on process restart; since Android
+// keeps the process alive for days, a finished habit or an overdue goal could
+// keep firing notifications for weeks (and a newly-started habit would never
+// start firing either).
 //
-// HİÇBİR KOŞULDA REDDETMEZ: bu bir yan etki katmanıdır, çağıranın akışını bozmaz.
+// NEVER REJECTS UNDER ANY CONDITION: this is a side-effect layer, it must not disrupt the caller's flow.
 export async function rescheduleEverything(userId: string): Promise<void> {
   await rescheduleAllReminders(habitRepo.listByUser(userId)).catch((e) =>
     console.warn('[Bildirim] Alışkanlık hatırlatmaları kurulamadı:', e)
@@ -557,17 +571,17 @@ export async function rescheduleEverything(userId: string): Promise<void> {
   );
 }
 
-// Hesap birleştirme/değiştirme sonrası çağrılır (bkz. LoginScreen.onGoogle):
-// reassignLocalIds (birleştir) tüm alışkanlık/görev/hedef/hatırlatma satırlarına
-// YENİ id verir, clearLocalData (değiştir) hepsini SİLİP yeniden indirir — ikisinde
-// de OS'un bildirim kuyruğunda ESKİ id'lerle kurulmuş tetikleyiciler yetim kalır:
-// cancelHabitReminders(yeniId) onları asla bulamaz, eski içerikle sonsuza dek
-// (çift) çalmaya devam ederler. Yukarıdaki migrateToMultiReminderIfNeeded'daki
-// aynı "nuke + rescheduleAll* güncel DB'den baştan kurar" deseni burada da geçerli.
+// Called after account merge/switch (see LoginScreen.onGoogle):
+// reassignLocalIds (merge) gives ALL habit/task/goal/reminder rows NEW ids,
+// clearLocalData (switch) DELETES them all and re-downloads — in both cases,
+// triggers scheduled with the OLD ids in the OS's notification queue become
+// orphaned: cancelHabitReminders(newId) can never find them, and they keep
+// firing forever with stale content (duplicated). The same "nuke + rescheduleAll*
+// rebuilds from current DB" pattern from migrateToMultiReminderIfNeeded above applies here too.
 export async function cancelAllReminders(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch {
-    // hiç izin/kayıt yoksa hata verebilir — önemsiz, devam.
+    // may throw if there's no permission/record at all — harmless, proceed.
   }
 }

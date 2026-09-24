@@ -1,7 +1,8 @@
-// Almanca çeviri sözlüğü — src/i18n/translations.ts'ten AYRILDI (denetim
-// bulgusu H1: tek dosyada üç dil 1648 satırdı; bir dile dokunmak diff'i tüm
-// sözlüğe yayıyordu). Anahtar kümesi ÜÇ DOSYADA DA AYNI olmalı — eksik anahtar
-// Türkçe'ye düşer (bkz. translate()), yani sessizce yanlış dil gösterebilir.
+// German translation dictionary — SPLIT OFF from src/i18n/translations.ts
+// (audit finding H1: all three languages in one file was 1648 lines; touching
+// one language spread the diff across the whole dictionary). The key set must
+// be IDENTICAL across all three files — a missing key falls back to Turkish
+// (see translate()), which can silently show the wrong language.
 
 import type { Dict } from '@/i18n/dict';
 

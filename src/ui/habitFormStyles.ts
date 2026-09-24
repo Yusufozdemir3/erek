@@ -1,8 +1,8 @@
-// HabitForm'un stil fabrikası — src/ui/HabitForm.tsx'ten AYRILDI (denetim
-// bulgusu H1: bileşen 980 satırdı, stiller tek başına ~210 satır).
+// HabitForm's style factory — SPLIT OUT of src/ui/HabitForm.tsx (review
+// finding H1: the component was 980 lines, with styles alone taking ~210 of them).
 //
-// DESEN (bkz. ThemeProvider): modül seviyesinde StyleSheet.create YOK — tema
-// değişince yeniden üretilebilsin diye fabrika render sırasında çağrılır.
+// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the factory
+// is called at render time so it can be regenerated when the theme changes.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -11,10 +11,10 @@ export type HabitFormStyles = ReturnType<typeof makeHabitFormStyles>;
 
 export const makeHabitFormStyles = (c: Colors) =>
   StyleSheet.create({
-    // Bölüm başlığı — düzenlemede (stepped=false) tüm alan grupları tek scrollda
-    // art arda geldiği için hangi grubun nerede bittiğini/başladığını gösterir
-    // (Kimlik/Sıklık/Hedef/Hatırlatma). Sihirbazda (stepped) her adımda tek bir
-    // başlık görünür — o adımın bağlamını netleştirir, zarar vermez.
+    // Section header — during editing (stepped=false), all field groups follow
+    // one another in a single scroll, so this shows where each group ends/starts
+    // (Identity/Frequency/Target/Reminder). In the wizard (stepped), a single
+    // header shows per step — clarifies that step's context, does no harm.
     sectionHeader: {
       fontSize: 16,
       fontWeight: '800',
@@ -67,7 +67,7 @@ export const makeHabitFormStyles = (c: Colors) =>
     swatchSel: { borderWidth: 3, borderColor: c.text },
     swatchCheck: { color: c.onAccent, fontSize: 14, fontWeight: '800' },
     freqRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-    // "Kaç günde bir? / Haftada kaç kez?" satırı (interval + kota kipleri).
+    // The "Every how many days? / How many times a week?" row (interval + quota modes).
     freqNumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
     freqNumLabel: { fontSize: 14, fontWeight: '600', color: c.text },
     freqNumInput: {
@@ -83,10 +83,11 @@ export const makeHabitFormStyles = (c: Colors) =>
       borderColor: c.border,
     },
     freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
-    // Çipler İKİŞERLİ sarar (flexBasis ~yarım satır + flexGrow ile satırı doldurur).
-    // Eskiden `flex: 1` idi: 4 sıklık çipi tek satıra sıkışıp her biri ¼ genişlik
-    // alıyor, "Haftada X kez" iki satıra kırılıp satır yüksekliğini bozuyordu.
-    // İki çipli kullanımda (katkı biçimi) görünüm aynı kalır — tek satırda ikisi.
+    // Chips wrap TWO PER ROW (flexBasis ~half a row + flexGrow fills out the row).
+    // Used to be `flex: 1`: the 4 frequency chips crammed into one row at ¼
+    // width each, and "X times a week" wrapped onto two lines, breaking the
+    // row height. With two chips (contribution style), the look stays the
+    // same — both on one row.
     freqBtn: {
       flexBasis: '47%',
       flexGrow: 1,
@@ -157,7 +158,7 @@ export const makeHabitFormStyles = (c: Colors) =>
     saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
     saveBtnDisabled: { opacity: 0.4 },
 
-    // Sihirbaz: üstteki kimlik rozeti (kimlik dışındaki adımlarda gösterilir).
+    // Wizard: the identity badge at the top (shown on steps other than identity).
     previewRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -174,7 +175,7 @@ export const makeHabitFormStyles = (c: Colors) =>
     },
     previewTitle: { fontSize: 15, fontWeight: '700', color: c.text, flex: 1 },
 
-    // Sihirbaz: alt gezinme (nokta göstergesi + Geri/İleri).
+    // Wizard: bottom navigation (dot indicator + Back/Next).
     wizardNav: { marginTop: 20 },
     dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 16 },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.border },
@@ -192,7 +193,7 @@ export const makeHabitFormStyles = (c: Colors) =>
     navBackText: { fontSize: 20, fontWeight: '700', color: c.text },
     navNextBtn: { flex: 1 },
 
-    // Sihirbaz: takip tipi seçim kartları (ilk adım).
+    // Wizard: tracking type selection cards (first step).
     kindCard: {
       flexDirection: 'row',
       alignItems: 'center',

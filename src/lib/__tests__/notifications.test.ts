@@ -1,9 +1,9 @@
-// notifications.ts testleri — bu oturumda baştan yazılan çoklu-hatırlatma
-// mantığının hiç testi yoktu. expo-notifications gerçek native modül olduğundan
-// mock'lanır (yalnız bu dosyanın kapsamında); reminderRepo/goalRepo GERÇEK
-// (in-memory SQLite) — schedule fonksiyonlarının aldığı Reminder/Goal/Habit/Task
-// nesneleri düz test fixture'ları, DB'ye yazılması gerekmiyor (yalnız reschedule-all
-// testleri reminderRepo üzerinden gerçek satır okuyor).
+// notifications.ts tests — the multi-reminder logic rewritten from scratch in
+// this session had no tests at all. expo-notifications is a real native
+// module, so it's mocked (scoped to this file only); reminderRepo/goalRepo are
+// REAL (in-memory SQLite) — the Reminder/Goal/Habit/Task objects the schedule
+// functions receive are plain test fixtures that don't need to be written to
+// the DB (only the reschedule-all tests read real rows via reminderRepo).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -40,8 +40,8 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { DEFAULT: 3 },
 }));
 
-// getStoredLang expo-localization'a düşebilir (cihaz dili) — testte gereksiz;
-// sabit 'tr' döndüren dublörle değiştirilir.
+// getStoredLang can fall back to expo-localization (device language) — not
+// needed in tests; replaced with a stub that returns a fixed 'tr'.
 jest.mock('@/i18n/I18nProvider', () => ({ getStoredLang: jest.fn(async () => 'tr') }));
 
 const mockSchedule = Notifications.scheduleNotificationAsync as jest.Mock;
@@ -98,7 +98,7 @@ function makeGoal(overrides: Partial<Goal> = {}): Goal {
     goal_type: 'numeric',
     target_value: 100,
     current_value: 10,
-    value_baseline: 10, // girdisi olmayan hedefte değerin tamamı baseline'dadır
+    value_baseline: 10, // for a goal with no entries, the entire value is in the baseline
     unit: 'sayfa',
     deadline: '2999-01-01',
     completed_at: null,
@@ -116,11 +116,11 @@ function makeReminder(time: string, id = `r-${time}`): Reminder {
 
 beforeEach(async () => {
   await resetTestDb();
-  await AsyncStorage.clear(); // bildirim tercihleri de burada tutulur — testler arası sızmasın
+  await AsyncStorage.clear(); // notification preferences are also kept here — mustn't leak between tests
   jest.clearAllMocks();
   mockGetAll.mockResolvedValue([]);
   mockGetPerms.mockResolvedValue({ granted: true, canAskAgain: true });
-  // AsyncStorage temiz olduğu için getNotificationPrefs hepsi açık döner (varsayılan).
+  // Since AsyncStorage is clean, getNotificationPrefs returns everything on (the default).
 });
 
 describe('cancelByPrefix (cancelHabitReminders/cancelTaskReminders/cancelGoalReminders)', () => {
@@ -128,8 +128,8 @@ describe('cancelByPrefix (cancelHabitReminders/cancelTaskReminders/cancelGoalRem
     mockGetAll.mockResolvedValue([
       { identifier: 'habit:habit-1:r1' },
       { identifier: 'habit:habit-1:r2#3' },
-      { identifier: 'habit:habit-2:r9' }, // başka alışkanlık — dokunulmamalı
-      { identifier: 'task:habit-1:r1' }, // farklı entity türü ama benzer id — dokunulmamalı
+      { identifier: 'habit:habit-2:r9' }, // a different habit — must not be touched
+      { identifier: 'task:habit-1:r1' }, // different entity type but a similar id — must not be touched
     ]);
 
     await cancelHabitReminders('habit-1');
@@ -188,11 +188,11 @@ describe('scheduleHabitReminders', () => {
     expect(mockSchedule).not.toHaveBeenCalled();
   });
 
-  // Yaşam aralığı: OS tetikleyicileri (DAILY/WEEKLY) tarih bilmez, sonsuza dek
-  // tekrar eder. Aralık bu yüzden her programlamada burada denetlenir.
+  // Lifetime range: OS triggers (DAILY/WEEKLY) don't know about dates, they
+  // repeat forever. That's why the range is checked here on every scheduling pass.
   it('HENÜZ BAŞLAMAMIŞ alışkanlıkta kurulmaz (başlangıç tarihi gelecekte)', async () => {
-    // "1 Eylül'de başlasın" diyen kullanıcı bugünden bildirim almamalı; alışkanlık
-    // listelerde de görünmüyor (useTodayData aynı aralığı süzüyor).
+    // A user who said "start on Sept 1" shouldn't get notifications starting
+    // today; the habit also doesn't show up in lists (useTodayData filters the same range).
     const habit = makeHabit({ start_date: '2999-01-01' });
 
     const ok = await scheduleHabitReminders(habit, [makeReminder('08:00')]);
@@ -290,7 +290,7 @@ describe('scheduleGoalReminders', () => {
 describe('rescheduleAllReminders / rescheduleAllTaskReminders / rescheduleAllGoalReminders', () => {
   it('yalnızca DB’de gerçekten hatırlatması olan varlıkları yeniden kurar', async () => {
     reminderRepo.create('habit', 'h1', '08:00');
-    const habits = [makeHabit({ id: 'h1' }), makeHabit({ id: 'h2' })]; // h2'nin hiç hatırlatması yok
+    const habits = [makeHabit({ id: 'h1' }), makeHabit({ id: 'h2' })]; // h2 has no reminder at all
 
     await rescheduleAllReminders(habits);
 
@@ -307,18 +307,19 @@ describe('rescheduleAllReminders / rescheduleAllTaskReminders / rescheduleAllGoa
     expect(mockSchedule).not.toHaveBeenCalled();
   });
 
-  // Her scheduleX çağrısı önce cancelX yapar, o da kurulu bildirimlerin TAMAMINI
-  // native köprüden çeker. Bu tarama varlık başına tekrarlanırsa açılış maliyeti
-  // varlık sayısıyla doğrusal büyür (80 varlık = 80 tam tarama, hepsi seri).
-  // Tur başına TEK tarama olmalı — bu test o kazancı kilitler.
+  // Every scheduleX call first does a cancelX, which pulls ALL currently
+  // scheduled notifications from the native bridge. If this scan repeats per
+  // entity, the startup cost grows linearly with the entity count (80
+  // entities = 80 full scans, all sequential). There should be ONE scan per
+  // pass — this test locks in that gain.
   it('varlık sayısından bağımsız olarak kurulu bildirimleri TEK kez tarar', async () => {
     for (const id of ['h1', 'h2', 'h3', 'h4', 'h5']) reminderRepo.create('habit', id, '08:00');
     const habits = ['h1', 'h2', 'h3', 'h4', 'h5'].map((id) => makeHabit({ id }));
 
     await rescheduleAllReminders(habits);
 
-    expect(mockSchedule).toHaveBeenCalledTimes(5); // beşi de kuruldu
-    expect(mockGetAll).toHaveBeenCalledTimes(1); // ama tarama bir kez yapıldı
+    expect(mockSchedule).toHaveBeenCalledTimes(5); // all five were scheduled
+    expect(mockGetAll).toHaveBeenCalledTimes(1); // but the scan was done once
   });
 
   it('eski tetikleyiciler toplu turda da iptal edilir (anlık görüntü kullanılır)', async () => {
@@ -327,7 +328,7 @@ describe('rescheduleAllReminders / rescheduleAllTaskReminders / rescheduleAllGoa
     mockGetAll.mockResolvedValue([
       { identifier: 'habit:h1:eski' },
       { identifier: 'habit:h2:eski' },
-      { identifier: 'timer:h1' }, // zamanlayıcı bildirimi — DOKUNULMAMALI
+      { identifier: 'timer:h1' }, // a timer notification — must NOT be touched
     ]);
 
     await rescheduleAllReminders([makeHabit({ id: 'h1' }), makeHabit({ id: 'h2' })]);
@@ -340,7 +341,7 @@ describe('rescheduleAllReminders / rescheduleAllTaskReminders / rescheduleAllGoa
 
   it('görev: yalnız tamamlanmamış + son tarihli + hatırlatmalı görevleri kurar', async () => {
     reminderRepo.create('task', 't1', '09:00');
-    reminderRepo.create('task', 't2', '09:00'); // t2 tamamlanmış — filtrelenmeli
+    reminderRepo.create('task', 't2', '09:00'); // t2 is completed — must be filtered out
 
     await rescheduleAllTaskReminders([
       makeTask({ id: 't1' }),
@@ -365,6 +366,6 @@ describe('migrateToMultiReminderIfNeeded', () => {
     expect(mockCancelAll).toHaveBeenCalledTimes(1);
 
     await migrateToMultiReminderIfNeeded();
-    expect(mockCancelAll).toHaveBeenCalledTimes(1); // ikinci kez artmadı
+    expect(mockCancelAll).toHaveBeenCalledTimes(1); // didn't increase the second time
   });
 });

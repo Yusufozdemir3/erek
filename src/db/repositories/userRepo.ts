@@ -1,7 +1,7 @@
-// Kullanıcı (User) repository.
-// "Girişsiz başla" akışının temeli: uygulama ilk açıldığında anonim bir
-// yerel kullanıcı oluşturulur. Kullanıcı sonradan hesap açarsa bu kayıt
-// e-posta ile ilişkilendirilir (is_anonymous -> 0).
+// User repository.
+// The foundation of the "start without signing in" flow: an anonymous local
+// user is created the first time the app opens. If the user later signs up,
+// this record gets linked to their email (is_anonymous -> 0).
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -19,8 +19,8 @@ function rowToUser(row: any): User {
 }
 
 export const userRepo = {
-  // Cihazdaki mevcut kullanıcıyı döner; yoksa anonim olarak oluşturur.
-  // Uygulama açılışında çağrılır - her zaman bir kullanıcı garantiler.
+  // Returns the device's existing user; creates an anonymous one if there isn't one.
+  // Called at app startup - always guarantees a user.
   getOrCreateLocal(): User {
     const db = getDb();
     const existing = db.getFirstSync<any>(
@@ -35,11 +35,11 @@ export const userRepo = {
        VALUES (?, NULL, 1, ?, NULL, 0)`,
       [id, now]
     );
-    // Yeni ekleneni tekrar sorgulamaya gerek yok — alanlar zaten elimizde.
+    // No need to query the newly-inserted row again — we already have the fields.
     return { id, email: null, is_anonymous: 1, updated_at: now, deleted_at: null, synced: 0 };
   },
 
-  // Anonim kullanıcıyı kayıtlı hesaba yükseltir (Ayarlar'dan hesap bağlanınca).
+  // Upgrades the anonymous user to a registered account (when an account gets linked from Settings).
   upgradeToAccount(id: string, email: string): void {
     const db = getDb();
     db.runSync(
@@ -48,7 +48,7 @@ export const userRepo = {
     );
   },
 
-  // Hesaptan çıkışta yerel kullanıcıyı yeniden anonim yapar (veri cihazda kalır).
+  // On sign-out, turns the local user back to anonymous (data stays on the device).
   downgradeToLocal(id: string): void {
     const db = getDb();
     db.runSync(

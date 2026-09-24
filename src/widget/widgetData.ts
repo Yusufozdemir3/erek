@@ -1,15 +1,14 @@
-// Ana ekran widget'ının snapshot'ını ÜRETEN taraf (uygulama süreci).
-// Bugüne planlı alışkanlıkları repo'dan okur, aktif tema/dil ile yerelleştirilmiş
-// bir snapshot kurar, AsyncStorage'a yazar ve (varsa) native widget'ı tazeler.
+// The side that PRODUCES the home-screen widget's snapshot (the app process).
+// Reads today's scheduled habits from the repo, builds a snapshot localized
+// with the active theme/language, writes it to AsyncStorage, and refreshes the native widget (if present).
 //
-// refreshWidget(userId) TAMAMEN kendine yeter: dil ve temayı AsyncStorage'dan
-// kendisi okur (React context gerektirmez) — böylece herhangi bir yerden tek
-// argümanla çağrılabilir (notifications.ts'in getStoredLang/translate deseni).
+// refreshWidget(userId) is FULLY self-sufficient: it reads language and theme
+// from AsyncStorage itself (no React context needed) — so it can be called
+// from anywhere with a single argument (the same pattern as notifications.ts's getStoredLang/translate).
 //
-// EXPO GO GÜVENLİĞİ: react-native-android-widget yalnızca lazy require ile ve
-// try/catch içinde yüklenir. Expo Go'da native modül yoktur; barrel import'u
-// orada patlayabilir, bu yüzden snapshot her koşulda yazılır ama native güncelleme
-// yalnızca gerçek build'de (Android) denenir.
+// EXPO GO SAFETY: react-native-android-widget is only loaded via a lazy
+// require, inside try/catch. Expo Go has no native module; the barrel import
+// could throw there, so the snapshot is always written, but the native update is only attempted in a real (Android) build.
 
 import { Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,13 +28,13 @@ import {
 } from '@/ui/theme';
 import { WIDGET_NAME, writeSnapshot, type WidgetColors, type WidgetSnapshot } from './widgetSnapshot';
 
-// ThemeProvider ile aynı AsyncStorage anahtarları — tema tercihini React dışından
-// okumak için (bkz. src/ui/ThemeProvider.tsx).
+// Same AsyncStorage keys as ThemeProvider — to read the theme preference
+// outside React (see src/ui/ThemeProvider.tsx).
 const MODE_KEY = 'theme:mode';
 const ACCENT_KEY = 'theme:accent';
 const DARK_STYLE_KEY = 'theme:darkStyle';
 
-// Aktif paleti React dışında çözer: kayıtlı mod + vurgu + koyu stil + sistem şeması.
+// Resolves the active palette outside React: stored mode + accent + dark style + system scheme.
 async function resolveColors(): Promise<WidgetColors> {
   const [mode, accentRaw, darkStyle] = await Promise.all([
     AsyncStorage.getItem(MODE_KEY),
@@ -63,8 +62,8 @@ async function resolveColors(): Promise<WidgetColors> {
   };
 }
 
-// Bugüne planlı (sıklık + yaşam aralığı) alışkanlıkların o günkü durumundan
-// widget snapshot'ı kurar. useTodayData'daki filtre mantığının aynısı.
+// Builds the widget snapshot from today's state of habits scheduled for today
+// (frequency + life range). Same filter logic as useTodayData.
 export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot> {
   const lang = await getStoredLang();
   const colors = await resolveColors();
@@ -101,20 +100,20 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
   };
 }
 
-// Snapshot'ı yazar ve (Android + gerçek build ise) native widget'ı yeniden çizer.
-// Hata hiçbir koşulda uygulamayı bozmamalı: her adım savunmacı.
+// Writes the snapshot and (on Android in a real build) re-renders the native
+// widget. An error must never break the app under any circumstance: every step is defensive.
 export async function refreshWidget(userId: string): Promise<void> {
   let snap: WidgetSnapshot;
   try {
     snap = await buildTodaySnapshot(userId);
   } catch {
-    return; // veri okunamadı — widget'a dokunma
+    return; // couldn't read the data — leave the widget alone
   }
   await writeSnapshot(snap).catch(() => {});
 
   if (Platform.OS !== 'android') return;
   try {
-    // Lazy: paket yalnızca native modül varken (dev/prod build) yüklensin.
+    // Lazy: only load the package when the native module exists (dev/prod build).
     const { requestWidgetUpdate } = require('react-native-android-widget');
     const React = require('react');
     const { TodayWidget } = require('./TodayWidget');
@@ -124,6 +123,6 @@ export async function refreshWidget(userId: string): Promise<void> {
       widgetNotFound: () => {},
     });
   } catch {
-    // Expo Go ya da widget desteği yok — snapshot yazıldı, native güncelleme atlandı.
+    // Expo Go, or no widget support — the snapshot was written, the native update was skipped.
   }
 }

@@ -1,32 +1,34 @@
-// SIRADAKİ ADIM istatistiği — saf fonksiyon (goalProjection/habitSeries ile aynı
-// gerekçe: React'siz, test edilebilir, zaman parametreli).
+// NEXT MILESTONE statistic — pure function (same rationale as
+// goalProjection/habitSeries: no React, testable, time is a parameter).
 //
-// MODEL (kullanıcı kararı 2026-07-23): hedef istatistiklerinin altında adımların
-// TOPLU özeti (kalan adım / gün başına adım / haftada adım) DEĞİL, yalnızca
-// SIRADAKİ adımın durumu gösterilir. Kullanıcının o an sorduğu soru "toplamda
-// kaç adım kaldı" değil, "şimdi neye çalışıyorum ve yetişiyor muyum".
+// MODEL (user decision 2026-07-23): under the goal statistics, instead of an
+// AGGREGATE summary of milestones (remaining steps / steps per day / per
+// week), only the status of the NEXT milestone is shown. The question the
+// user is actually asking at that moment isn't "how many steps are left in
+// total" but "what am I working on right now, and am I on track".
 //
-// Sıradaki adım = listede (position sırası) HENÜZ ULAŞILMAMIŞ ilk adım.
-// Miktarlı adımlarda "ulaşıldı" current_value'dan türer (kümülatif eşik),
-// miktarsız (checklist) adımlarda elle işaretlemeden gelir — bkz. milestoneViews.
+// Next milestone = the first NOT-YET-REACHED milestone in the list (position
+// order). For amount-based milestones, "reached" is derived from
+// current_value (a cumulative threshold); for amount-less (checklist)
+// milestones it comes from manual checking — see milestoneViews.
 
 import { diffDays } from './helpers';
 import type { MilestoneView } from '@/db';
 
 export interface NextMilestoneStat {
   title: string;
-  // — Miktarlı adımlarda dolu; checklist adımında null —
-  targetAmount: number | null; // adımın hedefi
-  remainingAmount: number | null; // o hedefe ne kadar kaldı (0'ın altına inmez)
-  ratio: number; // 0..1 — adımın kendi doluluk oranı ("yüzde kaç"tayız)
-  // — Son tarihi olan adımlarda dolu —
+  // — Populated for amount-based milestones; null for a checklist milestone —
+  targetAmount: number | null; // the milestone's target
+  remainingAmount: number | null; // how much is left to that target (never goes below 0)
+  ratio: number; // 0..1 — the milestone's own completion ratio ("what percent are we at")
+  // — Populated for milestones with a due date —
   dueDate: string | null;
-  daysLeft: number | null; // negatifse gecikmiş
+  daysLeft: number | null; // negative means overdue
   isOverdue: boolean;
-  overdueDays: number | null; // yalnız isOverdue iken pozitif dolu
+  overdueDays: number | null; // positive, populated only when isOverdue
 }
 
-// Ulaşılmamış ilk adımın istatistiği; hiç adım yoksa ya da hepsi tamamlandıysa null.
+// Statistic for the first unreached milestone; null if there are no milestones or all are completed.
 export function nextMilestoneStat(
   views: MilestoneView[],
   currentValue: number,

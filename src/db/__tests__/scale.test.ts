@@ -1,11 +1,11 @@
-// ÖLÇEK TESTLERİ — bir yılı aşkın kullanan bir kullanıcının gerçek büyüklükleri.
+// SCALE TESTS — the real-world sizes of a user who's been active for over a year.
 //
-// NEDEN VAR: P2/P3 turlarında iki değişiklik büyük veriye özgü davranışlar
-// ekledi — Görevler ekranının sorgu sınırı (taskRepo.listForScreen) ve toplu
-// alışkanlık sorgularının SQLite `IN (…)` bağlı değişken sınırını aşmaması
-// (helpers.chunk, SQL_PARAM_CHUNK). İkisi de küçük veride sessizce doğru
-// görünüp yalnız SINIRIN ÖTESİNDE bozulabilecek türden hatalar taşır — bu
-// yüzden testler bilerek sınırı AŞAN boyutlarda çalışır.
+// WHY THIS EXISTS: two changes in the P2/P3 rounds added behavior specific to
+// large data — the Tasks screen's query limit (taskRepo.listForScreen) and
+// keeping bulk habit queries from exceeding SQLite's `IN (…)` bound-parameter
+// limit (helpers.chunk, SQL_PARAM_CHUNK). Both are the kind of bug that looks
+// silently correct on small data and only breaks BEYOND the limit — that's
+// why these tests deliberately run at sizes that EXCEED the limit.
 
 import { habitRepo } from '../repositories/habitRepo';
 import { subtaskRepo } from '../repositories/subtaskRepo';
@@ -42,28 +42,28 @@ describe('taskRepo.listForScreen — büyük görev listesi', () => {
 
     const list = taskRepo.listForScreen(userId, '2026-06-01');
 
-    // Ekranın gerçekten çizeceği liste: 800 + 50, 2000 civarı DEĞİL — sanallaştırma
-    // gerekmeden akıcı kalması gereken kısım budur.
+    // What the screen actually renders: 800 + 50, NOT ~2000 — this is the part
+    // that has to stay smooth without needing virtualization.
     expect(list.length).toBe(ACTIVE + RECENT_COMPLETED);
     expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(OLD_COMPLETED);
 
-    // Sıralama korunuyor: tamamlanmamışlar üstte.
+    // Ordering is preserved: incomplete ones stay on top.
     const firstCompletedIdx = list.findIndex((t) => t.completed_at !== null);
     expect(list.slice(0, firstCompletedIdx).every((t) => t.completed_at === null)).toBe(true);
 
-    // "Tümünü göster" (since=null) gerçekten hepsini verir.
+    // "Show all" (since=null) really does return everything.
     expect(taskRepo.listForScreen(userId, null).length).toBe(ACTIVE + OLD_COMPLETED + RECENT_COMPLETED);
   }, 30_000);
 });
 
 describe('habitRepo — SQL_PARAM_CHUNK sınırını aşan alışkanlık sayısı', () => {
   it(`${SQL_PARAM_CHUNK}'den FAZLA alışkanlıkta getDayStates hiçbirini kaybetmez/kopyalamaz`, () => {
-    const COUNT = SQL_PARAM_CHUNK + 137; // sınırı bilerek aşıyor
+    const COUNT = SQL_PARAM_CHUNK + 137; // deliberately exceeds the limit
     const habits = Array.from({ length: COUNT }, (_, i) =>
       habitRepo.create({ user_id: userId, title: `Alışkanlık ${i}` })
     );
     const today = '2026-07-01';
-    // Yalnız BİR KISMINI işaretle — sonuçta hiç yer almaması gerekenleri de sına.
+    // Mark only PART of them — also exercises the ones that should be absent from the result.
     for (let i = 0; i < habits.length; i += 3) {
       habitRepo.toggleLog(habits[i].id, today, true);
     }
@@ -77,8 +77,8 @@ describe('habitRepo — SQL_PARAM_CHUNK sınırını aşan alışkanlık sayıs�
       if (i % 3 === 0) {
         expect(states[habits[i].id]).toEqual({ amount: 0, completed: true });
       } else {
-        // İşaretlenmemiş alışkanlık sonuçta hiç yer almaz (repo'nun dokümante
-        // ettiği sözleşme) — parçalama bunu bozmamalı.
+        // An unmarked habit is absent from the result entirely (the contract
+        // the repo documents) — chunking must not break that.
         expect(states[habits[i].id]).toBeUndefined();
       }
     }
@@ -89,8 +89,8 @@ describe('habitRepo — SQL_PARAM_CHUNK sınırını aşan alışkanlık sayıs�
     const habits = Array.from({ length: COUNT }, (_, i) =>
       habitRepo.create({ user_id: userId, title: `A${i}` })
     );
-    // Parça sınırının TAM ETRAFINDAKİ alışkanlıkları özellikle işaretle — bir
-    // off-by-one hatası tam da burada bir günü yanlış parçaya düşürürdü.
+    // Specifically mark the habits RIGHT AROUND the chunk boundary — an
+    // off-by-one bug would drop a day into the wrong chunk exactly here.
     const boundary = [SQL_PARAM_CHUNK - 1, SQL_PARAM_CHUNK, SQL_PARAM_CHUNK + 1];
     for (const i of boundary) habitRepo.toggleLog(habits[i].id, '2026-07-05', true);
 
@@ -103,7 +103,7 @@ describe('habitRepo — SQL_PARAM_CHUNK sınırını aşan alışkanlık sayıs�
     for (const i of boundary) {
       expect([...out[habits[i].id]]).toEqual(['2026-07-05']);
     }
-    // İşaretlenmeyenler sonuçta yer almıyor.
+    // Unmarked ones are absent from the result.
     expect(out[habits[0].id]).toBeUndefined();
   }, 30_000);
 });
@@ -114,7 +114,7 @@ describe('subtaskRepo.countsForTasks — SQL_PARAM_CHUNK sınırını aşan gör
     const tasks = Array.from({ length: COUNT }, (_, i) =>
       taskRepo.create({ user_id: userId, title: `G${i}` })
     );
-    // Parça sınırındaki görevlere alt görev ekle.
+    // Add subtasks to the tasks at the chunk boundary.
     const boundary = [SQL_PARAM_CHUNK - 1, SQL_PARAM_CHUNK, SQL_PARAM_CHUNK + 1];
     for (const i of boundary) {
       const s = subtaskRepo.create(tasks[i].id, 'Adım');
@@ -127,6 +127,6 @@ describe('subtaskRepo.countsForTasks — SQL_PARAM_CHUNK sınırını aşan gör
     for (const i of boundary) {
       expect(counts[tasks[i].id]).toEqual({ done: 1, total: 2 });
     }
-    expect(counts[tasks[0].id]).toBeUndefined(); // alt görevsiz görev yer almaz
+    expect(counts[tasks[0].id]).toBeUndefined(); // a task with no subtasks is absent
   }, 30_000);
 });

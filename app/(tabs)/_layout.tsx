@@ -1,12 +1,12 @@
-// Alt sekme çubuğu düzeni: Bugün, Görevler, [＋], Alışkanlıklar, Hedefler.
-// Ortadaki kare ＋ bir sekme değil — dokununca 45° dönerek ×'e döner ve üç
-// seçenek (Görev·Alışkanlık·Hedef) yaylanarak açılır (AddFab); seçilen tür
-// doğrudan ekleme formunda (AddSheet) açılır. Ayarlar sekme olmaktan
-// çıktı: içeriği /profile ekranında, ekran başlıklarındaki 👤 ikonundan açılır.
-// Her sekmenin kendi büyük başlığı olduğu için sekme başlığı (header) gizli.
-// İkonlar çizgi (line-art) ikon setinden çiziliyor: Feather (takvim/onay-kutusu/
-// hedef) + Ionicons (alev). @expo/vector-icons Expo ile birlikte gelir; ekstra
-// bağımlılık yok. Odaktaki sekme primary renkte, diğerleri soluk (faint).
+// Bottom tab bar layout: Today, Tasks, [＋], Habits, Goals.
+// The square ＋ in the middle isn't a tab — tapping it rotates 45° into an ×
+// and springs open three options (Task·Habit·Goal) (AddFab); the chosen type
+// opens straight into the add form (AddSheet). Settings stopped being a tab:
+// its content lives on the /profile screen, opened from the 👤 icon in screen
+// headers. Every tab has its own large title, so the tab bar's own header is hidden.
+// Icons are drawn from a line-art icon set: Feather (calendar/checkbox/target)
+// + Ionicons (flame). @expo/vector-icons ships with Expo, so no extra
+// dependency. The focused tab is primary-colored, the rest are faint.
 
 import { useState } from 'react';
 import { Tabs } from 'expo-router';
@@ -21,11 +21,11 @@ import { useI18n } from '@/i18n/I18nProvider';
 export default function TabsLayout() {
   const { colors } = useTheme();
   const { t } = useI18n();
-  // Kare ＋ butonunun "swing" menüsü (fan) ve seçilince açılan ekleme formu.
+  // The square ＋ button's "swing" menu (fan) and the add form it opens once a choice is made.
   const [fanOpen, setFanOpen] = useState(false);
   const [sheetStep, setSheetStep] = useState<Step | null>(null);
-  // Aynı butona UZUN BASINCA açılan bağımsız sayaç seçici (bkz. TimerPicker) —
-  // kısa dokunuşun Görev·Alışkanlık·Hedef menüsüyle çakışmaması için ayrı state.
+  // A separate timer picker (see TimerPicker) opens on a LONG PRESS of the same
+  // button — kept as its own state so a short tap's Task·Habit·Goal menu doesn't collide with it.
   const [timerPickerOpen, setTimerPickerOpen] = useState(false);
 
   return (
@@ -84,8 +84,8 @@ export default function TabsLayout() {
         />
       </Tabs>
 
-      {/* Kare ＋ dokununca yaylanarak açılan üç seçenek (Görev·Alışkanlık·Hedef).
-          Seçilen tür doğrudan ilgili AddSheet formunda açılır. */}
+      {/* The square ＋ springs open into three options (Task·Habit·Goal) on tap.
+          The chosen type opens directly into its AddSheet form. */}
       <AddFab
         open={fanOpen}
         onClose={() => setFanOpen(false)}
@@ -103,7 +103,7 @@ export default function TabsLayout() {
 
       <TimerPicker visible={timerPickerOpen} onClose={() => setTimerPickerOpen(false)} />
 
-      {/* Yalnız bir zamanlayıcı çalışırken görünür — bkz. TimerStrip. */}
+      {/* Only visible while a timer is running — see TimerStrip. */}
       <TimerStrip />
     </>
   );

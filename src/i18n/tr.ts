@@ -1,12 +1,13 @@
-// Türkçe çeviri sözlüğü — src/i18n/translations.ts'ten AYRILDI (denetim
-// bulgusu H1: tek dosyada üç dil 1648 satırdı; bir dile dokunmak diff'i tüm
-// sözlüğe yayıyordu). Anahtar kümesi ÜÇ DOSYADA DA AYNI olmalı — eksik anahtar
-// Türkçe'ye düşer (bkz. translate()), yani sessizce yanlış dil gösterebilir.
+// Turkish translation dictionary — SPLIT OFF from src/i18n/translations.ts
+// (audit finding H1: all three languages in one file was 1648 lines; touching
+// one language spread the diff across the whole dictionary). The key set must
+// be IDENTICAL across all three files — a missing key falls back to Turkish
+// (see translate()), which can silently show the wrong language.
 
 import type { Dict } from '@/i18n/dict';
 
 export const tr: Dict = {
-  // Ortak eylemler
+  // Common actions
   'common.add': 'Ekle',
   'common.save': 'Kaydet',
   'common.delete': 'Sil',
@@ -21,13 +22,13 @@ export const tr: Dict = {
   'common.deleteConfirm': 'Silmek için tekrar bas',
   'app.dataLayerError': 'Veri katmanı başlatılamadı',
 
-  // Sekmeler
+  // Tabs
   'tabs.today': 'Bugün',
   'tabs.tasks': 'Görevler',
   'tabs.habits': 'Alışkanlıklar',
   'tabs.goals': 'Hedefler',
 
-  // Ekleme menüsü (AddSheet)
+  // Add menu (AddSheet)
   'add.menuTitle': 'Ne eklemek istersin?',
   'add.task': 'Görev',
   'add.taskDesc': 'Tek seferlik yapılacak iş',
@@ -41,7 +42,7 @@ export const tr: Dict = {
   'add.expand': 'Ekle',
   'add.collapse': 'Ekleme menüsünü kapat',
 
-  // Alışkanlık tipi seçimi
+  // Habit type selection
   'add.kindBinary': 'Basit (tik)',
   'add.kindBinaryDesc': 'Yaptım / yapmadım',
   'add.kindNumeric': 'Sayısal değer',
@@ -49,7 +50,7 @@ export const tr: Dict = {
   'add.kindTimer': 'Zamanlayıcı',
   'add.kindTimerDesc': 'Geri sayım — ör. 20 dk meditasyon',
 
-  // Görev formu
+  // Task form
   'task.title': 'Başlık',
   'task.titlePlaceholder': 'Görev başlığı',
   'task.priority': 'Öncelik',
@@ -67,7 +68,7 @@ export const tr: Dict = {
   'task.repeat': 'Tekrar',
   'task.repeatNone': 'Tekrar yok',
 
-  // Alışkanlık formu
+  // Habit form
   'habit.kindLabel': 'Takip tipi',
   'habit.sectionIdentity': 'Kimlik',
   'habit.sectionSchedule': 'Sıklık ve tarih aralığı',
@@ -129,7 +130,7 @@ export const tr: Dict = {
     'Yani günde {target} {habitUnit} yaparsan, hedefe yaklaşık {result} {goalUnit} eklenir.',
   'habit.edit': 'Alışkanlığı düzenle',
 
-  // Alışkanlık ikon seti etiketleri (erişilebilirlik) — bkz. habitIcons.tsx
+  // Habit icon set labels (accessibility) — see habitIcons.tsx
   'habitIcon.water': 'Su',
   'habitIcon.run': 'Yürüyüş',
   'habitIcon.cycle': 'Bisiklet',
@@ -161,7 +162,7 @@ export const tr: Dict = {
   'habitIcon.heart': 'Sağlık',
   'habitIcon.trophy': 'Başarı',
 
-  // Gün kısaltmaları (Pazartesi → Pazar)
+  // Weekday abbreviations (Monday → Sunday)
   'weekday.mon': 'Pzt',
   'weekday.tue': 'Sal',
   'weekday.wed': 'Çar',
@@ -170,13 +171,13 @@ export const tr: Dict = {
   'weekday.sat': 'Cmt',
   'weekday.sun': 'Paz',
 
-  // Öncelik etiketleri
+  // Priority labels
   'priority.low': 'Düşük',
   'priority.medium': 'Orta',
   'priority.high': 'Yüksek',
   'priority.a11y': 'Öncelik: {label}',
 
-  // Tarih yardımcıları (theme.ts'teki paylaşılan formatlayıcılar için)
+  // Date helpers (for the shared formatters in theme.ts)
   'date.noDate': 'Tarihsiz',
   'date.daysLeft': '{n} gün kaldı',
   'date.daysLeft_one': '{n} gün kaldı',
@@ -192,11 +193,11 @@ export const tr: Dict = {
   'time.switchToManual': 'Elle yazmaya geç',
   'time.switchToWheel': 'Tekerlekle seçmeye geç',
 
-  // Ekran alt başlıkları
+  // Screen subtitles
   'screen.tasksSubtitle': '{n} görev bekliyor',
   'screen.tasksSubtitle_one': '{n} görev bekliyor',
-  // "Görevler" ekranı eski tamamlananları varsayılan olarak gizler (liste
-  // yıllar içinde sınırsız büyüyordu); bu düğme hepsini açar.
+  // The "Tasks" screen hides old completed items by default (the list grew
+  // unbounded over the years); this button reveals them all.
   'tasks.showOlderCompleted': 'Daha eski {n} tamamlanan görevi göster',
   'tasks.showOlderCompleted_one': 'Daha eski {n} tamamlanan görevi göster',
   'screen.habitsSubtitle': 'Her gün küçük bir adım',
@@ -206,12 +207,12 @@ export const tr: Dict = {
   'today.hideCompleted': 'Tamamlananları gizle',
   'today.filterEmpty': 'Bu filtreye uyan bir şey yok',
 
-  // Ana ekran widget'ı
+  // Home screen widget
   'widget.title': 'Bugün',
   'widget.summary': '{done}/{total} tamamlandı',
   'widget.empty': 'Bugüne planlı alışkanlık yok',
 
-  // Boş durumlar
+  // Empty states
   'empty.todayTitle': 'Bugün için her şey tamam',
   'empty.todayBody': 'Planında bir şey yok — keyfini çıkar.',
   'empty.otherDayTitle': 'Bu gün boş',
@@ -222,7 +223,7 @@ export const tr: Dict = {
   'empty.goalsTitle': 'Henüz hedef yok',
   'empty.goalsBody': 'Alttaki ＋ ile büyük bir hedef koy — sayısal ya da tarihli.',
 
-  // Hedef formu
+  // Goal form
   'goal.titlePlaceholder': 'Hedef başlığı (örn. 100 km koş)',
   'goal.numeric': 'Sayısal',
   'goal.milestoneType': 'Parçalı',
@@ -265,7 +266,7 @@ export const tr: Dict = {
   'goal.markIncomplete': 'Tamamlanmadı işaretle',
   'goal.entryHistory': 'Girdi geçmişi',
 
-  // Bildirim izni uyarısı
+  // Notification permission warning
   'notif.noPermTitle': 'Bildirim izni yok',
   'notif.noPermBody':
     'Hatırlatma kaydedildi ama bildirim gönderebilmek için izin gerekiyor. Telefon ayarlarından bu uygulamaya bildirim izni verebilirsin.',
@@ -283,7 +284,7 @@ export const tr: Dict = {
   'notif.timerDoneTitle': 'Süre doldu ⏱️',
   'notif.timerDoneBody': '{title} — hedefe ulaştın!',
 
-  // Profil / görünüm / dil
+  // Profile / appearance / language
   'profile.title': 'Profil',
   'notifications.title': 'Bildirimler',
   'notifications.soundVibrationTitle': 'Ses ve titreşim',
@@ -332,8 +333,8 @@ export const tr: Dict = {
   'profile.hapticsEnabled': 'Dokunsal geri bildirim',
   'profile.hapticsHint':
     'İşaretleme, +/− ve zamanlayıcı gibi dokunuşlarda hafif titreşim. Bildirim titreşiminden ayrıdır.',
-  // Erişilebilirlik etiketleri (accessibilityLabel) — ekranda görünmez ama
-  // ekran okuyucular için çevrilmeleri gerekir.
+  // Accessibility labels (accessibilityLabel) — not visible on screen but
+  // must be translated for screen readers.
   'common.editA11y': '{title}, düzenle',
   'common.deleteA11y': '{title}, sil',
   'task.subtaskCountSuffix': 'alt görev',
@@ -351,11 +352,11 @@ export const tr: Dict = {
   'habit.decreaseA11y': 'Miktarı azalt',
   'habit.increaseA11y': 'Miktarı artır',
 
-  // Onboarding (ilk açılış tanıtımı)
+  // Onboarding (first-launch intro)
   'onboarding.skipA11y': 'Tanıtımı atla',
   'onboarding.skip': 'Atla',
 
-  // — Giriş ekranı (yalnız Google) —
+  // — Login screen (Google only) —
   'login.title': 'Giriş yap',
   'login.subtitle': 'Verilerin buluta yedeklensin, telefonunu değiştirdiğinde kaldığın yerden devam et.',
   'login.google': 'Google ile devam et',
@@ -378,7 +379,7 @@ export const tr: Dict = {
   'onboarding.page4Body':
     "Her şey önce cihazında saklanır, internetsiz çalışır. İstersen Profil'den hesap bağlayıp buluta yedekleyebilir, başka cihazlarla eşitleyebilirsin.",
 
-  // İstatistik ekranı (habit/[id].tsx)
+  // Stats screen (habit/[id].tsx)
   'stats.notFound': 'Alışkanlık bulunamadı.',
   'stats.currentStreak': 'Güncel seri',
   'stats.longestStreak': 'En uzun seri',
@@ -403,12 +404,12 @@ export const tr: Dict = {
   'stats.prevMonthA11y': 'Önceki ay',
   'stats.nextMonthA11y': 'Sonraki ay',
 
-  // Hedef detay ekranı (goal/[id].tsx) — sekmeler
+  // Goal detail screen (goal/[id].tsx) — tabs
   'goal.tabOverview': 'Genel',
   'goal.tabStats': 'İstatistik',
   'goal.tabEdit': 'Düzenle',
 
-  // Hedef istatistik sekmesi — kart etiketleri (sayı+etiket, cümle değil)
+  // Goal stats tab — tile labels (number+label, not sentences)
   'goalStats.notFound': 'Hedef bulunamadı.',
   'goalStats.completed': '🎉 Hedef tamamlandı',
   'goalStats.noDeadline': 'Son tarih yok — tempo hesaplanamıyor.',
@@ -443,18 +444,18 @@ export const tr: Dict = {
   'goalStats.nextMilestoneOverdueLabel': 'Adım gecikmesi (gün)',
   'goalStats.allMilestonesDone': 'Tüm adımlar tamamlandı 🎉',
 
-  // Streak kilometre taşı rozet etiketleri
+  // Streak milestone badge labels
   'milestone.week': '1 hafta',
   'milestone.month': '1 ay',
   'milestone.hundredDays': '100 gün',
   'milestone.year': '1 yıl',
 
-  // Bugün ekranı özet çubukları
+  // Today screen summary bars
   'summary.habits': 'Alışkanlık',
   'summary.tasks': 'Görev',
 
-  // Hesap ekranı (account.tsx) — hesap özelliği şu an kapalı (ACCOUNTS_ENABLED)
-  // ama kod erişilebilir kalıyor, tam çevrildi.
+  // Account screen (account.tsx) — the account feature is currently disabled
+  // (ACCOUNTS_ENABLED) but the code stays reachable, so it's fully translated.
   'account.errInvalidCreds': 'E-posta veya parola hatalı.',
   'account.errAlreadyRegistered': 'Bu e-posta zaten kayıtlı. Giriş yapmayı dene.',
   'account.errEmailNotConfirmed': 'E-posta henüz onaylanmadı. Gelen kutundaki bağlantıya tıkla.',
@@ -499,7 +500,7 @@ export const tr: Dict = {
   'account.footnote':
     'Verilerin önce cihazda saklanır; hesap yalnızca buluta yedekler ve değişiklikleri birleştirir (son yazan kazanır).',
 
-  // Profil — hesap/senkron bloğu (ACCOUNTS_ENABLED açıldığında görünür)
+  // Profile — account/sync block (visible once ACCOUNTS_ENABLED is turned on)
   'profile.account': 'Hesap',
   'profile.cloudSync': 'Bulut senkron',
   'profile.syncNotConfigured': 'Hesap bağlamak için önce bulut senkronu yapılandır (aşağıya bak).',
@@ -531,8 +532,8 @@ export const tr: Dict = {
   'profile.deletedBody': 'Bulut hesabın ve buluttaki verilerin silindi. Cihazındaki veriler duruyor.',
   'profile.deleteFailedTitle': 'Silme başarısız',
 
-  // Hesap değişimi — yerel veri BAŞKA bir hesaba aitken giriş yapılırsa
-  // (bkz. sync/syncEngine.ts classifySignIn).
+  // Account switch — signing in while local data belongs to a DIFFERENT
+  // account (see sync/syncEngine.ts classifySignIn).
   'sync.switchTitle': 'Bu cihazdaki veriler başka bir hesaba ait',
   'sync.switchBody':
     'Bu cihazın verisi daha önce başka bir hesaba yedeklenmiş. Ne yapmak istersin?\n\n• Bu hesaba kopyala: cihazdaki her şey bu hesaba da eklenir (diğer hesabın yedeği olduğu gibi kalır).\n• Buluttakini indir: CİHAZDAKİ VERİ SİLİNİR ve bu hesabın verisi indirilir.',

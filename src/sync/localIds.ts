@@ -1,28 +1,29 @@
-// YEREL KİMLİK YENİLEME — "birleştir" (fork) akışının kalbi.
+// LOCAL IDENTITY REGENERATION — the heart of the "merge" (fork) flow.
 //
-// SORUN (sahada görüldü, 2026-07-23): id'ler cihazda üretilir ve hesap değişince
-// DEĞİŞMEZ. Aynı cihazın verisi önce A hesabına (ya da anonim bir oturuma)
-// gönderilmişse, sonra B hesabıyla push denendiğinde Postgres şu hatayı verir:
+// THE PROBLEM (seen in the field, 2026-07-23): ids are generated on the
+// device and DON'T change when the account changes. If the same device's data
+// was previously pushed to account A (or an anonymous session), and a push is
+// then attempted under account B, Postgres returns:
 //   "new row violates row-level security policy (USING expression)"
-// Çünkü upsert(onConflict: id) var olan satırı GÜNCELLEMEYE çalışır; o satır
-// başka bir uid'e aittir ve RLS'in USING koşulu B'ye onu göstermez. Senkron o
-// tabloda kalıcı olarak kilitlenir — arkasındaki tablolar hiç sıraya gelmez.
+// Because upsert(onConflict: id) tries to UPDATE the existing row; that row
+// belongs to a different uid, and RLS's USING clause hides it from B. Sync
+// permanently locks up on that table — the tables behind it never get their turn.
 //
-// ÇÖZÜM: yerel satırlara YENİ id verilir. Böylece push, güncelleme değil EKLEME
-// olur; eski hesabın buluttaki satırlarına hiç dokunulmaz, çakışma matematiksel
-// olarak imkânsız hale gelir. Yerel veri aynen korunur (yalnız kimlikleri değişir).
+// THE FIX: local rows get a NEW id. That makes the push an INSERT instead of
+// an update; the old account's cloud rows are never touched, and the conflict
+// becomes mathematically impossible. Local data is preserved exactly (only its ids change).
 //
-// FK SIRASI: şemada ON UPDATE CASCADE YOK (bkz. migration001), o yüzden ebeveyn
-// id'sini değiştirmek çocukları kırardı. Bu yüzden kısıtlar İŞLEM BOYUNCA
-// kapatılır — SQLite'ta `PRAGMA foreign_keys` bir transaction İÇİNDE etkisizdir,
-// bu yüzden sıra: PRAGMA OFF → BEGIN → güncellemeler → COMMIT → PRAGMA ON →
-// foreign_key_check ile doğrula.
+// FK ORDER: the schema has NO ON UPDATE CASCADE (see migration001), so
+// changing a parent's id would break its children. That's why constraints are
+// turned off FOR THE DURATION OF THE TRANSACTION — in SQLite, `PRAGMA
+// foreign_keys` has no effect INSIDE a transaction, so the order is: PRAGMA
+// OFF → BEGIN → updates → COMMIT → PRAGMA ON → verify with foreign_key_check.
 
 import { getDb } from '@/db/database';
 import { newId } from '@/lib/helpers';
 
-// Kimliği yenilenecek tablolar ve o tabloyu İŞARET EDEN kolonlar.
-// reminders.entity_id üç olası ebeveyni gösterir; entity_type ile ayrışır.
+// The tables whose ids get regenerated, and the columns that POINT TO them.
+// reminders.entity_id points to three possible parents; entity_type disambiguates.
 interface IdTable {
   table: string;
   refs: { table: string; column: string; where?: string }[];
@@ -52,8 +53,8 @@ const ID_TABLES: IdTable[] = [
       { table: 'reminders', column: 'entity_id', where: "entity_type = 'task'" },
     ],
   },
-  // Çocuk tabloların KENDİ id'leri de yenilenir: onlar da buluta kendi
-  // id'leriyle push edilir, dolayısıyla aynı çakışmayı yaşayabilirler.
+  // Child tables' OWN ids also get regenerated: they too get pushed to the
+  // cloud with their own ids and can hit the same conflict.
   { table: 'habit_logs', refs: [] },
   { table: 'subtasks', refs: [] },
   { table: 'goal_milestones', refs: [] },
@@ -62,23 +63,23 @@ const ID_TABLES: IdTable[] = [
 ];
 
 export interface ReassignResult {
-  /** Tablo adı -> kimliği değişen satır sayısı. */
+  /** Table name -> number of rows whose id changed. */
   counts: Record<string, number>;
-  /** Eski id -> yeni id (yalnız ebeveyn tablolar; çağıran eşleme yapmak isterse). */
+  /** Old id -> new id (parent tables only; for the caller to map if it wants to). */
   habitIdMap: Map<string, string>;
 }
 
-// Tüm yerel veri satırlarına yeni id verir ve tüm iç referansları günceller.
-// users tablosuna DOKUNULMAZ (senkronlanmaz, cihaz kimliğidir).
+// Assigns a new id to every local data row and updates all internal
+// references. The users table is NOT touched (it isn't synced, it's the device identity).
 //
-// Bu işlem yereldeki VERİYİ değiştirmez, yalnız kimliklerini. Çağıran ardından
-// prepareFullResync + runSync ile veriyi yeni hesaba KOPYA olarak göndermelidir.
+// This operation doesn't change the local DATA, only its ids. The caller
+// should follow up with prepareFullResync + runSync to push the data to the new account as a copy.
 export function reassignLocalIds(): ReassignResult {
   const db = getDb();
   const counts: Record<string, number> = {};
   const habitIdMap = new Map<string, string>();
 
-  // Kısıtlar transaction dışında kapatılmalı (SQLite kuralı).
+  // Constraints must be turned off outside a transaction (an SQLite rule).
   db.execSync('PRAGMA foreign_keys = OFF;');
   db.execSync('BEGIN;');
   try {
@@ -108,11 +109,11 @@ export function reassignLocalIds(): ReassignResult {
   }
   db.execSync('PRAGMA foreign_keys = ON;');
 
-  // Kısıtlar kapalıyken çalıştık: sonucun tutarlılığını AÇIKÇA doğrula.
-  // (Sessiz bir kırık referans, ileride teşhisi çok zor hatalara dönüşür.)
+  // We ran with constraints off: EXPLICITLY verify the result is consistent.
+  // (A silent broken reference turns into very hard-to-diagnose bugs later.)
   const broken = db.getAllSync<Record<string, unknown>>('PRAGMA foreign_key_check;');
   if (broken.length > 0) {
-    throw new Error(`Kimlik yenileme sonrası ${broken.length} kırık referans bulundu`);
+    throw new Error(`Kimlik yenileme sonrası ${broken.length} kırık referans bulundu`); // "N broken references found after id regeneration"
   }
 
   return { counts, habitIdMap };

@@ -1,11 +1,13 @@
-// Merkezi ＋ butonunun açtığı ekleme formu (sayfayı ortalayan modal — alttan
-// değil). Genelde ＋ menüsü türü seçtiği için doğrudan ilgili formda açılır
-// (initialStep); "‹ Geri" ile tür seçim menüsüne dönülebilir.
-// Tüm türler oluşturma anında TAM ayarlarıyla eklenir: görev (TaskForm) ve
-// alışkanlık (HabitForm) düzenleme paneliyle aynı formu paylaşır; hedef kendi
-// tam formuyla (goals.tsx'ten taşınmış). Ekleme sonrası notifyDataChanged ile
-// açık ekranların listeleri tazelenir ve ilgili sekmeye gidilir.
-// Mimari kural: SQL yok — yalnızca repo çağrıları.
+// The add form opened by the central ＋ button (a centered modal — not a
+// bottom sheet). Since the ＋ menu usually already picks the type, it opens
+// directly on the relevant form (initialStep); "‹ Back" returns to the type
+// selection menu.
+// All types are added with FULL settings right at creation time: task
+// (TaskForm) and habit (HabitForm) share the same form as their edit panels;
+// goal has its own full form (moved from goals.tsx). After adding,
+// notifyDataChanged refreshes the lists on open screens and navigates to the
+// relevant tab.
+// Architecture rule: no SQL — repo calls only.
 
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -27,13 +29,14 @@ export type Step = 'menu' | 'task' | 'habit' | 'goal';
 interface Props {
   visible: boolean;
   onClose: () => void;
-  // Açılırken doğrudan gidilecek adım. Merkezi ＋ menüsü türü kendi seçtiği
-  // için genelde bir form adımı verilir; verilmezse tür seçim menüsü açılır.
+  // The step to jump to directly when opened. Since the central ＋ menu
+  // usually already picks a type, a form step is generally passed; if not,
+  // the type selection menu opens.
   initialStep?: Step;
 }
 
-// Metinler i18n anahtarı olarak tutulur; render'da t() ile çevrilir. İkonlar
-// EntityIcon ile tab bar'daki aynı çizgi ikon setinden (tutarlılık).
+// Text is kept as i18n keys and translated with t() at render time. Icons come
+// from EntityIcon, the same line-icon set used in the tab bar (for consistency).
 const MENU_OPTIONS: { step: Step; type: EntityType; titleKey: string; descKey: string }[] = [
   { step: 'task', type: 'task', titleKey: 'add.task', descKey: 'add.taskDesc' },
   { step: 'habit', type: 'habit', titleKey: 'add.habit', descKey: 'add.habitDesc' },
@@ -47,20 +50,20 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const { user, notifyDataChanged, selectedDate } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
 
-  // Her açılışta istenen adıma (varsayılan menü) dön.
+  // Return to the requested step (default menu) on every open.
   useEffect(() => {
     if (visible) setStep(initialStep);
   }, [visible, initialStep]);
 
-  // Ekleme sonrası: menüyü kapat, listeleri tazele, ilgili sekmeye git.
+  // After adding: close the menu, refresh the lists, navigate to the relevant tab.
   const finish = (tab: '/(tabs)/tasks' | '/(tabs)/habits' | '/(tabs)/goals') => {
     notifyDataChanged();
     onClose();
     router.navigate(tab);
   };
 
-  // Görev, düzenleme paneliyle aynı TaskForm'la oluşturulur — öncelik, son tarih,
-  // saat ve (isteğe bağlı) alt görevler oluşturma anında ayarlanabilir.
+  // A task is created with the same TaskForm as the edit panel — priority, due
+  // date, time, and (optionally) subtasks can all be set at creation time.
   const addTask = (values: TaskFormValues) => {
     const created = taskRepo.create({
       user_id: user.id,
@@ -70,9 +73,9 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       end_time: values.end_time,
       recurrence: values.recurrence,
     });
-    // Taslak alt görevleri, görev yazıldıktan sonra sırayla oluştur.
+    // Create the draft subtasks in order, after the task itself is written.
     values.subtasks?.forEach((sub) => subtaskRepo.create(created.id, sub));
-    // Hatırlatma saatleri seçildiyse o an bildirimler kurulur (yoksa no-op).
+    // If reminder times were chosen, notifications are set up right away (no-op otherwise).
     const reminders = reminderRepo.replaceAll('task', created.id, values.remind_times);
     scheduleTaskReminders(created, reminders).then((ok) => {
       if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
@@ -80,12 +83,12 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     finish('/(tabs)/tasks');
   };
 
-  // Alışkanlık, düzenleme paneliyle aynı HabitForm'la oluşturulur — tüm ayarlar
-  // (ikon, renk, sıklık, tarih aralığı, nicel hedef, hatırlatma, hedefe bağla)
-  // oluşturma anında ayarlanabilir.
+  // A habit is created with the same HabitForm as the edit panel — all
+  // settings (icon, color, frequency, date range, numeric target, reminders,
+  // linking to a goal) can be set at creation time.
   const addHabit = (values: HabitFormValues) => {
     const created = habitRepo.create({ user_id: user.id, ...values });
-    // Hatırlatma saatleri seçildiyse bildirimleri programla (izin yoksa uyar).
+    // If reminder times were chosen, schedule notifications (warn if permission is missing).
     const reminders = reminderRepo.replaceAll('habit', created.id, values.remind_times);
     if (reminders.length > 0) {
       scheduleHabitReminders(created, reminders).then((ok) => {
@@ -97,9 +100,9 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     finish('/(tabs)/habits');
   };
 
-  // Hedef, düzenleme paneliyle aynı GoalForm'la oluşturulur — tip (sayısal/parçalı)
-  // yalnızca burada seçilir, deadline zorunlu, taslak milestone'lar hedefle
-  // birlikte yazılır.
+  // A goal is created with the same GoalForm as the edit panel — the type
+  // (numeric/milestone) is only chosen here, the deadline is required, and
+  // draft milestones are written together with the goal.
   const addGoal = (values: GoalFormValues) => {
     const created = goalRepo.create({
       user_id: user.id,
@@ -113,8 +116,9 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     values.milestones?.forEach((m) =>
       goalMilestoneRepo.create(created.id, m.title, { amount: m.amount, due_date: m.due_date })
     );
-    // Günlük giriş hatırlatmaları seçildiyse o an kurulur (izin yoksa uyar —
-    // habit/task oluşturmayla aynı desen; eskiden sonuç hiç kontrol edilmiyordu).
+    // If daily-entry reminders were chosen, they're set up right away (warn if
+    // permission is missing — same pattern as habit/task creation; the result
+    // used to not be checked at all).
     const reminders = reminderRepo.replaceAll('goal', created.id, values.remind_times);
     if (reminders.length > 0) {
       scheduleGoalReminders(created, reminders).then((ok) => {
@@ -143,8 +147,8 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
               ))}
             </>
           ) : (
-            // ModalCard içeriği zaten ScrollView'da sarar (uzun alışkanlık formu
-            // güvenle kaydırılır, "Ekle" düğmesi kırpılmaz).
+            // ModalCard already wraps its content in a ScrollView (the long
+            // habit form scrolls safely, the "Add" button never gets clipped).
             <>
               <View style={styles.formHead}>
                 <Pressable onPress={() => setStep('menu')} hitSlop={8}>
@@ -153,13 +157,13 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                 <Text style={styles.heading}>
                   {step === 'task' ? t('add.newTask') : step === 'habit' ? t('add.newHabit') : t('add.newGoal')}
                 </Text>
-                {/* başlığı ortalamak için sol taraftaki "‹ Geri" genişliğinde boşluk */}
+                {/* spacer the width of the "‹ Back" on the left, to center the title */}
                 <View style={styles.headSpacer} />
               </View>
 
               {step === 'habit' ? (
-                // Takip tipi (tik/sayısal/zamanlayıcı) sihirbazın kendi ilk adımı —
-                // HabitForm'a `kind` verilmez, kullanıcı stepped modda seçer.
+                // The tracking type (checkbox/numeric/timer) is the wizard's own
+                // first step — `kind` isn't passed to HabitForm; the user picks it in stepped mode.
                 <HabitForm
                   userId={user.id}
                   submitLabel={t('common.add')}
@@ -168,10 +172,10 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   onSubmit={addHabit}
                 />
               ) : step === 'task' ? (
-                // Görev: düzenleme paneliyle aynı tam form (öncelik, tarih, saat)
-                // + oluşturmada taslak alt görev ekleme. Son tarih "Bugün" ekranında
-                // o an bakılan güne varsayılanır (selectedDate) — Cuma'ya bakarken
-                // eklenen görev Cuma'ya gitsin diye.
+                // Task: the same full form as the edit panel (priority, date, time)
+                // + adding draft subtasks at creation time. The due date defaults to
+                // whichever day is currently viewed on the "Today" screen
+                // (selectedDate) — so a task added while viewing Friday goes to Friday.
                 <TaskForm
                   initial={{ due_date: selectedDate }}
                   submitLabel={t('common.add')}
@@ -180,8 +184,8 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   onSubmit={addTask}
                 />
               ) : (
-                // Hedef: düzenleme paneliyle aynı GoalForm — tip (sayısal/parçalı)
-                // yalnızca oluştururken seçilir.
+                // Goal: the same GoalForm as the edit panel — the type
+                // (numeric/milestone) is only chosen when creating.
                 <GoalForm
                   submitLabel={t('common.add')}
                   autoFocusTitle
@@ -209,7 +213,7 @@ const makeStyles = (c: Colors) =>
       padding: 14,
       marginBottom: 10,
     },
-    // Emoji için yuvarlak yumuşak kutu (premium his).
+    // Rounded soft box for the emoji (premium feel).
     optionIcon: {
       width: 44,
       height: 44,

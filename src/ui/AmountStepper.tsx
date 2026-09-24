@@ -1,8 +1,8 @@
-// Nicel alışkanlıklar için −/＋ miktar sayacı ("5/8 bardak").
-// Hem "Bugün" hem "Alışkanlıklar" ekranında kullanılır. Salt görsel + üç eylem;
-// değeri değiştirmek çağıran ekranda habitRepo.incrementAmount ile yapılır.
-// Miktar metnine dokununca klavyeden doğrudan sayı girilebilir (+/- ile tek tek
-// artırmak yerine).
+// The −/＋ amount stepper for numeric habits ("5/8 cups").
+// Used on both the "Today" and "Habits" screens. Purely visual + three
+// actions; changing the value is done via habitRepo.incrementAmount in the
+// calling screen. Tapping the amount text lets you type a number directly on
+// the keyboard (instead of incrementing one by one with +/-).
 
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -16,11 +16,11 @@ interface Props {
   unit: string | null;
   onDec: () => void;
   onInc: () => void;
-  onSet: (value: number) => void; // klavyeden girilen mutlak değer
-  disabled?: boolean; // true: gelecek bir gün görüntüleniyor, düzenlenemez
+  onSet: (value: number) => void; // absolute value entered from the keyboard
+  disabled?: boolean; // true: a future day is being viewed, not editable
 }
 
-// Tam sayıysa ondalık gösterme (5, 5.5).
+// Don't show decimals for whole numbers (5, 5.5).
 function fmt(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
@@ -33,11 +33,11 @@ export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disab
   const [text, setText] = useState('');
   const reached = amount >= target;
 
-  // onSubmitEditing'den sonra klavye kapanınca onBlur da tetiklenir; bu
-  // ikisi aynı düzenleme oturumunda commit()'i iki kez çalıştırırdı ve
-  // onSet mutlak değeri "şimdiki DB değeri + fark" olarak uyguladığından
-  // (habitRepo.incrementAmount göreli çalışır) ikinci çağrı değeri yanlışlıkla
-  // tekrar üstüne eklerdi. Ref, bir oturumda yalnızca ilk commit'in geçmesini sağlar.
+  // When the keyboard closes after onSubmitEditing, onBlur also fires; the two
+  // would run commit() twice in the same editing session, and since onSet
+  // applies the absolute value as "current DB value + diff" (habitRepo.incrementAmount
+  // works relatively), the second call would mistakenly add the value on top
+  // again. The ref ensures only the first commit in a session goes through.
   const committedRef = useRef(false);
 
   const startEdit = () => {

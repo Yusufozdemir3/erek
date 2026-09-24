@@ -1,20 +1,20 @@
-// Repository'lerin paylaştığı küçük yardımcılar.
+// Small helpers shared by the repositories.
 
 import * as Crypto from 'expo-crypto';
 import type { Recurrence } from '../types/models';
 
-// Cihazda UUID üretir. Offline'da bile çakışmayan ID için kritik.
+// Generates a UUID on-device. Critical for IDs that don't collide even offline.
 export function newId(): string {
   return Crypto.randomUUID();
 }
 
-// Şu anın ISO 8601 zaman damgası. updated_at için kullanılır.
+// The current ISO 8601 timestamp. Used for updated_at.
 export function nowIso(): string {
   return new Date().toISOString();
 }
 
-// Date -> "YYYY-MM-DD" (yerel saat dilimine göre). Takvim seçicilerin ortak
-// çıktı biçimi; ekranlarda ayrı ayrı tekrarlanmasın diye burada tek yerde.
+// Date -> "YYYY-MM-DD" (in the local timezone). The shared output format for
+// date pickers; kept in one place so it isn't repeated separately across screens.
 export function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -22,21 +22,21 @@ export function toYmd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-// Bugünün tarihi "YYYY-MM-DD" formatında (alışkanlık logları için).
-// Yerel saat dilimine göre - kullanıcının "bugün"ü neyse o.
+// Today's date in "YYYY-MM-DD" format (for habit logs).
+// In the local timezone - whatever the user's "today" is.
 export function todayDate(): string {
   return toYmd(new Date());
 }
 
-// Date -> "08:30" (saat:dakika). Saat seçicilerin ortak çıktı biçimi.
+// Date -> "08:30" (hour:minute). The shared output format for time pickers.
 export function toHm(d: Date): string {
   const h = String(d.getHours()).padStart(2, '0');
   const m = String(d.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 }
 
-// "08:30" -> bugünün o saatine ayarlı bir Date (saat seçicinin başlangıç değeri).
-// null verilirse şimdiki saat.
+// "08:30" -> a Date set to that time today (the time picker's initial value).
+// Returns the current time if null is given.
 export function hmToDate(hm: string | null): Date {
   const d = new Date();
   if (hm) {
@@ -46,16 +46,16 @@ export function hmToDate(hm: string | null): Date {
   return d;
 }
 
-// Bir tarih-saat metninde ("YYYY-MM-DDTHH:MM..." gibi) saat bileşeni var mı?
-// Görev son tarihi saatsiz ("YYYY-MM-DD") ya da saatli olabilir; ekranlar bu
-// ayrımı bu fonksiyonla yapar.
+// Does a date-time string (like "YYYY-MM-DDTHH:MM...") have a time component?
+// A task's due date can be time-less ("YYYY-MM-DD") or have a time; screens
+// use this function to tell the two apart.
 export function extractTime(value: string | null): string | null {
   if (!value || value.length < 16 || value[10] !== 'T') return null;
   return value.slice(11, 16);
 }
 
-// Saniye -> "M:SS" ya da saatliyse "H:MM:SS" saat/kronometre etiketi.
-// Zamanlayıcı alışkanlıkta hem hedef hem ilerleme bu biçimde gösterilir.
+// Seconds -> "M:SS", or "H:MM:SS" clock/stopwatch label if there are hours.
+// Both the target and the progress are shown in this format for timer habits.
 export function fmtClock(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
   const hrs = Math.floor(s / 3600);
@@ -65,17 +65,18 @@ export function fmtClock(totalSeconds: number): string {
   return hrs > 0 ? `${hrs}:${pad(mins)}:${pad(secs)}` : `${mins}:${pad(secs)}`;
 }
 
-// Süre-ölçümlü sayısal hedef işareti — Goal.unit alanına yazılır (gerçek bir
-// birim metni değil, "bu hedefin target/current_value'su SANİYE cinsinden"
-// demek — habit.kind='timer'in dakika→saniye deseninin hedeflere taşınmış
-// hali). Migration/yeni kolon GEREKMEDİ: unit zaten serbest metin TEXT.
+// Marker for a duration-tracked numeric goal — written into the Goal.unit
+// field (not an actual unit label, but means "this goal's target/current_value
+// is in SECONDS" — the goal-side counterpart of habit.kind='timer''s
+// minutes→seconds pattern). NO migration/new column was NEEDED: unit is
+// already a free-text TEXT field.
 export const TIME_UNIT = '__time__';
 export function isTimeUnit(unit: string | null | undefined): boolean {
   return unit === TIME_UNIT;
 }
 
-// Bugün dahil son `count` günün "YYYY-MM-DD" listesi (en eskiden bugüne).
-// Haftalık geçmiş şeridi ve istatistik ısı haritası ortak kullanır.
+// List of "YYYY-MM-DD" for the last `count` days including today (oldest to
+// today). Shared by the weekly history strip and the stats heatmap.
 export function lastDays(count: number): string[] {
   const out: string[] = [];
   const d = new Date();
@@ -87,11 +88,12 @@ export function lastDays(count: number): string[] {
   return out;
 }
 
-// SQLite bir sorguda sınırlı sayıda bağlı değişken kabul eder (modern sürümlerde
-// 32766, eskilerde 999). `IN (?, ?, …)` üreten TOPLU sorgular bu sayıyı doğrudan
-// liste uzunluğundan aldığı için, yeterince uzun bir listede sorgu anlaşılmaz bir
-// hatayla patlar — ve bu tam da "uygulamayı en çok kullanan" kişide olur. Parçalara
-// bölüp sonuçları birleştirmek sınırı tümüyle konu dışı bırakır.
+// SQLite accepts a limited number of bound parameters per query (32766 in
+// modern versions, 999 in older ones). Since BATCH queries that build
+// `IN (?, ?, …)` derive that count directly from the list length, the query
+// blows up with a cryptic error once the list gets long enough — and that
+// happens for exactly the person who uses the app the most. Splitting into
+// chunks and merging the results takes the limit out of the equation entirely.
 export const SQL_PARAM_CHUNK = 400;
 
 export function chunk<T>(items: T[], size: number = SQL_PARAM_CHUNK): T[][] {
@@ -101,7 +103,7 @@ export function chunk<T>(items: T[], size: number = SQL_PARAM_CHUNK): T[][] {
   return out;
 }
 
-// JSON alanları güvenli parse/stringify (recurrence gibi).
+// Safe parse/stringify for JSON fields (like recurrence).
 export function parseJson<T>(value: string | null): T | null {
   if (value == null) return null;
   try {
@@ -116,13 +118,14 @@ export function toJson(value: unknown): string | null {
   return JSON.stringify(value);
 }
 
-// Görüntüleme sırası: Pazartesi'den Pazar'a (JS getDay() değerleri; dile bağlı değil).
+// Display order: Monday to Sunday (JS getDay() values; not language-dependent).
 export const WEEKDAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-// Verilen gün alışkanlığın yaşam aralığında mı? null start = baştan beri,
-// null end = süresiz. Aralık dışı günler "planlı değil" muamelesi görür:
-// görünmez, streak'i ne besler ne bozar. "YYYY-MM-DD" metin karşılaştırması
-// kronolojik sıralamayla birebir aynı olduğundan Date'e çevirmeye gerek yok.
+// Is the given day within the habit's lifetime range? null start = since the
+// beginning, null end = indefinite. Days outside the range are treated as
+// "not scheduled": invisible, neither feeding nor breaking the streak. No
+// need to convert to Date since "YYYY-MM-DD" string comparison is identical
+// to chronological ordering.
 export function isWithinHabitDates(
   start: string | null,
   end: string | null,
@@ -133,24 +136,25 @@ export function isWithinHabitDates(
   return true;
 }
 
-// İki "YYYY-MM-DD" arasındaki tam gün farkı (b - a; b ileriyse pozitif).
+// The whole-day difference between two "YYYY-MM-DD" values (b - a; positive if b is later).
 export function diffDays(aYmd: string, bYmd: string): number {
   const a = new Date(`${aYmd}T00:00:00`);
   const b = new Date(`${bYmd}T00:00:00`);
   return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
 
-// Verilen günün içinde bulunduğu haftanın pazartesisi ("YYYY-MM-DD").
-// Kota ("haftada X kez") hesapları haftayı hep Pazartesi başlangıçlı sayar.
+// The Monday of the week containing the given day ("YYYY-MM-DD").
+// Quota ("X times per week") calculations always treat the week as starting on Monday.
 export function weekStartOf(dateYmd: string): string {
   const d = new Date(`${dateYmd}T00:00:00`);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return toYmd(d);
 }
 
-// Haftalık ESNEK KOTA kuralı mı ("haftada X kez", gün seçilmeden)?
-// Kota kuralında hiçbir gün tek başına "vadeli" değildir: alışkanlık her gün
-// yapılabilir, başarı ölçüsü haftalık toplamdır (seri de hafta bazında sayılır).
+// Is this a weekly FLEXIBLE QUOTA rule ("X times per week", no days selected)?
+// Under a quota rule, no single day is "due" on its own: the habit can be
+// done any day, and success is measured by the weekly total (the streak is
+// also counted on a weekly basis).
 export function isQuotaSchedule(schedule: Recurrence | null): boolean {
   return (
     !!schedule &&
@@ -160,9 +164,10 @@ export function isQuotaSchedule(schedule: Recurrence | null): boolean {
   );
 }
 
-// Bir tekrar kuralı verilen günde ("YYYY-MM-DD") geçerli mi? null = her gün.
-// Alışkanlığın o gün "vadeli/planlı" olup olmadığını belirler (streak + Bugün filtresi).
-// Kota kuralı (haftada X kez) her gün "müsait" sayılır — değerlendirme haftalıktır.
+// Is a recurrence rule valid on the given day ("YYYY-MM-DD")? null = every day.
+// Determines whether the habit is "due/scheduled" that day (used for the
+// streak + Today filter). A quota rule (X times per week) is considered
+// "available" every day — evaluation is weekly.
 export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boolean {
   if (!schedule || schedule.freq === 'daily') return true;
   if (schedule.freq === 'weekly') {
@@ -173,19 +178,21 @@ export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boo
   if (schedule.freq === 'monthly') {
     if (!schedule.monthDay) return false;
     const d = new Date(`${dateYmd}T00:00:00`);
-    // AYIN SONUNA KIRPMA: "ayın 31'i" seçen kullanıcı 30 günlük aylarda ve
-    // Şubat'ta hiç planlı gün almıyordu — alışkanlık yılda 5 ay görünmüyor,
-    // "her ay sonu" niyeti sessizce kayboluyordu. Ayın son gününü aşan seçim,
-    // o ayın son gününe düşer (takvim uygulamalarının standart davranışı).
-    // BEDELİ (bilinçli): 29/30/31 seçmiş mevcut alışkanlıklarda artık daha çok
-    // planlı gün var, yani o günler işaretlenmezse seri bozulur. Alternatifi —
-    // ayı tamamen atlamak — zaten yanlış olan davranışı sürdürmekti.
+    // CLAMP TO END OF MONTH: a user who picked "the 31st" got no scheduled day
+    // at all in 30-day months and in February — the habit would disappear for
+    // 5 months a year, silently losing the "every end of month" intent. A
+    // selection beyond a month's last day falls back to that month's last day
+    // (standard behavior in calendar apps).
+    // THE COST (accepted deliberately): existing habits set to 29/30/31 now
+    // have more scheduled days, so the streak breaks if those days aren't
+    // checked off. The alternative — skipping the month entirely — would just
+    // have continued the already-wrong behavior.
     const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     return d.getDate() === Math.min(schedule.monthDay, lastDayOfMonth);
   }
   if (schedule.freq === 'interval') {
     const every = schedule.every ?? 0;
-    if (every < 1 || !schedule.anchor) return true; // bozuk kural — güvenli taraf: her gün
+    if (every < 1 || !schedule.anchor) return true; // malformed rule — safe side: every day
     const diff = diffDays(schedule.anchor, dateYmd);
     return diff >= 0 && diff % every === 0;
   }
@@ -195,13 +202,14 @@ export function isScheduledOn(schedule: Recurrence | null, dateYmd: string): boo
   return true;
 }
 
-// Tekrarlayan bir görev tamamlanınca due_date'in ileri sarılacağı SONRAKİ tarih.
-// currentDue "YYYY-MM-DD" ya da saatli "YYYY-MM-DDTHH:MM:SS" olabilir; saat
-// bileşeni (varsa) korunur. today'den ve currentDue'nun gününden KESİN sonraki,
-// kurala uyan ilk gün seçilir — gecikmiş bir görev geçmişe değil, ilk gelecek
-// slota atlar (bugünden önceki günler asla üretilmez). Kurala uyan gün 366 gün
-// içinde bulunamazsa (ör. haftalık kuralda hiç gün seçili değilse) null döner;
-// çağıran bu durumda görevi ileri sarmak yerine normal tamamlamaya düşer.
+// The NEXT date due_date is fast-forwarded to when a recurring task is
+// completed. currentDue can be "YYYY-MM-DD" or timed "YYYY-MM-DDTHH:MM:SS";
+// the time component (if any) is preserved. The first rule-matching day
+// STRICTLY after both today and currentDue's day is chosen — an overdue task
+// jumps to the next future slot rather than the past (days before today are
+// never produced). Returns null if no matching day is found within 366 days
+// (e.g. a weekly rule with no days selected); in that case the caller falls
+// back to normal completion instead of fast-forwarding the task.
 export function nextTaskOccurrence(
   recurrence: Recurrence,
   currentDue: string,
@@ -209,11 +217,11 @@ export function nextTaskOccurrence(
 ): string | null {
   const timePart = currentDue.length > 10 ? currentDue.slice(10) : '';
   const dueYmd = currentDue.slice(0, 10);
-  // Gecikmiş görevde bugünden (dolayısıyla yarından) devam et; erken tamamlanan
-  // (vadesi gelecekte) görevde kendi gününden sonrasına geç.
+  // For an overdue task, continue from today (hence tomorrow); for a task
+  // completed early (due date in the future), move to after its own due day.
   const baseYmd = dueYmd > today ? dueYmd : today;
   const d = new Date(`${baseYmd}T00:00:00`);
-  // 4+ yıl tarama: yıllık kuralda 29 Şubat gibi en seyrek gün bile bulunur.
+  // Scans 4+ years: finds even the rarest day, like Feb 29 in a yearly rule.
   for (let i = 0; i < 1462; i++) {
     d.setDate(d.getDate() + 1);
     const ymd = toYmd(d);
@@ -222,21 +230,21 @@ export function nextTaskOccurrence(
   return null;
 }
 
-// scheduleLabel'ın dil bağımlı parçaları — çağıran t() üzerinden üretir
-// (bkz. buildScheduleLabels). Bu modül çevrilmiş metin barındırmaz.
+// The language-dependent parts of scheduleLabel — produced by the caller via
+// t() (see buildScheduleLabels). This module holds no translated text itself.
 export interface ScheduleLabels {
   everyDay: string;
-  dayNames: string[]; // JS getDay() sırası (0=Pazar ... 6=Cumartesi)
-  everyNDays: (n: number) => string;   // "3 günde bir"
-  timesPerWeek: (n: number) => string; // "Haftada 3 kez"
-  monthDay: (d: number) => string;     // "Her ayın 15'i"
-  yearly: (dates: string) => string;   // "Her yıl: 12 Şub, 1 Oca"
-  formatMonthDay: (md: string) => string; // "MM-DD" -> "12 Şub" (yerelli) ya da "12.02"
+  dayNames: string[]; // JS getDay() order (0=Sunday ... 6=Saturday)
+  everyNDays: (n: number) => string;   // "every 3 days"
+  timesPerWeek: (n: number) => string; // "3 times a week"
+  monthDay: (d: number) => string;     // "The 15th of every month"
+  yearly: (dates: string) => string;   // "Every year: Feb 12, Jan 1"
+  formatMonthDay: (md: string) => string; // "MM-DD" -> "Feb 12" (localized) or "12.02"
 }
 
-// Ortak etiket fabrikası: hem React tarafı (useI18n().t) hem React-dışı taraf
-// (translate(lang, ...)) aynı imzada bir çevirici verebilir. formatMonthDay
-// verilmezse yerelsiz "GG.AA" biçimi kullanılır.
+// Shared label factory: both the React side (useI18n().t) and the non-React
+// side (translate(lang, ...)) can provide a translator with the same
+// signature. If formatMonthDay isn't given, the non-localized "DD.MM" format is used.
 export function buildScheduleLabels(
   tr: (key: string, params?: Record<string, string | number>) => string,
   formatMonthDay?: (md: string) => string
@@ -256,8 +264,8 @@ export function buildScheduleLabels(
   };
 }
 
-// Sıklık kuralının okunabilir kısa etiketi ("Her gün" / "Pzt·Çar·Cum" /
-// "3 günde bir" / "Haftada 3 kez" / "Her ayın 15'i" / "Her yıl: ...").
+// A short, readable label for the recurrence rule ("Every day" / "Mon·Wed·Fri" /
+// "every 3 days" / "3 times a week" / "The 15th of every month" / "Every year: ...").
 export function scheduleLabel(schedule: Recurrence | null, labels: ScheduleLabels): string {
   if (!schedule || schedule.freq === 'daily') return labels.everyDay;
   if (schedule.freq === 'weekly') {

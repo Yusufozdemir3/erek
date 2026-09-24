@@ -1,6 +1,6 @@
-// Expo varsayılan Babel yapılandırması.
-// react-native-reanimated'ın Babel eklentisi SDK 52'de babel-preset-expo içine
-// gömülüdür — ayrıca eklenmez (çift eklenirse reanimated uyarı verir).
+// Default Expo Babel configuration.
+// react-native-reanimated's Babel plugin is bundled into babel-preset-expo as
+// of SDK 52 — it's not added separately (adding it twice makes reanimated warn).
 module.exports = function (api) {
   api.cache(true);
   return {

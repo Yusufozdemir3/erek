@@ -1,55 +1,57 @@
-// Sayısal hedefin tempo + projeksiyonları — saf, deterministik (today paramlı)
-// fonksiyon. useGoalStats bunu çağırır; ayrı tutulması test edilebilir kılar
-// (timerLogic.ts / habitSeries.ts ile aynı gerekçe).
+// Pace + projections for a numeric goal — a pure, deterministic (today is a
+// parameter) function. Called by useGoalStats; keeping it separate makes it
+// testable (same rationale as timerLogic.ts / habitSeries.ts).
 //
-// MODEL (kullanıcı kararı 2026-07-23): hedefte BAŞLANGIÇ ve SON TARİH artık
-// ZORUNLU (bkz. GoalForm — ikisi de bugünle önceden dolu gelir), o yüzden bütün
-// hesaplar bu iki tarihin çizdiği eksende yapılır:
+// MODEL (user decision 2026-07-23): a goal's START and END DATE are now
+// REQUIRED (see GoalForm — both come pre-filled with today), so all
+// calculations are done along the axis drawn by these two dates:
 //
-//   başlangıç ─────────── bugün ─────────── son tarih
-//   |<-- yaşanan gün -->|<-- kalan gün -->|
+//   start ─────────── today ─────────── end date
+//   |<-- days elapsed -->|<-- days left -->|
 //
-//   • avgDaily ("günde ne kadar yapıyorum") = mevcut / yaşanan gün.
-//     Kayan 7/30 günlük pencere DEĞİL: hedefin tüm ömrü boyunca gerçekleşen
-//     hız. Girdi geçmişine bağlı olmadığı için miktarı geri almak (negatif
-//     düzeltme) temposu sıfırlayıp kartları ekrandan silmiyor — eski davranışta
-//     son 7 günün neti <= 0 olunca "Senin temponun" grubu tümüyle kayboluyordu.
-//   • last7Total ("son 7 günde ne kadar yaptım") girdi geçmişinden gelir; bu
-//     bilerek pencereli, çünkü sorunun kendisi pencereli.
-//   • projectedFinishDate ("bu hızla hangi tarihte bitiririm") = bugün + kalan/avgDaily
-//   • projectedAtDeadline ("bu hızla son tarihte miktar ne olur") = mevcut + avgDaily × kalan gün
-//   • behindAmount = hedef − projectedAtDeadline (>0 açık, <0 fazla)
+//   • avgDaily ("how much am I doing per day") = current / days elapsed.
+//     NOT a rolling 7/30-day window: the realized rate over the goal's entire
+//     lifetime. Since it doesn't depend on entry history, undoing an amount
+//     (a negative correction) doesn't zero out the pace and make the cards
+//     disappear — in the old behavior, once the last 7 days' net dropped to
+//     <= 0, the whole "your pace" group would vanish entirely.
+//   • last7Total ("how much have I done in the last 7 days") comes from entry
+//     history; this is deliberately windowed, because the question itself is windowed.
+//   • projectedFinishDate ("at this rate, when will I finish") = today + remaining/avgDaily
+//   • projectedAtDeadline ("at this rate, what will the amount be by the deadline") = current + avgDaily × days left
+//   • behindAmount = target − projectedAtDeadline (>0 shortfall, <0 surplus)
 //
-// SON TARİH GEÇTİYSE: projeksiyon "tahmin" olmaktan çıkar, GERÇEKLEŞEN olur —
-// son tarihteki miktar artık mevcut değerdir, açık da kalan miktardır. Eskiden
-// bu durumda ikisi de null'a düşüyordu, yani kullanıcı en geride olduğu anda
-// kartlar ekrandan kayboluyordu.
+// IF THE DEADLINE HAS PASSED: the projection stops being an "estimate" and
+// becomes what ACTUALLY HAPPENED — the amount at the deadline is now the
+// current value, and the shortfall is the remaining amount. In the old
+// behavior both would drop to null in this case, meaning the cards would
+// disappear from the screen exactly when the user was most behind.
 
 import { diffDays, toYmd } from './helpers';
 
 export interface GoalEntryLike {
   amount: number;
-  updated_at: string; // ISO; yalnız gün kısmı kullanılır
+  updated_at: string; // ISO; only the date part is used
 }
 
 export interface ProjectionInput {
-  entries: GoalEntryLike[]; // goalEntryRepo sırası: en yeniden en eskiye
+  entries: GoalEntryLike[]; // goalEntryRepo order: newest to oldest
   target: number | null;
   current: number;
-  remaining: number | null; // hedef − mevcut (numeric); yoksa null
-  daysLeft: number | null; // son tarihe kalan gün (negatifse geçmiş)
+  remaining: number | null; // target − current (numeric); null if unavailable
+  daysLeft: number | null; // days left until the deadline (negative if past)
   completed: boolean;
   today: string; // "YYYY-MM-DD"
-  startDate?: string | null; // goals.start_date (zorunlu); yoksa en eski girdiye düşülür
+  startDate?: string | null; // goals.start_date (required); falls back to the oldest entry if missing
 }
 
 export interface Projection {
-  avgDaily: number | null; // günlük gerçekleşen hız (mevcut / yaşanan gün)
-  daysElapsed: number | null; // başlangıçtan bugüne, bugün DAHİL
-  last7Total: number | null; // son 7 günde girilen toplam
-  projectedFinishDate: string | null; // "bu hızla" bitiş günü
-  projectedAtDeadline: number | null; // son tarihteki miktar (geçmişse: gerçekleşen)
-  behindAmount: number | null; // >0 son tarihte açık, <0 fazla
+  avgDaily: number | null; // realized daily rate (current / days elapsed)
+  daysElapsed: number | null; // from start to today, today INCLUDED
+  last7Total: number | null; // total entered in the last 7 days
+  projectedFinishDate: string | null; // finish day "at this rate"
+  projectedAtDeadline: number | null; // amount at the deadline (if passed: what actually happened)
+  behindAmount: number | null; // >0 shortfall at the deadline, <0 surplus
 }
 
 const EMPTY: Projection = {
@@ -61,23 +63,26 @@ const EMPTY: Projection = {
   behindAmount: null,
 };
 
-// Tahmini bitiş için üst sınır. Çok küçük bir hızda (ör. günde 0,001) matematik
-// yüzlerce yıl sonrasına tarih üretiyor; uç değerde Date taşıp "NaN-NaN-NaN"
-// yazdırıyordu. Bu sınırın ötesi "bu hızla bitmez" demektir — tarih gösterilmez.
-const MAX_PROJECTION_DAYS = 3650; // 10 yıl
+// Upper bound for the estimated finish date. At a very tiny rate (e.g. 0.001
+// per day) the math produces a date centuries away; at the extreme, Date
+// overflows and prints "NaN-NaN-NaN". Beyond this bound means "won't finish
+// at this rate" — no date is shown.
+const MAX_PROJECTION_DAYS = 3650; // 10 years
 
 export function goalProjection(input: ProjectionInput): Projection {
   const { entries, target, current, remaining, daysLeft, completed, today, startDate } = input;
 
   const dayOf = (iso: string) => iso.slice(0, 10);
-  // Sıfır günü: hedefin başlangıç tarihi. Eski hedeflerde (start_date eklenmeden
-  // önce oluşmuş) en eski girdinin gününe düşülür; o da yoksa hesap yapılamaz.
+  // Day zero: the goal's start date. For older goals (created before
+  // start_date was added), falls back to the oldest entry's day; if that's
+  // also missing, no calculation can be done.
   const firstEntryDay = entries.length > 0 ? dayOf(entries[entries.length - 1].updated_at) : null;
   const zeroDay = startDate ?? firstEntryDay;
   if (!zeroDay) return EMPTY;
 
-  // Yaşanan gün: başlangıç günü de bugün de dahil (bugün açılan hedef = 1 gün).
-  // Gelecek tarihli başlangıçta (henüz başlamamış hedef) en az 1 kabul edilir.
+  // Days elapsed: both the start day and today are included (a goal opened
+  // today = 1 day). For a future start date (a not-yet-started goal), at
+  // least 1 is assumed.
   const daysElapsed = Math.max(1, diffDays(zeroDay, today) + 1);
 
   const shiftDay = (days: number) => {
@@ -86,14 +91,14 @@ export function goalProjection(input: ProjectionInput): Projection {
     return toYmd(d);
   };
 
-  // "Son 7 günde ne kadar yaptım" — pencere hedefin yaşadığı günü aşamaz.
+  // "How much have I done in the last 7 days" — the window can't exceed the goal's lifetime.
   const window7 = Math.min(7, daysElapsed);
   const since = shiftDay(-(window7 - 1));
   const last7Total = entries
     .filter((e) => dayOf(e.updated_at) >= since)
     .reduce((s, e) => s + e.amount, 0);
 
-  // "Günde ne kadar yapıyorum" — hedefin ömrü boyunca gerçekleşen hız.
+  // "How much am I doing per day" — the realized rate over the goal's entire lifetime.
   const avgDaily = current > 0 ? current / daysElapsed : null;
 
   let projectedFinishDate: string | null = null;
@@ -106,13 +111,15 @@ export function goalProjection(input: ProjectionInput): Projection {
   }
 
   if (daysLeft != null && target != null) {
-    // İleri projeksiyon YALNIZ hedef henüz açıkken anlamlı:
-    //   • son tarih geçtiyse tahmin değil GERÇEKLEŞEN (o gün elindeki miktar),
-    //   • hedef tamamlandıysa uzatma yapılmaz: bitmiş bir hedef için "son tarihte
-    //     90 fazla yaparsın" demek anlamsız — kullanıcının sorduğu soru
-    //     ("yetişecek miyim?") çoktan cevaplanmış.
-    // (Bu not eskiden "addProgress miktarı hedefte kırpar" diyordu; o tavan
-    // 2026-08-03'te kaldırıldı — sayaç artık hedefi dürüstçe aşabiliyor.)
+    // Forward projection is ONLY meaningful while the goal is still open:
+    //   • if the deadline has passed, it's not an estimate but what ACTUALLY
+    //     HAPPENED (the amount on hand that day),
+    //   • if the goal is completed, no extrapolation is done: telling the
+    //     user of a finished goal "you'll be 90 over by the deadline" is
+    //     meaningless — the question they were asking ("will I make it?") has
+    //     already been answered.
+    // (This note used to say "addProgress clamps the amount to the goal"; that
+    // cap was removed on 2026-08-03 — the counter can now honestly exceed the goal.)
     const extrapolate = daysLeft >= 0 && !completed;
     projectedAtDeadline = extrapolate ? current + (avgDaily ?? 0) * daysLeft : current;
     behindAmount = target - projectedAtDeadline;

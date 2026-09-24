@@ -1,18 +1,20 @@
-// METİN KONTRASTI — WCAG AA (4.5:1) bekçisi.
+// TEXT CONTRAST — a WCAG AA (4.5:1) guard.
 //
-// NEDEN VAR: renk paleti elle ayarlanıyor ve bir tonu "biraz daha soluk yapalım"
-// demek sessizce erişilebilirlik kaybı demek. Denetimde bulunan durum tam buydu:
-// `faint` açık temada 2.5:1 idi ve o ton form placeholder'ları, ipucu satırları,
-// dipnotlar gibi GERÇEK içerikte kullanılıyordu — yani güneş altında veya yaşa
-// bağlı görme kaybında okunmayan metin.
+// WHY THIS EXISTS: the color palette is tuned by hand, and saying "let's make
+// this tone a bit fainter" silently means losing accessibility. That's
+// exactly what the audit found: `faint` was 2.5:1 in light theme, and that
+// tone was used in REAL content like form placeholders, hint lines, and
+// footnotes — i.e. text that's unreadable in sunlight or with age-related
+// vision loss.
 //
-// Kapsam: metin taşıyan tonlar (text/muted/faint) hem ekran zemininde hem kart
-// zemininde ölçülür. Süs/ayraç tonları (border, line, track) metin DEĞİLDİR ve
-// AA gövde eşiğine tabi değildir — bilerek dışarıda.
+// Scope: text-bearing tones (text/muted/faint) are measured against both the
+// screen background and the card background. Decorative/divider tones
+// (border, line, track) are NOT text and aren't subject to the AA body
+// threshold — deliberately excluded.
 
 import { blackColors, darkColors, lightColors, type Colors } from '@/ui/theme';
 
-// sRGB kanalını doğrusallaştırır (WCAG 2.x tanımı).
+// Linearizes an sRGB channel (WCAG 2.x definition).
 function channel(v: number): number {
   const s = v / 255;
   return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -41,8 +43,8 @@ const PALETTES: [name: string, colors: Colors][] = [
   ['koyu (tam siyah)', blackColors],
 ];
 
-// Metin taşıyan tonlar. onAccent ayrı ele alınır (zemini vurgu rengidir, temanın
-// zemini değil) — vurgu renkleri kullanıcı tarafından seçildiği için ayrı bir konu.
+// Text-bearing tones. onAccent is handled separately (its background is the
+// accent color, not the theme background) — accent colors are user-selected, a separate concern.
 const TEXT_TOKENS: (keyof Colors)[] = ['text', 'muted', 'faint'];
 
 describe('metin kontrastı — WCAG AA', () => {
@@ -54,8 +56,8 @@ describe('metin kontrastı — WCAG AA', () => {
   });
 
   it.each(PALETTES)('%s tema: metin tonları KART zemininde de AA geçer', (_name, colors) => {
-    // Metnin çoğu kart üstünde; kart zemini ekran zemininden farklı olduğu için
-    // ayrıca ölçülmeli (açık temada kart beyaz, ekran hafif gri).
+    // Most text sits on cards; since the card background differs from the
+    // screen background, it must be measured separately (in light theme the card is white, the screen a light gray).
     const failing = TEXT_TOKENS.filter((token) => ratio(colors[token], colors.card) < AA_BODY).map(
       (token) => `${token} (${ratio(colors[token], colors.card).toFixed(2)}:1)`
     );
@@ -63,9 +65,9 @@ describe('metin kontrastı — WCAG AA', () => {
   });
 
   it.each(PALETTES)('%s tema: üç kademe arasındaki hiyerarşi korunur', (_name, colors) => {
-    // text en okunaklı, faint en soluk olmalı. Hepsi eşiği geçsin diye tonlar
-    // koyulaştırılırken sıranın bozulması (ör. faint'in muted'dan koyu çıkması)
-    // görsel hiyerarşiyi sessizce ters çevirirdi.
+    // text should be the most legible, faint the palest. If the ordering
+    // broke while darkening tones to clear the threshold (e.g. faint ending
+    // up darker than muted), it would silently invert the visual hierarchy.
     const t = ratio(colors.text, colors.bg);
     const m = ratio(colors.muted, colors.bg);
     const f = ratio(colors.faint, colors.bg);
@@ -74,8 +76,8 @@ describe('metin kontrastı — WCAG AA', () => {
   });
 
   it('renkli düğme üstündeki metin (onAccent) vurgu renginde okunur', () => {
-    // onAccent iki temada da beyaz; zemini vurgu rengidir. Varsayılan vurgu ile
-    // ölçüyoruz — kullanıcının seçebildiği diğer vurgular ayrı bir konu.
+    // onAccent is white in both themes; its background is the accent color.
+    // We measure against the default accent — other accents the user can pick are a separate concern.
     expect(ratio(lightColors.onAccent, lightColors.primary)).toBeGreaterThanOrEqual(4.5);
   });
 });

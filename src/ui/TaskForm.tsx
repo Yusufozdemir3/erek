@@ -1,10 +1,10 @@
-// Görev form ALANLARI — hem oluşturma (AddSheet) hem düzenleme (TaskEditModal)
-// tarafından paylaşılır (HabitForm ile aynı desen). Alanlar, durum ve doğrulama
-// burada; kalıcılık (create/update), alt görev bölümü ve modal/sheet kabuğu
-// çağırana aittir. onSubmit son (dönüştürülmüş) değerleri yukarı verir.
-// Alt görevler oluşturmada YOK (yalnız sonradan, düzenleme panelinde) — bu
-// yüzden düzenleme tarafı alt görev bölümünü `children` olarak geçer.
-// Mimari kural: SQL yok — yalnızca çağıran repo yazar.
+// Task form FIELDS — shared by both creation (AddSheet) and editing
+// (TaskEditModal) (same pattern as HabitForm). Fields, state, and validation
+// live here; persistence (create/update), the subtask section, and the
+// modal/sheet shell belong to the caller. onSubmit hands the final (converted)
+// values up. Subtasks are NOT part of creation (only added later, in the edit
+// panel) — that's why the edit side passes the subtask section as `children`.
+// Architectural rule: no SQL — only the caller's repo writes.
 
 import { useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -21,8 +21,8 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { makeTaskFormStyles } from '@/ui/taskFormStyles';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, shortDate } from '@/ui/theme';
 
-// Tekrar seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
-// HabitForm'daki sıklık seçiciyle aynı desen — tutarlı görünüm.
+// Day buttons in the recurrence picker (Monday through Sunday; wd = JS getDay).
+// Same pattern as HabitForm's frequency picker — consistent look.
 const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.mon', wd: 1 },
   { labelKey: 'weekday.tue', wd: 2 },
@@ -33,13 +33,13 @@ const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.sun', wd: 0 },
 ];
 
-// Tekrar modu: 'none' = tek seferlik (varsayılan), 'daily' = her gün,
-// 'weekly' = haftanın belirli günleri, 'interval' = her X günde bir,
-// 'monthly' = her ayın belirli günü, 'yearly' = her yıl belirli tarihler.
+// Recurrence mode: 'none' = one-time (default), 'daily' = every day,
+// 'weekly' = specific days of the week, 'interval' = every X days,
+// 'monthly' = a specific day of every month, 'yearly' = specific dates every year.
 type RepeatMode = 'none' | 'daily' | 'weekly' | 'interval' | 'monthly' | 'yearly';
 
-// Tekrar seçenekleri — hem açılan listeyi hem kapalıyken özet düğmesinin
-// etiketini besler (tek kaynak).
+// Recurrence options — feeds both the dropdown list and the summary button's
+// label while collapsed (single source of truth).
 const REPEAT_OPTIONS: { mode: RepeatMode; labelKey: string }[] = [
   { mode: 'none', labelKey: 'task.repeatNone' },
   { mode: 'daily', labelKey: 'habit.everyDay' },
@@ -49,30 +49,30 @@ const REPEAT_OPTIONS: { mode: RepeatMode; labelKey: string }[] = [
   { mode: 'yearly', labelKey: 'task.freqYearly' },
 ];
 
-// taskRepo.create/update'in beklediği alanlarla örtüşür (due_date saat gömülü).
+// Mirrors the fields taskRepo.create/update expect (due_date has the time embedded).
 export interface TaskFormValues {
   title: string;
   priority: Priority;
   due_date: string | null; // "YYYY-MM-DD" | "YYYY-MM-DDTHH:MM:SS" | null
-  end_time: string | null;  // "HH:MM" | null — yalnız başlangıç saati varken anlamlı
-  recurrence: Recurrence | null; // null = tek seferlik; tamamlanınca ileri sarılır
-  remind_times: string[]; // son tarih gününde hatırlatma saatleri (0 ya da daha fazla)
-  // Yalnız oluşturmada (enableSubtaskDraft): görevle birlikte yazılacak alt
-  // görev başlıkları. Düzenlemede alt görevler anında yazıldığı için buradan
-  // gelmez (undefined).
+  end_time: string | null;  // "HH:MM" | null — only meaningful when a start time is set
+  recurrence: Recurrence | null; // null = one-time; advances forward on completion
+  remind_times: string[]; // reminder times on the due date's day (0 or more)
+  // Creation only (enableSubtaskDraft): subtask titles to be written along with
+  // the task. Not populated during editing (undefined), since subtasks are
+  // written immediately there.
   subtasks?: string[];
 }
 
 interface Props {
   initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[] }>;
-  submitLabel: string;                  // "Kaydet" | "Ekle"
+  submitLabel: string;                  // "Save" | "Add"
   onSubmit: (values: TaskFormValues) => void;
-  onDelete?: () => void;                // yalnız düzenlemede: Sil düğmesi
-  autoFocusTitle?: boolean;             // oluşturmada klavye hemen açılsın
-  children?: ReactNode;                 // düzenlemede alt görev bölümü (eylemlerin üstünde)
-  // Oluşturmada taslak alt görev editörü göster. Görev henüz olmadığı için alt
-  // görevler string olarak toplanır ve onSubmit ile yukarı verilir (AddSheet
-  // görevi yazdıktan sonra bunları oluşturur).
+  onDelete?: () => void;                // edit mode only: the Delete button
+  autoFocusTitle?: boolean;             // open the keyboard immediately on creation
+  children?: ReactNode;                 // the subtask section in edit mode (above the actions)
+  // Show the draft subtask editor during creation. Since the task doesn't exist
+  // yet, subtasks are collected as strings and handed up via onSubmit (AddSheet
+  // creates them after writing the task).
   enableSubtaskDraft?: boolean;
 }
 
@@ -80,22 +80,23 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeTaskFormStyles(colors);
-  // "08:30" -> okunaklı etiket; null ise "Saat yok".
+  // "08:30" -> readable label; "No time" if null.
   const timeLabel = (hm: string | null) => (hm ? hm : t('task.noTime'));
   const [title, setTitle] = useState(initial?.title ?? '');
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'medium');
-  // Son tarih artık ZORUNLU: her görevde bir tarih olmalı. Oluşturmada bugün,
-  // düzenlemede mevcut tarih (yoksa yine bugün) varsayılan gelir; kaldırma
-  // seçeneği yok (aşağıda "Temizle" düğmesi bilerek kaldırıldı).
+  // Due date is now REQUIRED: every task must have a date. Defaults to today on
+  // creation, or the existing date on editing (today if none); there's no way to
+  // remove it (the "Clear" button below was deliberately removed).
   const [dueDate, setDueDate] = useState<string>(
     initial?.due_date ? initial.due_date.slice(0, 10) : todayDate()
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
-  // Hatırlatma saatleri — son tarihin GÜNÜNDE bu saatlerde bildirim (due_date'in
-  // kendi saatinden bağımsız; alışkanlık hatırlatması deseni). Boş liste = hatırlatma yok.
+  // Reminder times — notifications at these times ON the due date's day
+  // (independent of due_date's own time; same pattern as habit reminders). Empty
+  // list = no reminder.
   const [remindTimes, setRemindTimes] = useState<string[]>(initial?.remind_times ?? []);
-  // Tekrar: kuraldan başlangıç modunu çıkar.
+  // Recurrence: derive the initial mode from the rule.
   const initRec = initial?.recurrence ?? null;
   const initRepeatMode: RepeatMode = !initRec
     ? 'none'
@@ -109,24 +110,24 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             ? 'weekly'
             : 'daily';
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(initRepeatMode);
-  // Tekrar listesi kapalı başlar; düzenlemede bile seçili kip düğmede yazdığı
-  // için kullanıcı açmadan ne olduğunu görür.
+  // The recurrence list starts collapsed; even in edit mode the selected mode is
+  // shown on the button, so the user sees it without expanding.
   const [repeatOpen, setRepeatOpen] = useState(false);
   const repeatLabel = t(REPEAT_OPTIONS.find((o) => o.mode === repeatMode)!.labelKey);
   const [weekdays, setWeekdays] = useState<number[]>(
     initRec?.freq === 'weekly' ? initRec.weekdays ?? [] : []
   );
-  // interval: kaç günde bir (metin; >=2 geçerli).
+  // interval: every how many days (text; >=2 is valid).
   const [everyNText, setEveryNText] = useState(
     initRec?.freq === 'interval' ? String(initRec.every ?? 2) : '2'
   );
-  // monthly: ayın günü (1-31; varsayılan seçili son tarihin günü).
+  // monthly: day of the month (1-31; defaults to the selected due date's day).
   const [monthDayText, setMonthDayText] = useState(
     initRec?.freq === 'monthly'
       ? String(initRec.monthDay ?? 1)
       : String(Number((initial?.due_date ?? todayDate()).slice(8, 10)))
   );
-  // yearly: "MM-DD" listesi (yıl bileşeni yok).
+  // yearly: a list of "MM-DD" (no year component).
   const [yearDates, setYearDates] = useState<string[]>(
     initRec?.freq === 'yearly' ? [...(initRec.dates ?? [])].sort() : []
   );
@@ -134,7 +135,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showYearDatePicker, setShowYearDatePicker] = useState(false);
-  // Oluşturmada taslak alt görevler (henüz görev yok → string listesi).
+  // Draft subtasks during creation (no task exists yet → a list of strings).
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
   const [newSub, setNewSub] = useState('');
 
@@ -153,14 +154,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const submit = () => {
     const t = title.trim();
     if (!t) return;
-    // Saat yalnızca bir tarih seçiliyken anlamlıdır; tarih artık her zaman var.
+    // A time is only meaningful when a date is selected; a date now always exists.
     const due_date = dueTime ? `${dueDate}T${dueTime}:00` : dueDate;
-    // Bitiş saati yalnız bir başlangıç saati varsa ve ondan SONRA ise geçerli.
+    // The end time is only valid if there's a start time and it's AFTER it.
     const end_time = dueTime && endTime && endTime > dueTime ? endTime : null;
-    // Tekrar kuralı: 'none' → tek seferlik. Eksik/geçersiz alt girdiler makul
-    // bir varsayılana düşer ("tekrar istedi"yi sessizce kaybetmemek için):
-    // haftalıkta gün yoksa 'daily', aralıkta sayı <2 ise 'daily', aylıkta gün
-    // 1-31 dışındaysa son tarihin günü, yıllıkta tarih yoksa son tarihin günü.
+    // Recurrence rule: 'none' → one-time. Missing/invalid sub-inputs fall back to
+    // a sensible default (so we don't silently drop "they wanted recurrence"):
+    // 'daily' if weekly has no day, 'daily' if the interval count is <2, the due
+    // date's day if the monthly day is outside 1-31, the due date's day if yearly has no date.
     let recurrence: Recurrence | null = null;
     if (repeatMode === 'daily') {
       recurrence = { freq: 'daily' };
@@ -204,7 +205,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
 
   return (
     <>
-      {/* Başlık */}
+      {/* Title */}
       <Text style={styles.label}>{t('task.title')}</Text>
       <TextInput
         style={styles.input}
@@ -219,7 +220,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         {title.length}/{TITLE_MAX_LEN}
       </Text>
 
-      {/* Öncelik */}
+      {/* Priority */}
       <Text style={styles.label}>{t('task.priority')}</Text>
       <View style={styles.row}>
         {PRIORITY_ORDER.map((p) => {
@@ -239,7 +240,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         })}
       </View>
 
-      {/* Son tarih — zorunlu, kaldırılamaz */}
+      {/* Due date — required, cannot be removed */}
       <Text style={styles.label}>{t('task.dueDate')}</Text>
       <View style={styles.row}>
         <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
@@ -254,7 +255,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         onConfirm={onPickDate}
       />
 
-      {/* Saat — isteğe bağlı */}
+      {/* Time — optional */}
       <Text style={styles.label}>{t('task.timeOptional')}</Text>
       <View style={styles.row}>
         <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
@@ -280,7 +281,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         onConfirm={onPickTime}
       />
 
-      {/* Bitiş saati — yalnız bir başlangıç saati seçilmişken anlamlı */}
+      {/* End time — only meaningful once a start time is selected */}
       {dueTime && (
         <>
           <Text style={styles.label}>{t('task.endTime')}</Text>
@@ -307,18 +308,20 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Hatırlatma — son tarihin GÜNÜNDE seçilen saatlerde bildirim (son tarihin
-          kendi saatinden bağımsız; alışkanlık hatırlatması deseni). Boşsa bildirim
-          kurulmaz. Tekrarlayan görevde her tekrarın gününde çalar. */}
+      {/* Reminder — notifications at the selected times ON the due date's day
+          (independent of the due date's own time; same pattern as habit
+          reminders). If empty, no notification is scheduled. For a recurring
+          task, it fires on the day of each recurrence. */}
       <ReminderListEditor label={t('task.reminder')} times={remindTimes} onChange={setRemindTimes} />
 
-      {/* Tekrar — tek seferlik (varsayılan) / her gün / belirli günler /
-          her X günde bir / her ay / her yıl. Tekrarlayan bir görev tamamlanınca
-          bir sonraki tekrar tarihine ileri sarılır (aynı görev; kopya yok).
-          Altı seçenek yan yana durunca form kalabalıklaşıyordu: kapalıyken
-          yalnız SEÇİLİ kipi gösteren bir düğme var, dokununca liste açılıyor.
-          Kip seçilince kendiliğinden kapanır — kipe özel ayrıntı denetimleri
-          (gün rozetleri, "kaç günde bir" vb.) zaten aşağıda görünmeye devam eder. */}
+      {/* Recurrence — one-time (default) / every day / specific days / every X
+          days / every month / every year. When a recurring task is completed,
+          it advances to the next recurrence date (same task; no duplicate).
+          Six options side by side made the form feel cluttered: while
+          collapsed there's a single button showing only the SELECTED mode,
+          tapping it opens the list. It auto-collapses once a mode is picked —
+          the mode-specific detail controls (day chips, "every how many days,"
+          etc.) keep showing below regardless. */}
       <Text style={styles.label}>{t('task.repeat')}</Text>
       <Pressable
         style={styles.repeatBtn}
@@ -346,9 +349,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
                 style={[styles.freqBtn, sel && styles.freqBtnSel]}
                 onPress={() => {
                   setRepeatMode(mode);
-                  // "Belirli günler" seçilince boşsa yardımcı olsun diye bugünün
-                  // gününü seçili getir (HabitForm deseni). Yıllıkta da son tarih
-                  // ilk tarih olarak gelir.
+                  // When "specific days" is picked and it's empty, preselect
+                  // today's weekday as a helpful default (HabitForm pattern).
+                  // For yearly, the due date is likewise preselected as the first date.
                   if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
                   if (mode === 'yearly' && yearDates.length === 0) setYearDates([dueDate.slice(5, 10)]);
                   setRepeatOpen(false);
@@ -428,17 +431,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             value={new Date(`${dueDate}T00:00:00`)}
             onClose={() => setShowYearDatePicker(false)}
             onConfirm={(picked) => {
-              const md = toYmd(picked).slice(5, 10); // yıl bileşeni atılır
+              const md = toYmd(picked).slice(5, 10); // year component is discarded
               setYearDates((prev) => (prev.includes(md) ? prev : [...prev, md].sort()));
             }}
           />
         </>
       )}
 
-      {/* Düzenlemede alt görev bölümü buraya gelir (anında yazılır). */}
+      {/* The subtask section goes here in edit mode (written immediately). */}
       {children}
 
-      {/* Oluşturmada taslak alt görev editörü (görev yazılınca birlikte oluşur) */}
+      {/* Draft subtask editor during creation (created together when the task is written) */}
       {enableSubtaskDraft && (
         <>
           <Text style={styles.label}>{t('task.subtasksOptional')}</Text>
@@ -480,7 +483,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Eylemler — Sil yalnız düzenlemede (onDelete varsa) */}
+      {/* Actions — Delete only in edit mode (when onDelete is provided) */}
       <View style={styles.actions}>
         {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
         <Pressable style={styles.saveBtn} onPress={submit} accessibilityRole="button" accessibilityLabel={submitLabel}>

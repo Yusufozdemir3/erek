@@ -1,45 +1,47 @@
-// Tam ekran (interstitial) reklamlar — Google AdMob (react-native-google-mobile-ads).
+// Full-screen (interstitial) ads — Google AdMob (react-native-google-mobile-ads).
 //
-// TETİKLEYİCİ (kullanıcı kararı, 2026-08-04): yalnızca uygulama ÖNE GELDİĞİNDE
-// (soğuk açılış dahil), en fazla INTERSTITIAL_MIN_GAP_MS'de bir. BİLEREK
-// YAPILMAYAN yer: bir alışkanlık/görev TAMAMLANDIĞINDA. Bu uygulamanın çekirdek
-// tasarımı "tamamlama = anında olumlu geri bildirim" üzerine kurulu (haptik,
-// animasyon, seri/puan sistemi — bkz. habitScore.ts). Tamamlamadan hemen sonra
-// tam ekran reklam çıkarmak bu döngüyü doğrudan baltalar ve elde tutmayı
-// düşürür — bu yüzden reklam katmanı habitRepo/taskRepo'nun tamamlama yollarına
-// HİÇ dokunmaz, yalnızca AppData'nın öne-gelme tetikleyicisine bağlanır.
+// TRIGGER (user decision, 2026-08-04): only when the app comes to the
+// FOREGROUND (including cold start), at most once per INTERSTITIAL_MIN_GAP_MS.
+// DELIBERATELY NOT triggered on: a habit/task being COMPLETED. This app's
+// core design is built around "completion = instant positive feedback"
+// (haptics, animation, the streak/score system — see habitScore.ts). Popping
+// a full-screen ad right after completion would directly undermine that loop
+// and hurt retention — so the ad layer NEVER touches habitRepo/taskRepo's
+// completion paths, it only hooks into AppData's foreground trigger.
 //
-// İLK KURULUMDA HİÇ REKLAM YOK: bkz. adsLogic.shouldShowInterstitial — lastShownAt
-// hiç kaydedilmemişse zamanlayıcı "şimdi" ile tohumlanır ama reklam GÖSTERİLMEZ;
-// kullanıcı tanıtım/giriş ekranlarının hemen ardından tam ekran reklamla
-// karşılaşmasın diye.
+// NO ADS AT ALL ON FIRST INSTALL: see adsLogic.shouldShowInterstitial — if
+// lastShownAt was never recorded, the timer is seeded with "now" but the ad
+// is NOT SHOWN; so the user doesn't hit a full-screen ad right after the
+// onboarding/login screens.
 //
-// TEST ID'LERİ — GERÇEK YAYINDAN ÖNCE DEĞİŞTİRİLMESİ GEREKENLER:
-// app.json'daki `androidAppId` VE aşağıdaki varsayılan ad unit id'si Google'ın
-// herkese açık TEST kimlikleridir (ca-app-pub-3940256099942544~...). Bunlar
-// çökmeden çalışır ama GELİR ÜRETMEZ. Gerçek yayından önce:
-//   1) AdMob hesabında uygulama + interstitial reklam birimi oluştur.
-//   2) app.json > plugins > "react-native-google-mobile-ads" > androidAppId'yi
-//      gerçek App ID ile değiştir (bu bir native manifest alanı — değişiklik
-//      ancak yeniden `expo prebuild` ile etkili olur).
-//   3) .env'e EXPO_PUBLIC_ADMOB_INTERSTITIAL_UNIT_ID = gerçek ad unit id'sini yaz.
+// TEST IDS — MUST BE REPLACED BEFORE GOING LIVE:
+// both `androidAppId` in app.json AND the default ad unit id below are
+// Google's publicly known TEST ids (ca-app-pub-3940256099942544~...). These
+// work without crashing but GENERATE NO REVENUE. Before going live:
+//   1) create the app + an interstitial ad unit in the AdMob account.
+//   2) replace androidAppId under app.json > plugins > "react-native-google-mobile-ads"
+//      with the real App ID (this is a native manifest field — the change
+//      only takes effect after a fresh `expo prebuild`).
+//   3) write EXPO_PUBLIC_ADMOB_INTERSTITIAL_UNIT_ID = the real ad unit id into .env.
 //
-// GDPR/UMP ONAYI: AdsConsent.gatherConsent() SDK başlatılmadan ÖNCE çağrılır —
-// Google'ın kendi yönergesi bu sırayı zorunlu kılıyor (AB/İngiltere kullanıcısına
-// reklam isteği atılmadan önce onay durumu bilinmeli). Form İÇERİĞİ AdMob
-// panelinde ayarlanır (Privacy & messaging); kod tarafı yalnızca akışı tetikler.
+// GDPR/UMP CONSENT: AdsConsent.gatherConsent() is called BEFORE the SDK is
+// initialized — Google's own guideline requires this order (consent status
+// must be known before an ad request is sent to an EU/UK user). The form's
+// CONTENT is configured in the AdMob dashboard (Privacy & messaging); the
+// code side only triggers the flow.
 //
-// EXPO GO / HENÜZ DERLENMEMİŞ BUILD: native modül yoktur. Lazy require + try/catch
-// (bu kod tabanındaki customNotificationChannel.ts/ringtonePicker.ts ile aynı
-// güvenlik deseni) — bulunamazsa reklam katmanı sessizce pasif kalır.
+// EXPO GO / NOT-YET-COMPILED BUILD: the native module doesn't exist. Lazy
+// require + try/catch (same safety pattern as
+// customNotificationChannel.ts/ringtonePicker.ts elsewhere in this codebase)
+// — the ad layer silently stays inactive if not found.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shouldShowInterstitial } from './adsLogic';
 
 const LAST_SHOWN_KEY = 'ads:lastInterstitialShownAt';
-const INTERSTITIAL_MIN_GAP_MS = 30 * 60 * 1000; // 30 dakika
+const INTERSTITIAL_MIN_GAP_MS = 30 * 60 * 1000; // 30 minutes
 
-// Google'ın herkese açık test ad unit id'si — bkz. dosya başı notu.
+// Google's publicly known test ad unit id — see the note at the top of the file.
 const TEST_INTERSTITIAL_UNIT_ID = 'ca-app-pub-3940256099942544/1033173712';
 const INTERSTITIAL_UNIT_ID =
   process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_UNIT_ID || TEST_INTERSTITIAL_UNIT_ID;
@@ -52,15 +54,15 @@ function loadNative(): NativeAdsModule | null {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require('react-native-google-mobile-ads');
   } catch {
-    return null; // Expo Go / native modül henüz derlenmemiş
+    return null; // Expo Go / native module not yet compiled
   }
 }
 
 let initPromise: Promise<void> | null = null;
 
-// SDK'yı başlatır ve GDPR/UMP onay akışını SDK başlatmadan ÖNCE tamamlar.
-// İdempotent (eşzamanlı çağrılar aynı promise'i paylaşır) — hem bu dosyadan hem
-// dışarıdan güvenle birden çok kez çağrılabilir.
+// Initializes the SDK, completing the GDPR/UMP consent flow BEFORE the SDK
+// starts. Idempotent (concurrent calls share the same promise) — safe to call
+// multiple times, both from this file and externally.
 function ensureInitialized(native: NativeAdsModule): Promise<void> {
   if (!initPromise) {
     initPromise = (async () => {
@@ -71,11 +73,12 @@ function ensureInitialized(native: NativeAdsModule): Promise<void> {
   return initPromise;
 }
 
-// Uygulama öne geldiğinde (soğuk açılış dahil) çağrılır — bkz. ui/AppData.tsx.
-// Sıklık sınırını kendi başına uygular (AsyncStorage'da kalıcı, süreç yeniden
-// başlasa da hatırlanır); çağıranın ayrıca bir kapı kurmasına gerek yoktur.
-// HİÇBİR KOŞULDA REDDETMEZ: bu bir yan etkidir, kullanıcının asıl akışını
-// (senkron, veri yükleme) bloklamamalı ya da bozmamalı.
+// Called when the app comes to the foreground (including cold start) — see
+// ui/AppData.tsx. Enforces the frequency limit on its own (persisted in
+// AsyncStorage, remembered even across process restarts); the caller doesn't
+// need to set up an additional gate. NEVER REJECTS UNDER ANY CONDITION: this
+// is a side effect, it must not block or disrupt the user's actual flow
+// (sync, data loading).
 export async function maybeShowInterstitial(): Promise<void> {
   const native = loadNative();
   if (!native) return;
@@ -86,7 +89,7 @@ export async function maybeShowInterstitial(): Promise<void> {
     const lastShownAt = stored ? Number(stored) : null;
 
     if (!shouldShowInterstitial(lastShownAt, now, INTERSTITIAL_MIN_GAP_MS)) {
-      // İlk kontrol: reklam göstermeden zamanlayıcıyı tohumla (bkz. dosya başı notu).
+      // First check: seed the timer without showing an ad (see the note at the top of the file).
       if (lastShownAt === null) await AsyncStorage.setItem(LAST_SHOWN_KEY, String(now));
       return;
     }
@@ -103,8 +106,8 @@ export async function maybeShowInterstitial(): Promise<void> {
 
       const ad = native.InterstitialAd.createForAdRequest(INTERSTITIAL_UNIT_ID);
       const unsubLoaded = ad.addAdEventListener(native.AdEventType.LOADED, () => {
-        // "Gösterildi" damgası YÜKLENME anında yazılır (show() öncesi): bir
-        // sonraki öne-gelmede aynı anda ikinci bir yükleme denemesi başlamasın.
+        // The "shown" timestamp is written at LOAD time (before show()): so
+        // that a second load attempt doesn't start at the same time on the next foreground.
         AsyncStorage.setItem(LAST_SHOWN_KEY, String(Date.now())).catch(() => {});
         ad.show().catch(() => finish());
       });
@@ -122,8 +125,8 @@ export async function maybeShowInterstitial(): Promise<void> {
       });
 
       ad.load();
-      // Reklam hiç yüklenmezse (ağ yok, envanter yok) sonsuza dek beklemesin —
-      // çağıranın akışını (foreground handler) kilitlemez.
+      // If the ad never loads (no network, no inventory) don't wait forever —
+      // must not lock up the caller's flow (the foreground handler).
       setTimeout(finish, 10_000);
     });
   } catch (e) {

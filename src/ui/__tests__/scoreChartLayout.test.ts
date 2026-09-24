@@ -1,14 +1,16 @@
-// Puan grafiği yerleşim testleri.
+// Score chart layout tests.
 //
-// REGRESYON (emülatörde yakalandı, 2026-07-23): TEK noktalı grafikte çizim alanı
-// bir tam `spacing` kadar şişiyordu (`Math.max(1, n-1) * spacing`), ekrandan
-// taşıyor, ScrollView açılışta sona kayıyor ve tek nokta solda görünmez alanda
-// kalıyordu — kullanıcı BOŞ bir grafik görüyordu. Bu durum ancak puan kilidi
-// kaldırılınca mümkün oldu (öncesinde 7 günden az veriyle grafik çizilmiyordu).
+// REGRESSION (caught on an emulator, 2026-07-23): for a chart with a SINGLE
+// point, the plot area was inflated by a whole extra `spacing`
+// (`Math.max(1, n-1) * spacing`), overflowing the screen; the ScrollView
+// auto-scrolled to the end on open, leaving the single point off-screen on
+// the left — the user saw an EMPTY-looking chart. This only became possible
+// once the score lock was removed (previously the chart wasn't drawn with
+// fewer than 7 days of data).
 
 import { AXIS_W, chartLayout, LABEL_W_MAX, POINT_SPACING_MIN } from '../scoreChartLayout';
 
-const WIDTH = 340; // tipik telefon kart genişliği (dp)
+const WIDTH = 340; // typical phone card width (dp)
 const available = WIDTH - AXIS_W;
 
 describe('chartLayout — tek nokta', () => {
@@ -20,7 +22,7 @@ describe('chartLayout — tek nokta', () => {
   it('tek nokta görünür alanda kalır (etiket kutusunun ortasında)', () => {
     const { xAt, labelW, plotW } = chartLayout(1, WIDTH);
     expect(xAt(0)).toBe(labelW / 2);
-    expect(xAt(0)).toBeLessThan(plotW); // alanın İÇİNDE
+    expect(xAt(0)).toBeLessThan(plotW); // INSIDE the area
     expect(xAt(0)).toBeGreaterThan(0);
   });
 
@@ -73,7 +75,7 @@ describe('chartLayout — sınır durumlar', () => {
   });
 
   it('çok dar kapta bile geçerli sayılar üretir', () => {
-    const l = chartLayout(10, AXIS_W); // çizime yer kalmıyor
+    const l = chartLayout(10, AXIS_W); // no room left for the plot
     expect(Number.isFinite(l.spacing)).toBe(true);
     expect(l.spacing).toBe(POINT_SPACING_MIN);
   });

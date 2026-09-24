@@ -1,41 +1,42 @@
-// ŞEMA ↔ SENKRON KOLON PARİTESİ.
+// SCHEMA ↔ SYNC COLUMN PARITY.
 //
-// NEDEN VAR: syncEngine.TABLES elle bakılan bir liste ve yerel şemayla bağı
-// derleyici tarafından denetlenmiyor. Bir migration yeni kolon eklerken bu
-// listeyi güncellemeyi unutmak SESSİZ bir arıza üretir — kolon push'ta hiç
-// gönderilmez, pull'da hiç yazılmaz, kayıt tek cihazda doğru görünmeye devam
-// ederken ikinci cihazda varsayılana düşer. Ne tip denetimi, ne çalışma zamanı
-// hatası, ne de kullanıcıya bir uyarı çıkar.
+// WHY THIS EXISTS: syncEngine.TABLES is a hand-maintained list, and its link
+// to the local schema isn't checked by the compiler. Forgetting to update this
+// list when a migration adds a new column produces a SILENT failure — the
+// column is never sent on push, never written on pull, and the record keeps
+// looking correct on one device while falling back to the default on a
+// second one. No type check, no runtime error, no warning ever reaches the user.
 //
-// Tam olarak bu oldu: goal_contribution ve goal_factor (migration010) senkron
-// listesine hiç eklenmemişti; birim çarpanlı hedef katkısı ("4 bardak = 1 litre")
-// ikinci cihazda per_completion'a düşüp bağlı hedefe yanlış ilerleme yazıyordu.
-// Bu testler o hatayı yakalardı ve bundan sonraki her tekrarını yakalar.
+// This exact thing happened: goal_contribution and goal_factor (migration010)
+// were never added to the sync list; a goal contribution with a unit
+// multiplier ("4 cups = 1 liter") fell back to per_completion on the second
+// device and wrote the wrong progress to the linked goal. These tests would
+// have caught that bug, and catch every recurrence of it from now on.
 //
-// KURAL: senkronlanan kolon kümesi = yerel tablonun TÜM kolonları − LOCAL_ONLY.
-// Yeni bir kolonun bilerek yerel kalması gerekiyorsa aşağıya AÇIKÇA eklenmeli;
-// böylece "unutuldu" ile "bilerek dışarıda" ayrımı kodda görünür olur.
+// RULE: the synced column set = ALL columns of the local table − LOCAL_ONLY.
+// If a new column is meant to stay local on purpose, it must be added below
+// EXPLICITLY, so "forgotten" and "deliberately excluded" stay visibly distinct in the code.
 
 import { getDb } from '../../db/database';
 import { resetTestDb } from '../../test/dbTestUtils';
 
-// syncEngine, supabase istemcisini (dolayısıyla react-native'i) içeri alır.
-// Bu testin ona ihtiyacı yok — yalnız TABLES tanımını okuyor (syncEngine.test.ts
-// ile aynı taklit deseni; mock'lar import'tan ÖNCE gelmeli).
+// syncEngine pulls in the supabase client (and thus react-native). This test
+// doesn't need that — it only reads the TABLES definition (same mocking
+// pattern as syncEngine.test.ts; the mocks must come BEFORE the import).
 jest.mock('../supabase', () => ({ supabase: null }));
 jest.mock('../auth', () => ({ ensureSignedIn: async () => null }));
 
 // eslint-disable-next-line import/first
 import { TABLES } from '../syncEngine';
 
-// Senkronlanmayan yerel kolonlar (bilinçli).
-//   synced — "buluta gönderilmeyi bekliyor mu" bayrağı; cihaza özeldir, uzak
-//            tarafta karşılığı yoktur ve olmamalıdır.
+// Local columns that aren't synced (deliberately).
+//   synced — the "waiting to be pushed to the cloud" flag; it's device-specific
+//            and has, and must have, no remote counterpart.
 const LOCAL_ONLY_COLUMNS = new Set(['synced']);
 
-// Senkronlanmayan yerel tablolar (bilinçli).
-//   users — cihaz kimliği; buluttaki kimlik auth.users'tır, bu tablo yalnız
-//           yerel kullanıcı kaydını (anonim/hesaplı) tutar (bkz. userRepo).
+// Local tables that aren't synced (deliberately).
+//   users — the device identity; the cloud identity is auth.users, this table
+//           only holds the local user record (anonymous/account) (see userRepo).
 const LOCAL_ONLY_TABLES = new Set(['users']);
 
 function localColumns(table: string): string[] {
@@ -61,7 +62,7 @@ describe('senkron kolon paritesi', () => {
     '%s: senkronlanan kolonlar yerel şemayla birebir örtüşür',
     (table, cfg) => {
       const expected = localColumns(table).filter((c) => !LOCAL_ONLY_COLUMNS.has(c));
-      // Sıra önemli değil (SELECT/INSERT listesi kendi sırasını kullanır), küme önemli.
+      // Order doesn't matter (the SELECT/INSERT list uses its own order), the set does.
       expect([...cfg.cols].sort()).toEqual([...expected].sort());
     }
   );
@@ -86,21 +87,22 @@ describe('senkron kolon paritesi', () => {
   });
 
   it('yerelde NOT NULL olan her senkron kolonunun bir varsayılanı var', () => {
-    // upsertLocal uzaktan gelen boş değeri `?? defaults ?? null` ile yazar. NOT NULL
-    // bir kolonda varsayılan yoksa tek bir eksik alan pull'u fırlatır ve o
-    // kullanıcının senkronu KALICI olarak kilitlenir (her tur aynı satırda patlar).
-    // Tüm tablolar TEK seferde raporlanır: tablo tablo expect etmek ilk hatada
-    // durur ve geri kalan eksikler bir sonraki koşuya kalırdı.
+    // upsertLocal writes an empty incoming value via `?? defaults ?? null`. If a
+    // NOT NULL column has no default, a single missing field makes the pull
+    // throw and that user's sync gets PERMANENTLY stuck (failing on the same row every round).
+    // All tables are reported in ONE go: asserting table by table would stop
+    // at the first failure and leave the rest of the gaps for the next run.
     const missing: Record<string, string[]> = {};
     for (const cfg of TABLES) {
       const cols = getDb()
         .getAllSync<{ name: string; notnull: number; dflt_value: string | null }>(
           `PRAGMA table_info(${cfg.table});`
         )
-        // Yalnız yerel şemanın KENDİSİNİN bir varsayılan bildirdiği NOT NULL
-        // kolonlar: fallback hem gerekli hem tartışmasız olan küme bu. Varsayılanı
-        // olmayan NOT NULL kolonlar (goal_entries.amount gibi) kaydın yükü demektir
-        // ve uydurulacak bir değerleri yoktur — uzak şemada da NOT NULL'dırlar.
+        // Only the NOT NULL columns where the local schema ITSELF declares a
+        // default: this is the set where a fallback is both needed and
+        // uncontroversial. NOT NULL columns with no default (like
+        // goal_entries.amount) are the record's payload and have no sensible
+        // value to invent — they're NOT NULL in the remote schema too.
         .filter((c) => c.notnull === 1 && c.dflt_value != null)
         .filter((c) => cfg.cols.includes(c.name))
         .filter((c) => cfg.defaults?.[c.name] === undefined)

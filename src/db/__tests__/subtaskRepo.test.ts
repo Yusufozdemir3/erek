@@ -1,4 +1,4 @@
-// subtaskRepo testleri: ekleme sırası (position), toggle, soft delete, sayım.
+// subtaskRepo tests: insertion order (position), toggle, soft delete, counting.
 
 import { subtaskRepo } from '../repositories/subtaskRepo';
 import { taskRepo } from '../repositories/taskRepo';
@@ -55,7 +55,7 @@ describe('softDelete', () => {
     const list = subtaskRepo.listByTask(taskId);
     expect(list.map((s) => s.title)).toEqual(['B']);
 
-    // Silinenden sonra eklenen, en büyük position'dan devam eder.
+    // One added after a deletion continues from the highest position.
     subtaskRepo.create(taskId, 'C');
     expect(subtaskRepo.listByTask(taskId).map((s) => s.title)).toEqual(['B', 'C']);
   });
@@ -98,9 +98,9 @@ describe('countsForTasks (çoklu)', () => {
       [taskId]: { done: 1, total: 2 },
       [other]: { done: 1, total: 1 },
     });
-    // Alt görevsiz görev sonuçta hiç yer almaz.
+    // A task with no subtasks never appears in the result at all.
     expect(counts[empty]).toBeUndefined();
-    // Tekil countForTask ile birebir aynı.
+    // Matches the single-task countForTask exactly.
     expect(counts[taskId]).toEqual(subtaskRepo.countForTask(taskId));
   });
 

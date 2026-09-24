@@ -1,16 +1,17 @@
-// Alışkanlık form ALANLARI — hem oluşturma (AddSheet) hem düzenleme
-// (HabitEditModal) tarafından paylaşılır. Tek kaynak: alanlar, durum ve doğrulama
-// burada; kalıcılık (create/update), bildirim programlama ve modal/sheet kabuğu
-// çağırana aittir. onSubmit son (dönüştürülmüş) değerleri yukarı verir.
-// Parent, hedef/alışkanlık değişince taze başlangıç için `key` ile remount eder.
-// Mimari kural: SQL yok — yalnızca goalRepo (okuma, hedef bağlama listesi için).
+// Habit form FIELDS — shared by both creation (AddSheet) and editing
+// (HabitEditModal). A single source: fields, state and validation live here;
+// persistence (create/update), notification scheduling, and the modal/sheet
+// shell belong to the caller. onSubmit hands the final (converted) values up.
+// The parent remounts via `key` for a fresh start when the goal/habit changes.
+// Architecture rule: no SQL — only goalRepo (read-only, for the goal-linking list).
 //
-// STEPPED (sihirbaz) MODU: `stepped` true ise (yalnızca oluşturmada, AddSheet)
-// alanlar 3-4 adıma bölünüp tek tek gösterilir — Kimlik (başlık+ikon+renk) →
-// Sıklık → Takip (varsa) → Hatırlatma. `stepped` false/verilmemişse (düzenleme,
-// HabitEditModal) TÜM alanlar eskisi gibi tek uzun kaydırmada gösterilir —
-// aynı JSX parçaları, yalnızca görünürlük koşulu değişir; alan SIRASI ya da
-// mantığı değişmez, edit akışı davranışsal olarak birebir korunur.
+// STEPPED (wizard) MODE: when `stepped` is true (creation only, AddSheet),
+// fields are split into 3-4 steps shown one at a time — Identity
+// (title+icon+color) → Frequency → Tracking (if any) → Reminder. When
+// `stepped` is false/omitted (editing, HabitEditModal), ALL fields are shown
+// in one long scroll as before — the same JSX pieces, only the visibility
+// condition changes; field ORDER or logic doesn't change, the edit flow's
+// behavior is preserved exactly.
 
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -36,8 +37,8 @@ import {
 } from '@/lib/habitFormLogic';
 import { DEFAULT_HABIT_COLOR, shortDate } from '@/ui/theme';
 
-// Sıklık seçicideki gün düğmeleri (Pazartesi'den Pazar'a; wd = JS getDay).
-// Etiketler i18n anahtarı; render'da t() ile çevrilir.
+// Day buttons in the frequency picker (Monday to Sunday; wd = JS getDay).
+// Labels are i18n keys, translated with t() at render time.
 const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.mon', wd: 1 },
   { labelKey: 'weekday.tue', wd: 2 },
@@ -48,7 +49,7 @@ const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.sun', wd: 0 },
 ];
 
-// habitRepo.create/update'in beklediği alanlarla birebir örtüşür.
+// Maps 1:1 to the fields habitRepo.create/update expect.
 export interface HabitFormValues {
   title: string;
   kind: HabitKind;
@@ -56,35 +57,37 @@ export interface HabitFormValues {
   icon: string | null;
   color: string | null;
   schedule: Recurrence | null;
-  target_amount: number | null; // numeric: miktar · timer: hedef SANİYE · binary: null
+  target_amount: number | null; // numeric: amount · timer: target in SECONDS · binary: null
   unit: string | null;
   start_date: string | null;
   end_date: string | null;
   goal_id: string | null;
-  goal_contribution: GoalContribution | null; // yalnız goal_id varsa anlamlı; NULL = per_completion
-  goal_factor: number;                        // yalnız 'amount' modunda anlamlı
+  goal_contribution: GoalContribution | null; // only meaningful if goal_id is set; NULL = per_completion
+  goal_factor: number;                        // only meaningful in 'amount' mode
 }
 
 interface Props {
-  userId: string;                       // hedef bağlama listesi bu kullanıcıdan
-  // Takip tipi. Verilirse SABİTTİR (düzenleme — tip oluşturmadan sonra değişmez).
-  // Verilmezse (oluşturma) sihirbazın ilk adımı ('kind') tipi kullanıcıya seçtirir.
+  userId: string;                       // the goal-linking list comes from this user
+  // Tracking type. If provided, it's FIXED (editing — the type never changes
+  // after creation). If omitted (creation), the wizard's first step ('kind')
+  // lets the user pick it.
   kind?: HabitKind;
-  initial?: Partial<HabitFormValues>;   // düzenleme: mevcut değerler; oluşturma: yok (varsayılan)
-  submitLabel: string;                  // "Kaydet" | "Ekle"
+  initial?: Partial<HabitFormValues>;   // editing: current values; creation: none (defaults)
+  submitLabel: string;                  // "Save" | "Add"
   onSubmit: (values: HabitFormValues) => void;
-  onDelete?: () => void;                // yalnız düzenlemede: Sil düğmesi
-  autoFocusTitle?: boolean;             // oluşturmada klavye hemen açılsın
-  stepped?: boolean;                    // sihirbaz modu (yalnız oluşturma — bkz. üst yorum)
+  onDelete?: () => void;                // editing only: the Delete button
+  autoFocusTitle?: boolean;             // open the keyboard immediately at creation
+  stepped?: boolean;                    // wizard mode (creation only — see the header comment)
 }
 
 type WizardStep = 'kind' | 'identity' | 'schedule' | 'tracking' | 'reminder';
-// Sıklık kipi (UI durumu; Recurrence'a submit'te çevrilir — bkz. submit).
-// Dört sıklık kipi lib/habitFormLogic.ts'te tanımlı (dönüşümü orası yapıyor).
+// Frequency mode (UI state; converted to Recurrence on submit — see submit).
+// The four frequency modes are defined in lib/habitFormLogic.ts (which does the conversion).
 type FreqMode = HabitFreqMode;
 
-// Takip tipi seçimi — sihirbazın ilk adımı (yalnız oluşturmada, tip sabit
-// verilmemişse). Emoji yerine ikon setiyle aynı çizgi vektör dili (Feather).
+// Tracking type selection — the wizard's first step (creation only, when the
+// type isn't fixed). Uses the same line-vector language as the icon set
+// (Feather) instead of emoji.
 const KIND_OPTIONS: { kind: HabitKind; name: keyof typeof Feather.glyphMap; titleKey: string; descKey: string }[] = [
   { kind: 'binary', name: 'check-circle', titleKey: 'add.kindBinary', descKey: 'add.kindBinaryDesc' },
   { kind: 'numeric', name: 'hash', titleKey: 'add.kindNumeric', descKey: 'add.kindNumericDesc' },
@@ -105,13 +108,13 @@ export function HabitForm({
   const { t, lang } = useI18n();
   const styles = makeHabitFormStyles(colors);
   const initSchedule = initial?.schedule ?? null;
-  // Tip: sabit verilmişse (düzenleme) ondan; yoksa (oluşturma) kullanıcı sihirbazın
-  // ilk adımında seçer (null = henüz seçilmedi).
+  // Type: from the fixed value if provided (editing); otherwise (creation) the
+  // user picks it in the wizard's first step (null = not chosen yet).
   const [kind, setKind] = useState<HabitKind | null>(fixedKind ?? initial?.kind ?? null);
   const initWeekly =
     !!initSchedule && initSchedule.freq === 'weekly' && (initSchedule.weekdays?.length ?? 0) > 0;
-  // Dört sıklık kipi: her gün / haftanın belirli günleri / her X günde bir /
-  // haftada X kez (esnek kota — gün seçilmez, haftalık sayı tutturulur).
+  // Four frequency modes: every day / specific days of the week / every X days /
+  // X times a week (a flexible quota — no days picked, just hit a weekly count).
   const initFreqMode: FreqMode = !initSchedule
     ? 'daily'
     : initSchedule.freq === 'interval'
@@ -128,15 +131,15 @@ export function HabitForm({
   const [color, setColor] = useState<string | null>(initial?.color ?? null);
   const [freqMode, setFreqMode] = useState<FreqMode>(initFreqMode);
   const [weekdays, setWeekdays] = useState<number[]>(initWeekly ? initSchedule!.weekdays! : []);
-  // interval: kaç günde bir (metin; >=2 geçerli, aksi halde "her gün"e düşer).
+  // interval: every how many days (text; >=2 is valid, otherwise falls back to "every day").
   const [everyNText, setEveryNText] = useState(
     initSchedule?.freq === 'interval' ? String(initSchedule.every ?? 2) : '2'
   );
-  // quota: haftada kaç kez (1-7).
+  // quota: how many times a week (1-7).
   const [quotaText, setQuotaText] = useState(
     isQuotaSchedule(initSchedule) ? String(initSchedule!.timesPerWeek) : '3'
   );
-  // Nicel: miktar (ör. 8). Zamanlayıcı: hedef DAKİKA (saniyeye çevrilir). Metin olarak tutulur.
+  // Numeric: amount (e.g. 8). Timer: target in MINUTES (converted to seconds). Kept as text.
   const [targetText, setTargetText] = useState(
     initial?.target_amount == null
       ? ''
@@ -145,33 +148,35 @@ export function HabitForm({
         : String(initial.target_amount)
   );
   const [unit, setUnit] = useState(initial?.unit ?? '');
-  // OLUŞTURMADA (initial yok) varsayılan olarak BUGÜN gelir — en sık senaryo
-  // "bugünden itibaren" takip etmek. DÜZENLEMEDE mevcut değer korunur (null =
-  // bilinçli "baştan beri" tercihi, bugüne çevrilmez). "Temizle" ile kaldırılabilir.
+  // At CREATION (no initial), defaults to TODAY — the most common scenario is
+  // tracking "starting today". At EDITING, the existing value is kept (null =
+  // a deliberate "since the beginning" choice, not converted to today). Can be
+  // removed with "Clear".
   const [startDate, setStartDate] = useState<string | null>(
     initial === undefined ? todayDate() : initial.start_date ?? null
   );
   const [endDate, setEndDate] = useState<string | null>(initial?.end_date ?? null);
   const [goalId, setGoalId] = useState<string | null>(initial?.goal_id ?? null);
-  // Bağlı hedefe katkı biçimi: 'per_completion' (varsayılan, gün başına +1) ya da
-  // 'amount' (o gün yapılan miktar × çarpan). Yalnızca nicel/zamanlayıcıda anlamlı
-  // (ikili alışkanlıkta "miktar" kavramı yoktur).
+  // Contribution style for the linked goal: 'per_completion' (default, +1 per
+  // day) or 'amount' (that day's amount × a multiplier). Only meaningful for
+  // numeric/timer (a binary habit has no concept of "amount").
   const [goalContribution, setGoalContribution] = useState<GoalContribution>(
     initial?.goal_contribution ?? 'per_completion'
   );
-  // Kullanıcıya çarpan yerine "kaç {alışkanlık birimi} bir {hedef birimi} eder?"
-  // diye SORULUR — ondalık yerine tam sayıyla düşünmesi doğal (ör. "4 bardak 1
-  // litre eder"). goal_factor'ün (litre/bardak) matematiksel TERSİdir; bu yüzden
-  // başlangıç değeri de tersine çevrilerek gösterilir. Varsayılan "1": birimler
-  // zaten aynıysa (ör. sayfa=sayfa) kullanıcı hiç dokunmadan doğru sonucu görür.
+  // Instead of a multiplier, the user is ASKED "how many {habit unit} make one
+  // {goal unit}?" — thinking in whole numbers instead of decimals feels
+  // natural (e.g. "4 cups make 1 liter"). This is the mathematical INVERSE of
+  // goal_factor (liter/cup), so the initial value is also shown inverted.
+  // Default "1": if the units are already the same (e.g. page=page), the user
+  // gets the right result without touching anything.
   const [goalRatioText, setGoalRatioText] = useState(
     initial?.goal_factor && initial.goal_factor > 0 ? String(1 / initial.goal_factor) : '1'
   );
   const [goals, setGoals] = useState<Goal[]>([]);
-  // Hangi tarih seçici açık: başlangıç mı bitiş mi (null = kapalı).
+  // Which date picker is open: start or end (null = closed).
   const [datePicker, setDatePicker] = useState<'start' | 'end' | null>(null);
 
-  // Yalnızca sayısal (ilerleme sayacı olan) hedeflere bağlanılabilir.
+  // Can only link to numeric (progress-counter) goals.
   useEffect(() => {
     setGoals(goalRepo.listByUser(userId).filter((g) => g.goal_type === 'numeric'));
   }, [userId]);
@@ -180,11 +185,11 @@ export function HabitForm({
     setWeekdays((prev) => (prev.includes(wd) ? prev.filter((x) => x !== wd) : [...prev, wd]));
   };
 
-  // Sihirbaz adımları: 'kind' yalnızca tip sabit verilmemişse (oluşturma) baştaki
-  // ilk adımdır. 'tracking' yalnızca gösterecek bir şeyi varsa listeye girer
-  // (nicel/zamanlayıcının hedef alanı VAR ya da en az bir hedefe bağlanılabilir);
-  // tip henüz seçilmediyse (kind null) bu adım da henüz yoktur — tip seçilince
-  // gerekiyorsa devreye girer.
+  // Wizard steps: 'kind' is the very first step only when the type isn't fixed
+  // (creation). 'tracking' only enters the list if it has something to show
+  // (numeric/timer HAS a target field, or there's at least one goal to link
+  // to); if the type hasn't been picked yet (kind is null), this step doesn't
+  // exist yet either — it kicks in once the type is chosen, if needed.
   const needsKindStep = stepped && fixedKind == null;
   const hasTrackingStep = kind != null && (kind !== 'binary' || goals.length > 0);
   const steps: WizardStep[] = stepped
@@ -198,19 +203,21 @@ export function HabitForm({
     : [];
   const [stepIndex, setStepIndex] = useState(0);
   const currentStep: WizardStep | null = stepped ? steps[Math.min(stepIndex, steps.length - 1)] : null;
-  // Bir alan grubu gösterilsin mi? Sihirbaz kapalıyken (düzenleme) hep true —
-  // tüm alanlar eskisi gibi tek seferde görünür, sıra/davranış değişmez.
-  // 'kind' İSTİSNA: takip tipi yalnızca oluşturma sihirbazında (needsKindStep
-  // varken) seçtirilir. Düzenlemede kind hep sabit verilir (fixedKind) ve tip
-  // sonradan değiştirilemez — alanları tutarsız bırakırdı (ör. hedefi zaten
-  // dakika olarak saklanmış bir zamanlayıcıyı ikili yapmak). Bu yüzden
-  // düzenlemede (stepped=false) bu bölüm hiç gösterilmez.
+  // Should a field group be shown? Always true while the wizard is off
+  // (editing) — all fields appear at once as before, order/behavior unchanged.
+  // 'kind' is the EXCEPTION: the tracking type is only picked in the creation
+  // wizard (while needsKindStep applies). During editing, kind is always fixed
+  // (fixedKind) and the type can never change afterward — it would leave
+  // fields inconsistent (e.g. turning a timer whose target is already stored
+  // in minutes into a binary habit). So this section never shows during
+  // editing (stepped=false).
   const show = (s: WizardStep) => (s === 'kind' ? stepped === true && currentStep === s : !stepped || currentStep === s);
 
-  // Nicel/zamanlayıcı alışkanlıkta hedef girilmeden geçilemez — aksi halde
-  // target_amount/unit null kalıp ikili alışkanlıktan farksız, anlamsız bir
-  // "nicel" alışkanlık oluşurdu. Nicelde birim de zorunlu (hedefin ne
-  // olduğunu göstermek için); zamanlayıcıda birim hep dakika, ayrıca istemez.
+  // A numeric/timer habit can't proceed without entering a target — otherwise
+  // target_amount/unit would stay null, producing a meaningless "numeric"
+  // habit indistinguishable from a binary one. For numeric, unit is also
+  // required (to show what the target actually is); for timer, the unit is
+  // always minutes, so it isn't asked for.
   const trackingTargetValid = (() => {
     if (kind !== 'numeric' && kind !== 'timer') return true;
     const parsed = parseFloat(targetText.replace(',', '.'));
@@ -231,14 +238,14 @@ export function HabitForm({
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
   const submit = () => {
-    if (!kind) return; // tip seçilmeden gönderilemez (sihirbazda canProceed zaten engeller)
+    if (!kind) return; // can't submit without a type chosen (canProceed already blocks this in the wizard)
     const t = title.trim();
     if (!t) return;
-    // Düzenleme modunda (stepped=false) sihirbazın canProceed engeli devrede
-    // değil — kaydet butonu doğrudan burayı çağırır, bu yüzden aynı kural
-    // burada da uygulanır (bkz. trackingTargetValid).
+    // In editing mode (stepped=false) the wizard's canProceed guard isn't
+    // active — the save button calls straight here, so the same rule is
+    // enforced here too (see trackingTargetValid).
     if (!trackingTargetValid) return;
-    // Saf dönüşümler lib/habitFormLogic.ts'te (test edilebilir olsun diye).
+    // Pure conversions live in lib/habitFormLogic.ts (so they're testable).
     const schedule = buildSchedule({
       freqMode,
       weekdays,
@@ -249,8 +256,8 @@ export function HabitForm({
     });
     const { target_amount, unit: unitVal } = buildTarget(kind, targetText, unit);
     const end_date = clampEndDate(startDate, endDate);
-    // Katkı biçimi yalnız bir hedefe bağlı nicel/zamanlayıcı alışkanlıkta anlamlı;
-    // aksi halde NULL (= per_completion) gönderilir.
+    // Contribution style is only meaningful for a numeric/timer habit linked to
+    // a goal; otherwise NULL (= per_completion) is sent.
     const goal_contribution: GoalContribution | null =
       goalId && kind !== 'binary' ? goalContribution : null;
     const goal_factor = ratioToGoalFactor(goalRatioText);
@@ -277,18 +284,20 @@ export function HabitForm({
     else if (datePicker === 'end') setEndDate(ymd);
   };
 
-  // "Kaç {birim} bir {hedef birimi} eder?" sorusunda kullanılan iki etiket.
-  // Zamanlayıcıda birim hep dakikadır (hedef dakika girilir); nicelde kullanıcının
-  // yazdığı birim, boşsa jenerik bir kelimeye düşer.
+  // The two labels used in the "how many {unit} make one {goal unit}?"
+  // question. For timer, the unit is always minutes (the target is entered in
+  // minutes); for numeric, it's whatever unit the user typed, falling back to
+  // a generic word when empty.
   const habitUnitLabel = kind === 'timer' ? t('habit.minuteUnit') : unit.trim() || t('habit.genericUnit');
   const selectedGoal = goals.find((g) => g.id === goalId);
   const goalUnitLabel = selectedGoal?.unit?.trim() || t('habit.genericUnit');
 
-  // Tam sayıysa ondalık gösterme (AmountStepper.fmt ile aynı desen).
+  // Don't show decimals for whole numbers (same pattern as AmountStepper.fmt).
   const fmtPreviewNum = (n: number) => (n % 1 === 0 ? String(n) : String(Math.round(n * 100) / 100));
 
-  // Canlı önizleme: girilen günlük hedef ve oran geçerliyse "günde X yaparsan
-  // hedefe Y eklenir" cümlesi için ham sayılar. Biri bile geçersizse gösterilmez.
+  // Live preview: raw numbers for the "if you do X per day, Y gets added to
+  // the goal" sentence, provided the entered daily target and ratio are both
+  // valid. Hidden if even one of them is invalid.
   const parsedDailyTarget = parseFloat(targetText.replace(',', '.'));
   const parsedRatioPreview = parseFloat(goalRatioText.replace(',', '.'));
   const contributionPreview =
@@ -299,15 +308,15 @@ export function HabitForm({
       ? { target: parsedDailyTarget, result: parsedDailyTarget / parsedRatioPreview }
       : null;
 
-  // Seçili renk yoksa varsayılan alışkanlık rengi — hem ikon ızgarasının
-  // "seçiliyken bu renkte görünür" önizlemesi hem de sihirbazın üstteki kimlik
-  // rozeti bunu kullanır.
+  // The default habit color when none is selected — used both by the icon
+  // grid's "shown in this color when selected" preview and by the wizard's
+  // top identity badge.
   const previewColor = color ?? DEFAULT_HABIT_COLOR;
 
   return (
     <>
-      {/* Sihirbazda (tip seçimi ve kimlik dışındaki adımlarda) üstte küçük bir
-          kimlik rozeti — hangi alışkanlığı ayarladığını hatırlatır. */}
+      {/* In the wizard (steps other than type selection and identity), a small
+          identity badge at the top — reminds which habit is being configured. */}
       {stepped && currentStep !== 'kind' && currentStep !== 'identity' && (
         <View style={styles.previewRow}>
           <View
@@ -324,7 +333,7 @@ export function HabitForm({
         </View>
       )}
 
-      {/* Takip tipi — yalnız sihirbazın ilk adımı (tip sabit verilmemişse) */}
+      {/* Tracking type — only the wizard's first step (when the type isn't fixed) */}
       {show('kind') && (
         <>
           <Text style={styles.label}>{t('habit.kindLabel')}</Text>
@@ -352,7 +361,7 @@ export function HabitForm({
         </>
       )}
 
-      {/* Başlık */}
+      {/* Title */}
       {show('identity') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionIdentity')}</Text>
@@ -372,8 +381,8 @@ export function HabitForm({
         </>
       )}
 
-      {/* İkon + renk — çizgi vektör ikon seçili renkle tintlenir; seçili olana
-          tekrar basınca kaldırılır. */}
+      {/* Icon + color — the line-vector icon is tinted with the selected color;
+          tapping the selected one again removes it. */}
       {show('identity') && (
         <HabitAppearancePicker
           icon={icon}
@@ -387,8 +396,8 @@ export function HabitForm({
         />
       )}
 
-      {/* Sıklık — her gün / belirli günler / her X günde bir / haftada X kez,
-          + tarih aralığı */}
+      {/* Frequency — every day / specific days / every X days / X times a week,
+          + date range */}
       {show('schedule') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionSchedule')}</Text>
@@ -409,7 +418,7 @@ export function HabitForm({
                   style={[styles.freqBtn, sel && styles.freqBtnSel]}
                   onPress={() => {
                     setFreqMode(mode);
-                    // Boşsa yardımcı olsun diye bugünün gününü seçili getir.
+                    // If empty, pre-select today's day as a helpful default.
                     if (mode === 'days' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
                   }}
                 >
@@ -466,8 +475,8 @@ export function HabitForm({
             </View>
           )}
 
-          {/* Tarih aralığı: başlangıçtan önce / bitişten sonra alışkanlık görünmez,
-              streak'i etkilemez. Boş = sınırsız. */}
+          {/* Date range: before the start / after the end, the habit doesn't
+              appear and doesn't affect the streak. Empty = unlimited. */}
           <Text style={styles.label}>{t('habit.startDate')}</Text>
           <View style={styles.row}>
             <Pressable style={styles.dateBtn} onPress={() => setDatePicker('start')}>
@@ -503,7 +512,7 @@ export function HabitForm({
                 ? new Date(`${datePicker === 'start' ? startDate : endDate}T00:00:00`)
                 : new Date()
             }
-            // Bitiş, başlangıçtan önce seçilemesin (submit'te ayrıca güvence var).
+            // Don't allow picking an end date before the start (there's also a safeguard on submit).
             minimumDate={datePicker === 'end' && startDate ? new Date(`${startDate}T00:00:00`) : undefined}
             onClose={() => setDatePicker(null)}
             onConfirm={(picked) => {
@@ -514,8 +523,8 @@ export function HabitForm({
         </>
       )}
 
-      {/* Takip: tipe göre hedef alanı (numeric = günlük miktar + birim, timer =
-          süre dakika; binary'de hedef alanı yok) + hedefe bağla. */}
+      {/* Tracking: a target field depending on type (numeric = daily amount +
+          unit, timer = duration in minutes; binary has no target field) + linking to a goal. */}
       {show('tracking') && (
         <>
       <Text style={styles.sectionHeader}>{t('habit.sectionTracking')}</Text>
@@ -562,8 +571,8 @@ export function HabitForm({
         </>
       )}
 
-      {/* Hedefe bağla — bu alışkanlığı her tamamladığın gün seçili hedefin
-          ilerlemesi +1 artar (geri alınca −1). Yalnızca sayısal hedefler. */}
+      {/* Link to a goal — every day you complete this habit, the selected
+          goal's progress increases by +1 (−1 when undone). Numeric goals only. */}
       {goals.length > 0 && (
         <>
           <Text style={styles.label}>{t('habit.linkGoal')}</Text>
@@ -595,8 +604,8 @@ export function HabitForm({
         </>
       )}
 
-      {/* Katkı biçimi — yalnız nicel/zamanlayıcı VE bir hedefe bağlıyken anlamlı.
-          İkili alışkanlıkta "miktar" kavramı yok, hep gün başına +1'dir. */}
+      {/* Contribution style — only meaningful when numeric/timer AND linked to
+          a goal. A binary habit has no concept of "amount", it's always +1 per day. */}
       {goalId && kind !== 'binary' && (
         <>
           <Text style={styles.label}>{t('habit.goalContribution')}</Text>
@@ -656,11 +665,11 @@ export function HabitForm({
       )}
         </>
       )}
-      {/* ↑ 'tracking' adımını kapatır (numeric/timer hedef + hedefe bağla + katkı biçimi) */}
+      {/* ↑ closes the 'tracking' step (numeric/timer target + goal link + contribution style) */}
 
-      {/* Hatırlatma saatleri — birden fazla eklenebilir. Sihirbazdaki son adımla
-          aynı mantıksal sırayı korumak için burada, Takip'ten sonra gösterilir
-          (düzenlemede tüm bölümler tek scrollda aynı sırayla akar). */}
+      {/* Reminder times — multiple can be added. Shown here after Tracking to
+          keep the same logical order as the wizard's last step (during editing
+          all sections flow in the same order in a single scroll). */}
       {show('reminder') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionReminder')}</Text>
@@ -668,8 +677,8 @@ export function HabitForm({
         </>
       )}
 
-      {/* Eylemler: sihirbazda alt gezinme (nokta göstergesi + Geri/İleri),
-          düzenlemede eskisi gibi Sil + Kaydet. */}
+      {/* Actions: bottom navigation in the wizard (dot indicator + Back/Next),
+          Delete + Save as before during editing. */}
       {stepped ? (
         <View style={styles.wizardNav}>
           <View style={styles.dots} accessibilityLabel={t('common.stepOfA11y', { n: stepIndex + 1, total: steps.length })}>

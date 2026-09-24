@@ -1,8 +1,9 @@
-// Alışkanlık düzenleme paneli (sayfayı ortalayan modal).
-// "Alışkanlıklar" ekranında bir alışkanlığa basınca açılır. Alanların tamamı ortak
-// HabitForm bileşeninde; burası yalnızca modal kabuğu + kalıcılık (update/delete)
-// ve bildirim programlaması. Oluşturma tarafı (AddSheet) aynı formu kullanır.
-// Mimari kural: SQL yok - yalnızca habitRepo çağrılır.
+// Habit edit panel (a centered modal).
+// Opens when a habit is tapped on the "Habits" screen. All the fields live in
+// the shared HabitForm component; this file is just the modal shell +
+// persistence (update/delete) + notification scheduling. The creation side
+// (AddSheet) uses the same form.
+// Architecture rule: no SQL - only habitRepo is called.
 
 import { Alert, StyleSheet, Text } from 'react-native';
 import { habitRepo, reminderRepo } from '@/db';
@@ -14,9 +15,9 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 
 interface Props {
-  habit: Habit | null; // null = panel kapalı
+  habit: Habit | null; // null = panel closed
   onClose: () => void;
-  onChanged: () => void; // kaydet/sil sonrası parent listeyi tazelesin
+  onChanged: () => void; // parent refreshes the list after save/delete
 }
 
 export function HabitEditModal({ habit, onClose, onChanged }: Props) {
@@ -29,8 +30,8 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
     const reminders = reminderRepo.replaceAll('habit', habit.id, values.remind_times);
     onChanged();
     onClose();
-    // Veriyi yazdıktan sonra bildirimleri güncelle (liste değiştiyse yeniden
-    // kurar, boşaldıysa iptal eder). Güncel hali DB'den alınır.
+    // Update notifications after writing the data (rebuilds them if the list
+    // changed, cancels them if it's now empty). The current state is read from the DB.
     const updated = habitRepo.getById(habit.id);
     if (updated) {
       scheduleHabitReminders(updated, reminders).then((ok) => {
@@ -53,7 +54,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   return (
     <ModalCard visible onClose={onClose}>
       <Text style={[styles.heading, { color: colors.text }]}>{t('habit.edit')}</Text>
-      {/* key: farklı alışkanlığa geçince form taze başlangıç değerleriyle kurulur */}
+      {/* key: switching to a different habit remounts the form with fresh initial values */}
       <HabitForm
         key={habit.id}
         userId={habit.user_id}

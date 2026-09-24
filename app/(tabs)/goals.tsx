@@ -1,15 +1,16 @@
-// "Hedefler" sekmesi — iki tip hedef:
-//  - numeric: ilerleme çubuğu (örn. 40/100 km)
-//  - milestone: adımlara bölünebilir (görev/alt görev mantığı) — tüm adımlar
-//    tamamlanınca (varsa) otomatik tamamlanır.
-// Her iki tipte de artık bir son tarih var (zorunlu, GoalForm'da ayarlanır) ve
-// isteğe bağlı adımlar (goal_milestones) olabilir — yalnızca 'milestone' tipte
-// zorunlu değil, 'numeric' hedefe de opsiyonel checklist olarak eklenebilir.
-// Liste SALT-OKUNUR bir özet/gezinme yüzeyi: ilerleme girişi (numeric stepper),
-// tamamlandı işaretleme (milestone) ve adım ekleme artık burada değil — hepsi
-// /goal/[id] ekranının 'Genel'/'Adımlar' sekmelerinde ("entry" tek yerde).
-// Ekleme burada yok: sekme çubuğundaki ＋ menüsünden yapılır (form AddSheet'te).
-// Mimari kural: SQL yok; yalnızca goalRepo/goalMilestoneRepo çağrılır.
+// "Goals" tab — two goal types:
+//  - numeric: a progress bar (e.g. 40/100 km)
+//  - milestone: can be broken into steps (same logic as task/subtask) — auto-
+//    completes once all steps are done (if any).
+// Both types now have a due date (mandatory, set in GoalForm) and can have
+// optional milestones (goal_milestones) — not just mandatory for the
+// 'milestone' type, a 'numeric' goal can also get them as an optional checklist.
+// The list is a READ-ONLY summary/navigation surface: progress entry (numeric
+// stepper), marking complete (milestone), and adding milestones no longer
+// happen here — all of it lives on the /goal/[id] screen's 'Overview'/
+// 'Milestones' tabs ("entry" in one single place).
+// No adding here: that happens from the ＋ menu in the tab bar (the form lives in AddSheet).
+// Architecture rule: no SQL; only goalRepo/goalMilestoneRepo are called.
 
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -36,21 +37,22 @@ export default function GoalsScreen() {
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [milestoneCounts, setMilestoneCounts] = useState<Record<string, { done: number; total: number }>>({});
-  // Aynı anda yalnızca bir kartın swipe aksiyonları açık kalsın.
+  // Only one card's swipe actions may be open at a time.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
-  // Düzenleme artık ayrı bir modal değil — /goal/[id] ekranının 'edit' sekmesi
-  // (bkz. app/goal/[id].tsx). Stats ikonu aynı ekranı 'stats' sekmesiyle açar.
+  // Editing is no longer a separate modal — it's the 'edit' tab on the
+  // /goal/[id] screen (see app/goal/[id].tsx). The stats icon opens the same
+  // screen on the 'stats' tab.
   const openGoal = (id: string, tab: 'stats' | 'edit') =>
     router.push({ pathname: '/goal/[id]', params: { id, tab } });
 
   const reload = useCallback(() => {
     const list = goalRepo.listByUser(user.id);
     setGoals(list);
-    // Adım rozetleri görünümlerden türetilir: miktarlı (ara-eşik) adımın "done"
-    // durumu completed kolonunda DEĞİL, hedefin current_value'sundadır (bkz.
-    // milestoneViews). Hedef sayısı küçük — hedef başına sorgu kabul edilir
-    // (useGoalStats.linkedHabits'teki aynı gerekçe).
+    // Milestone badges are derived from the views: a threshold (amount-bearing)
+    // milestone's "done" state lives NOT in the completed column but in the
+    // goal's current_value (see milestoneViews). The number of goals is small
+    // — a query per goal is acceptable (same rationale as useGoalStats.linkedHabits).
     const counts: Record<string, { done: number; total: number }> = {};
     for (const g of list) {
       const views = milestoneViews(goalMilestoneRepo.listByGoal(g.id), g.current_value);
@@ -59,13 +61,13 @@ export default function GoalsScreen() {
       }
     }
     setMilestoneCounts(counts);
-    // dataVersion: ＋ menüsünden hedef eklenince odak değişmeden tazelensin.
+    // dataVersion: refreshes without losing focus when a goal is added from the ＋ menu.
   }, [user.id, dataVersion]);
 
   useFocusEffect(reload);
 
-  // Silme onayı artık SwipeableRow'un kendi iki-dokunuşluk aksiyon düğmesinde
-  // (sağa açılan panel) — burada doğrudan siliniyor.
+  // Delete confirmation now lives in SwipeableRow's own two-tap action button
+  // (the panel that opens to the right) — deletion here is immediate.
   const remove = (id: string) => {
     goalRepo.softDelete(id);
     cancelGoalReminders(id).catch(() => {});
@@ -81,7 +83,7 @@ export default function GoalsScreen() {
         </View>
         <Text style={shared.subtitle}>{t('screen.goalsSubtitle')}</Text>
 
-        {/* LİSTE */}
+        {/* LIST */}
         {goals.length === 0 ? (
           <EmptyState
             emoji="🎯"
@@ -108,21 +110,21 @@ export default function GoalsScreen() {
                 editA11yLabel={t('common.editA11y', { title: goal.title })}
                 deleteA11yLabel={t('common.deleteA11y', { title: goal.title })}
               >
-              {/* marginBottom kaldırıldı (0) — bkz. tasks.tsx'teki aynı düzeltme yorumu. */}
+              {/* marginBottom removed (0) — see the same fix comment in tasks.tsx. */}
               <View style={[styles.goalCard, styles.noMargin]}>
                 <View style={styles.goalHead}>
-                  {/* Salt-okunur durum göstergesi — işaretleme artık /goal/[id]'nin
-                      Genel sekmesinde (bkz. dosya başı yorumu). */}
+                  {/* Read-only status indicator — checking off now happens on
+                      /goal/[id]'s Overview tab (see the file-header comment). */}
                   {goal.goal_type === 'milestone' && (
                     <View style={[styles.checkbox, completed && styles.checkboxDone]}>
                       {completed && <Text style={styles.checkmark}>✓</Text>}
                     </View>
                   )}
-                  {/* Başlığa dokununca hedef ekranı 'Düzenle' sekmesiyle açılır */}
+                  {/* Tapping the title opens the goal screen on the 'Edit' tab */}
                   <Pressable style={styles.titleArea} onPress={() => openGoal(goal.id, 'edit')}>
                     <Text style={[styles.goalTitle, completed && styles.goalTitleDone]}>{goal.title}</Text>
                   </Pressable>
-                  {/* İkona dokununca aynı ekran 'İstatistik' sekmesiyle açılır (bkz. habits.tsx'teki hafta şeridi) */}
+                  {/* Tapping the icon opens the same screen on the 'Stats' tab (see the week strip in habits.tsx) */}
                   <Pressable
                     onPress={() => openGoal(goal.id, 'stats')}
                     hitSlop={8}
@@ -149,14 +151,14 @@ export default function GoalsScreen() {
                     </Text>
                   </>
                 )}
-                {/* Adım rozeti artık her iki tipte de görünebilir — 'numeric' hedefe de
-                    opsiyonel adım eklenebiliyor (bkz. dosya başı yorumu). */}
+                {/* The milestone badge can now show on both types — a
+                    'numeric' goal can also get optional milestones (see the file-header comment). */}
                 {counts && counts.total > 0 && (
                   <Text style={[styles.goalMeta, styles.standaloneMeta]}>
                     {counts.done}/{counts.total} {t('goal.milestoneCountSuffix', { n: counts.total })}
                   </Text>
                 )}
-                {/* Son tarih artık kartın sağ alt köşesinde küçük bir rozet gibi. */}
+                {/* The due date now sits as a small badge in the card's bottom-right corner. */}
                 {!!dLabel && (
                   <View style={styles.deadlineRow}>
                     <Text style={styles.deadlineLeft}>{dLabel}</Text>
@@ -181,7 +183,7 @@ const makeStyles = (c: Colors) =>
       borderWidth: 1,
       borderColor: c.border,
       padding: 13,
-      marginBottom: 10, // noMargin ile ezilir (bkz. rowSpacing); dış sarmalayıcıya taşındı
+      marginBottom: 10, // overridden by noMargin (see rowSpacing); moved to the outer wrapper
     },
     goalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
     checkbox: {
@@ -211,7 +213,7 @@ const makeStyles = (c: Colors) =>
     progressFill: { height: '100%', borderRadius: 5, backgroundColor: c.primary },
     goalMeta: { fontSize: 14, color: c.muted, fontWeight: '600' },
     standaloneMeta: { marginTop: 8 },
-    // Son tarih — sağ alt köşede küçük bir rozet.
+    // Due date — a small badge in the bottom-right corner.
     deadlineRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
     deadlineLeft: { fontSize: 11, color: c.streak, fontWeight: '700' },
   });

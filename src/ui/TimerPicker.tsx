@@ -1,12 +1,12 @@
-// Bağımsız sayaç seçici — merkezi ＋ butonuna UZUN BASILINCA açılır (kısa
-// dokunuş her zamanki Görev·Alışkanlık·Hedef menüsünü açar; bkz. AddFab).
-// Zamanlayıcı tipi alışkanlıkları + süre-ölçümlü sayısal hedefleri (bkz.
-// helpers.TIME_UNIT) tek listede gösterir; bir satıra dokununca TimerProvider
-// o hedefe yönlendirilip başlar — aynı anda TEK zamanlayıcı kuralı korunur
-// (biri çalışırken başkasına dokununca öncekini otomatik kaydeder).
-// Zaten çalışan satıra tekrar dokunmak DURAKLATIR (yeniden başlatmak DEĞİL —
-// TimerProvider.start aynı hedefe ikinci kez çağrılırsa commit atlanır ve
-// oturumun o ana kadarki süresi kaybolurdu; bkz. TimerProvider yorumu).
+// Standalone timer picker — opens on a LONG PRESS of the central ＋ button (a
+// short tap opens the usual Task·Habit·Goal menu; see AddFab).
+// Shows timer-type habits + duration-based numeric goals (see helpers.TIME_UNIT)
+// in a single list; tapping a row routes TimerProvider to that target and starts
+// it — the SINGLE-active-timer rule is preserved (tapping another row while one
+// is running auto-commits the previous one).
+// Tapping an already-running row PAUSES it (not restart it — if TimerProvider.start
+// is called a second time for the same target, the commit is skipped and the
+// session's elapsed time up to that point would be lost; see the TimerProvider comment).
 
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -34,7 +34,7 @@ interface Row {
   title: string;
   icon: string | null;
   color: string | null;
-  amount: number; // o anki birikmiş saniye (DB'deki, canlı değil)
+  amount: number; // seconds accumulated so far (from the DB, not live)
   target: number;
 }
 
@@ -45,7 +45,7 @@ export function TimerPicker({ visible, onClose }: Props) {
   const { user } = useAppData();
   const timer = useTimer();
 
-  // Yalnızca sheet açıkken hesapla (kapalıyken gereksiz DB sorgusu yok).
+  // Only computed while the sheet is open (no unnecessary DB query while closed).
   const rows = useMemo<Row[]>(() => {
     if (!visible) return [];
     const habitRows: Row[] = habitRepo

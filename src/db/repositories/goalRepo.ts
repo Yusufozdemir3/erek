@@ -1,6 +1,6 @@
-// Hedef (Goal) repository.
-// İki tip: 'numeric' (50/100 km gibi ilerleme) ve 'milestone' (adımlara bölünebilir,
-// görev/alt görev mantığıyla aynı). Her iki tipte de artık bir deadline olabilir.
+// Goal repository.
+// Two types: 'numeric' (progress like 50/100 km) and 'milestone' (can be
+// broken into steps, same logic as task/subtask). Both types can now have a deadline.
 
 import { getDb } from '../database';
 import { newId, nowIso, todayDate } from '../../lib/helpers';
@@ -28,19 +28,22 @@ function rowToGoal(row: any): Goal {
   };
 }
 
-// current_value'nun girdilerden TÜRETİLDİĞİ tek nokta (bkz. migration019):
-//   current_value = value_baseline + aktif girdilerin toplamı, 0 tabanlı.
-// Girdiler toplamsal ve ayrı ayrı senkronlandığı için iki cihazın katkısı
-// çakışmadan birleşir; baseline yalnız elle düzeltmeleri ve eski birikimi taşır.
+// The single place where current_value is DERIVED from entries (see
+// migration019):
+//   current_value = value_baseline + sum of active entries, 0-based.
+// Since entries are additive and sync independently, two devices'
+// contributions merge without conflict; the baseline only carries manual
+// corrections and legacy accumulated value.
 //
-// 0 TABANI: tek cihazda addProgress zaten tabanı uyguluyor, ama iki cihaz aynı
-// anda eksiye çeken düzeltme girerse toplam negatife düşebilir — okurken
-// kırpıyoruz ki "-5 km" gibi anlamsız bir değer hiç ortaya çıkmasın.
+// 0 FLOOR: on a single device addProgress already applies the floor, but if
+// two devices simultaneously apply a negative correction, the total could dip
+// below zero — we clamp on read so a nonsensical value like "-5 km" never
+// surfaces.
 //
-// bumpSync: değer bir KULLANICI EYLEMİ sonucu değiştiyse (addProgress, elle
-// düzenleme) satır yeniden gönderilmeli. Senkronun pull sonrası yeniden hesabında
-// ise FALSE geçilir — aksi halde her tur, hiçbir şey değişmese bile tüm hedefleri
-// yeniden push eden bir gel-git doğardı.
+// bumpSync: the row should be re-sent if the value changed due to a USER
+// ACTION (addProgress, manual edit). During sync's post-pull recompute, pass
+// FALSE instead — otherwise every round would re-push all goals in a feedback
+// loop even when nothing actually changed.
 function recompute(id: string, bumpSync: boolean): void {
   const db = getDb();
   const sums = bumpSync ? ', updated_at = ?, synced = 0' : '';
@@ -62,7 +65,7 @@ export interface CreateGoalInput {
   unit?: string | null;
   deadline?: string | null;
   remind_at?: string | null;
-  start_date?: string | null; // verilmezse bugün (tempo hesabının sıfır günü)
+  start_date?: string | null; // defaults to today if not given (day zero for the pace calculation)
 }
 
 export const goalRepo = {
@@ -98,13 +101,14 @@ export const goalRepo = {
     return rows.map(rowToGoal);
   },
 
-  // Hedefin tanımını günceller (başlık, hedef değeri, birim, son tarih, mevcut değer).
-  // goal_type değiştirilmez — tip değişimi alanları tutarsız bırakır.
-  // current_value verilirse yalnızca 0 tabanına sıkıştırılır; ÜST sınır YOKTUR
-  // (bkz. addProgress: hedef bir sınır değil eşiktir). Eskiden burada da tavan
-  // vardı ve hedefi düşürmek mevcut ilerlemeyi sessizce kesiyordu (100 hedefli,
-  // 50 birikmiş bir hedefi 10'a çekmek 50'yi 10 yapıyordu — kullanıcının
-  // gerçekten yaptığı iş kayboluyordu).
+  // Updates a goal's definition (title, target value, unit, deadline, current
+  // value). goal_type is never changed — changing the type would leave fields
+  // inconsistent. If current_value is given it's only clamped to a 0 floor;
+  // there's NO upper limit (see addProgress: a goal is a threshold, not a
+  // cap). There used to be a ceiling here too, and lowering a goal's target
+  // silently truncated existing progress (a goal targeting 100 with 50 already
+  // accumulated, retargeted to 10, turned that 50 into 10 — the user's actual
+  // work vanished).
   update(
     id: string,
     fields: Partial<{
@@ -115,8 +119,9 @@ export const goalRepo = {
       remind_at: string | null;
       start_date: string | null;
       current_value: number;
-      // "Mevcut değer" elle değiştirilirken bu fark İLERLEME GEÇMİŞİNE de yazılsın mı
-      // (GoalForm'daki onay kutusu). false/verilmezse sessiz düzeltmedir.
+      // Whether manually changing "Current value" should ALSO log the
+      // difference to the PROGRESS HISTORY (GoalForm's checkbox). false/
+      // omitted means a silent correction.
       log_manual_change: boolean;
     }>
   ): void {
@@ -129,22 +134,25 @@ export const goalRepo = {
     if (fields.deadline !== undefined) { sets.push('deadline = ?'); vals.push(fields.deadline); }
     if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
     if (fields.start_date !== undefined) { sets.push('start_date = ?'); vals.push(fields.start_date); }
-    // "Mevcut değer"i ELLE değiştirmenin İKİ yolu var ve ikisi de current_value'yu
-    // DOĞRUDAN yazamaz — o değer artık girdilerden türetiliyor (bkz. migration019),
-    // doğrudan yazılan sayı bir sonraki yeniden hesapta silinirdi:
+    // There are TWO ways to manually change "Current value", and NEITHER can
+    // write current_value DIRECTLY anymore — that value is now derived from
+    // entries (see migration019), so a directly-written number would just get
+    // erased on the next recompute:
     //
-    //   log_manual_change=false (varsayılan, SESSİZ DÜZELTME): fark BASELINE'a
-    //     yazılır, girdi geçmişine hiçbir şey eklenmez. Elle düzeltme bir günün
-    //     emeği değildir ve tempoyu şişirmemeli.
-    //   log_manual_change=true: fark bir GİRDİ olarak yazılır, baseline'a
-    //     dokunulmaz — kullanıcı bunu bilerek ilerleme sayıyor.
+    //   log_manual_change=false (default, SILENT CORRECTION): the difference
+    //     is written to the BASELINE, nothing is added to the entry history.
+    //     A manual correction isn't a day's work and shouldn't inflate the pace.
+    //   log_manual_change=true: the difference is written as an ENTRY, the
+    //     baseline is left untouched — the user is deliberately counting this
+    //     as progress.
     //
-    // İkisi birlikte YAPILMAZ: bu kural eskiden ekranda (app/goal/[id].tsx)
-    // duruyordu ve baseline'ı yazdıktan SONRA ayrıca girdi ekliyordu; toplam bir
-    // anda `requested + fark` oluyor ama current_value `requested`te kalıyordu.
-    // Değer, kullanıcı hiçbir şey yapmadan, bir sonraki senkron turunda sıçrardı.
-    // Kural artık burada — tek yerde, iki yol da aynı değişmezi korur.
-    // Negatif olmasın; üst sınır yok (bkz. yukarıdaki not).
+    // The two are NEVER done together: this rule used to live on the screen
+    // (app/goal/[id].tsx), which wrote to the baseline and THEN also added an
+    // entry; the total instantly became `requested + difference` while
+    // current_value stayed at `requested`. The value would jump on its own,
+    // with the user doing nothing, on the next sync round. The rule now lives
+    // here — in one place, both paths preserve the same invariant.
+    // Must not go negative; no upper limit (see the note above).
     const requested = fields.current_value !== undefined ? Math.max(0, fields.current_value) : null;
     if (sets.length === 0 && requested === null) return;
     const before = requested !== null ? this.getById(id)?.current_value ?? 0 : 0;
@@ -171,62 +179,69 @@ export const goalRepo = {
     }
   },
 
-  // Sayısal hedefte ilerlemeyi DELTA olarak değiştirir (örn. +5 km, -1 düzeltme).
+  // Changes progress on a numeric goal by a DELTA (e.g. +5 km, -1 correction).
   //
-  // TAVAN YOK (2026-08-03 kararı). current_value artık dürüst bir SAYAÇ'tır:
-  // ne kadar yapıldıysa onu tutar, target_value'yu aşabilir. Hedef bir SINIR
-  // değil bir EŞİK'tir ve yalnızca GÖSTERİMDE anlam taşır — progressRatio zaten
-  // Math.min(1, …) ile oranı kırpar, useGoalStats.remaining Math.max(0, …) ile
-  // kalanı, milestoneViews eşik oranlarını. Yani "%120 dolu bar" gibi bir şey
-  // ortaya çıkmaz; yalnızca metinde dürüstçe "120 / 100 km" yazar.
+  // NO CEILING (decision from 2026-08-03). current_value is now an honest
+  // COUNTER: it holds exactly how much was done, and can exceed target_value.
+  // A goal is a THRESHOLD, not a LIMIT, and the target only matters for
+  // DISPLAY — progressRatio already clamps the ratio with Math.min(1, …),
+  // useGoalStats.remaining clamps the remainder with Math.max(0, …), and
+  // milestoneViews clamps threshold ratios. So nothing like a "120%-full bar"
+  // ever appears; only the text honestly reads "120 / 100 km".
   //
-  // NEDEN KALDIRILDI — kırpma iki ayrı veri kaybı üretiyordu:
-  //   1) current_value hedefi aşmışken (zamanlayıcı bunu üretebiliyordu) "+1 dk"
-  //      eklemek `next = target` dediği için ilerlemeyi GERİ ÇEKİYORDU:
-  //      current=6000, target=3600, +60 → applied = -2400 (40 dakika silindi)
-  //      ve girdi geçmişine hiç yaşanmamış bir -40:00 kaydı düşüyordu.
-  //   2) Hedef DOLUYKEN bağlı alışkanlığı işaretle→geri al döngüsü asimetrikti:
-  //      +1 kırpılıp yutuluyor (applied=0), -1 ise uygulanıyordu → her döngüde
-  //      hedeften 1 birim sessizce eksiliyordu (bkz. habitRepo.bumpGoalIfLinked'in
-  //      "+1/-1 simetriktir" varsayımı). Tavan kalkınca ikisi de tam uygulanır.
-  // Tek kalan sınır 0 tabanı: negatif ilerleme anlamsız.
+  // WHY IT WAS REMOVED — clamping produced two separate data-loss bugs:
+  //   1) When current_value had already exceeded the target (the timer could
+  //      produce this), adding "+1 min" computed `next = target`, which
+  //      PULLED PROGRESS BACKWARD: current=6000, target=3600, +60 ->
+  //      applied = -2400 (40 minutes erased), and a -40:00 entry that never
+  //      actually happened got logged into the history.
+  //   2) While the goal was FULL, checking a linked habit on and back off was
+  //      asymmetric: the +1 got clamped away and swallowed (applied=0) while
+  //      the -1 was applied fully -> every cycle silently drained 1 unit from
+  //      the goal (see habitRepo.bumpGoalIfLinked's assumption that "+1/-1 are
+  //      symmetric"). With the ceiling gone, both apply in full.
+  // The only remaining limit is the 0 floor: negative progress makes no sense.
   //
-  // Yalnızca 'numeric' hedeflerde anlamlı: 'milestone' hedefte current_value
-  // kullanılmadığından sessizce yok sayılır (bağlı alışkanlık geçişi de buraya
-  // düşer; milestone hedefe bağlansa bile sayaç bozulmaz).
-  // Dönüş: GERÇEKTEN uygulanan fark — yalnız 0 tabanı istenen delta'yı kısabilir
-  // (ör. current=2 iken -5 istenirse gerçek fark -2'dir). Kayda istenen değil
-  // gerçekleşen fark düşer ki geçmiş ve ondan hesaplanan tempo/projeksiyon
-  // current_value ile tutarlı kalsın. Fark 0 ise hiçbir şey yazılmaz.
+  // Only meaningful for 'numeric' goals: for a 'milestone' goal current_value
+  // isn't used, so this is silently ignored (a linked habit's transition also
+  // lands here; even if it's linked to a milestone goal, the counter stays intact).
+  // Return value: the difference ACTUALLY applied — only the 0 floor can
+  // shrink the requested delta (e.g. requesting -5 while current=2 gives an
+  // actual difference of -2). The log records the ACTUAL difference, not the
+  // requested one, so the history and the pace/projection computed from it
+  // stay consistent with current_value. If the difference is 0, nothing is written.
   //
-  // Girdi kaydı BİLEREK burada: eskiden her çağıranın ayrıca goalEntryRepo.create
-  // çağırması gerekiyordu ve bağlı alışkanlık katkıları (habitRepo) bunu ATLIYORDU
-  // → hedefin geçmişinde görünmüyor, tempo/projeksiyon yalnız elle "Ekle"lenenden
-  // hesaplanıyordu. Tek yerde toplanınca bir daha unutulamaz.
+  // The entry write lives here ON PURPOSE: every caller used to also have to
+  // call goalEntryRepo.create separately, and linked-habit contributions
+  // (habitRepo) SKIPPED this -> they wouldn't show up in the goal's history,
+  // and pace/projection was only computed from manual "Add" entries.
+  // Consolidating it in one place means it can never be forgotten again.
   //
-  // NOT: `update` ile "Mevcut değer"i ELLE set etmek hâlâ girdi yazmaz — o bir
-  // ilerleme değil DÜZELTME'dir (bir günün emeği gibi sayılıp tempoyu şişirmemeli).
+  // NOTE: manually setting "Current value" via `update` still doesn't write an
+  // entry — that's a CORRECTION, not progress (it shouldn't be counted like a
+  // day's work and inflate the pace).
   //
-  // ZAMANLAYICI DA BURAYI KULLANIR: eskiden ayrı bir addTimeProgress vardı, tek
-  // farkı tavanı uygulamamasıydı. Tavan kalkınca ikisi birebir aynı fonksiyon
-  // oldu ve ayrı tutmak, aynı alan üzerinde FARKLI invariant varsayan iki yazma
-  // yolu demekti — yukarıdaki (1) numaralı hatanın kök nedeni tam olarak buydu.
+  // THE TIMER USES THIS TOO: there used to be a separate addTimeProgress,
+  // whose only difference was not applying the ceiling. Once the ceiling was
+  // removed, the two became byte-for-byte the same function, and keeping them
+  // separate would have meant two write paths assuming DIFFERENT invariants on
+  // the same field — which was exactly the root cause of bug (1) above.
   addProgress(id: string, amount: number): number {
     const goal = this.getById(id);
     if (!goal || goal.goal_type !== 'numeric') return 0;
     const next = Math.max(0, goal.current_value + amount);
     const applied = next - goal.current_value;
     if (applied === 0) return 0;
-    // ÖNCE girdi, SONRA yeniden hesap: current_value artık girdilerden türetiliyor
-    // (bkz. migration019 + recompute). Doğrudan yazmak, senkron pull'undan sonraki
-    // yeniden hesapla çelişirdi — ve zaten aynı sonucu verir: baseline sabit
-    // kaldığı için toplam tam olarak `next` çıkar.
+    // Entry FIRST, recompute SECOND: current_value is now derived from
+    // entries (see migration019 + recompute). Writing it directly would
+    // conflict with the post-sync-pull recompute — and produces the same
+    // result anyway, since the baseline stays fixed the total comes out to exactly `next`.
     goalEntryRepo.create(id, applied);
     recompute(id, true);
     return applied;
   },
 
-  // 0-1 arası ilerleme oranı. UI yüzde göstergesi için.
+  // A 0-1 progress ratio. For the UI's percentage indicator.
   progressRatio(goal: Goal): number {
     if (goal.goal_type === 'numeric' && goal.target_value && goal.target_value > 0) {
       return Math.min(1, goal.current_value / goal.target_value);
@@ -234,16 +249,18 @@ export const goalRepo = {
     return 0;
   },
 
-  // Bir hedefin tamamlanmış sayılıp sayılmadığı — TİPE göre farklı kaynaktan:
-  // 'numeric' oran/hedeften türer (ayrı bir bayrak tutulmaz); 'milestone' elle
-  // ya da tüm adımlar tamamlanınca otomatik işaretlenen completed_at'ten okunur.
+  // Whether a goal counts as completed — sourced differently by TYPE:
+  // 'numeric' derives it from ratio/target (no separate flag is kept);
+  // 'milestone' reads completed_at, which is set manually or automatically
+  // once all milestones are done.
   isCompleted(goal: Goal): boolean {
     return goal.goal_type === 'numeric' ? this.progressRatio(goal) >= 1 : goal.completed_at != null;
   },
 
-  // Yalnızca 'milestone' hedeflerde anlamlı (elle işaretleme ya da tüm adımlar
-  // tamamlanınca otomatik çağrılır — bkz. app/goal/[id].tsx). 'numeric' hedefte
-  // sessizce yok sayılır: tamamlanma zaten current_value>=target_value'dan gelir.
+  // Only meaningful for 'milestone' goals (called either by a manual toggle or
+  // automatically once all milestones are done — see app/goal/[id].tsx). For a
+  // 'numeric' goal this is silently ignored: completion already comes from
+  // current_value>=target_value.
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
     const goal = this.getById(id);
@@ -254,16 +271,15 @@ export const goalRepo = {
     );
   },
 
-  // TÜM hedeflerin current_value'sunu girdilerden yeniden türetir.
-  // Senkron pull'u bittikten sonra çağrılır (bkz. syncEngine.runSync): uzaktan
-  // gelen girdiler ve/veya baseline yereldeki toplamı değiştirmiş olabilir ve
-  // uzaktan gelen current_value'nun kendisi (son-yazan-kazanır ile taşınan eski
-  // önbellek) diğer cihazın katkısını GÖRMEZ — kaybolan ilerlemenin kaynağı
-  // tam olarak buydu (bkz. migration019).
+  // Re-derives current_value from entries for ALL goals.
+  // Called after a sync pull finishes (see syncEngine.runSync): entries and/or
+  // baseline arriving from remote may have changed the local total, and the
+  // remote current_value itself (an old cache carried over via last-writer-
+  // wins) doesn't SEE the other device's contribution — that mismatch was
+  // exactly the source of the lost-progress bug (see migration019).
   //
-  // synced'e DOKUNMAZ: bu bir kullanıcı eylemi değil, zaten senkronlanmış
-  // veriden yapılan yeniden hesap. Aksi halde her tur tüm hedefleri yeniden
-  // push eden sonu gelmez bir gel-git olurdu.
+  // Does NOT touch synced: this is a recompute from already-synced data, not a
+  // user action. Otherwise every round would re-push all goals in an endless feedback loop.
   recomputeAllFromEntries(): void {
     const db = getDb();
     db.runSync(
@@ -274,7 +290,7 @@ export const goalRepo = {
     );
   },
 
-  // Hedefe ait hatırlatma satırları da burada temizlenir (gerekçe: habitRepo.softDelete).
+  // A goal's reminder rows are cleaned up here too (rationale: habitRepo.softDelete).
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();

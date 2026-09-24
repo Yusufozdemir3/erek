@@ -1,10 +1,11 @@
-// Intl için dil → yerel ayar eşlemesi. src/ui/theme.ts'ten AYRILDI: saf veri
-// olmasına rağmen orada durduğu için onu import eden her modül react-native'i
-// (StyleSheet) de çekiyordu — bu, tarih biçimlendiren SAF modüllerin hızlı
-// 'logic' test projesinde koşmasını engelliyordu (ör. ui/habit/habitStatsFormat).
+// Language → locale mapping for Intl. SPLIT OFF from src/ui/theme.ts: even
+// though this is plain data, living there meant every module that imported
+// it also pulled in react-native (StyleSheet) — which kept PURE modules that
+// format dates (e.g. ui/habit/habitStatsFormat) from running in the fast
+// 'logic' test project.
 //
-// theme.ts geriye uyum için bunu yeniden dışa açar; yeni kod doğrudan buradan
-// import etmeli.
+// theme.ts re-exports this for backward compatibility; new code should
+// import directly from here.
 
 import type { Lang } from '@/i18n/translations';
 

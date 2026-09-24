@@ -1,26 +1,27 @@
-// Sentry hata izleme. Kimlik bilgisi .env'den okunur (EXPO_PUBLIC_ önekli
-// değişkenler derlemeye gömülür). DSN yoksa Sentry sessizce devre dışı kalır —
-// supabase.ts'teki isSyncConfigured deseniyle aynı desen: eksik yapılandırma
-// hiçbir şeyi çökertmez, ilgili özellik yalnızca pasif kalır.
+// Sentry crash reporting. Credentials are read from .env (EXPO_PUBLIC_-prefixed
+// vars get embedded at build time). If there's no DSN, Sentry silently stays
+// disabled — same pattern as isSyncConfigured in supabase.ts: missing config
+// never crashes anything, the feature just stays inactive.
 //
-// MEVCUT DURUM (2026-08-04): Sentry AÇIK — .env'de DSN tanımlı, runtime çökmeleri
-// panele düşüyor. Uygulama yayında olduğu ve başka hiçbir gözlemlenebilirlik
-// aracı bulunmadığı için açıldı (öncesinde bir kullanıcı çökse haberimiz olmuyordu).
+// CURRENT STATE (2026-08-04): Sentry is ON — DSN is set in .env, runtime
+// crashes land in the dashboard. Turned on because the app is live and there's
+// no other observability tool (before this, a user crash would go unnoticed).
 //
-// ⚠ HÂLÂ EKSİK — STACK TRACE'LER MINIFIED: app.json'daki Sentry EXPO CONFIG
-// PLUGIN'i hâlâ ÇIKARIK (commit af0fa17): plugin'in build-zamanı kaynak-harita
-// yükleme adımı, SENTRY_AUTH_TOKEN olmadan Android build'ini gradle'da düşürüyor.
-// Native modül autolink'li olduğundan plugin olmadan da hatalar YAKALANIR;
-// plugin'in kattığı tek şey panelde okunaklı (minify çözülmüş) trace.
-// AÇMAK İÇİN — SIRA ÖNEMLİ (token önce, yoksa build patlar):
-//   (1) sentry.io > Settings > Auth Tokens: project:releases + org:read yetkili token;
-//   (2) token'ı build ortamına ver — EAS'te build alınıyorsa `eas secret:create
-//       --name SENTRY_AUTH_TOKEN`, YEREL Gradle build'de EAS secret'ı İŞE YARAMAZ,
-//       token gradlew çağrısından önce ortam değişkeni olarak verilmeli (android/
-//       klasörüne yazma: prebuild --clean siler);
-//   (3) app.json plugins'e şunu ekle (organization SLUG'ı hazır — panelden alındı):
+// STILL MISSING — STACK TRACES ARE MINIFIED: the Sentry EXPO CONFIG PLUGIN in
+// app.json is still commented out (commit af0fa17): the plugin's build-time
+// source-map upload step breaks the Android build in gradle without a
+// SENTRY_AUTH_TOKEN. Since the native module is autolinked, errors ARE CAUGHT
+// even without the plugin; all the plugin adds is a readable (de-minified)
+// trace in the dashboard.
+// TO ENABLE IT — ORDER MATTERS (token first, or the build breaks):
+//   (1) sentry.io > Settings > Auth Tokens: create a token with project:releases + org:read scope;
+//   (2) supply the token to the build environment — for an EAS build, `eas secret:create
+//       --name SENTRY_AUTH_TOKEN`; for a LOCAL Gradle build, the EAS secret DOESN'T WORK,
+//       the token must be set as an environment variable before invoking gradlew (don't
+//       write it into the android/ folder: prebuild --clean deletes it);
+//   (3) add this to app.json's plugins (organization SLUG already known — taken from the dashboard):
 //       ['@sentry/react-native', { organization: 'yusuf-01', project: 'erek' }]
-//   (4) kontrol build alıp panelde trace'in okunaklı geldiğini doğrula.
+//   (4) do a verification build and confirm the trace shows up readable in the dashboard.
 
 import * as Sentry from '@sentry/react-native';
 
@@ -29,26 +30,28 @@ const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 export const isSentryConfigured = Boolean(dsn);
 
 if (isSentryConfigured) {
-  // tracesSampleRate: PERFORMANS izlemesinin örnekleme oranı — çökme yakalamayla
-  // ilgisi YOKTUR, o ayrıdır ve bu ayardan bağımsız olarak hep çalışır.
-  // 0 = performans izlemesi tamamen kapalı. Üç gerekçe:
-  //   - Bu veriyi tüketen kimse yok; istediğimiz tek şey çökme görünürlüğü.
-  //   - Ücretsiz kotayı çökmelere bırakır (eskiden 1.0'dı: her şeyi gönderiyordu).
-  //   - Gizlilik politikasındaki "kullanım analitiği toplanmaz" sözünü tartışmasız
-  //     tutar — işlem/zamanlama verisi o sözün gri alanına giriyordu.
+  // tracesSampleRate: the sampling rate for PERFORMANCE tracing — this has
+  // NOTHING to do with crash capture, which is separate and always runs
+  // regardless of this setting.
+  // 0 = performance tracing fully disabled. Three reasons:
+  //   - Nobody consumes this data; all we want is crash visibility.
+  //   - Leaves the free quota for crashes (used to be 1.0: sent everything).
+  //   - Keeps the privacy policy's "no usage analytics collected" promise
+  //     unambiguous — transaction/timing data would fall into a gray area of that promise.
   Sentry.init({
     dsn,
-    // GELİŞTİRMEDE TAMAMEN KAPALI. İki gerekçe: (1) geliştirirken ürettiğimiz
-    // hatalar gerçek kullanıcı çökmeleriyle aynı panele düşüp sinyali gürültüye
-    // boğuyordu; (2) ücretsiz planın aylık hata kotasını yakıyordu. Bunun bedeli:
-    // Sentry'nin çalıştığı ancak GERÇEK bir build ile doğrulanabilir — `expo start`
-    // ile test hatası fırlatmak artık hiçbir şey göndermez (beklenen davranış).
+    // FULLY DISABLED IN DEVELOPMENT. Two reasons: (1) errors we generate while
+    // developing landed in the same dashboard as real user crashes, drowning
+    // the signal in noise; (2) it was burning the free plan's monthly error
+    // quota. The cost of this: Sentry working can only be verified with a
+    // REAL build — throwing a test error via `expo start` now sends nothing
+    // (expected behavior).
     enabled: !__DEV__,
     tracesSampleRate: 0,
-    // sendDefaultPii: SDK'nın varsayılanı da false ama AÇIKÇA yazılıyor — gizlilik
-    // politikasının §5'te verdiği "kimlik bilgisi göndermiyoruz" sözünün kodda
-    // karşılığı bu satır. Varsayılana güvenmek, bir SDK yükseltmesinin sözü
-    // sessizce bozabileceği anlamına gelirdi.
+    // sendDefaultPii: the SDK's default is also false, but this is set
+    // EXPLICITLY — this line is the code-level equivalent of the "we don't
+    // send identifying information" promise made in §5 of the privacy policy.
+    // Relying on the default would mean an SDK upgrade could silently break that promise.
     sendDefaultPii: false,
   });
 }

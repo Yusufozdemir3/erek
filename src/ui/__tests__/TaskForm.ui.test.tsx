@@ -1,15 +1,17 @@
-// TaskForm bileşen testi — bu oturumun iki özelliğini kapsar:
-//  (1) Son tarih ZORUNLU: oluşturmada varsayılan bugün, "Temizle" ile kaldırılamaz.
-//  (2) Saat isteğe bağlı: seçilince due_date'e gömülür; bitiş saati başlangıçtan
-//      SONRA ise geçerli. Tarih/saat seçici (DatePickerModal/TimePickerModal)
-//      setup-ui'de dublörlenir; seçim `global.__pickers.date/time(date)` ile simüle edilir.
+// TaskForm component test — covers two features from this session:
+//  (1) The deadline is REQUIRED: defaults to today at creation, can't be
+//      removed via "Clear".
+//  (2) The time is optional: once picked it's embedded into due_date; the end
+//      time is valid only if it's AFTER the start time. The date/time picker
+//      (DatePickerModal/TimePickerModal) is doubled in setup-ui; selection is
+//      simulated via `global.__pickers.date/time(date)`.
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { TaskForm } from '@/ui/TaskForm';
 import { todayDate } from '@/lib/helpers';
 import { renderUI } from '@/test/renderWithProviders';
 
-// Dublör seçicinin onConfirm'ini çağırıp bekleyen state'i boşaltır.
+// Calls the double picker's onConfirm and flushes pending state.
 async function pick(mode: 'date' | 'time', date: Date) {
   const cb = (globalThis as any).__pickers?.[mode];
   if (!cb) throw new Error(`"${mode}" seçici monte değil`);
@@ -38,7 +40,7 @@ describe('TaskForm', () => {
       expect.objectContaining({
         title: 'Fatura öde',
         priority: 'medium',
-        due_date: todayDate(), // saatsiz, tam bugün
+        due_date: todayDate(), // no time, exactly today
         end_time: null,
       })
     );
@@ -48,8 +50,8 @@ describe('TaskForm', () => {
     const { queryByText, getByPlaceholderText } = await renderUI(
       <TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />
     );
-    // Henüz saat seçilmediğinden ekranda hiç "Temizle" bulunmamalı — bu, tarihin
-    // (varsayılan bugün) kaldırılamaz olduğunu dolaylı doğrular.
+    // Since no time has been picked yet, "Clear" shouldn't appear anywhere on
+    // screen — this indirectly confirms the date (default today) can't be removed.
     expect(getByPlaceholderText('Görev başlığı')).toBeTruthy();
     expect(queryByText('Temizle')).toBeNull();
   });
@@ -60,7 +62,7 @@ describe('TaskForm', () => {
       <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
     );
     fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Toplantı');
-    fireEvent.press(getByText('Saat yok')); // saat seçiciyi aç
+    fireEvent.press(getByText('Saat yok')); // open the time picker
     await pick('time', new Date(2026, 0, 1, 9, 30));
     fireEvent.press(getByText('Ekle'));
     expect(onSubmit).toHaveBeenCalledWith(
@@ -74,12 +76,12 @@ describe('TaskForm', () => {
       <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
     );
     fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Spor');
-    // Başlangıç saati 09:30
+    // Start time 09:30
     fireEvent.press(getByText('Saat yok'));
     await pick('time', new Date(2026, 0, 1, 9, 30));
-    // Bitiş saati alanı artık görünür (başlangıç varken). Kalan "Saat yok" bitiştir.
+    // The end-time field is now visible (once a start exists). The remaining "Saat yok" is the end.
     fireEvent.press(getByText('Saat yok'));
-    await pick('time', new Date(2026, 0, 1, 10, 0)); // 10:00 > 09:30 → geçerli
+    await pick('time', new Date(2026, 0, 1, 10, 0)); // 10:00 > 09:30 → valid
     fireEvent.press(getByText('Ekle'));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ due_date: `${todayDate()}T09:30:00`, end_time: '10:00' })
@@ -101,16 +103,15 @@ describe('TaskForm', () => {
     );
   });
 
-  // Hatırlatma saatleri son tarihin kendi saatinden AYRI: ReminderListEditor'ün
-  // "＋ Saat ekle" düğmesiyle birden fazla eklenebilir, remind_times listesi
-  // olarak gönderilir.
+  // Reminder times are SEPARATE from the deadline's own time: multiple can be
+  // added via ReminderListEditor's "+ Add time" button, sent as the remind_times list.
   it('hatırlatma saati eklenince remind_times listesine girer', async () => {
     const onSubmit = jest.fn();
     const { getByText, getByPlaceholderText } = await renderUI(
       <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
     );
     fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'İlaç al');
-    fireEvent.press(getByText('＋ Saat ekle')); // hatırlatma seçicisini aç
+    fireEvent.press(getByText('＋ Saat ekle')); // open the reminder picker
     await pick('time', new Date(2026, 0, 1, 8, 0));
     fireEvent.press(getByText('Ekle'));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ remind_times: ['08:00'] }));
@@ -126,15 +127,16 @@ describe('TaskForm', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ remind_times: [] }));
   });
 
-  // Altı tekrar seçeneği formu kalabalıklaştırdığı için kapalı duruyor: düğme
-  // yalnız seçili kipi gösterir, dokununca liste açılır, seçince tekrar kapanır.
+  // The six recurrence options are collapsed since they'd clutter the form:
+  // the button shows only the selected mode, tapping it opens the list, and
+  // selecting one closes it again.
   describe('tekrar seçici', () => {
     it('seçenekler kapalı başlar, düğme seçili kipi gösterir', async () => {
       const { getByText, queryByText } = await renderUI(
         <TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />
       );
-      expect(getByText('Tekrar yok')).toBeTruthy(); // özet düğmesi
-      expect(queryByText('Her gün')).toBeNull(); // liste kapalı
+      expect(getByText('Tekrar yok')).toBeTruthy(); // summary button
+      expect(queryByText('Her gün')).toBeNull(); // list is closed
     });
 
     it('düğmeye basınca açılır, kip seçilince kapanır ve özet güncellenir', async () => {
@@ -143,9 +145,9 @@ describe('TaskForm', () => {
         <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
       );
       fireEvent.press(getByText('Tekrar yok'));
-      fireEvent.press(getByText('Her gün')); // artık görünür → seç
-      expect(queryByText('Tekrar yok')).toBeNull(); // liste kapandı, özet değişti
-      expect(getByText('Her gün')).toBeTruthy(); // özet düğmesi
+      fireEvent.press(getByText('Her gün')); // now visible → select it
+      expect(queryByText('Tekrar yok')).toBeNull(); // list closed, summary changed
+      expect(getByText('Her gün')).toBeTruthy(); // summary button
 
       fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Su iç');
       fireEvent.press(getByText('Ekle'));

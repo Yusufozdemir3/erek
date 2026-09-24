@@ -1,6 +1,7 @@
-// Alışkanlık (Habit) repository.
-// Önemli tasarım kararı: streak (seri) ASLA saklanmaz, her zaman loglardan hesaplanır.
-// Sebebi: türetilmiş veriyi saklamak senkronda tutarsızlık yaratır. Tek doğru kaynak loglar.
+// Habit repository.
+// Important design decision: streak is NEVER stored, it's always computed from
+// logs. Reason: storing derived data creates inconsistency during sync. Logs
+// are the single source of truth.
 
 import { getDb } from '../database';
 import {
@@ -17,12 +18,12 @@ import {
   weekStartOf,
 } from '../../lib/helpers';
 
-// — KOTA ("haftada X kez") seri yardımcıları —
-// Kota kuralında hiçbir gün tek başına vadeli olmadığından seriler GÜN değil
-// HAFTA bazında sayılır: bir hafta, içindeki tamamlanan gün sayısı kotaya
-// ulaştıysa "yapıldı"dır. Haftalar Pazartesi başlangıçlıdır (weekStartOf).
+// — QUOTA ("X times a week") streak helpers —
+// Under a quota rule no single day is due on its own, so streaks are counted
+// in WEEKS, not days: a week is "done" once the number of completed days
+// within it reaches the quota. Weeks start on Monday (weekStartOf).
 
-// Tamamlanan log tarihlerini hafta-başlangıcı anahtarına göre sayar.
+// Counts completed log dates keyed by their week-start.
 function weekCompletionCounts(dates: string[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const d of dates) {
@@ -67,7 +68,7 @@ function rowToHabit(row: any): Habit {
 export interface CreateHabitInput {
   user_id: string;
   title: string;
-  kind?: HabitKind; // varsayılan 'binary'
+  kind?: HabitKind; // defaults to 'binary'
   remind_at?: string | null;
   goal_id?: string | null;
   icon?: string | null;
@@ -77,8 +78,8 @@ export interface CreateHabitInput {
   unit?: string | null;
   start_date?: string | null;
   end_date?: string | null;
-  goal_contribution?: GoalContribution | null; // NULL = per_completion (varsayılan)
-  goal_factor?: number;                        // yalnız 'amount' modunda anlamlı; varsayılan 1
+  goal_contribution?: GoalContribution | null; // NULL = per_completion (default)
+  goal_factor?: number;                        // only meaningful in 'amount' mode; defaults to 1
 }
 
 export const habitRepo = {
@@ -154,13 +155,14 @@ export const habitRepo = {
     db.runSync(`UPDATE habits SET ${sets.join(', ')} WHERE id = ?`, vals);
   },
 
-  // Alışkanlığı VE ona ait hatırlatma satırlarını soft-delete eder.
-  // Hatırlatmalar burada temizlenmeli, çağıranda DEĞİL: silme dört ayrı yerden
-  // yapılıyor (liste ekranı, düzenleme paneli, …) ve hepsinde tek tek hatırlamak
-  // gerekiyordu — hiçbirinde yapılmıyordu. Sonuç: satırlar aktif kalıp sonsuza
-  // dek buluta push ediliyor, hesap birleştirmede yeni kimlik alıp yeniden
-  // gönderiliyordu. Bildirimin kendisi ayrı bir mesele (OS kuyruğu) ve onu
-  // çağıran iptal eder — burası yalnız VERİ.
+  // Soft-deletes a habit AND its reminder rows.
+  // Reminders must be cleaned up here, NOT by the caller: deletion happens
+  // from four different places (the list screen, the edit panel, …) and each
+  // one would need to remember it separately — none of them did. The result
+  // was rows staying active and being pushed to the cloud forever, then
+  // getting a new identity and being re-sent again on account merge. The
+  // notification itself is a separate matter (the OS queue) and its caller
+  // cancels it — this is only about DATA.
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();
@@ -168,8 +170,8 @@ export const habitRepo = {
     reminderRepo.deleteAllForEntity('habit', id);
   },
 
-  // Belirli bir gün için alışkanlığı tamamlandı/tamamlanmadı işaretler.
-  // UNIQUE(habit_id, log_date) sayesinde aynı gün iki kayıt oluşmaz - varsa günceller.
+  // Marks a habit completed/not-completed for a given day.
+  // Thanks to UNIQUE(habit_id, log_date), the same day never gets two records - if one exists, it's updated.
   toggleLog(habitId: string, date: string, completed: boolean): void {
     const db = getDb();
     const now = nowIso();
@@ -192,18 +194,19 @@ export const habitRepo = {
     this.bumpGoalIfLinked(habitId, wasCompleted, completed);
   },
 
-  // Alışkanlık bir hedefe "per_completion" modunda (varsayılan) bağlıysa,
-  // TAMAMLANMA GEÇİŞİNDE bağlı hedefin ilerlemesini günceller: tamamlandı → +1,
-  // geri alındı → −1. Yalnızca durum gerçekten değiştiğinde çalışır; aynı durumu
-  // tekrar yazmak (ör. zaten tamamlanmış günü tekrar işaretlemek) hedefi
-  // etkilemez → çift sayım olmaz. Bir günü geçmişe dönük işaretlemek de geçerli
-  // bir geçiştir. goalRepo.addProgress 0..target aralığına sıkıştırır ve numeric
-  // olmayan hedefi zaten yok sayar.
-  // 'amount' modundaki alışkanlıklar bu fonksiyona hiç girmez (bkz. incrementAmount) —
-  // onlarda katkı tamamlanma durumuna değil, o anki miktar farkına bağlıdır.
-  // NOT: Çok-cihaz senkronunda goal.current_value LWW ile taşınır; bu, manuel
-  // +1/+5 ilerlemesindeki mevcut sınırla aynıdır (eşzamanlı katkılar birleşmez).
-  // `habit` verilirse (incrementAmount zaten çekmişse) tekrar sorgu atılmaz.
+  // If a habit is linked to a goal in "per_completion" mode (the default),
+  // updates the linked goal's progress ON THE COMPLETION TRANSITION: completed
+  // -> +1, undone -> −1. Only runs when the state actually changed; re-writing
+  // the same state (e.g. re-checking an already-completed day) doesn't affect
+  // the goal -> no double counting. Retroactively marking a past day is also a
+  // valid transition. goalRepo.addProgress clamps to the 0..target range and
+  // already ignores a non-numeric goal.
+  // Habits in 'amount' mode never reach this function (see incrementAmount) —
+  // for them the contribution depends on the actual amount difference at that moment, not the completion state.
+  // NOTE: in multi-device sync, goal.current_value is carried by LWW; this is
+  // the same existing limitation as manual +1/+5 progress (concurrent
+  // contributions don't merge).
+  // If `habit` is given (incrementAmount already fetched it), it's not queried again.
   bumpGoalIfLinked(
     habitId: string,
     wasCompleted: boolean,
@@ -216,7 +219,7 @@ export const habitRepo = {
     goalRepo.addProgress(h.goal_id, isCompleted ? 1 : -1);
   },
 
-  // Bir alışkanlığın belirli gün tamamlanıp tamamlanmadığı.
+  // Whether a habit was completed on a given day.
   isCompletedOn(habitId: string, date: string): boolean {
     const db = getDb();
     const row = db.getFirstSync<any>(
@@ -226,7 +229,7 @@ export const habitRepo = {
     return row?.completed === 1;
   },
 
-  // Nicel alışkanlık: belirli gün yapılan miktar (kayıt yoksa 0).
+  // Numeric habit: the amount done on a given day (0 if there's no record).
   getAmountOn(habitId: string, date: string): number {
     const db = getDb();
     const row = db.getFirstSync<any>(
@@ -236,19 +239,20 @@ export const habitRepo = {
     return row?.amount ?? 0;
   },
 
-  // getAmountOn + isCompletedOn'un ÇOKLU sürümü: "Bugün" ekranı, her alışkanlık
-  // için o günün miktar+tamamlanma bilgisini iki ayrı sorguyla (N+1) çekmek
-  // yerine tek soruda alır. habit_logs'ta UNIQUE(habit_id, log_date) olduğundan
-  // alışkanlık başına en çok bir satır döner; log'u olmayan alışkanlık sonuçta
-  // hiç yer almaz (çağıran amount=0 / completed=false varsayar).
+  // The MULTI version of getAmountOn + isCompletedOn: instead of the "Today"
+  // screen firing two separate queries per habit (N+1) for that day's
+  // amount+completion, it gets everything in one query. Since habit_logs has
+  // UNIQUE(habit_id, log_date), at most one row comes back per habit; a habit
+  // with no log doesn't show up at all in the result (the caller assumes
+  // amount=0 / completed=false).
   getDayStates(
     habitIds: string[],
     date: string
   ): Record<string, { amount: number; completed: boolean }> {
     const db = getDb();
     const out: Record<string, { amount: number; completed: boolean }> = {};
-    // Parçalı: `IN (…)` bağlı değişken sayısı liste uzunluğuna eşit, SQLite'ın
-    // sınırı ise sabit (bkz. helpers.chunk).
+    // Chunked: the number of bound `IN (…)` parameters equals the list
+    // length, while SQLite's own limit is fixed (see helpers.chunk).
     for (const ids of chunk(habitIds)) {
       const placeholders = ids.map(() => '?').join(',');
       const rows = db.getAllSync<{ habit_id: string; amount: number; completed: number }>(
@@ -261,10 +265,10 @@ export const habitRepo = {
     return out;
   },
 
-  // getDayStates'in ARALIK sürümü: verilen alışkanlıkların [start, end] arasında
-  // TAMAMLANDI işaretli günleri, alışkanlık başına bir küme. "Alışkanlıklar"
-  // ekranındaki son-7-gün şeridi bunu kullanır — eskiden alışkanlık başına ayrı
-  // bir recentLogs sorgusu atılıyordu (liste uzadıkça doğrusal büyüyen N+1).
+  // The RANGE version of getDayStates: for the given habits, the set of days
+  // marked COMPLETED within [start, end], one set per habit. The "Habits"
+  // screen's last-7-days strip uses this — it used to fire a separate
+  // recentLogs query per habit (N+1 that grew linearly as the list got longer).
   completedDatesBetween(
     habitIds: string[],
     startYmd: string,
@@ -285,9 +289,9 @@ export const habitRepo = {
     return out;
   },
 
-  // Nicel alışkanlık: o günün miktarını delta kadar değiştirir (0'ın altına inmez).
-  // completed, hedefe ulaşıldığında (amount >= target) 1 olur. target null/0 ise
-  // completed hep 0 kalır. UNIQUE(habit_id, log_date) ile tek kayıt tutulur.
+  // Numeric habit: changes that day's amount by a delta (never goes below 0).
+  // completed becomes 1 once the target is reached (amount >= target). If
+  // target is null/0, completed always stays 0. A single record is kept via UNIQUE(habit_id, log_date).
   incrementAmount(habitId: string, date: string, delta: number, target: number | null): void {
     const db = getDb();
     const now = nowIso();
@@ -298,9 +302,10 @@ export const habitRepo = {
     const wasCompleted = existing?.completed === 1;
     const current = existing ? existing.amount ?? 0 : 0;
     const next = Math.max(0, current + delta);
-    // 0 tabanına çarpınca istenen delta ile gerçekte uygulanan fark ayrışabilir
-    // (ör. current=2, delta=-5 istenirse next=0, gerçek fark -2'dir) — 'amount'
-    // modunda hedefe bunun (istenenin değil) gerçek farkı yansır.
+    // Clamping at the 0 floor can make the requested delta diverge from the
+    // difference actually applied (e.g. current=2, delta=-5 requested ->
+    // next=0, actual difference is -2) — in 'amount' mode, the goal reflects
+    // this actual difference, not the requested one.
     const appliedDelta = next - current;
     const completed = target != null && target > 0 && next >= target ? 1 : 0;
     if (existing) {
@@ -315,9 +320,10 @@ export const habitRepo = {
         [newId(), habitId, date, completed, next, now]
       );
     }
-    // Hedefe katkı iki moddan biri: 'amount' ise HER değişiklikte (tamamlanma
-    // beklemeden) gerçek fark × çarpan hedefe yansır; yoksa (varsayılan
-    // per_completion) yalnızca tamamlanma DURUM geçişinde +1/-1 uygulanır.
+    // Goal contribution is one of two modes: in 'amount' mode, EVERY change
+    // (not waiting for completion) applies the actual difference × the
+    // multiplier to the goal; otherwise (the default, per_completion) only the
+    // completion STATE transition applies +1/-1.
     const habit = this.getById(habitId);
     if (habit?.goal_id && habit.goal_contribution === 'amount') {
       if (appliedDelta !== 0) goalRepo.addProgress(habit.goal_id, appliedDelta * habit.goal_factor);
@@ -326,19 +332,19 @@ export const habitRepo = {
     }
   },
 
-  // STREAK HESABI: bugünden geriye doğru, alışkanlığın PLANLI günlerini sayar.
-  // Yalnızca schedule'a göre vadeli VE yaşam aralığı (start/end) içindeki günler
-  // dikkate alınır — plansız/aralık dışı günlerdeki boşluk seriyi bozmaz
-  // (ör. Pzt/Çar/Cum alışkanlığında Salı önemsiz; bitişten sonraki günler de).
-  // Bugün planlıysa ve henüz işaretlenmemişse seriyi bozmaz (bir önceki planlı
-  // günden devam eder). İlk kaçırılan planlı günde durur.
-  // KOTA (haftada X kez) kuralında sonuç GÜN değil HAFTA sayısıdır: kotası dolan
-  // ardışık haftalar; içinde bulunulan hafta dolmadıysa seriyi bozmaz (hafta
-  // bitmedi), dolduysa sayılır.
-  // `preloaded` verilirse alışkanlık tekrar SORGULANMAZ (bumpGoalIfLinked'deki
-  // aynı desen). Liste ekranları alışkanlığı zaten ellerinde tutuyor ve bu
-  // fonksiyonu satır başına çağırıyor; içerideki getById, listedeki her
-  // alışkanlık için gereksiz ikinci bir sorgu demekti.
+  // STREAK COMPUTATION: counts backward from today over the habit's SCHEDULED
+  // days. Only days that are due per the schedule AND within the lifespan
+  // (start/end) are considered — a gap on an unscheduled/out-of-range day
+  // doesn't break the streak (e.g. Tuesday doesn't matter for a Mon/Wed/Fri
+  // habit; neither do days after the end date). If today is scheduled but not
+  // yet marked, the streak isn't broken (it continues from the previous
+  // scheduled day). Stops at the first missed scheduled day.
+  // Under a QUOTA (X times a week) rule the result is a count of WEEKS, not
+  // days: consecutive weeks whose quota was met; if the current week hasn't
+  // met it yet, the streak isn't broken (the week isn't over), but it doesn't count either.
+  // If `preloaded` is given, the habit is NOT QUERIED again (same pattern as
+  // in bumpGoalIfLinked). List screens already hold the habit and call this
+  // function per row; the getById inside would mean an unnecessary second query per habit in the list.
   currentStreak(habitId: string, preloaded?: Habit | null): number {
     const db = getDb();
     const habit = preloaded !== undefined ? preloaded : this.getById(habitId);
@@ -359,7 +365,7 @@ export const habitRepo = {
       let cursor = weekStartOf(todayDate());
       let streak = 0;
       if ((counts.get(cursor) ?? 0) >= quota) streak++;
-      // Bu hafta henüz dolmadıysa bozmaz — önceki haftalardan devam.
+      // The current week not being done yet doesn't break it — continue from previous weeks.
       cursor = shiftWeek(cursor, -1);
       while ((counts.get(cursor) ?? 0) >= quota) {
         streak++;
@@ -373,8 +379,8 @@ export const habitRepo = {
     let streak = 0;
     const cursor = new Date(`${today}T00:00:00`);
 
-    // Geriye doğru gün gün yürü; yalnızca planlı günleri değerlendir.
-    // Üst sınır ~2+ yılı kapsar (haftalık planda seyrek günler için geniş).
+    // Walk backward day by day; only evaluate scheduled days.
+    // The upper bound covers ~2+ years (generous for sparse days in a weekly schedule).
     for (let i = 0; i < 800; i++) {
       const y = cursor.getFullYear();
       const m = String(cursor.getMonth() + 1).padStart(2, '0');
@@ -385,7 +391,7 @@ export const habitRepo = {
         if (completed.has(dateStr)) {
           streak++;
         } else if (dateStr === today) {
-          // Bugün henüz işaretlenmedi — seriyi bozma, atla.
+          // Today isn't marked yet — don't break the streak, skip it.
         } else {
           break;
         }
@@ -395,7 +401,7 @@ export const habitRepo = {
     return streak;
   },
 
-  // Son N gündeki tamamlanma kayıtları (istatistik/takvim için).
+  // Completion records from the last N days (for stats/calendar).
   recentLogs(habitId: string, days: number): HabitLog[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -408,10 +414,10 @@ export const habitRepo = {
     return rows as HabitLog[];
   },
 
-  // Belirli bir tarihten (dahil) bugüne kadar TÜM loglar (istatistik ekranı için:
-  // ısı haritası, tamamlanma oranı, toplam miktar hepsi bu tek sorgudan türetilir).
-  // recentLogs'tan farkı: satır sayısına değil tarih aralığına göre filtreler —
-  // boş günler (hiç log yoksa) çağıran tarafta günlerin tam listesiyle tamamlanmalı.
+  // ALL logs from a given date (inclusive) through today (for the stats
+  // screen: heatmap, completion rate, total amount — all derived from this
+  // single query). Difference from recentLogs: it filters by date range, not
+  // row count — empty days (no log at all) must be filled in by the caller with the full list of days.
   logsInRange(habitId: string, sinceYmd: string): HabitLog[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -421,8 +427,8 @@ export const habitRepo = {
     return rows as HabitLog[];
   },
 
-  // Bir alışkanlığın TÜM geçmiş logları (tarihe göre artan). İstatistik
-  // ekranının skor/seri/haftanın-günü hesapları tek bu sorgudan türetilir.
+  // ALL of a habit's historical logs (ascending by date). The stats screen's
+  // score/streak/day-of-week calculations are all derived from this one query.
   allLogs(habitId: string): HabitLog[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -432,8 +438,8 @@ export const habitRepo = {
     return rows as HabitLog[];
   },
 
-  // KOTA (haftada X kez) alışkanlığında verilen günün haftasında tamamlanan gün
-  // sayısı — "Bugün" ekranındaki "2/3 bu hafta" göstergesi için.
+  // For a QUOTA (X times a week) habit, the number of completed days in the
+  // week of a given date — used for the "2/3 this week" indicator on the "Today" screen.
   completionsInWeek(habitId: string, dateYmd: string): number {
     const db = getDb();
     const start = weekStartOf(dateYmd);
@@ -447,8 +453,9 @@ export const habitRepo = {
     return rows[0]?.n ?? 0;
   },
 
-  // İki tarih arasındaki (dahil) loglar — takvim ay görünümü için. logsInRange'den
-  // farkı: açık uçlu "bugüne kadar" değil, KAPALI bir aralık (geçmiş ayları gezerken).
+  // Logs between two dates (inclusive) — for the calendar's month view.
+  // Difference from logsInRange: not an open-ended "through today", but a
+  // CLOSED range (used when browsing past months).
   logsBetween(habitId: string, startYmd: string, endYmd: string): HabitLog[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -458,12 +465,14 @@ export const habitRepo = {
     return rows as HabitLog[];
   },
 
-  // EN UZUN SERİ: currentStreak'in "bugünden geriye" mantığının aksine, ilk
-  // tamamlanan günden bugüne kadar tüm geçmişi baştan sona tarayıp gördüğü en
-  // uzun ardışık planlı-gün serisini döner. Aynı planlı-gün kuralını kullanır
-  // (plansız/aralık dışı gün boşluğu seriyi bozmaz).
-  // KOTA kuralında sonuç HAFTA sayısıdır; içinde bulunulan (bitmemiş) hafta
-  // dolmadıysa seri BOZULMAZ ama sayılmaz da (currentStreak ile tutarlı).
+  // LONGEST STREAK: unlike currentStreak's "backward from today" approach,
+  // this scans the entire history from front to back, from the first
+  // completed day to today, and returns the longest consecutive scheduled-day
+  // streak it ever saw. Uses the same scheduled-day rule (a gap on an
+  // unscheduled/out-of-range day doesn't break the streak).
+  // Under a QUOTA rule the result is a count of WEEKS; if the current
+  // (unfinished) week hasn't met the quota, the streak isn't BROKEN but it
+  // isn't counted either (consistent with currentStreak).
   longestStreak(habitId: string): number {
     const db = getDb();
     const habit = this.getById(habitId);
@@ -523,13 +532,14 @@ export const habitRepo = {
     return best;
   },
 
-  // TÜM SERİLER: longestStreak'le AYNI yürüyüş ve AYNI planlı-gün kuralı, ama
-  // tek bir "en iyi" yerine geçmişteki HER ardışık seriyi (uzunluk + başlangıç/
-  // bitiş tarihi) toplar — istatistik ekranındaki "seri geçmişi" listesi için.
-  // Bilinçli tutarlılık: longestStreak'in bugünü-tolerans göstermeyen kuralıyla
-  // birebir aynı sonucu üretir (ayrı bir "current" özel durumu YOK).
-  // KOTA kuralında girdiler hafta bazındadır (length = hafta sayısı, start/end =
-  // serinin ilk haftasının pazartesisi / son haftasının pazarı).
+  // ALL STREAKS: the SAME walk and SAME scheduled-day rule as longestStreak,
+  // but instead of a single "best" it collects EVERY consecutive streak in the
+  // past (length + start/end date) — for the stats screen's "streak history"
+  // list. Deliberately consistent: produces exactly the same result as
+  // longestStreak's no-tolerance-for-today rule (there is NO separate
+  // "current" special case).
+  // Under a QUOTA rule the entries are week-based (length = number of weeks,
+  // start/end = the Monday of the streak's first week / the Sunday of its last week).
   allStreaks(habitId: string): { length: number; start: string; end: string }[] {
     const db = getDb();
     const habit = this.getById(habitId);
@@ -554,7 +564,7 @@ export const habitRepo = {
       const flush = () => {
         if (run > 0 && runStart && runEnd) {
           const d = new Date(`${runEnd}T00:00:00`);
-          d.setDate(d.getDate() + 6); // haftanın pazarı
+          d.setDate(d.getDate() + 6); // the week's Sunday
           streaks.push({ length: run, start: runStart, end: toYmd(d) });
         }
         run = 0;
@@ -567,7 +577,7 @@ export const habitRepo = {
           run++;
           runEnd = cursor;
         } else if (cursor !== currentWeek) {
-          flush(); // bitmemiş mevcut hafta seriyi bozmaz (longestStreak ile tutarlı)
+          flush(); // an unfinished current week doesn't break the streak (consistent with longestStreak)
         }
         cursor = shiftWeek(cursor, 1);
       }
@@ -608,7 +618,7 @@ export const habitRepo = {
       }
       cursor.setDate(cursor.getDate() + 1);
     }
-    flush(); // döngü biterken açık kalan seriyi de ekle
+    flush(); // also include a streak still open when the loop ends
 
     return streaks.sort((a, b) => b.length - a.length);
   },

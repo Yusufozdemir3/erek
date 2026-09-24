@@ -1,14 +1,14 @@
-// Hedef istatistik ekranının veri yükleme mantığı: ilerleme, kalan miktar/adım,
-// son tarihe göre gereken günlük/haftalık/aylık tempo ve bu hedefe bağlı
-// alışkanlıklar. Yeni bir geçmiş tablosu GEREKTİRMEZ — GoalEditModal'daki "anlık
-// durum" şeridiyle aynı kaynaklardan (goal.current_value/target_value/deadline)
-// türetilir, burada yalnızca daha zengin ve ayrı bir ekranda gösterilir (bkz.
-// useHabitStats ile aynı desen).
+// Data loading logic for the goal stats screen: progress, remaining
+// amount/steps, the daily/weekly/monthly pace needed to hit the deadline, and
+// habits linked to this goal. Does NOT require a new history table — it's
+// derived from the same sources as GoalEditModal's "current status" strip
+// (goal.current_value/target_value/deadline), just shown here in a richer form
+// on a separate screen (same pattern as useHabitStats).
 //
-// Ekran artık sekmeli (Genel/İstatistik/Adımlar/Düzenle) tek bir kalıcı
-// bileşen olduğundan (eskiden ayrı bir modal her açılışta unmount oluyordu),
-// milestone/goal mutasyonlarından sonra otomatik yeniden odaklanma OLMAZ —
-// çağıran taraf her mutasyondan sonra döndürülen `reload`'u elle çağırmalı.
+// Since the screen is now a single persistent tabbed component
+// (Overview/Stats/Steps/Edit) instead of a separate modal that used to unmount
+// on every open, there's NO automatic refocus after milestone/goal mutations —
+// the caller must manually call the returned `reload` after every mutation.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -27,49 +27,48 @@ export interface LinkedHabit {
 
 export interface GoalStats {
   goal: Goal | null;
-  ratio: number; // 0..1, yalnızca 'numeric'
-  remaining: number | null; // 'numeric': hedef - mevcut; değilse null
+  ratio: number; // 0..1, 'numeric' only
+  remaining: number | null; // 'numeric': target - current; otherwise null
   completed: boolean;
-  daysLeft: number | null; // null = son tarih yok; negatifse gecikmiş
+  daysLeft: number | null; // null = no deadline; negative means overdue
   isOverdue: boolean;
-  overdueDays: number | null; // yalnız isOverdue iken dolu (pozitif)
-  // Yalnız 'numeric': hedefe son tarihte yetişmek için gereken tempo
-  // ("belirlenen tarihte bitirmek için günde/haftada ne kadar yapmalıyım").
-  // Son tarih yoksa, tamamlandıysa ya da son tarih geçtiyse ikisi de null.
+  overdueDays: number | null; // only populated (positive) while isOverdue
+  // Numeric only: the pace needed to hit the deadline in time ("how much do I
+  // need to do per day/week to finish by the set date"). Both are null if
+  // there's no deadline, it's completed, or the deadline has passed.
   dailyPace: number | null;
   weeklyPace: number | null;
-  // — Gerçekleşen tempo + projeksiyonlar (numeric); bkz. lib/goalProjection.ts —
-  // Hepsi başlangıç–son tarih ekseninde hesaplanır (ikisi de zorunlu alan).
-  // "Günde ne kadar yapıyorum": mevcut / yaşanan gün.
+  // — Actual pace + projections (numeric); see lib/goalProjection.ts —
+  // All computed on the start–deadline axis (both are required fields).
+  // "How much am I doing per day": current / days elapsed.
   avgDaily: number | null;
-  // "Bu hızla son tarihte miktar ne olur"; son tarih geçtiyse gerçekleşen değer.
+  // "What will the amount be at the deadline at this rate"; the actual value if the deadline has passed.
   projectedAtDeadline: number | null;
-  // "Bu hızla hangi tarihte bitiririm" ("YYYY-MM-DD"; makul aralıktaysa).
+  // "At this rate, what date will I finish" ("YYYY-MM-DD"; if within a reasonable range).
   projectedFinishDate: string | null;
-  // Son tarihteki fark: pozitif = açık kalır, negatif = hedefi aşar.
+  // Difference at the deadline: positive = falls short, negative = exceeds the target.
   behindAmount: number | null;
-  // Başlangıç tarihinden bugüne yaşanan gün (bugün dahil).
+  // Days elapsed from the start date to today (inclusive).
   daysElapsed: number | null;
-  // "Son 7 günde ne kadar yaptım" — girdi geçmişinden.
+  // "How much did I do in the last 7 days" — from the entry history.
   last7Total: number | null;
-  // Adımlar artık HER İKİ tipte de opsiyonel olabilir ('numeric' hedefe de
-  // checklist eklenebilir) — bu alanlar milestonesTotal>0 iken doludur, tipe
-  // bakılmaksızın.
+  // Steps can now be optional on EITHER type ('numeric' goals can also have a
+  // checklist) — these fields are populated whenever milestonesTotal>0, regardless of type.
   milestones: GoalMilestone[];
-  // Adım görünümleri: miktarı olan adımlar current_value'dan kümülatif dolan
-  // ara-eşik barları; miktarsızlar checklist (bkz. goalMilestoneRepo.milestoneViews).
+  // Step views: steps with an amount become cumulative threshold bars filled
+  // from current_value; those without become a checklist (see goalMilestoneRepo.milestoneViews).
   milestoneViews: MilestoneView[];
   milestonesDone: number;
   milestonesTotal: number;
   milestonesRemaining: number;
-  // İstatistik sekmesinin adım bölümü artık TOPLU tempo (gün/adım, adım/hafta)
-  // yerine YALNIZ sıradaki adımı gösterir — bkz. lib/milestoneStats.ts.
-  // Hiç adım yoksa ya da hepsi tamamlandıysa null.
+  // The stats tab's step section now shows ONLY the next step instead of an
+  // AGGREGATE pace (days/step, steps/week) — see lib/milestoneStats.ts.
+  // null if there are no steps or all are completed.
   nextMilestone: NextMilestoneStat | null;
-  // Bu hedefe bağlı (goal_id ile işaretlenmiş) alışkanlıklar — bkz. HabitForm.linkGoal.
+  // Habits linked to this goal (marked via goal_id) — see HabitForm.linkGoal.
   linkedHabits: LinkedHabit[];
-  // "Genel" sekmesindeki serbest miktar girişlerinin geçmişi (en yeniden en
-  // eskiye) — yalnızca bir günlük, current_value'nun kaynağı DEĞİL.
+  // History of free-form amount entries on the "Overview" tab (newest to
+  // oldest) — a log only, NOT the source of current_value.
   entries: GoalEntry[];
   reload: () => void;
 }
@@ -126,29 +125,30 @@ export function useGoalStats(goalId: string): GoalStats {
     const isOverdue = daysLeft != null && daysLeft < 0;
     const overdueDays = isOverdue ? -daysLeft! : null;
 
-    // Tempo hesabı yalnız gelecekte (bugün dahil) bir son tarihi olan, henüz
-    // tamamlanmamış hedefte anlamlı. "Bugün son gün" (daysLeft=0) -> kalanın
-    // tamamı bugüne düşer, bölen en az 1 kabul edilir.
+    // Pace is only meaningful for a not-yet-completed goal with a deadline in
+    // the future (today included). "Today is the deadline" (daysLeft=0) -> all
+    // of the remainder falls on today, the divisor is treated as at least 1.
     const effectiveDays = daysLeft != null && daysLeft >= 0 ? Math.max(1, daysLeft) : null;
     const dailyPace =
       !completed && remaining != null && effectiveDays != null ? remaining / effectiveDays : null;
     const weeklyPace = dailyPace != null ? dailyPace * 7 : null;
 
-    // Adımlar tipten bağımsız çekilir: 'milestone' hedefte zorunlu iş akışının
-    // parçası, 'numeric' hedefte miktarlı ara-eşik ya da (miktarsızsa) checklist
-    // (tamamlanma durumunu ETKİLEMEZ — bkz. goalRepo.setCompleted'in tip koruması).
-    // "done" sayısı görünümlerden gelir: eşik adımı current_value'dan, checklist
-    // adımı completed kolonundan sayılır.
+    // Steps are fetched regardless of type: they're a required part of the
+    // workflow for a 'milestone' goal, and either a quantity-based threshold or
+    // (if quantity-less) a checklist for a 'numeric' goal (does NOT AFFECT
+    // completion status — see the type guard in goalRepo.setCompleted). The
+    // "done" count comes from the views: threshold steps are counted from
+    // current_value, checklist steps from the completed column.
     const milestones = goalMilestoneRepo.listByGoal(goal.id);
     const views = computeMilestoneViews(milestones, goal.current_value);
     const milestonesDone = views.filter((v) => v.reached).length;
     const milestonesTotal = views.length;
     const milestonesRemaining = Math.max(0, milestonesTotal - milestonesDone);
-    // Sıradaki adım: kullanıcının o an üzerinde çalıştığı tek eşik.
+    // Next step: the single threshold the user is currently working on.
     const nextMilestone = nextMilestoneStat(views, goal.current_value, todayDate());
 
-    // Bu hedefe bağlı alışkanlıklar — ayrı bir sorgu yerine tüm kullanıcı
-    // alışkanlıkları tek listede zaten çekiliyor (liste büyüklüğü küçük).
+    // Habits linked to this goal — instead of a separate query, all of the
+    // user's habits are already fetched in a single list (the list size is small).
     const linkedHabits: LinkedHabit[] = habitRepo
       .listByUser(goal.user_id)
       .filter((h) => h.goal_id === goal.id)
@@ -156,8 +156,8 @@ export function useGoalStats(goalId: string): GoalStats {
 
     const entries = goalEntryRepo.listByGoal(goal.id);
 
-    // Gerçekleşen tempo + projeksiyonlar (yalnız numeric hedefte anlamlı). Saf
-    // fonksiyona çıkarıldı (bkz. lib/goalProjection.ts — tasarım kararları + test).
+    // Actual pace + projections (only meaningful for numeric goals). Extracted
+    // into a pure function (see lib/goalProjection.ts — design decisions + tests).
     const {
       avgDaily,
       daysElapsed,

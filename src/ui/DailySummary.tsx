@@ -1,6 +1,6 @@
-// "Bugün" ekranının üst özeti: o günün alışkanlık ve görev ilerlemesi mini
-// çubuklarla. Tamamlanınca çubuk + sayı yeşile döner (motive edici). Hem
-// alışkanlık hem görev boşsa hiç görünmez.
+// Top summary of the "Today" screen: that day's habit and task progress shown
+// with mini bars. When complete, the bar + count turn green (motivating). Hidden
+// entirely if both habits and tasks are empty.
 
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';

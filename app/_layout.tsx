@@ -1,5 +1,5 @@
-// Expo Router kök layout'u. Tüm ekranların etrafını AppDataProvider sarar:
-// böylece veri katmanı (SQLite + anonim kullanıcı) ilk render'dan önce hazır olur.
+// Expo Router root layout. Wraps every screen with AppDataProvider:
+// this way the data layer (SQLite + anonymous user) is ready before the first render.
 
 import { useEffect } from 'react';
 import { LogBox } from 'react-native';
@@ -23,22 +23,23 @@ import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notification
 import { loadHapticsPref } from '@/lib/haptics';
 import { Sentry } from '@/lib/sentry';
 
-// Expo Go'da expo-notifications, push (remote) bildirimlerinin desteklenmediğine
-// dair uyarı basıyor. Bizim kullanımımız yalnızca YEREL hatırlatma; bunlar Expo
-// Go'da çalışıyor. Konsolu kirletmemek için bu beklenen uyarıları gizliyoruz.
-// (Gerçek prod çözümü development build'tir.)
+// expo-notifications logs a warning in Expo Go that push (remote) notifications
+// aren't supported. Our usage is LOCAL notifications only; those work fine in
+// Expo Go. We suppress these expected warnings to keep the console clean.
+// (The real production solution is a development build.)
 LogBox.ignoreLogs([
   'expo-notifications: Push notifications (remote notifications) functionality',
   '`expo-notifications` functionality is not fully supported in Expo Go',
 ]);
 
-// Tema'ya bağlı kabuk: durum çubuğu + Stack zemini/başlık renkleri aktif palete
-// göre. useTheme kullandığından ThemeProvider İÇİNDE render edilir.
+// Theme-aware shell: status bar + Stack background/header colors follow the
+// active palette. Rendered INSIDE ThemeProvider since it uses useTheme.
 //
-// KRİTİK: expo-router içteki React Navigation konteynerinin tema zeminini
-// SİSTEM renk şemasından seçer. Bu yüzden telefon koyu, uygulama tercihi açık
-// iken navigation kabuğunun arka planı (ekran geçiş zemini, modal fonu) koyu
-// kalıyordu. NavThemeProvider'ı kendi şemamıza bağlayarak bunu düzeltiyoruz.
+// CRITICAL: expo-router's inner React Navigation container picks its theme
+// background from the SYSTEM color scheme. That's why, when the phone was dark
+// but the app preference was light, the navigation shell's background (screen
+// transition backdrop, modal backdrop) stayed dark. We fix this by binding
+// NavThemeProvider to our own scheme.
 function ThemedStack() {
   const { colors, scheme } = useTheme();
   const { t } = useI18n();
@@ -67,15 +68,16 @@ function ThemedStack() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-        {/* "account" ROTASI KALDIRILDI (ekran src/ui/AccountScreen.tsx'te duruyor).
-            Gerekçe: giriş artık yalnız Google ile (bkz. ui/LoginScreen.tsx) ve o
-            ekrana hiçbir yerden bağlantı yoktu — ama app/ altında durduğu sürece
-            rota CANLIYDI ve `habitapp://account` ile açılabiliyordu. Orada
-            e-posta+parola ile İKİNCİ bir hesap açılabiliyor, senkron doğrudan
-            runSync ile (AppData.syncNow'ı atlayarak) çalıştırılıyor — yani "son
-            yedek" damgası ve hata durumu güncellenmiyor — ve hesap değişimi
-            kontrolü (classifySignIn) hiç yapılmıyordu, yani düzeltilmiş olan RLS
-            kilidi yeniden üretilebiliyordu. */}
+        {/* The "account" ROUTE WAS REMOVED (the screen still lives at
+            src/ui/AccountScreen.tsx). Reason: sign-in is now Google-only (see
+            ui/LoginScreen.tsx) and nothing linked to that screen anymore — but
+            as long as it stayed under app/ the route was still LIVE and could
+            be opened with `habitapp://account`. It let you open a SECOND
+            account with email+password, ran sync directly via runSync
+            (bypassing AppData.syncNow) — meaning the "last backup" timestamp
+            and error state never updated — and never ran the account-switch
+            check (classifySignIn), so the RLS lockout we'd already fixed
+            could be reproduced again. */}
         <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
         <Stack.Screen
@@ -85,25 +87,27 @@ function ThemedStack() {
         <Stack.Screen name="habit/[id]" />
         <Stack.Screen name="goal/[id]" />
       </Stack>
-      {/* İlk açılışta bir kez gösterilen tanıtım (kendi bayrağını yönetir). */}
+      {/* Onboarding shown once on first launch (manages its own flag). */}
       <OnboardingGate />
-      {/* Tanıtımdan sonra bir kez gösterilen giriş ekranı — atlanabilir, kendi
-          bayrağını yönetir ve ACCOUNTS_ENABLED kapalıyken hiç çizilmez. */}
+      {/* Login screen shown once after onboarding — skippable, manages its
+          own flag, and never renders at all while ACCOUNTS_ENABLED is off. */}
       <LoginGate />
     </NavThemeProvider>
   );
 }
 
 function RootLayout() {
-  // İKON FONTLARI: @expo/vector-icons ikonları (Feather/Ionicons) glif fontlarını
-  // expo-asset üzerinden yükler; bunlar hazır olana dek ikon boş <Text/> çizer.
-  // Fontları açılışta bir kez ön-yükleyip ilk render'daki "ikonsuz" anı önlüyoruz.
-  // (Asıl kritik bağımlılık expo-file-system'dir — o olmadan expo-asset RELEASE
-  // build'de indirmeyi yapamaz ve TÜM ikonlar boş çıkardı; bkz. package.json.)
+  // ICON FONTS: @expo/vector-icons icons (Feather/Ionicons) load glyph fonts
+  // via expo-asset; until they're ready, icons render as an empty <Text/>.
+  // We preload the fonts once at startup to avoid the "iconless" flash on the
+  // first render. (The truly critical dependency is expo-file-system — without
+  // it, expo-asset can't download in a RELEASE build and ALL icons would come
+  // out blank; see package.json.)
   useFonts({ ...Feather.font, ...Ionicons.font });
 
-  // Bildirim handler'ı ve Android kanalı bir kez kurulur (izin istemez).
-  // Titreşim tercihi de burada cache'e alınır (haptics.ts React dışı olduğu için).
+  // Notification handler and Android channel are set up once (doesn't request
+  // permission). The haptics preference is also cached here (haptics.ts is
+  // outside React).
   useEffect(() => {
     setNotificationHandler();
     ensureAndroidChannel();
@@ -123,6 +127,6 @@ function RootLayout() {
   );
 }
 
-// Sentry yapılandırılmadıysa (DSN yok) bu sarmalayıcı zararsız bir geçiş
-// katmanı olarak kalır — hiçbir şey raporlamaz.
+// If Sentry isn't configured (no DSN), this wrapper stays a harmless pass-through
+// layer — it reports nothing.
 export default Sentry.wrap(RootLayout);

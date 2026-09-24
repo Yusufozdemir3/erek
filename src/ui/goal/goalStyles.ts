@@ -1,12 +1,12 @@
-// Hedef DETAY ekranının stil fabrikası — app/goal/[id].tsx'ten AYRILDI.
-// Gerekçe: ekran dosyası 1080 satıra ulaşmıştı ve stiller tek başına ~240
-// satırdı; sekme bileşenleri de aynı stilleri paylaşıyor. Stil sözlüğünü ayrı
-// tutmak hem ekranı okunur kılıyor hem de sekmelerin ortak `styles` prop'unu
-// tek bir yerden tiplemesini sağlıyor.
+// Style factory for the goal DETAIL screen — SPLIT OUT of app/goal/[id].tsx.
+// Rationale: the screen file had grown to 1080 lines and the styles alone
+// were ~240 lines; the tab components also share the same styles. Keeping
+// the style dictionary separate both keeps the screen readable and lets the
+// tabs' shared `styles` prop be typed from a single place.
 //
-// DESEN (bkz. ThemeProvider): modül seviyesinde StyleSheet.create YOK — tema
-// değişince yeniden üretilebilsin diye `makeGoalStyles(colors)` fabrikası
-// render sırasında çağrılır.
+// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the
+// `makeGoalStyles(colors)` factory is called during render so it can be
+// regenerated when the theme changes.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -54,7 +54,7 @@ export const makeGoalStyles = (c: Colors) =>
     overviewLine: { fontSize: 15, fontWeight: '700', color: c.text, marginTop: 10 },
     deadlineLine: { fontSize: 13, color: c.streak, fontWeight: '700', marginTop: 6 },
 
-    // — Genel sekmesi: veri girişi —
+    // — General tab: data entry —
     entryRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -62,7 +62,7 @@ export const makeGoalStyles = (c: Colors) =>
       marginTop: 10,
       gap: 10,
     },
-    // Serbest miktar girişi: kullanıcı yazar, "Ekle"ye basar (numeric hedef).
+    // Free-form amount entry: the user types a value and taps "Add" (numeric goal).
     entryInputRow: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
     entryInput: {
       flex: 1,
@@ -83,7 +83,7 @@ export const makeGoalStyles = (c: Colors) =>
     },
     entryAddText: { fontSize: 14, fontWeight: '700', color: c.onAccent },
 
-    // — Girdi geçmişi —
+    // — Entry history —
     entryHistory: { marginTop: 20 },
     entryHistoryTitle: { fontSize: 13, fontWeight: '700', color: c.muted, marginBottom: 8 },
     entryHistoryRow: {
@@ -133,7 +133,7 @@ export const makeGoalStyles = (c: Colors) =>
     habitTitle: { flex: 1, fontSize: 14, color: c.text, fontWeight: '600' },
     habitChevron: { fontSize: 18, color: c.faint },
 
-    // — İstatistik: sonuç bandı + grup başlıkları —
+    // — Stats: verdict banner + group headings —
     verdict: {
       borderRadius: 14,
       borderWidth: 1,
@@ -156,7 +156,7 @@ export const makeGoalStyles = (c: Colors) =>
       marginBottom: 10,
     },
 
-    // — İstatistik kartları (grid) —
+    // — Stat cards (grid) —
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     statCard: {
       flexGrow: 1,
@@ -173,11 +173,11 @@ export const makeGoalStyles = (c: Colors) =>
     statValuePrimary: { color: c.primary },
     statLabel: { fontSize: 11, color: c.muted, marginTop: 4, textAlign: 'center' },
     paceHint: { fontSize: 12, color: c.faint, marginTop: 4, width: '100%' },
-    // Sıradaki adımın başlığı — kartların ÜSTÜNDE, hangi eşiğe bakıldığını söyler
-    // (kartlar yalnız sayı gösteriyor, bağlam bu satırdan geliyor).
+    // Title of the next milestone — sits ABOVE the cards, says which threshold
+    // is being viewed (the cards only show numbers, this line provides the context).
     nextMilestoneTitle: { fontSize: 14, fontWeight: '700', color: c.text, width: '100%', marginBottom: 6 },
 
-    // — Adımlar (checklist + ara-eşik barları) —
+    // — Milestones (checklist + intermediate-threshold bars) —
     milestoneRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
     milestoneTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     milestonePct: { fontSize: 13, fontWeight: '800', color: c.primary },
@@ -193,7 +193,7 @@ export const makeGoalStyles = (c: Colors) =>
     milestoneMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
     milestoneMeta: { fontSize: 11, color: c.faint, fontWeight: '600' },
     milestoneMetaOverdue: { color: c.danger },
-    // — Ekleme satırının altındaki kademeli çipler (miktar / tarih) —
+    // — Staged chips below the add row (amount / date) —
     milestoneChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
     milestoneChip: {
       paddingHorizontal: 12,

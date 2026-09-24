@@ -1,8 +1,8 @@
-// Aktif zamanlayıcı mini durum şeridi — sekme çubuğunun hemen üstünde, YALNIZ
-// bir zamanlayıcı çalışırken görünür (boşta hiçbir yer kaplamaz). Hem durum
-// göstergesi hem hızlı duraklatma erişimi. TimerProvider her saniye kendi
-// context değerini yenilediği için (bkz. TimerProvider yorumu) burada ayrı bir
-// interval kurmaya gerek yok — useTimer() zaten canlı tikler.
+// Mini status strip for the active timer — right above the tab bar, visible
+// ONLY while a timer is running (takes up no space when idle). Both a status
+// indicator and quick access to pause. Since TimerProvider refreshes its own
+// context value every second (see the TimerProvider comment), there's no need
+// to set up a separate interval here — useTimer() already ticks live.
 
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -26,20 +26,20 @@ export function TimerStrip() {
   const kind = activeTarget?.kind ?? null;
   const id = activeTarget?.id ?? null;
 
-  // Başlık/ikon/renk/hedef zamanlayıcı boyunca DEĞİŞMEZ, ama bu bileşen her
-  // saniye yeniden render edilir (context canlı tikliyor). Aramayı hedef
-  // kimliğine bağlamazsak 45 dakikalık bir seans = 2700 gereksiz senkron SQLite
-  // sorgusu demek — hepsi JS thread'inde, hepsi aynı değişmeyen satır için.
-  // useMemo ile seans başına BİR sorguya iner.
-  // (Bilinçli sınır: zamanlayıcı çalışırken alışkanlığın adı değiştirilirse
-  // şerit eski adı gösterir; seans bitince düzelir. Alternatifi — adı
-  // ActiveTimer'a kopyalayıp AsyncStorage'a yazmak — veriyi tek doğru
-  // kaynaktan koparırdı.)
+  // Title/icon/color/target DON'T CHANGE for the duration of the timer, but this
+  // component re-renders every second (the context ticks live). If the lookup
+  // weren't tied to the target's identity, a 45-minute session would mean 2700
+  // unnecessary synchronous SQLite queries — all on the JS thread, all for the
+  // same unchanging row. useMemo brings it down to ONE query per session.
+  // (Deliberate limitation: if the habit's name is changed while the timer is
+  // running, the strip shows the old name until the session ends. The
+  // alternative — copying the name into ActiveTimer and writing it to
+  // AsyncStorage — would decouple the data from its single source of truth.)
   const meta = useMemo(() => {
     if (!kind || !id) return null;
     if (kind === 'habit') {
       const habit = habitRepo.getById(id);
-      if (!habit) return null; // silinmiş olabilir (nadir yarış); şerit sessizce kaybolur
+      if (!habit) return null; // may have been deleted (a rare race); the strip silently disappears
       return {
         title: habit.title,
         target: habit.target_amount ?? 0,
@@ -103,8 +103,8 @@ export function TimerStrip() {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    // Sekme çubuğunun hemen üstünde ortalanmış ince bir şerit (AddFab'ın
-    // yaylanan seçenekleriyle aynı referans yükseklik — bkz. AddFab.fan).
+    // A slim strip centered right above the tab bar (same reference height as
+    // AddFab's spring-out options — see AddFab.fan).
     wrap: {
       position: 'absolute',
       left: 12,

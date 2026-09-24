@@ -1,11 +1,13 @@
-// Dil (i18n) context'i. Kullanıcı tercihi: 'tr' | 'en' | 'de' (AsyncStorage'da
-// saklanır). Tercih yoksa cihaz dili (expo-localization) desteklenen bir dile
-// eşlenir; eşleşmezse İngilizce'ye düşer. Ekranlar useI18n().t(key, params) ile
-// metin alır. Kaynak/yedek dil Türkçe: bir anahtar seçili dilde yoksa Türkçe
-// karşılığı gösterilir (bkz. translations.ts).
+// Language (i18n) context. User preference: 'tr' | 'en' | 'de' (stored in
+// AsyncStorage). If there's no preference, the device language
+// (expo-localization) is mapped to a supported language; if it doesn't
+// match, it falls back to English. Screens get text via
+// useI18n().t(key, params). The source/fallback language is Turkish: if a
+// key is missing in the selected language, its Turkish counterpart is shown
+// (see translations.ts).
 //
-// ThemeProvider gibi ağacın dışında durur ki her yüzey (modallar, sekmeler)
-// aktif dile uysun.
+// Sits outside the tree like ThemeProvider so every surface (modals, tabs)
+// follows the active language.
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,7 +19,7 @@ const LANG_KEY = 'i18n:lang';
 interface I18nApi {
   lang: Lang;
   setLang: (l: Lang) => void;
-  // Anahtarı aktif dile çevirir; {param} yer tutucularını doldurur.
+  // Translates a key to the active language; fills in {param} placeholders.
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -29,7 +31,7 @@ export function useI18n(): I18nApi {
   return v;
 }
 
-// Cihaz dilini desteklenen bir dile eşle; yoksa İngilizce (global varsayılan).
+// Map the device language to a supported language; falls back to English (the global default).
 function deviceLang(): Lang {
   try {
     const code = getLocales()[0]?.languageCode?.toLowerCase();
@@ -38,8 +40,9 @@ function deviceLang(): Lang {
   return 'en';
 }
 
-// React dışı modüller (ör. bildirimler) için: kayıtlı dil tercihini okur,
-// yoksa cihaz diline düşer. I18nProvider'ın kendi başlangıç mantığıyla aynı.
+// For non-React modules (e.g. notifications): reads the stored language
+// preference, falling back to the device language. Mirrors I18nProvider's
+// own startup logic.
 export async function getStoredLang(): Promise<Lang> {
   try {
     const v = await AsyncStorage.getItem(LANG_KEY);
@@ -51,7 +54,7 @@ export async function getStoredLang(): Promise<Lang> {
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>(deviceLang);
 
-  // Kayıtlı tercihi bir kez yükle (yoksa cihaz dili kalır).
+  // Load the stored preference once (otherwise the device language stays in effect).
   useEffect(() => {
     AsyncStorage.getItem(LANG_KEY).then((v) => {
       if (v && (SUPPORTED_LANGS as string[]).includes(v)) setLangState(v as Lang);

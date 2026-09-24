@@ -1,6 +1,6 @@
-// Tombstone temizliği. Buradaki testlerin çoğu "SİLMEMESİ GEREKENİ silmiyor mu"
-// sorusunu sorar — yanlış bir temizlik, senkronun silme bilgisini kaybetmesi ve
-// kaydın diğer cihazdan geri "dirilmesi" demektir.
+// Tombstone cleanup. Most tests here ask "does it avoid deleting what it
+// SHOULDN'T" — an incorrect cleanup means sync loses the deletion info and
+// the record "resurrects" from another device.
 
 import { getDb } from '../database';
 import { purgeOldTombstones, TOMBSTONE_TTL_DAYS } from '../maintenance';
@@ -24,7 +24,7 @@ beforeEach(async () => {
   userId = userRepo.getOrCreateLocal().id;
 });
 
-// Bir satırı "eskiden silinmiş + buluta gönderilmiş" hale getirir.
+// Turns a row into "deleted long ago + already synced to the cloud".
 function markDeleted(table: string, id: string, at: string, synced = 1): void {
   getDb().runSync(`UPDATE ${table} SET deleted_at = ?, synced = ? WHERE id = ?`, [at, synced, id]);
 }
@@ -49,7 +49,7 @@ describe('purgeOldTombstones — temizlediği', () => {
     markDeleted('subtasks', sub.id, OLD);
 
     const goal = goalRepo.create({ user_id: userId, title: 'Hedef', goal_type: 'numeric', target_value: 10 });
-    goalRepo.addProgress(goal.id, 5); // bir girdi üretir
+    goalRepo.addProgress(goal.id, 5); // produces one entry
     const entryId = getDb().getFirstSync<{ id: string }>(`SELECT id FROM goal_entries`)!.id;
     markDeleted('goal_entries', entryId, OLD);
 
@@ -59,7 +59,7 @@ describe('purgeOldTombstones — temizlediği', () => {
   });
 
   it('çocukları temizlenen EBEVEYN aynı turda silinebilir hale gelir', () => {
-    // Yapraklar önce, ebeveynler sonra işlendiği için tek çağrı yeter.
+    // Leaves are processed before parents, so a single call is enough.
     const task = taskRepo.create({ user_id: userId, title: 'Görev' });
     const sub = subtaskRepo.create(task.id, 'Adım');
     markDeleted('subtasks', sub.id, OLD);
@@ -75,7 +75,7 @@ describe('purgeOldTombstones — temizlediği', () => {
 
 describe('purgeOldTombstones — DOKUNMADIĞI', () => {
   it('henüz gönderilmemiş (synced=0) silmeyi KORUR', () => {
-    // Aksi halde silme bilgisi buluta hiç ulaşmaz ve kayıt diğer cihazdan geri gelir.
+    // Otherwise the deletion info never reaches the cloud and the record comes back from another device.
     const habit = habitRepo.create({ user_id: userId, title: 'Su iç' });
     const reminder = reminderRepo.create('habit', habit.id, '08:00');
     markDeleted('reminders', reminder.id, OLD, 0);
@@ -108,7 +108,7 @@ describe('purgeOldTombstones — DOKUNMADIĞI', () => {
 
   it('kendisine işaret eden AKTİF çocuğu olan ebeveyni silmez (FK kırılmaz)', () => {
     const task = taskRepo.create({ user_id: userId, title: 'Görev' });
-    subtaskRepo.create(task.id, 'Aktif alt görev'); // silinmedi
+    subtaskRepo.create(task.id, 'Aktif alt görev'); // not deleted
     taskRepo.softDelete(task.id);
     markDeleted('tasks', task.id, OLD);
 
@@ -121,7 +121,7 @@ describe('purgeOldTombstones — DOKUNMADIĞI', () => {
     habitRepo.toggleLog(habit.id, '2026-07-01', true);
     habitRepo.softDelete(habit.id);
     markDeleted('habits', habit.id, OLD);
-    // softDelete hatırlatmaları da işaretler; onlar temizlensin diye eskitiyoruz.
+    // softDelete also marks reminders; we age them so they get cleaned up too.
     getDb().runSync(`UPDATE reminders SET deleted_at = ?, synced = 1`, [OLD]);
 
     purgeOldTombstones(TOMBSTONE_TTL_DAYS, NOW);

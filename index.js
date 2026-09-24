@@ -1,10 +1,11 @@
-// Uygulama giriş noktası. expo-router kök bileşenini yükler ve (yalnızca gerçek
-// build'de) Android ana ekran widget'ının arka plan görev işleyicisini kaydeder.
+// App entry point. Loads the expo-router root component and (only in a real
+// build) registers the Android home screen widget's background task handler.
 //
-// react-native-android-widget yalnızca native modül varken (development/production
-// build) yüklenmeli. Expo Go'da native modül yoktur ve paketin barrel import'u
-// orada hata verebilir; bu yüzden require + try/catch ile korunur. İçe aktarılamazsa
-// uygulama Expo Go'da normal çalışmaya devam eder, sadece widget devre dışı kalır.
+// react-native-android-widget should only be loaded when the native module is
+// present (development/production build). Expo Go has no native module, and the
+// package's barrel import can throw there; hence the require + try/catch guard.
+// If it can't be imported, the app keeps working normally in Expo Go, just with
+// the widget disabled.
 
 import 'expo-router/entry';
 
@@ -13,5 +14,5 @@ try {
   const { widgetTaskHandler } = require('./src/widget/widgetTaskHandler');
   registerWidgetTaskHandler(widgetTaskHandler);
 } catch {
-  // Expo Go / native modül yok — widget devre dışı, uygulama normal açılır.
+  // Expo Go / no native module — widget disabled, app starts up normally.
 }

@@ -1,8 +1,9 @@
-// Hatırlatma (Reminder) repository — bir alışkanlık/görev/hedefin SIFIR ya da
-// DAHA FAZLA hatırlatma saati olabilir (bkz. models.Reminder). UI asla SQL görmez.
-// replaceAll: formdan gelen "HH:MM" listesini mevcut kayıtlarla değiştirir — en
-// basit tutarlı yaklaşım (subtask/milestone gibi tekil ekle/sil yerine formun
-// TÜM listesi tek seferde submit edilir; bkz. HabitForm/TaskForm/GoalForm).
+// Reminder repository — a habit/task/goal can have ZERO OR MORE reminder
+// times (see models.Reminder). UI never sees SQL.
+// replaceAll: replaces the existing records with the "HH:MM" list coming from
+// the form — the simplest consistent approach (instead of individually
+// adding/removing like subtask/milestone, the form submits its WHOLE list at
+// once; see HabitForm/TaskForm/GoalForm).
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -21,7 +22,7 @@ function rowToReminder(row: any): Reminder {
 }
 
 export const reminderRepo = {
-  // Bir varlığın aktif hatırlatmaları, saate göre artan.
+  // An entity's active reminders, ascending by time.
   listByEntity(entityType: ReminderEntityType, entityId: string): Reminder[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -31,9 +32,9 @@ export const reminderRepo = {
     return rows.map(rowToReminder);
   },
 
-  // listByEntity'nin ÇOKLU sürümü: açılışta tüm alışkanlıkların/görevlerin/
-  // hedeflerin hatırlatmalarını yeniden kurarken N+1 sorgu yerine tek GROUP —
-  // entity_id -> o varlığın hatırlatmaları (saate göre artan).
+  // The MULTI version of listByEntity: at startup, when rebuilding reminders
+  // for all habits/tasks/goals, a single GROUP query instead of N+1 —
+  // entity_id -> that entity's reminders (ascending by time).
   mapByType(entityType: ReminderEntityType): Map<string, Reminder[]> {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -72,8 +73,9 @@ export const reminderRepo = {
     );
   },
 
-  // Formdan gelen zaman listesiyle mevcut kayıtları değiştirir (eskiler silinir,
-  // yenisi eklenir) — hatırlatmanın kendi kimliği önemli değil, yalnız saati.
+  // Replaces the existing records with the time list coming from the form
+  // (old ones are deleted, new ones are created) — a reminder's own identity
+  // doesn't matter, only its time.
   replaceAll(entityType: ReminderEntityType, entityId: string, times: string[]): Reminder[] {
     this.deleteAllForEntity(entityType, entityId);
     return [...times].sort().map((time) => this.create(entityType, entityId, time));

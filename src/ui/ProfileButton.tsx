@@ -1,6 +1,6 @@
-// Ekran başlıklarının sağındaki profil ikonu. Dokununca Profil ekranını
-// (hesap + bulut senkron — eski Ayarlar içeriği) modal olarak açar.
-// Ayarlar sekmesi kaldırıldığı için tüm sekmeler bu ikonu gösterir.
+// The profile icon on the right side of screen headers. Tapping it opens the
+// Profile screen (account + cloud sync — the former Settings content) as a modal.
+// Since the Settings tab was removed, every tab shows this icon.
 
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { router } from 'expo-router';

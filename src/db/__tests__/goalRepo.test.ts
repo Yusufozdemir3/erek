@@ -1,6 +1,6 @@
-// goalRepo testleri: CRUD, sayısal ilerleme (addProgress) kırpması,
-// update'teki current_value clamp'i, progressRatio, parçalı (milestone)
-// hedeflerde sayaç mantığının sessizce yok sayılması ve isCompleted/setCompleted.
+// goalRepo tests: CRUD, numeric progress (addProgress) clamping,
+// current_value clamp in update, progressRatio, the counter logic being
+// silently ignored for milestone goals, and isCompleted/setCompleted.
 
 import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
@@ -88,8 +88,8 @@ describe('listByUser', () => {
 describe('update', () => {
   it('başlık/hedef/birim/son tarihi değiştirir ve yeniden senkron bekletir (synced=0)', () => {
     const goal = numericGoal();
-    // create sonrası okunan satır synced=0; senkron olduğunu taklit için 1 yapalım.
-    // (update'in synced'i 0'a çektiğini görmek adına.)
+    // The row read right after create has synced=0; we'd set it to 1 to fake being synced.
+    // (This is just to observe that update pulls synced back to 0.)
     goalRepo.update(goal.id, { title: '200 km koş', target_value: 200, unit: 'mil' });
     const fromDb = goalRepo.getById(goal.id)!;
     expect(fromDb.title).toBe('200 km koş');
@@ -111,8 +111,8 @@ describe('update', () => {
   });
 
   it('hedefi düşürmek birikmiş ilerlemeyi KESMEZ', () => {
-    // Eskiden buradaki clamp 80'i 50'ye çekiyordu: kullanıcının gerçekten
-    // yaptığı iş, yalnızca hedefini küçülttüğü için sessizce siliniyordu.
+    // The clamp here used to pull 80 down to 50: the work the user had
+    // actually done was silently wiped out just because they lowered their target.
     const goal = numericGoal({ target_value: 100 });
     goalRepo.update(goal.id, { target_value: 50, current_value: 80 });
     const fromDb = goalRepo.getById(goal.id)!;
@@ -127,10 +127,10 @@ describe('update', () => {
   });
 });
 
-// addProgress artık girdi geçmişini de yazar (eskiden her çağıranın ayrıca
-// goalEntryRepo.create çağırması gerekiyordu ve alışkanlık katkıları unutuyordu).
-// Kayda İSTENEN değil GERÇEKLEŞEN fark düşmeli — yoksa geçmiş current_value ile
-// çelişir ve ondan hesaplanan tempo/projeksiyon şişer.
+// addProgress now also writes the entry history (previously every caller had
+// to separately call goalEntryRepo.create, and habit contributions got missed).
+// The record must capture the ACTUAL delta applied, not the REQUESTED one — otherwise
+// history contradicts current_value and the tempo/projection computed from it inflates.
 describe('addProgress girdi geçmişi', () => {
   it('uygulanan farkı girdi olarak yazar ve döndürür', () => {
     const goal = numericGoal({ target_value: 100 });
@@ -143,7 +143,7 @@ describe('addProgress girdi geçmişi', () => {
   it('0 tabanında kırpılınca girdiye istenen değil GERÇEKLEŞEN fark yazılır', () => {
     const goal = numericGoal({ target_value: 100 });
     goalRepo.addProgress(goal.id, 10);
-    // 10 - 30 = -20 ama taban 0 → gerçekte yalnız -10 uygulanır.
+    // 10 - 30 = -20 but the floor is 0 → only -10 is actually applied.
     expect(goalRepo.addProgress(goal.id, -30)).toBe(-10);
     expect(goalRepo.getById(goal.id)!.current_value).toBe(0);
     const amounts = goalEntryRepo.listByGoal(goal.id).map((e) => e.amount);
@@ -160,11 +160,11 @@ describe('addProgress girdi geçmişi', () => {
 
   it('hiçbir şey değişmezse girdi yazmaz', () => {
     const goal = numericGoal({ target_value: 100 });
-    goalRepo.addProgress(goal.id, 0); // fark yok
+    goalRepo.addProgress(goal.id, 0); // no change
     expect(goalEntryRepo.listByGoal(goal.id)).toEqual([]);
     goalRepo.addProgress(goal.id, 10);
-    expect(goalRepo.addProgress(goal.id, -30)).toBe(-10); // 0 tabanına oturdu
-    expect(goalRepo.addProgress(goal.id, -5)).toBe(0); // zaten 0, değişmez
+    expect(goalRepo.addProgress(goal.id, -30)).toBe(-10); // settled at the 0 floor
+    expect(goalRepo.addProgress(goal.id, -5)).toBe(0); // already 0, unchanged
     expect(goalEntryRepo.listByGoal(goal.id)).toHaveLength(2);
   });
 
@@ -179,9 +179,9 @@ describe('addProgress girdi geçmişi', () => {
   });
 });
 
-// current_value artık TÜRETİLMİŞ bir önbeklek: value_baseline + aktif girdilerin
-// toplamı (bkz. migration019). Bu değişmez bozulursa senkronun pull sonrası
-// yeniden hesabı kullanıcının değerini kaydırır — o yüzden ayrıca sınanıyor.
+// current_value is now a DERIVED cache: value_baseline + the sum of active
+// entries (see migration019). If this invariant breaks, sync's post-pull
+// recompute shifts the user's value — hence it's tested separately.
 describe('current_value değişmezi (baseline + girdiler)', () => {
   const invariant = (goalId: string) => {
     const goal = goalRepo.getById(goalId)!;
@@ -200,14 +200,14 @@ describe('current_value değişmezi (baseline + girdiler)', () => {
     goalRepo.addProgress(goal.id, 40);
     const after = goalRepo.getById(goal.id)!;
     expect(after.current_value).toBe(40);
-    expect(after.value_baseline).toBe(0); // katkı girdilerde, baseline'da değil
+    expect(after.value_baseline).toBe(0); // the contribution lives in entries, not baseline
     invariant(goal.id);
   });
 
   it('"Mevcut değer"i ELLE değiştirmek baseline\'ı yazar, girdi geçmişine dokunmaz', () => {
-    // Elle düzeltme bir günün emeği değildir; tempoyu şişirmemeli (bu yüzden
-    // girdi yazılmaz). Ama değerin yeniden hesapta hayatta kalması için bir yere
-    // yazılması gerekir — orası baseline.
+    // A manual correction isn't a day's work; it shouldn't inflate tempo (which is
+    // why no entry is written). But the value still needs to be written somewhere
+    // so it survives recompute — that place is the baseline.
     const goal = numericGoal();
     goalRepo.addProgress(goal.id, 40);
     const entriesBefore = goalEntryRepo.listByGoal(goal.id).length;
@@ -216,7 +216,7 @@ describe('current_value değişmezi (baseline + girdiler)', () => {
 
     const after = goalRepo.getById(goal.id)!;
     expect(after.current_value).toBe(100);
-    expect(after.value_baseline).toBe(60); // 100 = 60 + 40 (girdi)
+    expect(after.value_baseline).toBe(60); // 100 = 60 + 40 (entry)
     expect(goalEntryRepo.listByGoal(goal.id).length).toBe(entriesBefore);
     invariant(goal.id);
   });
@@ -255,10 +255,10 @@ describe('current_value değişmezi (baseline + girdiler)', () => {
     expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
   });
 
-  // "İlerleme geçmişine de ekle" işaretliyken fark BASELINE'a değil GİRDİYE yazılır.
-  // İkisi birden yapılırsa toplam current_value'dan kopar ve değer, kullanıcı
-  // hiçbir şey yapmadan bir sonraki yeniden hesapta sıçrar (eskiden ekranda
-  // yapılan hata tam olarak buydu — bkz. goalRepo.update yorumu).
+  // When "also add to progress history" is checked, the delta is written to the
+  // ENTRY, not the BASELINE. Doing both would make the total diverge from
+  // current_value, and the value would jump on the next recompute with the user
+  // doing nothing (this was exactly the bug the screen used to have — see the goalRepo.update comment).
   describe('log_manual_change', () => {
     it('işaretliyken fark girdi olarak yazılır, baseline sabit kalır', () => {
       const goal = numericGoal();
@@ -268,9 +268,9 @@ describe('current_value değişmezi (baseline + girdiler)', () => {
 
       const after = goalRepo.getById(goal.id)!;
       expect(after.current_value).toBe(100);
-      expect(after.value_baseline).toBe(0); // baseline'a DOKUNULMADI
+      expect(after.value_baseline).toBe(0); // baseline was NOT touched
       const amounts = goalEntryRepo.listByGoal(goal.id).map((e) => e.amount);
-      expect(amounts).toContain(60); // fark geçmişe düştü
+      expect(amounts).toContain(60); // the delta landed in history
       invariant(goal.id);
     });
 
@@ -321,7 +321,7 @@ describe('addProgress', () => {
     const goal = numericGoal({ target_value: 100 });
     goalRepo.addProgress(goal.id, 130);
     expect(goalRepo.getById(goal.id)!.current_value).toBe(130);
-    // Gösterim tarafı yine de taşmaz: oran 1'de kırpılır.
+    // Display side still doesn't overflow: the ratio is clamped to 1.
     expect(goalRepo.progressRatio(goalRepo.getById(goal.id)!)).toBe(1);
   });
 
@@ -349,15 +349,15 @@ describe('addProgress', () => {
   });
 });
 
-// HEDEFİ AŞMIŞ hedef (current_value > target_value) sıradan bir durumdur:
-// zamanlayıcı hedefe ulaşınca DURMAZ, kullanıcı çalışmaya devam edebilir.
-// Eskiden addProgress'in tavan kırpması böyle bir hedefte İSTENEN yönün TERSİNE
-// bir fark üretiyordu ("+1 ekle" demek current_value'yu tavana geri çekip aradaki
-// tüm fazlalığı siliyor, girdi geçmişine hiç yaşanmamış dev bir negatif kayıt
-// düşüyordu). Tavan tamamen kaldırıldı — bu testler o davranışın geri gelmemesini
-// kilitler.
+// A goal that's OVERSHOT its target (current_value > target_value) is a normal
+// state: the timer doesn't STOP once it reaches the target, the user can keep
+// working. addProgress's ceiling clamp used to produce a delta in the OPPOSITE
+// of the requested direction on such a goal ("add +1" would pull current_value
+// back down to the ceiling, wiping out all the excess, and drop a huge negative
+// entry into history that never actually happened). The ceiling has been removed
+// entirely — these tests lock in that this behavior never comes back.
 describe('addProgress — hedefi aşmış hedef', () => {
-  // 1 saatlik (3600 sn) hedefte 100 dakika (6000 sn) çalışılmış bir durum kurar.
+  // Sets up a state where 100 minutes (6000s) were logged against a 1-hour (3600s) goal.
   const overshotGoal = () => {
     const goal = numericGoal({ target_value: 3600, unit: TIME_UNIT });
     goalRepo.addProgress(goal.id, 6000);
@@ -384,14 +384,14 @@ describe('addProgress — hedefi aşmış hedef', () => {
     expect(goalRepo.getById(goal.id)!.current_value).toBe(5940);
   });
 
-  // Bağlı alışkanlıktaki "işaretle → geri al" döngüsünün net etkisi SIFIR olmalı.
-  // Tavan varken +1 yutuluyor, -1 uygulanıyordu; her döngü hedeften 1 birim
-  // sessizce çalıyordu (bkz. habitRepo.bumpGoalIfLinked).
+  // The net effect of a linked habit's "check → uncheck" cycle must be ZERO.
+  // With the ceiling in place, +1 was swallowed while -1 was fully applied;
+  // every cycle silently stole 1 unit from the goal (see habitRepo.bumpGoalIfLinked).
   it('hedef doluyken +1/-1 döngüsü simetriktir (net etki 0)', () => {
     const goal = numericGoal({ target_value: 100 });
-    goalRepo.addProgress(goal.id, 100); // tam doldu
-    goalRepo.addProgress(goal.id, 1); // alışkanlık işaretlendi
-    goalRepo.addProgress(goal.id, -1); // geri alındı
+    goalRepo.addProgress(goal.id, 100); // fully filled
+    goalRepo.addProgress(goal.id, 1); // habit checked
+    goalRepo.addProgress(goal.id, -1); // unchecked
     expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
   });
 });

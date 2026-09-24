@@ -1,6 +1,6 @@
-// Alt görev (Subtask) repository — basit checklist.
-// UI asla SQL görmez - sadece bu fonksiyonları çağırır.
-// Her yazma işlemi updated_at'i tazeler ve synced=0 yapar (senkron bekliyor).
+// Subtask repository — a simple checklist.
+// UI never sees SQL - it only calls these functions.
+// Every write refreshes updated_at and sets synced=0 (waiting for sync).
 
 import { getDb } from '../database';
 import { chunk, newId, nowIso } from '../../lib/helpers';
@@ -20,7 +20,7 @@ function rowToSubtask(row: any): Subtask {
 }
 
 export const subtaskRepo = {
-  // Yeni alt görev; listenin sonuna eklenir (position = mevcut en büyük + 1).
+  // New subtask; appended to the end of the list (position = current max + 1).
   create(taskId: string, title: string): Subtask {
     const db = getDb();
     const id = newId();
@@ -47,7 +47,7 @@ export const subtaskRepo = {
     };
   },
 
-  // Bir görevin aktif alt görevleri, eklenme sırasıyla.
+  // A task's active subtasks, in the order they were added.
   listByTask(taskId: string): Subtask[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -57,7 +57,7 @@ export const subtaskRepo = {
     return rows.map(rowToSubtask);
   },
 
-  // Görev kartlarındaki "2/3" rozeti için: tamamlanan / toplam.
+  // For the "2/3" badge on task cards: completed / total.
   countForTask(taskId: string): { done: number; total: number } {
     const db = getDb();
     const row = db.getFirstSync<{ done: number; total: number }>(
@@ -68,14 +68,14 @@ export const subtaskRepo = {
     return { done: row?.done ?? 0, total: row?.total ?? 0 };
   },
 
-  // countForTask'in ÇOKLU sürümü: bir liste ekranı (Bugün/Görevler) her görev
-  // için ayrı sorgu (N+1) yerine tek GROUP BY ile tüm rozet sayılarını alır.
-  // Yalnızca en az bir (silinmemiş) alt görevi olan görevler döner — alt görevsiz
-  // görevler sonuçta hiç yer almaz (çağıran "total > 0" filtresine gerek kalmaz).
+  // The MULTI version of countForTask: a list screen (Today/Tasks) gets all
+  // badge counts in a single GROUP BY instead of a per-task query (N+1). Only
+  // tasks with at least one (non-deleted) subtask show up — a task with no
+  // subtasks is absent from the result (the caller doesn't need a "total > 0" filter).
   countsForTasks(taskIds: string[]): Record<string, { done: number; total: number }> {
     const db = getDb();
     const out: Record<string, { done: number; total: number }> = {};
-    // Parçalı: `IN (…)` bağlı değişken sayısı liste uzunluğuna eşit (bkz. helpers.chunk).
+    // Chunked: the number of bound `IN (…)` parameters equals the list length (see helpers.chunk).
     for (const ids of chunk(taskIds)) {
       const placeholders = ids.map(() => '?').join(',');
       const rows = db.getAllSync<{ task_id: string; done: number; total: number }>(
@@ -97,10 +97,10 @@ export const subtaskRepo = {
     );
   },
 
-  // Bir görevin TAMAMLANMIŞ alt görevlerini sıfırlar (yeniden aç). Tekrarlayan
-  // bir görev bir sonraki tekrara ileri sarıldığında çağrılır — yeni tekrar taze
-  // (tümü işaretsiz) bir checklist'le başlasın. Yalnızca completed=1 satırlara
-  // dokunur; zaten işaretsizlerde gereksiz senkron churn'ü üretmez.
+  // Resets (reopens) a task's COMPLETED subtasks. Called when a recurring task
+  // fast-forwards to its next occurrence — the new occurrence should start
+  // with a fresh (all unchecked) checklist. Only touches completed=1 rows;
+  // doesn't create unnecessary sync churn on ones that were already unchecked.
   reopenForTask(taskId: string): void {
     const db = getDb();
     db.runSync(

@@ -1,13 +1,13 @@
 import { shouldShowInterstitial } from '../adsLogic';
 
 const T0 = 1_750_000_000_000;
-const GAP = 30 * 60_000; // 30 dk
+const GAP = 30 * 60_000; // 30 minutes
 
 describe('shouldShowInterstitial', () => {
   it('lastShownAt null iken HİÇ göstermez (ilk kurulum koruması)', () => {
-    // Çağıran bu durumda timestamp'i tohumlamalı ama reklamı göstermemeli —
-    // aksi halde her yeni kurulumda kullanıcı uygulamayı tanımadan tam ekran
-    // reklamla karşılaşırdı.
+    // In this case the caller should seed the timestamp but not show the ad
+    // — otherwise on every new install the user would hit a full-screen ad
+    // before even getting to know the app.
     expect(shouldShowInterstitial(null, T0, GAP)).toBe(false);
   });
 

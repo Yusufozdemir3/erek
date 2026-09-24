@@ -1,24 +1,24 @@
-// Ana ekran widget'ının OKUDUĞU anlık görüntü (snapshot) tipi ve AsyncStorage
-// erişimi. Bu dosya BİLEREK hiçbir repo (expo-sqlite) import etmez: widget'ın
-// arka plan (headless) görev işleyicisi buradan yalnızca hazır snapshot'ı okur —
-// o bağlamda SQLite güvenilir değildir. Snapshot'ı ÜRETEN taraf (uygulama
-// süreci) src/widget/widgetData.ts'tir.
+// The snapshot type the home-screen widget READS, plus AsyncStorage access.
+// This file DELIBERATELY imports no repo (expo-sqlite): the widget's
+// background (headless) task handler only reads the ready-made snapshot from
+// here — SQLite isn't reliable in that context. The side that PRODUCES the
+// snapshot (the app process) is src/widget/widgetData.ts.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// app.json'daki config plugin'de tanımlı widget adıyla BİREBİR aynı olmalı.
+// Must be EXACTLY the same as the widget name defined in app.json's config plugin.
 export const WIDGET_NAME = 'ErekToday';
 export const SNAPSHOT_KEY = 'widget:today';
 
 export interface WidgetHabit {
   id: string;
   title: string;
-  color: string; // çözülmüş renk (alışkanlık rengi ya da varsayılan)
+  color: string; // the resolved color (the habit's color or the default)
   completed: boolean;
 }
 
-// Widget'ın çizeceği renkler — snapshot'a gömülür ki headless işleyici
-// uygulama açık olmasa da doğru tema (açık/koyu + vurgu) ile çizsin.
+// The colors the widget will render with — embedded in the snapshot so the
+// headless handler renders with the correct theme (light/dark + accent) even when the app isn't open.
 export interface WidgetColors {
   bg: string;
   card: string;
@@ -32,11 +32,11 @@ export interface WidgetColors {
 }
 
 export interface WidgetSnapshot {
-  date: string; // "YYYY-MM-DD" — snapshot yazıldığındaki bugün
-  dateLabel: string; // yerelleştirilmiş tam tarih ("Çarşamba, 16 Temmuz 2026")
-  title: string; // "Bugün" (yerelleştirilmiş)
-  summaryLabel: string; // "3/5 tamamlandı" (yerelleştirilmiş)
-  emptyLabel: string; // liste boşken gösterilecek yerelleştirilmiş metin
+  date: string; // "YYYY-MM-DD" — today at the moment the snapshot was written
+  dateLabel: string; // localized full date ("Wednesday, July 16, 2026")
+  title: string; // "Today" (localized)
+  summaryLabel: string; // "3/5 completed" (localized)
+  emptyLabel: string; // localized text shown when the list is empty
   doneCount: number;
   totalCount: number;
   habits: WidgetHabit[];

@@ -1,15 +1,15 @@
-// migration017: migration016'nın ürettiği TİRESİZ 32 karakterlik hatırlatma
-// id'lerini kanonik UUID biçimine çevirir.
+// migration017: converts the DASHLESS 32-character reminder ids produced by
+// migration016 into canonical UUID form.
 //
-// Neden önemli: buluttaki reminders.id bir `uuid` kolonu — tiresiz metni kabul
-// edip pull'da TİRELİ geri veriyor. id eşleşmeyince aynı hatırlatma yerelde
-// ikinci satır olarak eklenip bildirim iki kez çalıyordu.
+// Why it matters: the cloud's reminders.id is a `uuid` column — it accepts
+// dashless text but returns it WITH DASHES on pull. When the ids didn't match,
+// the same reminder got inserted locally as a second row and the notification fired twice.
 
 import { getDb } from '../database';
 import { migration017 } from '../migrations/001_initial';
 import { resetTestDb } from '../../test/dbTestUtils';
 
-const LEGACY_ID = 'a3f1b2c4d5e6f708192a3b4c5d6e7f80'; // 32 karakter, tiresiz
+const LEGACY_ID = 'a3f1b2c4d5e6f708192a3b4c5d6e7f80'; // 32 characters, dashless
 const CANONICAL = 'a3f1b2c4-d5e6-f708-192a-3b4c5d6e7f80';
 
 function insertReminder(id: string): void {
@@ -28,7 +28,7 @@ function rows(): Array<{ id: string; synced: number }> {
 
 beforeEach(async () => {
   await resetTestDb();
-  getDb().runSync(`DELETE FROM reminders`); // migration016 backfill'i karışmasın
+  getDb().runSync(`DELETE FROM reminders`); // avoid interference from migration016's backfill
 });
 
 describe('migration017 — hatırlatma id normalizasyonu', () => {

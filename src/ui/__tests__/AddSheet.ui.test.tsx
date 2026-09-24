@@ -1,8 +1,8 @@
-// AddSheet bileşen testi — merkezi ＋ menüsü (en karmaşık paylaşılan yüzey: üç
-// formun tümü). Bildirim (expo-notifications gerektirir) ve router mock'lanır;
-// taskRepo/habitRepo/goalRepo/subtaskRepo/goalMilestoneRepo/reminderRepo GERÇEK
-// (in-memory SQLite) — TaskEditModal.ui.test.tsx ile aynı desen (uçtan uca DB
-// doğrulaması).
+// AddSheet component test — the central + menu (the most complex shared
+// surface: all three forms). Notifications (requires expo-notifications) and
+// router are mocked; taskRepo/habitRepo/goalRepo/subtaskRepo/goalMilestoneRepo/
+// reminderRepo are REAL (in-memory SQLite) — same pattern as
+// TaskEditModal.ui.test.tsx (end-to-end DB verification).
 
 import { Alert } from 'react-native';
 import { fireEvent, act } from '@testing-library/react-native';
@@ -77,10 +77,10 @@ describe('AddSheet — görev oluşturma', () => {
       <AddSheet visible onClose={onClose} initialStep="task" />
     );
     fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Fatura öde');
-    // Taslak alt görev (oluşturmada mevcut — enableSubtaskDraft).
+    // Draft subtask (available at creation time — enableSubtaskDraft).
     fireEvent.changeText(getByPlaceholderText('Alt görev ekle…'), 'Fişi tara');
     fireEvent.press(getByText('＋'));
-    // Hatırlatma saati.
+    // Reminder time.
     fireEvent.press(getByText('＋ Saat ekle'));
     await pick('time', new Date(2026, 0, 1, 9, 0));
 
@@ -103,17 +103,17 @@ describe('AddSheet — görev oluşturma', () => {
 
 describe('AddSheet — alışkanlık oluşturma (sihirbaz)', () => {
   it('tip seçilip başlık girilip hatırlatma eklenince oluşturur; izin reddi uyarısı gösterir', async () => {
-    (scheduleHabitReminders as jest.Mock).mockResolvedValueOnce(false); // izin reddedildi senaryosu
+    (scheduleHabitReminders as jest.Mock).mockResolvedValueOnce(false); // permission-denied scenario
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     const { getByText, getByPlaceholderText } = await renderUI(
       <AddSheet visible onClose={jest.fn()} initialStep="habit" />
     );
     fireEvent.press(getByText('Basit (tik)'));
-    fireEvent.press(getByText('İleri')); // -> kimlik
+    fireEvent.press(getByText('İleri')); // -> identity
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'Erken kalk');
-    fireEvent.press(getByText('İleri')); // -> sıklık
-    fireEvent.press(getByText('İleri')); // -> hatırlatma (binary+hedefsiz: tracking adımı yok)
+    fireEvent.press(getByText('İleri')); // -> frequency
+    fireEvent.press(getByText('İleri')); // -> reminder (binary+goalless: no tracking step)
     fireEvent.press(getByText('＋ Saat ekle'));
     await pick('time', new Date(2026, 0, 1, 7, 0));
 
@@ -146,6 +146,6 @@ describe('AddSheet — hedef oluşturma', () => {
     expect(created).toBeTruthy();
     expect(created!.goal_type).toBe('milestone');
     expect(goalMilestoneRepo.listByGoal(created!.id).map((m) => m.title)).toEqual(['Kutuları topla']);
-    expect(scheduleGoalReminders).not.toHaveBeenCalled(); // hiç hatırlatma eklenmedi
+    expect(scheduleGoalReminders).not.toHaveBeenCalled(); // no reminders were added
   });
 });

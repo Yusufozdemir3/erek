@@ -1,7 +1,7 @@
-// Bileşen testleri için ortak render sarmalayıcısı: her bileşen ThemeProvider ve
-// I18nProvider bağlamına ihtiyaç duyar (useTheme/useI18n). renderUI, RNTL render'ı
-// bu sağlayıcılarla sarar ve sağlayıcıların açılıştaki asenkron tercih okumasını
-// (AsyncStorage.getItem) boşaltır ki testler "act" uyarısı almadan sürsün.
+// Shared render wrapper for component tests: every component needs the
+// ThemeProvider and I18nProvider context (useTheme/useI18n). renderUI wraps
+// RNTL's render with these providers and flushes the providers' async
+// preference read at startup (AsyncStorage.getItem) so tests run without an "act" warning.
 
 import type { ReactElement } from 'react';
 import { act, render } from '@testing-library/react-native';
@@ -14,13 +14,13 @@ export async function renderUI(ui: ReactElement) {
       <I18nProvider>{ui}</I18nProvider>
     </ThemeProvider>
   );
-  // Sağlayıcıların useEffect içindeki AsyncStorage okuması bir sonraki microtask'ta
-  // çözülür; bekleyen setState'i burada boşaltıyoruz.
+  // The providers' AsyncStorage read inside useEffect resolves on the next
+  // microtask; we flush the pending setState here.
   await act(async () => {});
   return utils;
 }
 
-// Bekleyen microtask'ları (ör. seçici onChange sonrası state) boşaltmak için.
+// For flushing pending microtasks (e.g. state after a picker's onChange).
 export async function flush() {
   await act(async () => {});
 }

@@ -1,14 +1,14 @@
-// migration019: hedef ilerlemesi artık TÜRETİLİYOR (current_value =
-// value_baseline + aktif girdilerin toplamı).
+// migration019: goal progress is now DERIVED (current_value =
+// value_baseline + the sum of active entries).
 //
-// Bu migration'ın tek kritik sözü GERİYE UYUM: hiçbir hedefin GÖRÜNEN değerini
-// değiştirmemeli, yalnız aynı sayıyı bundan sonra çakışmadan birleşebilir iki
-// parçaya ayırmalı. Yanlış bir backfill, yayındaki her kullanıcının ilerlemesini
-// sessizce kaydırırdı — bu yüzden migration'ın kendisi test ediliyor.
+// This migration's one critical promise is BACKWARD COMPATIBILITY: it must not
+// change any goal's VISIBLE value, only split the same number into two parts
+// that can be merged without conflict from now on. A wrong backfill would
+// silently shift every live user's progress — hence the migration itself is tested.
 //
-// Kurulum: migration listesi 19'dan ÖNCEYE kadar elle uygulanır, "eski dünya"
-// verisi yazılır, sonra yalnız 019 çalıştırılır. Böylece üretimdeki SQL'in
-// kendisi sınanır (kopya değil).
+// Setup: the migration list is applied by hand up to (but not including) 19,
+// "old world" data is written, then only 019 is run. This way the actual
+// production SQL is tested (not a copy of it).
 
 import { getDb } from '../database';
 import { migrations } from '../migrations/001_initial';
@@ -25,7 +25,7 @@ function applyV19(): void {
   getDb().execSync(migrations.find((m) => m.version === V)!.sql);
 }
 
-// goals.user_id -> users(id) FK'si var; hedeflerden önce sahibi eklenmeli.
+// goals.user_id -> users(id) has an FK; the owner must be inserted before any goals.
 function insertUser(): void {
   getDb().runSync(
     `INSERT INTO users (id, email, is_anonymous, updated_at, deleted_at, synced)
@@ -69,14 +69,14 @@ describe('migration019 — ilerlemenin baseline + girdiler olarak ayrıştırıl
 
     applyV19();
 
-    // 40 = 40 (baseline) + 0 (girdi yok) → kullanıcı hiçbir fark görmez.
+    // 40 = 40 (baseline) + 0 (no entries) → the user sees no difference at all.
     expect(goalRow('g1').current_value).toBe(40);
     expect(goalRow('g1').value_baseline).toBe(40);
   });
 
   it('girdileri olan hedefte baseline yalnız girdilerle AÇIKLANAMAYAN farkı taşır', () => {
-    // 40'ın 15'i girdilerden geliyor (ör. bağlı alışkanlık katkıları), 25'i
-    // elle düzeltmeden ya da girdi kaydı tutulmayan eski sürümlerden.
+    // Of the 40, 15 comes from entries (e.g. linked habit contributions), and
+    // 25 comes from a manual correction or from older versions that kept no entry record.
     insertGoal('g1', 40);
     insertEntry('g1', 10);
     insertEntry('g1', 5);
@@ -84,7 +84,7 @@ describe('migration019 — ilerlemenin baseline + girdiler olarak ayrıştırıl
     applyV19();
 
     expect(goalRow('g1').value_baseline).toBe(25);
-    expect(goalRow('g1').current_value).toBe(40); // değişmedi
+    expect(goalRow('g1').current_value).toBe(40); // unchanged
   });
 
   it('tamamı girdilerden gelen hedefte baseline 0 olur', () => {
@@ -99,11 +99,11 @@ describe('migration019 — ilerlemenin baseline + girdiler olarak ayrıştırıl
   });
 
   it('SİLİNMİŞ girdiler toplama katılmaz (yeniden hesapla aynı kural)', () => {
-    // Silinmiş girdi sayılsaydı baseline eksik hesaplanır ve bir sonraki yeniden
-    // hesapta kullanıcının değeri düşerdi.
+    // If a deleted entry counted, the baseline would be computed short and the
+    // user's value would drop on the next recompute.
     insertGoal('g1', 30);
     insertEntry('g1', 10);
-    insertEntry('g1', 99, true); // soft-delete
+    insertEntry('g1', 99, true); // soft-deleted
 
     applyV19();
 
@@ -123,7 +123,7 @@ describe('migration019 — ilerlemenin baseline + girdiler olarak ayrıştırıl
   });
 
   it('yeni kolonun buluta çıkması için hedefler yeniden gönderilmeyi bekler', () => {
-    insertGoal('g1', 40); // synced=1 olarak eklendi
+    insertGoal('g1', 40); // inserted with synced=1
 
     applyV19();
 

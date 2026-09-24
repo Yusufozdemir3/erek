@@ -1,6 +1,7 @@
-// Zamanlayıcı saf zaman matematiği testleri. `now` parametresi sabitlenerek
-// duvar-saati davranışı deterministik doğrulanır — uygulama kapalıyken geçen
-// süre, hedef sınırı, saat geri alma ve gece yarısı devri kararı dahil.
+// Tests for the timer's pure time math. Pinning the `now` parameter verifies
+// the wall-clock behavior deterministically — including time elapsed while
+// the app is closed, the target boundary, turning the clock back, and the
+// midnight-rollover decision.
 
 import {
   commitDelta,
@@ -13,7 +14,7 @@ import {
 
 const DAY_MS = 86_400_000;
 
-const T0 = 1_750_000_000_000; // sabit başlangıç anı (epoch ms)
+const T0 = 1_750_000_000_000; // fixed start moment (epoch ms)
 
 function timer(over: Partial<ActiveTimer> = {}): ActiveTimer {
   return {
@@ -22,7 +23,7 @@ function timer(over: Partial<ActiveTimer> = {}): ActiveTimer {
     date: '2026-07-08',
     startedAt: T0,
     baseSeconds: 0,
-    targetSeconds: 20 * 60, // 20 dk
+    targetSeconds: 20 * 60, // 20 min
     ...over,
   };
 }
@@ -53,22 +54,23 @@ describe('commitDelta', () => {
   });
 
   it('hedefte kırpılmaz: koşan sürenin tamamı yazılır', () => {
-    // base 18 dk, hedef 20 dk, 10 dk koşmuş → tamamı (10 dk) yazılır, 2 dk'da kesilmez.
+    // base 18 min, target 20 min, ran for 10 min → the full 10 min is written, not cut off at 2 min.
     expect(commitDelta(timer({ baseSeconds: 18 * 60 }), T0 + 10 * 60_000)).toBe(600);
   });
 
   it('tam saniyeye yuvarlar ve asla negatif olmaz', () => {
     expect(commitDelta(timer(), T0 + 1_499)).toBe(1);   // 1.499 sn → 1
     expect(commitDelta(timer(), T0 + 1_500)).toBe(2);   // 1.5 sn → 2
-    expect(commitDelta(timer(), T0 - 5_000)).toBe(0);   // saat geri alınmış
+    expect(commitDelta(timer(), T0 - 5_000)).toBe(0);   // clock turned back
   });
 
   it('GECE YARISI KARARI: 23:50 → 00:20 seansının tamamı tek delta olarak döner (başlangıç gününe yazılır)', () => {
-    // Karar: seans başladığı güne yazılır (a.date sabit). 30 dk'nın tamamı
-    // tek parçadır; gün dönümünde bölünmez, hedefte de kırpılmaz.
-    const a = timer({ date: '2026-07-08' }); // 23:50'de başladı varsay
+    // Decision: the session is recorded on the day it started (a.date is
+    // fixed). The full 30 minutes is a single piece; it isn't split at
+    // midnight rollover, and isn't clamped at the target either.
+    const a = timer({ date: '2026-07-08' }); // assume it started at 23:50
     expect(commitDelta(a, T0 + 30 * 60_000)).toBe(1800);
-    expect(a.date).toBe('2026-07-08'); // gün alanı değişmez — hep başlangıç günü
+    expect(a.date).toBe('2026-07-08'); // the date field doesn't change — always the starting day
   });
 });
 
@@ -80,7 +82,7 @@ describe('isFinished', () => {
   });
 
   it('açılışta geri yükleme senaryosu: kapalıyken hedef dolduysa true (hemen tamamla)', () => {
-    // Kullanıcı 20 dk hedefli timer başlattı, uygulamayı kapattı, 1 saat sonra açtı.
+    // The user started a timer with a 20-minute target, closed the app, and reopened it an hour later.
     expect(isFinished(timer(), T0 + 3600_000)).toBe(true);
   });
 
@@ -89,9 +91,10 @@ describe('isFinished', () => {
   });
 });
 
-// Süreç öldükten sonra geri yükleme. Duvar-saati modeli uygulama AÇIKKEN
-// doğrudur (kullanıcı hedefi aşmayı seçebilir), ama süreç ölüyken o aralıkta
-// zamanlayıcı gerçekten çalışmıyordu — bu iki fonksiyon o farkı temsil eder.
+// Restoring after process death. The wall-clock model is correct while the
+// app is OPEN (the user can choose to exceed the target), but while the
+// process was dead the timer wasn't really running during that gap — these
+// two functions represent that difference.
 describe('isStaleSession', () => {
   it('aynı gün + hedef dolmamış: seans sürüyor sayılır', () => {
     expect(isStaleSession(timer(), '2026-07-08', T0 + 5 * 60_000)).toBe(false);
@@ -108,17 +111,18 @@ describe('isStaleSession', () => {
 
 describe('restoreCommitDelta', () => {
   it('İKİ GÜN KAPALI KALAN SEANS: 48 saat değil, hedefe kalan kadarı yazılır', () => {
-    // Düzeltilen hata tam olarak buydu: 20 dk hedefli seans akşam başlatılıp
-    // uygulama öldürülür ve iki gün sonra açılırsa, geçen sürenin TAMAMI seansın
-    // başladığı güne yazılıyordu (~172800 sn). Kayıt geçmiş bir güne düştüğü için
-    // "Sıfırla" ile bile geri alınamıyordu.
+    // This was exactly the bug that got fixed: if a session with a 20-minute
+    // target was started in the evening, the app was killed, and it's
+    // reopened two days later, the ENTIRE elapsed time used to be written to
+    // the day the session started (~172800 sec). Since the entry landed on a
+    // past day, it couldn't even be undone with "Reset".
     const a = timer();
-    expect(commitDelta(a, T0 + 2 * DAY_MS)).toBe(2 * 86_400); // ham duvar saati: 48 saat
-    expect(restoreCommitDelta(a, T0 + 2 * DAY_MS)).toBe(20 * 60); // yazılan: hedef kadar
+    expect(commitDelta(a, T0 + 2 * DAY_MS)).toBe(2 * 86_400); // raw wall clock: 48 hours
+    expect(restoreCommitDelta(a, T0 + 2 * DAY_MS)).toBe(20 * 60); // written: capped at the target
   });
 
   it('kısmen dolu seansta yalnızca hedefe KALAN kadarı yazılır', () => {
-    // base 18 dk, hedef 20 dk → en fazla 2 dk yazılabilir.
+    // base 18 min, target 20 min → at most 2 minutes can be written.
     expect(restoreCommitDelta(timer({ baseSeconds: 18 * 60 }), T0 + 5 * DAY_MS)).toBe(120);
   });
 

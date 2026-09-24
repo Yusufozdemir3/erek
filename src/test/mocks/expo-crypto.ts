@@ -1,5 +1,5 @@
-// Testlerde expo-crypto yerine geçer (jest.config.js moduleNameMapper).
-// newId() için native modül gerektirmeden gerçek UUID üretir.
+// Replaces expo-crypto in tests (jest.config.js moduleNameMapper).
+// Produces a real UUID for newId() without needing a native module.
 
 import * as nodeCrypto from 'node:crypto';
 

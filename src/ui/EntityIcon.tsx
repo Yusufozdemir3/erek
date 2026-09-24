@@ -1,9 +1,9 @@
-// Görev/Alışkanlık/Hedef "tür" ikonu — alt sekme çubuğuyla BİREBİR aynı çizgi
-// ikon setini kullanır (Feather check-square / Ionicons flame / Feather target)
-// ki uygulamanın her yerinde bu üç türün görsel kimliği tutarlı kalsın.
-// Kullanım: ＋ menüsü (AddSheet, AddFab), Bugün özet çubuğu (DailySummary).
-// Alışkanlığın kendi seçtiği emoji ikonu (HabitEditModal) bundan AYRI — o
-// kullanıcı özelleştirmesi, tür kimliği değil.
+// Task/Habit/Goal "type" icon — uses the EXACT SAME line-icon set as the
+// bottom tab bar (Feather check-square / Ionicons flame / Feather target) so
+// these three types' visual identity stays consistent everywhere in the app.
+// Used by: the ＋ menu (AddSheet, AddFab), the Today summary bar (DailySummary).
+// The emoji icon a habit picks for itself (HabitEditModal) is SEPARATE from
+// this — that's user customization, not a type identity.
 
 import { Feather, Ionicons } from '@expo/vector-icons';
 

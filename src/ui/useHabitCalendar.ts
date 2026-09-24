@@ -1,16 +1,16 @@
-// Alışkanlık istatistik ekranındaki "tam takvim" bölümünün veri/gezinme
-// mantığı. Ay ay ileri/geri gidilebilir (yalnız geçmişe; gelecek aya
-// gidilemez). Her ay için Pazartesi başlangıçlı 7 sütunluk hafta ızgarası
-// üretir; ay dışı hücreler null (dolgu).
-//
-// BİLİNEN SINIR: Habit tablosunda gerçek "oluşturulma tarihi" alanı yok
-// (start_date boşsa "baştan beri" anlamına gelir, ne zaman baştan bilinmez).
-// Bu yüzden start_date'i olmayan bir alışkanlıkta çok eskiye gidildiğinde,
-// alışkanlık henüz var olmadan önceki günler de "planlı ama kaçırılmış"
-// (kırmızı) görünebilir — mevcut 90 günlük ısı haritasında da aynı sınır var,
-// burada yalnız daha görünür hale gelebilir. Bunu tamamen önlemek yeni bir
-// created_at alanı (şema migration'ı) gerektirir; şimdilik gezinme son 24 ayla
-// sınırlanarak etkisi azaltılıyor.
+// Data/navigation logic for the "full calendar" section on the habit stats
+// screen. Can navigate month by month, forward/backward (backward only; can't
+// go to a future month). Produces a 7-column, Monday-first week grid for each
+// month; out-of-month cells are null (padding).
+
+// KNOWN LIMITATION: the Habit table has no real "creation date" field
+// (an empty start_date means "since the beginning," but when that beginning
+// was is unknown). So for a habit with no start_date, navigating far enough
+// back can show days before the habit even existed as "scheduled but missed"
+// (red) — the existing 90-day heatmap has the same limitation, this just makes
+// it more visible. Fully preventing it would require a new created_at field
+// (a schema migration); for now, navigation is limited to the last 24 months
+// to reduce the impact.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -24,14 +24,14 @@ export interface CalendarDay {
   date: string;
   scheduled: boolean;
   completed: boolean;
-  future: boolean; // bugünden sonrası — "kaçırıldı" değil, henüz yaşanmadı
+  future: boolean; // after today — not "missed," just not yet lived
 }
 
 export interface HabitCalendar {
   habit: Habit | null;
   year: number;
-  month: number; // 0-11 (JS Date ayı)
-  weeks: (CalendarDay | null)[][]; // her hafta 7 hücre (Pzt..Paz); ay dışı = null
+  month: number; // 0-11 (JS Date month)
+  weeks: (CalendarDay | null)[][]; // 7 cells per week (Mon..Sun); out-of-month = null
   canGoPrev: boolean;
   canGoNext: boolean;
   goPrev: () => void;
@@ -46,13 +46,13 @@ function ymd(y: number, m: number, d: number): string {
   return `${y}-${pad2(m + 1)}-${pad2(d)}`;
 }
 
-// JS getDay() (0=Pazar..6=Cumartesi) -> Pazartesi başlangıçlı sütun (0..6).
+// JS getDay() (0=Sunday..6=Saturday) -> Monday-first column (0..6).
 function mondayFirstIndex(jsDay: number): number {
   return (jsDay + 6) % 7;
 }
 
 export function useHabitCalendar(habitId: string): HabitCalendar {
-  const [monthOffset, setMonthOffset] = useState(0); // 0 = içinde bulunulan ay
+  const [monthOffset, setMonthOffset] = useState(0); // 0 = the current month
   const [habit, setHabit] = useState<Habit | null>(null);
   const [weeks, setWeeks] = useState<(CalendarDay | null)[][]>([]);
 
@@ -76,10 +76,10 @@ export function useHabitCalendar(habitId: string): HabitCalendar {
     const logs = habitRepo.logsBetween(habitId, firstDate, lastDate);
     const completedDates = new Set(logs.filter((l) => l.completed === 1).map((l) => l.log_date));
 
-    // KOTA (haftada X kez) kuralında hiçbir gün tek başına vadeli değildir:
-    // tamamlanmayan gün "kaçırılmış" (kırmızı) boyanmamalı. Bu yüzden kota
-    // alışkanlığında scheduled yalnız TAMAMLANAN günlerde true olur — takvimde
-    // yapılan günler renkli, kalan günler nötr görünür.
+    // Under a QUOTA (X times a week) rule, no single day is individually due:
+    // an incomplete day must NOT be colored "missed" (red). So for quota habits,
+    // scheduled is only true on COMPLETED days — done days show up colored on
+    // the calendar, the rest appear neutral.
     const quota = isQuotaSchedule(h.schedule);
     const cells: CalendarDay[] = [];
     for (let day = 1; day <= daysInMonth; day++) {
@@ -96,8 +96,8 @@ export function useHabitCalendar(habitId: string): HabitCalendar {
       });
     }
 
-    // Ayın 1'inin haftadaki yerine göre baştan dolgu (null) ekle; 7'nin katına
-    // tamamlanana kadar sondan da dolgu ekle.
+    // Add leading padding (null) based on where the 1st of the month falls in
+    // the week; also pad the end until the length is a multiple of 7.
     const leadPad = mondayFirstIndex(new Date(year, month, 1).getDay());
     const grid: (CalendarDay | null)[] = [
       ...Array(leadPad).fill(null),

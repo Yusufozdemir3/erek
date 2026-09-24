@@ -1,6 +1,6 @@
-// Görev (Task) repository.
-// UI asla SQL görmez - sadece bu fonksiyonları çağırır.
-// Her yazma işlemi updated_at'i tazeler ve synced=0 yapar (senkron bekliyor).
+// Task repository.
+// UI never sees SQL - it only calls these functions.
+// Every write refreshes updated_at and sets synced=0 (waiting for sync).
 
 import { getDb } from '../database';
 import { reminderRepo } from './reminderRepo';
@@ -8,21 +8,22 @@ import { subtaskRepo } from './subtaskRepo';
 import { newId, nextTaskOccurrence, nowIso, parseJson, toJson, todayDate } from '../../lib/helpers';
 import type { Task, Priority, Recurrence } from '../../types/models';
 
-// Öncelik sıralama anahtarı: yüksek->düşük.
+// Priority sort key: high->low.
 const PRIORITY_RANK_SQL = `CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END`;
 
-// Saati olan görevler (due_date "YYYY-MM-DDTHH:MM:SS", length>10) tamamen
-// önce; kendi aralarında SAATE göre (kronolojik) sıralanır. Saatsiz/tüm-gün
-// görevler ("YYYY-MM-DD") tamamen sonra; kendi aralarında yalnızca ÖNCELİĞE
-// göre sıralanır (tarihleri farklı olsa bile). CASE ifadesi saatsiz satırlarda
-// NULL üretip hepsini eşitler ki tarih aradan sızıp önceliği ezmesin.
+// Tasks with a time (due_date "YYYY-MM-DDTHH:MM:SS", length>10) come entirely
+// first; among themselves they're sorted by TIME (chronologically). Timeless/
+// all-day tasks ("YYYY-MM-DD") come entirely after; among themselves they're
+// sorted ONLY by PRIORITY (even if their dates differ). The CASE expression
+// produces NULL for timeless rows, making them all equal, so the date can't
+// leak in and override priority.
 const DUE_ORDER_SQL = `
   (length(due_date) <= 10) ASC,
   CASE WHEN length(due_date) > 10 THEN due_date END ASC,
   ${PRIORITY_RANK_SQL}
 `;
 
-// DB'den gelen ham satırı uygulama tipine çevirir (recurrence JSON parse).
+// Converts a raw DB row into the app type (parses the recurrence JSON).
 function rowToTask(row: any): Task {
   return {
     id: row.id,
@@ -51,7 +52,7 @@ export interface CreateTaskInput {
 }
 
 export const taskRepo = {
-  // Yeni görev oluşturur.
+  // Creates a new task.
   create(input: CreateTaskInput): Task {
     const db = getDb();
     const id = newId();
@@ -75,7 +76,7 @@ export const taskRepo = {
     return this.getById(id)!;
   },
 
-  // ID ile tek görev getirir (silinmemiş).
+  // Fetches a single task by ID (non-deleted).
   getById(id: string): Task | null {
     const db = getDb();
     const row = db.getFirstSync<any>(
@@ -85,7 +86,7 @@ export const taskRepo = {
     return row ? rowToTask(row) : null;
   },
 
-  // Bir kullanıcının tüm aktif görevleri (son tarihe göre sıralı).
+  // All of a user's active tasks (sorted by due date).
   listByUser(userId: string): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -97,15 +98,16 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // "Görevler" ekranı için: TÜM tamamlanmamış görevler + yalnızca `completedSince`
-  // gününden beri tamamlananlar. Tamamlananlar zaten listenin dibinde.
+  // For the "Tasks" screen: ALL incomplete tasks + only the ones completed
+  // since `completedSince`. Completed ones are already at the bottom of the list.
   //
-  // NEDEN SINIR VAR: listByUser tamamlananlar dahil HER görevi döndürüyor ve ekran
-  // hepsini çiziyordu. Tamamlanan görev hiç düşmediği için bir yıl kullanan birinde
-  // liste binleri buluyor; hem sorgu hem render doğrusal büyüyor ve asıl işe yarayan
-  // kısım (yapılacaklar) o yığının içinde kayboluyordu. Aktif görevler
-  // SINIRLANMAZ — kullanıcının gerçek çalışma kümesi odur ve kendiliğinden küçüktür.
-  // completedSince null verilirse sınır uygulanmaz ("tümünü göster").
+  // WHY THE LIMIT EXISTS: listByUser returned EVERY task including completed
+  // ones, and the screen drew all of them. Since a completed task never
+  // dropped out, for someone using the app for a year the list reached the
+  // thousands; both the query and the render grew linearly, and the actually
+  // useful part (things to do) got lost in that pile. Active tasks are NOT
+  // LIMITED — that's the user's real working set and it's naturally small.
+  // If completedSince is null, no limit is applied ("show everything").
   listForScreen(userId: string, completedSince: string | null): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -118,8 +120,8 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // Sınırın DIŞINDA kalan (daha eski tarihte tamamlanmış) görev sayısı — ekran
-  // "tümünü göster" düğmesini yalnız gerçekten gizlenen bir şey varsa gösterir.
+  // Count of tasks OUTSIDE the limit (completed at an older date) — the
+  // screen's "show all" button only appears when something is genuinely hidden.
   countCompletedBefore(userId: string, since: string): number {
     const db = getDb();
     const row = db.getFirstSync<{ n: number }>(
@@ -131,7 +133,7 @@ export const taskRepo = {
     return row?.n ?? 0;
   },
 
-  // "Bugün" ekranı için: bugün veya daha önce vadesi gelen, tamamlanmamış görevler.
+  // For the "Today" screen: incomplete tasks due today or earlier.
   listDueToday(userId: string, today: string): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -145,10 +147,11 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // "Bugün" ekranının gösterdiği liste: listDueToday'den farkı, BUGÜN tamamlanan
-  // görevleri de döndürür ki kutuya basınca görev kaybolmasın - işaretli/üstü
-  // çizili olarak gün boyu listede kalsın, ertesi gün kendiliğinden düşsün.
-  // Tamamlananlar listenin altına, tamamlanmamışlar vadeye göre üste sıralanır.
+  // The list shown on the "Today" screen: unlike listDueToday, this also
+  // returns tasks completed TODAY, so checking the box doesn't make the task
+  // disappear — it stays in the list, checked/struck-through, for the rest of
+  // the day, then drops off on its own the next day.
+  // Completed ones sort to the bottom, incomplete ones sort to the top by due date.
   listForToday(userId: string, today: string): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -165,10 +168,10 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // Belirli bir GÜNE vadeli görevler (tamamlanmış dahil). "Bugün" ekranında
-  // başka bir güne gezinildiğinde o günün görevlerini net göstermek için.
-  // listForToday'den farkı: kümülatif "<=" yok, sadece tam o gün; geçmiş günde
-  // devreden görevlerle karışmaz.
+  // Tasks due on a SPECIFIC day (including completed ones). For clearly
+  // showing that day's tasks when navigating to another day on the "Today" screen.
+  // Difference from listForToday: no cumulative "<=", just that exact day; it
+  // doesn't get mixed up with tasks carried over from a past day.
   listByDueDate(userId: string, date: string): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -181,15 +184,16 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // Görevi tamamlandı olarak işaretle (ya da geri al).
+  // Marks a task completed (or undoes it).
   //
-  // TEKRARLAYAN görevde "tamamla" (completed=true) farklı davranır: görev
-  // tamamlandı işaretlenmek YERİNE bir sonraki tekrar tarihine ILERI SARILIR
-  // (kullanıcı kararı: ayrı kopya/geçmiş tutulmaz, aynı satır ilerler). Böylece
-  // görev bugünden düşer ve sonraki tekrar gününde yeniden görünür; alt görevleri
-  // varsa taze bir checklist için sıfırlanır. Geri alma (completed=false) her
-  // zaman normal yolla (completed_at temizlenir) işler. Kural bozuk/çözülemezse
-  // (nextTaskOccurrence null) normal tamamlamaya düşülür.
+  // A RECURRING task behaves differently on "complete" (completed=true): the
+  // task ISN'T marked completed — it's FAST-FORWARDED to its next occurrence
+  // instead (a deliberate choice: no separate copy/history is kept, the same
+  // row moves forward). This way the task drops off today and reappears on its
+  // next occurrence date; if it has subtasks, they're reset for a fresh
+  // checklist. Undoing (completed=false) always goes through the normal path
+  // (completed_at is cleared). If the rule is broken/unresolvable
+  // (nextTaskOccurrence returns null), it falls back to normal completion.
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
     if (completed) {
@@ -213,7 +217,7 @@ export const taskRepo = {
     );
   },
 
-  // Görev alanlarını günceller.
+  // Updates task fields.
   update(id: string, fields: Partial<CreateTaskInput>): void {
     const db = getDb();
     const sets: string[] = [];
@@ -231,8 +235,8 @@ export const taskRepo = {
     db.runSync(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`, vals);
   },
 
-  // Soft delete - kayıt kalır, deleted_at işaretlenir (senkronda geri gelmesin diye).
-  // Göreve ait hatırlatma satırları da burada temizlenir (gerekçe: habitRepo.softDelete).
+  // Soft delete - the record stays, deleted_at is stamped (so it doesn't come back via sync).
+  // The task's reminder rows are cleaned up here too (rationale: habitRepo.softDelete).
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();

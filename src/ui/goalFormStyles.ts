@@ -1,8 +1,8 @@
-// GoalForm'un stil fabrikası — src/ui/GoalForm.tsx'ten AYRILDI (denetim
-// bulgusu H1: form bileşenleri 600+ satırdı ve bunun büyük kısmı stil sözlüğüydü).
+// GoalForm's style factory — SPLIT OUT of src/ui/GoalForm.tsx (review finding
+// H1: the form component was 600+ lines and a large chunk of that was the style dictionary).
 //
-// DESEN (bkz. ThemeProvider): modül seviyesinde StyleSheet.create YOK — tema
-// değişince yeniden üretilebilsin diye fabrika render sırasında çağrılır.
+// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the factory
+// is called at render time so it can be regenerated when the theme changes.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -90,13 +90,13 @@ export const makeGoalFormStyles = (c: Colors) =>
     },
     saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
 
-    // — Taslak milestone editörü (oluşturma) —
+    // — Draft milestone editor (creation) —
     subRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, gap: 10 },
     subBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.faint },
     subTitle: { flex: 1, fontSize: 14, color: c.text },
     subMeta: { fontSize: 11, fontWeight: '600', color: c.muted },
     subDelete: { fontSize: 20, color: c.faint, paddingHorizontal: 4 },
-    // — Kademeli çipler (miktar / tarih) — detay ekranındaki milestoneChip* ile aynı dil.
+    // — Progressive chips (amount / date) — same visual language as milestoneChip* on the detail screen.
     subChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
     subChip: {
       paddingHorizontal: 12,

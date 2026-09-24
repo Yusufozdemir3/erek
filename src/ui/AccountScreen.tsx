@@ -1,30 +1,32 @@
-// E-posta + parola ile hesap bağlama ekranı. ŞU AN KULLANILMIYOR ve bir ROTA
-// DEĞİL — bilerek app/ dışında duruyor (eskiden app/account.tsx'ti).
+// Account-linking screen via email + password. CURRENTLY UNUSED and NOT a
+// ROUTE — deliberately kept outside app/ (used to be app/account.tsx).
 //
-// NEDEN TAŞINDI: giriş yalnız Google ile yapılıyor (bkz. ui/LoginScreen.tsx) ve
-// bu ekrana hiçbir yerden bağlantı yoktu. Ama app/ altında durduğu sürece rota
-// canlıydı: `habitapp://account` ile açılabiliyordu ve orada üç sorun vardı —
-// (1) e-posta+parola ile İKİNCİ bir hesap açılabiliyor, "yalnız Google" kararının
-//     etrafından dolaşılıyordu;
-// (2) senkron doğrudan runSync ile çalıştırılıyor (AppData.syncNow atlanıyor),
-//     yani "son yedek" damgası ve senkron hata durumu güncellenmiyordu;
-// (3) hesap değişimi kontrolü (classifySignIn / birleştir-değiştir) hiç yoktu,
-//     yani düzeltilmiş olan RLS kilidi yeniden üretilebiliyordu.
+// WHY IT WAS MOVED: sign-in is Google-only now (see ui/LoginScreen.tsx) and
+// nothing linked to this screen anymore. But as long as it stayed under app/
+// the route was still live: it could be opened with `habitapp://account`, and
+// that had three problems —
+// (1) a SECOND account could be opened via email+password, circumventing the
+//     "Google only" decision;
+// (2) sync was run directly via runSync (bypassing AppData.syncNow), so the
+//     "last backup" timestamp and sync error state never got updated;
+// (3) there was no account-switch check (classifySignIn / merge-or-switch),
+//     so the RLS lockout that was fixed elsewhere could be reproduced here.
 //
-// GERİ AÇILACAKSA: önce yukarıdaki üçü LoginScreen'deki akışa hizalanmalı;
-// dosyayı app/ altına geri taşımak TEK BAŞINA yeterli değildir.
+// IF RE-ENABLING: first align the three issues above with the flow in
+// LoginScreen; moving the file back under app/ ALONE is not enough.
 //
-// Aşağıdaki özgün not (akışın kendisi) olduğu gibi korunuyor:
+// The original note below (the flow itself) is kept as-is:
 //
-// Akış:
-//   - Giriş yap / Kayıt ol (üstte segment; e-posta + parola, Supabase auth).
-//   - "Şifremi unuttum": uygulama İÇİ kod akışı — e-postaya 6 haneli kod gelir
-//     (Supabase şablonunda {{ .Token }} olmalı), kod + yeni parola girilince
-//     verifyOtp oturum açar ve parola güncellenir (bkz. sync/auth.ts).
-//   - Oturum açılınca yerel anonim kullanıcı hesaba YÜKSELTİLİR (email set edilir),
-//     tüm yerel veri yeniden gönderilecek şekilde işaretlenir (prepareFullResync)
-//     ve tam bir senkron turu çalışır.
-//   - Senkron sonucu (↑gönderilen / ↓alınan) ekranda gösterilir.
+// Flow:
+//   - Sign in / Sign up (segment at the top; email + password, Supabase auth).
+//   - "Forgot password": an IN-APP code flow — a 6-digit code is emailed
+//     (must be {{ .Token }} in the Supabase template), and once the code +
+//     new password are entered, verifyOtp signs in and updates the password
+//     (see sync/auth.ts).
+//   - Once signed in, the local anonymous user is UPGRADED to an account
+//     (email is set), all local data is marked for resending
+//     (prepareFullResync), and a full sync round runs.
+//   - The sync result (↑pushed / ↓pulled) is shown on screen.
 
 import { useState } from 'react';
 import {
@@ -70,7 +72,7 @@ export default function AccountScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  // Parola sıfırlama: kod istendi mi (adım 2'ye geçildi mi) + kod + yeni parola.
+  // Password reset: whether the code was requested (moved to step 2) + code + new password.
   const [resetCodeSent, setResetCodeSent] = useState(false);
   const [resetCode, setResetCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -84,7 +86,7 @@ export default function AccountScreen() {
     setInfo(null);
   };
 
-  // Oturum açıldıktan sonra: yerel kullanıcıyı hesaba yükselt + tam yeniden senkron.
+  // After signing in: upgrade the local user to an account + full resync.
   const linkAndSync = async () => {
     userRepo.upgradeToAccount(user.id, email.trim());
     await prepareFullResync();
@@ -119,9 +121,10 @@ export default function AccountScreen() {
     setBusy(true);
     try {
       if (mode === 'signup') {
-        // Şu an anonim oturumdaysak (uygulama açılışta anonim başlar), hesabı
-        // updateUser ile DÖNÜŞTÜR: aynı uid korunur → buluttaki verinin sahibi
-        // değişmez, RLS çakışması olmaz. Anonim oturum yoksa normal signUp.
+        // If we're currently in an anonymous session (the app starts anonymous
+        // on launch), CONVERT the account via updateUser: the same uid is kept
+        // → the owner of the cloud data doesn't change, no RLS conflict. If
+        // there's no anonymous session, do a normal signUp.
         const cur = await currentAuthUser();
         if (cur?.isAnonymous) {
           await linkEmailToAnonymous(em, password);
@@ -136,7 +139,7 @@ export default function AccountScreen() {
       } else {
         await signInWithEmail(em, password);
       }
-      // Buraya geldiysek aktif bir oturum var.
+      // If we got here, there's an active session.
       await finishSignedIn();
     } catch (e) {
       setError(translateAuthError(e, t));
@@ -145,7 +148,7 @@ export default function AccountScreen() {
     }
   };
 
-  // Parola sıfırlama — adım 1: e-postaya kod gönder.
+  // Password reset — step 1: send a code to the email.
   const onSendResetCode = async () => {
     clearMessages();
     const em = email.trim();
@@ -165,8 +168,8 @@ export default function AccountScreen() {
     }
   };
 
-  // Parola sıfırlama — adım 2: kod + yeni parola. Başarılıysa oturum açılmış
-  // olur; normal giriş yolundaki linkAndSync akışına devam edilir.
+  // Password reset — step 2: code + new password. On success a session is
+  // opened; continues into the same linkAndSync flow as normal sign-in.
   const onResetPassword = async () => {
     clearMessages();
     const em = email.trim();
@@ -214,7 +217,7 @@ export default function AccountScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Üst kimlik: bulut ikonu + başlık + kısa açıklama */}
+        {/* Top identity: cloud icon + title + short description */}
         <View style={styles.hero}>
           <View style={styles.heroIcon}>
             <Feather name={isForgot ? 'key' : 'cloud'} size={30} color={colors.primary} />
@@ -249,7 +252,7 @@ export default function AccountScreen() {
           </View>
         ) : (
           <View style={styles.card}>
-            {/* Giriş / Kayıt segmenti (parola sıfırlamada gizli) */}
+            {/* Sign in / Sign up segment (hidden during password reset) */}
             {!isForgot && (
               <View style={styles.segRow}>
                 {(['signin', 'signup'] as Mode[]).map((m) => {
@@ -272,7 +275,7 @@ export default function AccountScreen() {
               </View>
             )}
 
-            {/* E-posta */}
+            {/* Email */}
             <Text style={styles.label}>{t('account.email')}</Text>
             <View style={styles.inputRow}>
               <Feather name="mail" size={16} color={colors.faint} style={styles.inputIcon} />
@@ -289,7 +292,7 @@ export default function AccountScreen() {
               />
             </View>
 
-            {/* Parola sıfırlama adım 2: e-postadaki kod */}
+            {/* Password reset step 2: the code from the email */}
             {isForgot && resetCodeSent && (
               <>
                 <Text style={[styles.label, { marginTop: 14 }]}>{t('account.resetCode')}</Text>
@@ -308,7 +311,7 @@ export default function AccountScreen() {
               </>
             )}
 
-            {/* Parola (sıfırlamada yalnız adım 2'de: yeni parola) */}
+            {/* Password (only in step 2 during reset: new password) */}
             {(!isForgot || resetCodeSent) && (
               <>
                 <Text style={[styles.label, { marginTop: 14 }]}>
@@ -341,7 +344,7 @@ export default function AccountScreen() {
             {error && <Text style={styles.errText}>{error}</Text>}
             {info && <Text style={styles.infoText}>{info}</Text>}
 
-            {/* Ana eylem */}
+            {/* Main action */}
             <Pressable
               style={[styles.primaryBtn, busy && styles.btnDisabled]}
               onPress={isForgot ? (resetCodeSent ? onResetPassword : onSendResetCode) : onSubmit}
@@ -358,7 +361,7 @@ export default function AccountScreen() {
               )}
             </Pressable>
 
-            {/* Alt bağlantılar */}
+            {/* Bottom links */}
             {mode === 'signin' && (
               <Pressable style={styles.switchBtn} onPress={() => switchMode('forgot')} disabled={busy}>
                 <Text style={styles.switchText}>{t('account.forgot')}</Text>

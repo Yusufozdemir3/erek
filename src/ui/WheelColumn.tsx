@@ -1,14 +1,14 @@
-// Tek bir kaydırmalı sayı sütunu (saat ya da dakika) — TimePickerModal'ın
-// yapı taşı. Kaydırma bırakılınca en yakın değere "snap" eder; dokunuşla da
-// doğrudan seçilebilir. Üst/alt kenarlar zemine soluklaşır (fade illüzyonu
-// gerçek gradient olmadan opacity ile taklit edilir — RN'de ekstra bağımlılık
-// gerektirmesin diye).
+// A single scrollable number column (hour or minute) — a building block of
+// TimePickerModal. Snaps to the nearest value on scroll release; can also be
+// selected directly by tapping. The top/bottom edges fade into the background
+// (the fade illusion is faked with opacity instead of a real gradient — so it
+// doesn't require an extra dependency in RN).
 
 import { useEffect, useRef } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const ITEM_HEIGHT = 44;
-const VISIBLE_ITEMS = 5; // tekerlek yüksekliği = ITEM_HEIGHT * VISIBLE_ITEMS
+const VISIBLE_ITEMS = 5; // wheel height = ITEM_HEIGHT * VISIBLE_ITEMS
 const PAD = (ITEM_HEIGHT * (VISIBLE_ITEMS - 1)) / 2;
 
 interface Props {
@@ -24,7 +24,7 @@ export function WheelColumn({ values, selected, onSelect, format, textColor, fad
   const listRef = useRef<FlatList<number>>(null);
   const selectedIndex = Math.max(0, values.indexOf(selected));
 
-  // Dışarıdan `selected` değişirse (modal yeniden açıldığında) listeyi oraya kaydır.
+  // If `selected` changes externally (e.g. the modal reopens), scroll the list there.
   useEffect(() => {
     listRef.current?.scrollToOffset({ offset: selectedIndex * ITEM_HEIGHT, animated: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps

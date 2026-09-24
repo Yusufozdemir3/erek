@@ -1,7 +1,7 @@
-// Testlerde expo-sqlite yerine geçer (jest.config.js moduleNameMapper).
-// Aynı senkron API'yi Node'un yerleşik sqlite modülüyle (in-memory) sağlar.
-// Böylece repository testleri native modül olmadan GERÇEK SQL davranışıyla
-// çalışır: UNIQUE kısıtları, foreign key'ler ve transaction'lar dahil.
+// Replaces expo-sqlite in tests (jest.config.js moduleNameMapper).
+// Provides the same synchronous API using Node's built-in sqlite module
+// (in-memory). This lets repository tests run with REAL SQL behavior, no
+// native module needed: UNIQUE constraints, foreign keys, and transactions included.
 
 import { DatabaseSync } from 'node:sqlite';
 
@@ -26,9 +26,9 @@ class FakeSQLiteDatabase {
     return this.db.prepare(sql).all(...params) as T[];
   }
 
-  // Test yardımcısı: içteki DB'yi taze in-memory örnekle değiştirir.
-  // Sarmalayıcı nesnenin kimliği korunur — database.ts'teki singleton geçerli kalır.
-  // (node:sqlite'ta foreign key'ler varsayılan açık; PRAGMA tekrarına gerek yok.)
+  // Test helper: replaces the inner DB with a fresh in-memory instance.
+  // The wrapper object's identity is preserved — the singleton in database.ts stays valid.
+  // (In node:sqlite, foreign keys are on by default; no need to repeat the PRAGMA.)
   __reset(): void {
     this.db.close();
     this.db = new DatabaseSync(':memory:');
@@ -46,8 +46,8 @@ export function openDatabaseSync(name: string): FakeSQLiteDatabase {
   return db;
 }
 
-// Test yardımcısı — gerçek expo-sqlite API'sinde yoktur.
-// Her testin temiz bir veritabanıyla başlaması için beforeEach'te çağrılır.
+// Test helper — doesn't exist in the real expo-sqlite API.
+// Called in beforeEach so every test starts with a clean database.
 export function __resetAllDatabases(): void {
   for (const db of instances.values()) db.__reset();
 }

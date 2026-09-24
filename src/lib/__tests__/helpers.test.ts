@@ -1,5 +1,5 @@
-// helpers.ts testleri — isScheduledOn streak'in ve "Bugün" filtresinin temelidir.
-// Sabit tarihler kullanılır: 2026-06-29 Pazartesi, 2026-07-01 Çarşamba.
+// helpers.ts tests — isScheduledOn is the foundation of the streak and the "Today" filter.
+// Fixed dates are used: 2026-06-29 Monday, 2026-07-01 Wednesday.
 
 import {
   chunk,
@@ -20,10 +20,11 @@ import {
 } from '../helpers';
 import type { Recurrence } from '../../types/models';
 
-// SQLite'ın `IN (?, ?, …)` bağlı değişken sınırını aşmamak için toplu sorgular
-// listeyi bu fonksiyonla parçalıyor (bkz. habitRepo.getDayStates ve benzerleri).
-// Sınırın kendisi büyük (32766) ama tetiklenmemesi, binlerce alışkanlığı/görevi
-// olan bir kullanıcının sorgusunun anlaşılmaz bir SQLite hatasıyla patlamasından iyidir.
+// Batch queries split the list with this function to avoid exceeding
+// SQLite's `IN (?, ?, …)` bound-parameter limit (see habitRepo.getDayStates
+// and similar). The limit itself is large (32766), but avoiding hitting it is
+// better than a query blowing up with a cryptic SQLite error for a user with
+// thousands of habits/tasks.
 describe('chunk', () => {
   it('boş listede boş dizi döner (tek boş parça değil)', () => {
     expect(chunk([], 10)).toEqual([]);
@@ -90,11 +91,11 @@ describe('isScheduledOn', () => {
   });
 
   it('weekly yalnızca seçili günlerde planlıdır', () => {
-    const s: Recurrence = { freq: 'weekly', weekdays: [1, 3, 5] }; // Pzt, Çar, Cum
-    expect(isScheduledOn(s, '2026-06-29')).toBe(true); // Pazartesi
-    expect(isScheduledOn(s, '2026-07-01')).toBe(true); // Çarşamba
-    expect(isScheduledOn(s, '2026-06-30')).toBe(false); // Salı
-    expect(isScheduledOn(s, '2026-06-28')).toBe(false); // Pazar
+    const s: Recurrence = { freq: 'weekly', weekdays: [1, 3, 5] }; // Mon, Wed, Fri
+    expect(isScheduledOn(s, '2026-06-29')).toBe(true); // Monday
+    expect(isScheduledOn(s, '2026-07-01')).toBe(true); // Wednesday
+    expect(isScheduledOn(s, '2026-06-30')).toBe(false); // Tuesday
+    expect(isScheduledOn(s, '2026-06-28')).toBe(false); // Sunday
   });
 
   it('weekly weekdays boş/eksikse hiçbir gün planlı değildir', () => {
@@ -108,23 +109,24 @@ describe('isScheduledOn', () => {
     expect(isScheduledOn(s, '2026-07-14')).toBe(false);
   });
 
-  // "Ayın 31'i" seçen kullanıcı eskiden 30 günlük aylarda ve Şubat'ta HİÇ planlı
-  // gün almıyordu: alışkanlık yılda 5 ay görünmüyor, "her ay sonu" niyeti sessizce
-  // kayboluyordu. Seçim artık o ayın son gününe kırpılır.
+  // A user who picked "the 31st" used to get NO scheduled day at all in
+  // 30-day months and in February: the habit would disappear for 5 months a
+  // year, silently losing the "every end of month" intent. The selection is
+  // now clamped to that month's last day.
   it('monthly: ayın son gününü aşan seçim SON GÜNE kırpılır', () => {
     const s: Recurrence = { freq: 'monthly', monthDay: 31 };
-    expect(isScheduledOn(s, '2026-07-31')).toBe(true); // 31 çeken ay: kendi günü
-    expect(isScheduledOn(s, '2026-09-30')).toBe(true); // 30 çeken ay: son gün
+    expect(isScheduledOn(s, '2026-07-31')).toBe(true); // 31-day month: its own day
+    expect(isScheduledOn(s, '2026-09-30')).toBe(true); // 30-day month: last day
     expect(isScheduledOn(s, '2026-09-29')).toBe(false);
-    expect(isScheduledOn(s, '2026-02-28')).toBe(true); // Şubat (artık yıl değil)
-    expect(isScheduledOn(s, '2024-02-29')).toBe(true); // artık yılda 29
+    expect(isScheduledOn(s, '2026-02-28')).toBe(true); // February (not a leap year)
+    expect(isScheduledOn(s, '2024-02-29')).toBe(true); // 29th in a leap year
     expect(isScheduledOn(s, '2024-02-28')).toBe(false);
   });
 
   it('monthly: kısa aylara denk gelmeyen seçim (<=28) etkilenmez', () => {
     const s: Recurrence = { freq: 'monthly', monthDay: 15 };
     expect(isScheduledOn(s, '2026-02-15')).toBe(true);
-    expect(isScheduledOn(s, '2026-02-28')).toBe(false); // son gün kuralı devreye girmez
+    expect(isScheduledOn(s, '2026-02-28')).toBe(false); // the last-day rule doesn't kick in
   });
 
   it('monthly: monthDay yoksa hiçbir gün planlı değildir', () => {
@@ -133,12 +135,12 @@ describe('isScheduledOn', () => {
 
   it('interval çapadan itibaren her N günde bir planlıdır (çapadan öncesi değil)', () => {
     const s: Recurrence = { freq: 'interval', every: 3, anchor: '2026-07-01' };
-    expect(isScheduledOn(s, '2026-07-01')).toBe(true); // çapa günü
+    expect(isScheduledOn(s, '2026-07-01')).toBe(true); // anchor day
     expect(isScheduledOn(s, '2026-07-04')).toBe(true);
     expect(isScheduledOn(s, '2026-07-07')).toBe(true);
     expect(isScheduledOn(s, '2026-07-02')).toBe(false);
     expect(isScheduledOn(s, '2026-07-03')).toBe(false);
-    expect(isScheduledOn(s, '2026-06-28')).toBe(false); // çapadan önce
+    expect(isScheduledOn(s, '2026-06-28')).toBe(false); // before the anchor
   });
 
   it('interval çapa/adım eksikse güvenli tarafa düşer: her gün', () => {
@@ -178,9 +180,9 @@ describe('diffDays / weekStartOf', () => {
   });
 
   it('weekStartOf günün pazartesisini verir (Pazar da aynı haftaya aittir)', () => {
-    expect(weekStartOf('2026-07-15')).toBe('2026-07-13'); // Çarşamba → Pazartesi
-    expect(weekStartOf('2026-07-13')).toBe('2026-07-13'); // Pazartesi → kendisi
-    expect(weekStartOf('2026-07-19')).toBe('2026-07-13'); // Pazar → önceki Pazartesi
+    expect(weekStartOf('2026-07-15')).toBe('2026-07-13'); // Wednesday → Monday
+    expect(weekStartOf('2026-07-13')).toBe('2026-07-13'); // Monday → itself
+    expect(weekStartOf('2026-07-19')).toBe('2026-07-13'); // Sunday → the preceding Monday
   });
 });
 
@@ -207,7 +209,7 @@ describe('isWithinHabitDates', () => {
 });
 
 describe('nextTaskOccurrence', () => {
-  // 2026-07-15 Çarşamba, 2026-07-16 Perşembe, 2026-07-17 Cuma (getDay: Çar=3).
+  // 2026-07-15 Wednesday, 2026-07-16 Thursday, 2026-07-17 Friday (getDay: Wed=3).
   const daily: Recurrence = { freq: 'daily' };
 
   it('günlük: bugün vadeli görev bir sonraki güne (yarına) sarılır', () => {
@@ -215,7 +217,7 @@ describe('nextTaskOccurrence', () => {
   });
 
   it('günlük: gecikmiş görev geçmişe değil, bugünden sonraki güne sarılır', () => {
-    // Vade 3 gün önce ama bugün 15'i → sonraki = 16 (geçmiş üretilmez).
+    // Due 3 days ago but today is the 15th → next = 16 (a past date is never produced).
     expect(nextTaskOccurrence(daily, '2026-07-12', '2026-07-15')).toBe('2026-07-16');
   });
 
@@ -226,8 +228,8 @@ describe('nextTaskOccurrence', () => {
   });
 
   it('haftalık: bir sonraki seçili güne atlar (Pzt·Cum kuralında Çarşamba→Cuma)', () => {
-    const weekly: Recurrence = { freq: 'weekly', weekdays: [1, 5] }; // Pzt, Cum
-    // Bugün Çarşamba (15) → sonraki seçili gün Cuma (17).
+    const weekly: Recurrence = { freq: 'weekly', weekdays: [1, 5] }; // Mon, Fri
+    // Today is Wednesday (15) → the next selected day is Friday (17).
     expect(nextTaskOccurrence(weekly, '2026-07-15', '2026-07-15')).toBe('2026-07-17');
   });
 
@@ -236,7 +238,7 @@ describe('nextTaskOccurrence', () => {
   });
 
   it('erken tamamlanan (vadesi gelecekte) görev kendi gününden sonrasına geçer', () => {
-    // Vade 20'si, bugün 15'i → base 20, günlük sonraki = 21.
+    // Due on the 20th, today is the 15th → base is 20, daily next = 21.
     expect(nextTaskOccurrence(daily, '2026-07-20', '2026-07-15')).toBe('2026-07-21');
   });
 
@@ -249,8 +251,8 @@ describe('nextTaskOccurrence', () => {
     expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 15 }, '2026-07-15', '2026-07-15')).toBe(
       '2026-08-15'
     );
-    // Eskiden 31 çekmeyen aylar tamamen atlanıyordu (31 Ağu → 31 Eki, Eylül yok
-    // sayılıyordu). Artık kısa ay son gününe kırpılır: 31 Ağu → 30 Eyl.
+    // Months without a 31st used to be skipped entirely (Aug 31 → Oct 31,
+    // September was ignored). Now it's clamped to the short month's last day: Aug 31 → Sep 30.
     expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 31 }, '2026-08-31', '2026-08-31')).toBe(
       '2026-09-30'
     );
@@ -264,11 +266,11 @@ describe('nextTaskOccurrence', () => {
 });
 
 describe('scheduleLabel', () => {
-  // Fonksiyon dile bağımlı metin barındırmıyor; etiket seti çağırandan gelir
-  // (bkz. buildScheduleLabels — burada sade bir sahte set kullanılır).
+  // The function holds no language-dependent text; the label set comes from
+  // the caller (see buildScheduleLabels — a plain fake set is used here).
   const LABELS: ScheduleLabels = {
     everyDay: 'Her gün',
-    dayNames: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'], // 0=Pazar...6=Cumartesi
+    dayNames: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'], // 0=Sunday...6=Saturday
     everyNDays: (n) => `${n} günde bir`,
     timesPerWeek: (n) => `Haftada ${n} kez`,
     monthDay: (d) => `Her ayın ${d}. günü`,
@@ -283,7 +285,7 @@ describe('scheduleLabel', () => {
 
   it('weekly seçili günleri Pazartesi başlangıçlı sırayla listeler', () => {
     expect(scheduleLabel({ freq: 'weekly', weekdays: [1, 3, 5] }, LABELS)).toBe('Pzt·Çar·Cum');
-    // Görüntü sırası Pzt..Paz olduğundan Pazar (0) en sona düşer.
+    // Since the display order is Mon..Sun, Sunday (0) falls last.
     expect(scheduleLabel({ freq: 'weekly', weekdays: [0, 1] }, LABELS)).toBe('Pzt·Paz');
   });
 
@@ -296,7 +298,7 @@ describe('scheduleLabel', () => {
     expect(scheduleLabel({ freq: 'weekly', timesPerWeek: 3 }, LABELS)).toBe('Haftada 3 kez');
     expect(scheduleLabel({ freq: 'interval', every: 3, anchor: '2026-07-01' }, LABELS)).toBe('3 günde bir');
     expect(scheduleLabel({ freq: 'monthly', monthDay: 15 }, LABELS)).toBe('Her ayın 15. günü');
-    // Tarihler sıralanır: 01-01, 07-15 → "01.01, 15.07".
+    // Dates are sorted: 01-01, 07-15 → "01.01, 15.07".
     expect(scheduleLabel({ freq: 'yearly', dates: ['07-15', '01-01'] }, LABELS)).toBe('Her yıl: 01.01, 15.07');
   });
 });

@@ -1,8 +1,8 @@
-// Tema (açık/koyu) context'i. Kullanıcı tercihi: 'light' | 'dark' | 'system'
-// (AsyncStorage'da saklanır). 'system' seçiliyse telefon teması (useColorScheme)
-// izlenir. Ekranlar/bileşenler useTheme() ile aktif paleti + ortak stilleri alır.
-// ThemeProvider ağacın EN DIŞINDA durur ki her yüzey (yükleme ekranı, modallar,
-// durum çubuğu) temaya uysun.
+// Theme (light/dark) context. User preference: 'light' | 'dark' | 'system'
+// (stored in AsyncStorage). When 'system' is selected, the phone's theme
+// (useColorScheme) is followed. Screens/components get the active palette +
+// shared styles via useTheme(). ThemeProvider sits at the VERY OUTSIDE of the
+// tree so every surface (loading screen, modals, status bar) follows the theme.
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
@@ -19,8 +19,8 @@ import {
 } from '@/ui/theme';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
-// Koyu temanın stili: 'warm' = sıcak mürekkep (varsayılan), 'black' = tam siyah
-// (AMOLED). Yalnız koyu tema aktifken görünür bir fark yaratır.
+// Dark theme style: 'warm' = warm ink (default), 'black' = full black (AMOLED).
+// Only makes a visible difference while dark theme is active.
 export type DarkStyle = 'warm' | 'black';
 const MODE_KEY = 'theme:mode';
 const ACCENT_KEY = 'theme:accent';
@@ -29,12 +29,12 @@ const DARK_STYLE_KEY = 'theme:darkStyle';
 interface ThemeApi {
   colors: Colors;
   shared: ReturnType<typeof makeShared>;
-  scheme: 'light' | 'dark'; // gerçekte uygulanan tema
-  mode: ThemeMode;          // kullanıcı tercihi
+  scheme: 'light' | 'dark'; // the theme actually applied
+  mode: ThemeMode;          // user preference
   setMode: (m: ThemeMode) => void;
-  accent: AccentKey;        // vurgu (marka) rengi tercihi
+  accent: AccentKey;        // accent (brand) color preference
   setAccent: (a: AccentKey) => void;
-  darkStyle: DarkStyle;     // koyu temanın stili (sıcak / tam siyah)
+  darkStyle: DarkStyle;     // dark theme's style (warm / full black)
   setDarkStyle: (s: DarkStyle) => void;
 }
 
@@ -52,7 +52,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [accent, setAccentState] = useState<AccentKey>(DEFAULT_ACCENT);
   const [darkStyle, setDarkStyleState] = useState<DarkStyle>('warm');
 
-  // Kayıtlı tercihleri bir kez yükle.
+  // Load saved preferences once.
   useEffect(() => {
     AsyncStorage.getItem(MODE_KEY).then((v) => {
       if (v === 'light' || v === 'dark' || v === 'system') setModeState(v);
@@ -83,8 +83,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const scheme: 'light' | 'dark' =
     mode === 'system' ? (system === 'dark' ? 'dark' : 'light') : mode;
   const base = scheme === 'dark' ? (darkStyle === 'black' ? blackColors : darkColors) : lightColors;
-  // Vurgu rengi yalnızca primary/primarySoft'u geçersiz kılar; geri kalan tüm
-  // tonlar (zemin/metin/done/danger vb.) aktif açık/koyu temadan gelir.
+  // The accent color only overrides primary/primarySoft; all remaining tones
+  // (background/text/done/danger etc.) come from the active light/dark theme.
   const accentPalette = ACCENT_THEMES[accent][scheme];
   const colors: Colors = useMemo(
     () => ({ ...base, primary: accentPalette.primary, primarySoft: accentPalette.primarySoft }),

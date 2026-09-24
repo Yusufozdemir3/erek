@@ -1,24 +1,25 @@
-// Bildirim tercihleri — AsyncStorage'da kalıcı. getStoredLang (I18nProvider) ile
-// aynı desen: React dışı modüller (notifications.ts, her bildirim kurarken)
-// doğrudan okuyabilsin diye burada bir async getter tutulur; Profil ekranı ise
-// NotificationPrefsProvider ile reaktif erişir.
+// Notification preferences — persisted in AsyncStorage. Same pattern as
+// getStoredLang (I18nProvider): an async getter is kept here so non-React
+// modules (notifications.ts, whenever scheduling a notification) can read it
+// directly, while the Profile screen accesses it reactively via
+// NotificationPrefsProvider.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface NotificationPrefs {
-  enabled: boolean;          // ana anahtar — kapalıyken hiçbir bildirim kurulmaz
-  habitReminders: boolean;   // alışkanlık hatırlatmaları
-  taskReminders: boolean;    // görev hatırlatmaları
-  goalReminders: boolean;    // hedef "giriş yapmayı unutma" hatırlatmaları
-  timerDone: boolean;        // zamanlayıcı "süre doldu" bildirimi
-  sound: boolean;            // bildirim SESİ (Android'de ses'li kanala yönlendirir)
-  vibration: boolean;        // bildirim TİTREŞİMİ (ses'ten AYRI; bkz. notifications kanal mimarisi)
-  customSoundUri: string | null;  // cihazın zil sesi seçicisinden alınan content:// URI; null = sistem varsayılanı
-  customSoundName: string | null; // seçilen sesin görünen adı (RingtoneManager'dan; alınamazsa null)
+  enabled: boolean;          // master switch — no notification is scheduled while off
+  habitReminders: boolean;   // habit reminders
+  taskReminders: boolean;    // task reminders
+  goalReminders: boolean;    // goal "don't forget to log" reminders
+  timerDone: boolean;        // timer "time's up" notification
+  sound: boolean;            // notification SOUND (routes to the sound channel on Android)
+  vibration: boolean;        // notification VIBRATION (SEPARATE from sound; see notifications channel architecture)
+  customSoundUri: string | null;  // content:// URI from the device's ringtone picker; null = system default
+  customSoundName: string | null; // display name of the chosen sound (from RingtoneManager; null if unavailable)
 }
 
-// Yalnız boolean tercihler — customSoundUri/customSoundName ayrı anahtarlarda
-// (string) tutulur, aşağıdaki '1'/'0' döngüsüne KARIŞTIRILMAZ.
+// Boolean preferences only — customSoundUri/customSoundName are kept under
+// separate (string) keys and are NOT mixed into the '1'/'0' loop below.
 export type BoolPrefKey = Exclude<keyof NotificationPrefs, 'customSoundUri' | 'customSoundName'>;
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -46,15 +47,16 @@ const KEYS: Record<BoolPrefKey, string> = {
 const CUSTOM_SOUND_URI_KEY = 'notif:customSoundUri';
 const CUSTOM_SOUND_NAME_KEY = 'notif:customSoundName';
 
-// React dışı modüller için: kayıtlı tüm tercihleri okur (yoksa varsayılan: hepsi açık).
-// GERİYE UYUM: 'vibration' eskiden yoktu — 'sound' hem sesi hem titreşimi birlikte
-// yönetiyordu. 'notif:vibration' hiç yazılmamışsa eski 'notif:sound' değerini miras
-// alır: böylece combined'ı KAPATMIŞ kullanıcıda titreşim de kapalı gelir (ikisini
-// birden istemiyordu), açık bırakmışta ikisi de açık.
-// TEK multiGet: eskiden döngü içinde `await getItem` vardı, yani her çağrı 9
-// SIRALI depolama gidiş-dönüşü demekti. Bu fonksiyon her bildirim kurulumunda
-// (varlık başına) çağrıldığından açılıştaki toplu yeniden programlamada yüzlerce
-// gereksiz okuma birikiyordu.
+// For non-React modules: reads all stored preferences (defaults to all-on if
+// unset). BACKWARD COMPATIBILITY: 'vibration' didn't used to exist — 'sound'
+// used to control both sound and vibration together. If 'notif:vibration' was
+// never written, it inherits the old 'notif:sound' value: so a user who had
+// turned the combined switch OFF also gets vibration off (they didn't want
+// either), while a user who left it on gets both on.
+// SINGLE multiGet: this used to be an `await getItem` inside a loop, i.e. 9
+// SEQUENTIAL storage round-trips per call. Since this function is called on
+// every notification scheduling (per entity), the startup batch reschedule
+// was piling up hundreds of unnecessary reads.
 export async function getNotificationPrefs(): Promise<NotificationPrefs> {
   const boolKeys = Object.keys(KEYS) as BoolPrefKey[];
   const pairs = await AsyncStorage.multiGet([
@@ -69,7 +71,7 @@ export async function getNotificationPrefs(): Promise<NotificationPrefs> {
     const v = stored.get(KEYS[key]);
     if (v != null) out[key] = v === '1';
   }
-  // eski combined davranışını miras al (bkz. fonksiyon başlığı)
+  // inherit the old combined behavior (see function header)
   if (stored.get(KEYS.vibration) == null) out.vibration = out.sound;
   out.customSoundUri = stored.get(CUSTOM_SOUND_URI_KEY) ?? null;
   out.customSoundName = stored.get(CUSTOM_SOUND_NAME_KEY) ?? null;
@@ -80,9 +82,9 @@ export async function setNotificationPref(key: BoolPrefKey, value: boolean): Pro
   await AsyncStorage.setItem(KEYS[key], value ? '1' : '0');
 }
 
-// Özel bildirim sesini kalıcılaştırır. uri=null -> sistem varsayılanına dönüş
-// (ikisi de temizlenir). Kanalın kendisi notifications.ts'te URI'den türetilen
-// deterministik bir id ile oluşturulur (bkz. customNotificationChannel.ts).
+// Persists the custom notification sound. uri=null -> revert to system default
+// (both are cleared). The channel itself is created in notifications.ts with a
+// deterministic id derived from the URI (see customNotificationChannel.ts).
 export async function setCustomSound(uri: string | null, name: string | null): Promise<void> {
   if (uri == null) {
     await AsyncStorage.multiRemove([CUSTOM_SOUND_URI_KEY, CUSTOM_SOUND_NAME_KEY]);
@@ -93,10 +95,11 @@ export async function setCustomSound(uri: string | null, name: string | null): P
   else await AsyncStorage.removeItem(CUSTOM_SOUND_NAME_KEY);
 }
 
-// iOS bildirim içeriğine ses alanını ekler (iOS'ta kanal yoktur; ses bildirim
-// başınadır). ANDROID'de ses+titreşim (özel ses dahil) KANAL üzerinden belirlenir
-// (bkz. notifications.ts channelIdFor) — bu yüzden burada yalnız sesi taşıyoruz;
-// iOS'ta özel ses seçimi YOK (pickNotificationSound Android dışında hemen iptal döner).
+// Adds the sound field to iOS notification content (iOS has no channels; sound
+// is per-notification). On ANDROID, sound+vibration (including custom sound)
+// is determined via the CHANNEL (see notifications.ts channelIdFor) — so we
+// only carry sound here; there's NO custom sound selection on iOS
+// (pickNotificationSound immediately returns canceled outside Android).
 export function soundContent(prefs: NotificationPrefs): { sound: boolean } {
   return { sound: prefs.sound };
 }

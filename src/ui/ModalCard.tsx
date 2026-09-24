@@ -1,7 +1,7 @@
-// Ekranı ortalayan modal kabuğu — hem ekleme (AddSheet) hem düzenleme panelleri
-// (görev/alışkanlık/hedef) bunu paylaşır: alttan açılan sheet yerine ortada kart.
-// Uzun içerik ScrollView'da kaydırılır; klavye açılınca kart yukarı kalkar.
-// Arka fona dokununca kapanır. Mimari kural: yalnız görsel kabuk, veri yok.
+// Centered modal shell — shared by both the add sheet (AddSheet) and the edit
+// panels (task/habit/goal): a centered card instead of a bottom sheet.
+// Long content scrolls inside a ScrollView; the card rises when the keyboard opens.
+// Tapping the backdrop dismisses it. Architectural rule: visual shell only, no data.
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
@@ -21,7 +21,7 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   children: ReactNode;
-  // İçerik ScrollView içinde mi sarılsın (uzun formlar için). Varsayılan: evet.
+  // Whether to wrap the content in a ScrollView (for long forms). Default: yes.
   scroll?: boolean;
 }
 
@@ -29,10 +29,11 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
   const { colors } = useTheme();
   const { t } = useI18n();
 
-  // Android'de donanım geri tuşu doğrudan Modal'ın onRequestClose'unu tetikler.
-  // Klavye açıkken bu, kullanıcının "geri tuşuyla klavyeyi kapat" refleksiyle
-  // tüm formu kapatıp yazdığını kaybettiriyordu. Klavye açıkken geri tuşu artık
-  // önce yalnızca klavyeyi kapatır; modal ancak klavye kapalıyken kapanır.
+  // On Android, the hardware back button triggers the Modal's onRequestClose
+  // directly. With the keyboard open, this used to close the whole form when the
+  // user's reflex was "use the back button to dismiss the keyboard," losing what
+  // they'd typed. Now, while the keyboard is open, back only dismisses it first;
+  // the modal only closes once the keyboard is already closed.
   const keyboardVisible = useRef(false);
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () => {
@@ -70,7 +71,7 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
             accessibilityLabel={t('common.close')}
           />
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {/* Narin tutamaç çizgisi — premium his için üstte ortalanmış */}
+            {/* Slim handle bar — centered at the top for a premium feel */}
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
             {scroll ? (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -103,13 +104,13 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    // Yükseltilmiş kart hissi: yumuşak gölge + Android elevation.
+    // Elevated card feel: soft shadow + Android elevation.
     shadowColor: '#000',
     shadowOpacity: 0.28,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
     elevation: 16,
-    // Uzun form taşınca içerik kaydırılsın.
+    // Let content scroll when a long form overflows.
     maxHeight: '100%',
   },
   handle: {

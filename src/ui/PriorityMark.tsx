@@ -1,7 +1,7 @@
-// Görev önceliği göstergesi — renk + BİÇİM birlikte kodlar (salt renk, renk
-// körü kullanıcı için ayırt edilemezdi): düşük = daire, orta = kare,
-// yüksek = elmas (45° dönük kare). Ekran okuyucu için öncelik adı etikette.
-// "Bugün" ve "Görevler" kartlarının sağındaki eski düz renkli noktanın yerini alır.
+// Task priority indicator — encodes color + SHAPE together (color alone would be
+// indistinguishable for a color-blind user): low = circle, medium = square,
+// high = diamond (a square rotated 45°). Priority name is in the a11y label.
+// Replaces the old plain colored dot on the right of "Today" and "Tasks" cards.
 
 import { StyleSheet, View } from 'react-native';
 import type { Priority } from '@/db';
@@ -24,7 +24,7 @@ export function PriorityMark({ priority }: { priority: Priority }) {
 }
 
 const styles = StyleSheet.create({
-  base: { width: 10, height: 10, borderRadius: 2 }, // orta: kare
-  low: { borderRadius: 5 },                          // düşük: daire
-  high: { transform: [{ rotate: '45deg' }] },        // yüksek: elmas
+  base: { width: 10, height: 10, borderRadius: 2 }, // medium: square
+  low: { borderRadius: 5 },                          // low: circle
+  high: { transform: [{ rotate: '45deg' }] },        // high: diamond
 });

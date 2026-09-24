@@ -1,8 +1,8 @@
-// TaskForm'un stil fabrikası — src/ui/TaskForm.tsx'ten AYRILDI (denetim
-// bulgusu H1: form bileşenleri 600+ satırdı ve bunun büyük kısmı stil sözlüğüydü).
+// Style factory for TaskForm — SPLIT OUT from src/ui/TaskForm.tsx (review
+// finding H1: form components were 600+ lines, most of it a style dictionary).
 //
-// DESEN (bkz. ThemeProvider): modül seviyesinde StyleSheet.create YOK — tema
-// değişince yeniden üretilebilsin diye fabrika render sırasında çağrılır.
+// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the factory
+// is called at render time so it can be regenerated when the theme changes.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -47,9 +47,9 @@ export const makeTaskFormStyles = (c: Colors) =>
     clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
     clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
     hint: { fontSize: 12, color: c.danger, marginTop: -6, marginBottom: 10 },
-    // Tekrar seçici (HabitForm sıklık seçicisiyle aynı görünüm). 6 seçenek
-    // olduğundan satır sarar; flexBasis üçlü sıraya oturtur.
-    // Kapalıyken seçili kipi gösteren özet düğmesi; tekrar varsa vurgu renginde.
+    // Recurrence picker (same look as HabitForm's frequency picker). Wraps
+    // across lines since there are 6 options; flexBasis fits them in rows of three.
+    // Summary button showing the selected mode while collapsed; in the accent color when recurring.
     repeatBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -75,7 +75,7 @@ export const makeTaskFormStyles = (c: Colors) =>
       borderColor: c.border,
       backgroundColor: c.inputBg,
     },
-    // "Kaç günde bir? / Ayın günü" satırı.
+    // "Every how many days? / Day of the month" row.
     freqNumRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
     freqNumLabel: { fontSize: 14, fontWeight: '600', color: c.text },
     freqNumInput: {
@@ -91,7 +91,7 @@ export const makeTaskFormStyles = (c: Colors) =>
       borderColor: c.border,
     },
     freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
-    // Yıllık tarihlere seçilen "12 Şub ×" çipleri.
+    // "Feb 12 ×" chips for selected yearly dates.
     yearDateChip: { width: undefined, paddingHorizontal: 10, backgroundColor: c.primarySoft, borderColor: c.primary },
     yearDateChipText: { fontSize: 13, fontWeight: '700', color: c.primary },
     freqBtnSel: { borderColor: c.primary, backgroundColor: c.primarySoft, borderWidth: 2 },
@@ -125,7 +125,7 @@ export const makeTaskFormStyles = (c: Colors) =>
     },
     saveBtnText: { fontSize: 15, fontWeight: '700', color: c.onAccent },
 
-    // — Taslak alt görev editörü (oluşturma) —
+    // — Draft subtask editor (creation) —
     subRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, gap: 10 },
     subBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.faint },
     subTitle: { flex: 1, fontSize: 14, color: c.text },

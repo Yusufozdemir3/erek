@@ -1,5 +1,5 @@
-// DB'ye dokunan testler için ortak kurulum: her test temiz bir in-memory
-// veritabanı + güncel şema (gerçek migration'lar) ile başlar.
+// Shared setup for tests that touch the DB: every test starts with a clean
+// in-memory database + the current schema (real migrations).
 
 import { __resetAllDatabases } from './mocks/expo-sqlite';
 import { runMigrations } from '../db/database';

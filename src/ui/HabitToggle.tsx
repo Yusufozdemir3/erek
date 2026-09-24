@@ -1,8 +1,8 @@
-// Alışkanlık işaret dairesi — hem "Bugün" hem "Alışkanlıklar" ekranında kullanılır.
-// Alışkanlığın rengiyle çevrelenmiş bir daire: tamamlandıysa dolu + ✓, değilse
-// soluk zeminli + ikon (varsa, alışkanlığın rengiyle tintlenmiş çizgi glif — bkz.
-// habitIcons.tsx). İkon/renk yoksa varsayılan renge düşer.
-// Salt görsel; dokunma davranışı çağıran ekranda (Pressable) tanımlanır.
+// Habit indicator circle — used on both the "Today" and "Habits" screens.
+// A circle outlined with the habit's color: filled + ✓ when completed, otherwise
+// a faint background + icon (if any, a line glyph tinted with the habit's color —
+// see habitIcons.tsx). Falls back to the default color if no icon/color is set.
+// Purely visual; tap behavior is defined by the calling screen (Pressable).
 
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';

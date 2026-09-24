@@ -1,6 +1,6 @@
-// reassignLocalIds testleri — "birleştir" akışının güvenlik ağı.
-// Kırık bir referans burada yakalanmazsa sahada teşhisi çok zor hatalara döner
-// (ör. alışkanlığın logları görünmez olur, hatırlatma yetim kalır).
+// reassignLocalIds tests — the safety net for the "merge" flow.
+// A broken reference not caught here turns into bugs that are very hard to
+// diagnose in the field (e.g. a habit's logs become invisible, a reminder is orphaned).
 
 import { getDb } from '@/db/database';
 import { goalRepo } from '@/db/repositories/goalRepo';
@@ -13,7 +13,7 @@ import { userRepo } from '@/db/repositories/userRepo';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { reassignLocalIds } from '../localIds';
 
-// Tüm tablolarda veri + her tür referans üreten tam bir kurulum.
+// A full setup that produces data + every kind of reference across all tables.
 function seed() {
   const user = userRepo.getOrCreateLocal();
   const goal = goalRepo.create({
@@ -28,7 +28,7 @@ function seed() {
   const task = taskRepo.create({ user_id: user.id, title: 'Görev' });
   subtaskRepo.create(task.id, 'Alt görev');
   goalMilestoneRepo.create(goal.id, 'İlk 50', { amount: 50 });
-  goalRepo.addProgress(goal.id, 10); // goal_entries satırı üretir
+  goalRepo.addProgress(goal.id, 10); // produces a goal_entries row
   reminderRepo.create('habit', habit.id, '08:30');
   reminderRepo.create('task', task.id, '09:00');
   reminderRepo.create('goal', goal.id, '10:00');
@@ -98,7 +98,7 @@ describe('reassignLocalIds — referans bütünlüğü', () => {
 
     expect(newHabitId).toBeTruthy();
     expect(habitRepo.allLogs(newHabitId)).toHaveLength(logsBefore);
-    expect(habitRepo.allLogs(habit.id)).toHaveLength(0); // eski id artık yok
+    expect(habitRepo.allLogs(habit.id)).toHaveLength(0); // the old id no longer exists
   });
 
   it('görevin alt görevleri bağlı kalır', () => {
@@ -113,14 +113,14 @@ describe('reassignLocalIds — referans bütünlüğü', () => {
     reassignLocalIds();
     const goalId = getDb().getFirstSync<{ id: string }>(`SELECT id FROM goals`)!.id;
     expect(goalMilestoneRepo.listByGoal(goalId)).toHaveLength(1);
-    // Girdiler: elle eklenen +10 VE hedefe bağlı alışkanlığın iki tamamlanması
+    // Entries: the manually added +10 AND the two completions of the linked habit
     // (habitRepo.bumpGoalIfLinked -> addProgress -> goalEntryRepo.create).
     expect(count('goal_entries')).toBe(3);
     const orphan = getDb().getAllSync<{ goal_id: string }>(
       `SELECT goal_id FROM goal_entries WHERE goal_id <> ?`,
       [goalId]
     );
-    expect(orphan).toEqual([]); // hepsi yeni hedef id'sine bağlı
+    expect(orphan).toEqual([]); // all point to the new goal id
   });
 
   it('alışkanlığın hedef bağlantısı (goal_id) korunur', () => {

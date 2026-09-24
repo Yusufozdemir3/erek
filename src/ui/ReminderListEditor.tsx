@@ -1,8 +1,8 @@
-// Çoklu hatırlatma saati düzenleyici — HabitForm/TaskForm/GoalForm'un üçü de
-// kullanır (tekil remind_at yerine "HH:MM" listesi; bkz. reminderRepo).
-// Saf UI: liste + saat seçici burada, kalıcılık (reminderRepo.replaceAll) ve
-// bildirim programlaması çağırana ait (diğer form alanlarıyla aynı desen —
-// onSubmit'e kadar hiçbir şey yazılmaz).
+// Multi reminder-time editor — used by all three of HabitForm/TaskForm/GoalForm
+// (a list of "HH:MM" instead of a single remind_at; see reminderRepo).
+// Pure UI: the list + time picker live here, while persistence
+// (reminderRepo.replaceAll) and notification scheduling belong to the caller
+// (same pattern as the other form fields — nothing is written until onSubmit).
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,7 +14,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
 
 interface Props {
-  label: string; // "Hatırlatma saati" | "Hatırlatma" | "Günlük hatırlatma" — çağıran verir
+  label: string; // "Reminder time" | "Reminder" | "Daily reminder" — provided by the caller
   times: string[];
   onChange: (times: string[]) => void;
 }
@@ -25,8 +25,9 @@ export function ReminderListEditor({ label, times, onChange }: Props) {
   const styles = makeStyles(colors);
   const [showPicker, setShowPicker] = useState(false);
 
-  // Tavan hem burada hem düğmenin gizlenmesinde: seçici zaten açıkken liste
-  // dolarsa (ya da ileride başka bir çağıran gelirse) sessizce aşılmasın.
+  // The cap is enforced both here and by hiding the button: if the list fills up
+  // while the picker is already open (or a future caller adds one), it should
+  // never be silently exceeded.
   const atMax = times.length >= MAX_REMINDERS_PER_ENTITY;
 
   const addTime = (picked: Date) => {

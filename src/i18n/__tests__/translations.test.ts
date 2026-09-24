@@ -1,8 +1,9 @@
-// Çeviri sözlüğü bütünlüğü. Sözlük 2026-07-23'te dile göre üç dosyaya BÖLÜNDÜ
-// (tr.ts / en.ts / de.ts) — bu bölünme yeni bir risk doğurdu: artık bir dile
-// anahtar eklerken diğerlerini unutmak KOLAY ve sonuç sessiz (eksik anahtar
-// Türkçe'ye düşer, yani İngilizce arayüzde birden Türkçe metin belirir).
-// Bu testler o kaymayı test seviyesinde yakalar.
+// Translation dictionary integrity. On 2026-07-23 the dictionary was SPLIT
+// into three per-language files (tr.ts / en.ts / de.ts) — that split
+// introduced a new risk: it's now EASY to add a key to one language and
+// forget the others, and the failure is silent (a missing key falls back to
+// Turkish, so Turkish text can suddenly show up in the English UI).
+// These tests catch that drift at the test level.
 
 import { LANG_LABELS, SUPPORTED_LANGS, translate, translations } from '../translations';
 
@@ -60,9 +61,10 @@ describe('translate', () => {
   });
 });
 
-// Türkçe sayıdan sonra çoğul eki almadığı için tek şablon Türkçe'de doğru
-// görünüyordu; İngilizce "1 days left", Almanca "Noch 1 Tage" / "Vor 1 Tagen"
-// çıkıyordu. `n === 1` iken `<anahtar>_one` denenerek çözüldü (bkz. translate).
+// Turkish doesn't take a plural suffix after a number, so a single template
+// looked correct in Turkish; but it produced English "1 days left" and
+// German "Noch 1 Tage" / "Vor 1 Tagen". Solved by trying `<key>_one` when
+// `n === 1` (see translate).
 describe('translate — tekil biçim (çoğullaştırma)', () => {
   it('n=1 iken _one biçimini kullanır', () => {
     expect(translate('en', 'date.daysLeft', { n: 1 })).toBe('1 day left');
@@ -80,7 +82,7 @@ describe('translate — tekil biçim (çoğullaştırma)', () => {
   });
 
   it('_one karşılığı olmayan anahtar n=1 ile de çalışır (çoğula düşer)', () => {
-    // 'schedule.timesPerWeek' tekil biçim gerektirmez; sessizce base kullanılmalı.
+    // 'schedule.timesPerWeek' doesn't need a singular form; it should silently fall back to the base key.
     expect(translate('en', 'schedule.timesPerWeek', { n: 1 })).toBe('1× a week');
   });
 
@@ -88,9 +90,9 @@ describe('translate — tekil biçim (çoğullaştırma)', () => {
     expect(translate('en', 'date.daysLeft')).toBe('{n} days left');
   });
 
-  // Tekil biçimi olan her anahtarın ÜÇ dilde de karşılığı olmalı — yoksa
-  // İngilizce arayüzde birden Türkçe bir cümle belirir (sözlük bütünlüğü
-  // testlerinin aynı gerekçesi, çoğul kardeşler için).
+  // Every key that has a singular form must have one in ALL THREE languages —
+  // otherwise a Turkish sentence can suddenly show up in the English UI (the
+  // same rationale as the dictionary-integrity tests, applied to plural siblings).
   it('her _one anahtarının çoğul karşılığı da var', () => {
     for (const lang of SUPPORTED_LANGS) {
       const orphans = Object.keys(translations[lang])

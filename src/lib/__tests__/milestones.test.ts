@@ -1,4 +1,4 @@
-// Streak kilometre taşı rozetlerinin seçim mantığı.
+// The selection logic for streak milestone badges.
 
 import { highestMilestone } from '../milestones';
 

@@ -1,13 +1,13 @@
-// HabitTimer bileşen testi — özellikle bu oturumda eklenen "süreyi el ile (dakika)
-// girme" davranışı. TimerProvider (canlı sayaç motoru) mock'lanır; yalnız
-// bileşenin kendi giriş/etkinlik mantığı sınanır.
+// HabitTimer component test — especially the "enter duration manually (in
+// minutes)" behavior added in this session. TimerProvider (the live timer
+// engine) is mocked; only the component's own input/interaction logic is tested.
 
 import { fireEvent } from '@testing-library/react-native';
 import { HabitTimer } from '@/ui/HabitTimer';
 import { renderUI } from '@/test/renderWithProviders';
 
-// useTimer'ı kontrol edilebilir bir dublörle değiştir. 'mock' önekli olduğundan
-// jest.mock fabrikasında kullanılabilir (hoisting kısıtı).
+// Replace useTimer with a controllable double. Since it's prefixed with
+// 'mock', it can be used inside the jest.mock factory (hoisting restriction).
 const mockTimer = {
   isRunning: jest.fn<boolean, [string]>(() => false),
   liveSeconds: jest.fn<number | null, [string]>(() => null),
@@ -37,11 +37,11 @@ describe('HabitTimer', () => {
     const { getByText, getByDisplayValue } = await renderUI(
       <HabitTimer habitId="h1" amount={0} target={900} editable onSet={onSet} />
     );
-    fireEvent.press(getByText('0:00 / 15:00')); // düzenleme moduna geç (mevcut '0' dk)
+    fireEvent.press(getByText('0:00 / 15:00')); // switch to edit mode (currently '0' min)
     const input = getByDisplayValue('0');
     fireEvent.changeText(input, '15');
     fireEvent(input, 'submitEditing');
-    expect(onSet).toHaveBeenCalledWith(900); // 15 dk = 900 sn
+    expect(onSet).toHaveBeenCalledWith(900); // 15 min = 900 sec
   });
 
   it('sayaç çalışırken el ile giriş açılmaz', async () => {

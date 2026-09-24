@@ -1,21 +1,24 @@
-// react-native-google-mobile-ads'in pinlediği play-services-ads (24.6.0) Kotlin
-// 2.1 metadata'sıyla derlenmiş; bu projenin Kotlin Gradle eklentisi ise 1.9.25
-// (RN 0.76'nın varsayılanı) ve yalnız 2.0.0'a kadar metadata okuyabiliyor.
-// Sonuç: `:react-native-google-mobile-ads:compileReleaseKotlin` "Incompatible
-// classes were found in dependencies" ile patlıyordu — reklam paketinin JS
-// sürümünü değiştirmek işe yaramaz, native SDK sürümü her sürümde aynı pinli.
+// The play-services-ads version (24.6.0) pinned by react-native-google-mobile-ads
+// is compiled with Kotlin 2.1 metadata; this project's Kotlin Gradle plugin is
+// 1.9.25 (RN 0.76's default), which can only read metadata up to 2.0.0.
+// Result: `:react-native-google-mobile-ads:compileReleaseKotlin` blew up with
+// "Incompatible classes were found in dependencies" — changing the ads
+// package's JS version doesn't help, the native SDK version is pinned the
+// same way in every release.
 //
-// ÇÖZÜM: play-services-ads'i Kotlin 1.9 ile uyumlu bilinen bir sürüme (23.6.0)
-// zorluyoruz — yalnızca BU bağımlılığın sürümünü sabitliyoruz, projenin Kotlin
-// sürümüne DOKUNMUYORUZ (o çok daha büyük/riskli bir değişiklik olurdu).
+// FIX: force play-services-ads to a version known to be Kotlin 1.9-compatible
+// (23.6.0) — only THIS dependency's version is pinned, the project's Kotlin
+// version is NOT touched (that would be a much bigger, riskier change).
 //
-// NOT: android/ klasörü git'te izlenmiyor (prebuild üretir). Bu yüzden düzeltme
-// elle build.gradle'a değil BURAYA yazıldı — her prebuild'de otomatik uygulanır
-// (withForceDarkDisabled ile aynı gerekçe).
+// NOTE: the android/ folder isn't tracked in git (prebuild generates it). So
+// this fix was written HERE rather than by hand-editing build.gradle — it's
+// applied automatically on every prebuild (same rationale as
+// withForceDarkDisabled).
 //
-// İLERİDE: react-native-google-mobile-ads yeni bir sürümde Kotlin 1.9 uyumlu bir
-// play-services-ads sürümünü kendi pinlerse (ya da proje Kotlin 2.x'e geçerse)
-// bu plugin kaldırılabilir — o zaman zorlanan sürüm gereksiz bir tavan olur.
+// FUTURE: if a newer react-native-google-mobile-ads release pins a
+// Kotlin-1.9-compatible play-services-ads version on its own (or the project
+// moves to Kotlin 2.x), this plugin can be removed — the forced version
+// would then just be an unnecessary ceiling.
 
 const { withProjectBuildGradle } = require('@expo/config-plugins');
 
