@@ -634,6 +634,56 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
     habitRepo.toggleLog(habit.id, TODAY, true);
     expect(currentValue(goal.id)).toBe(0);
   });
+
+  // GoalJustCompleted: the return value the UI uses to ask "unlink this habit
+  // now that the goal is done?" (see src/ui/goalCompletionPrompt.ts). Must fire
+  // ONLY on the false->true transition — not on every contribution afterward,
+  // and not when there's nothing to complete (unlinked, or not yet at target).
+  describe('GoalJustCompleted dönüş değeri', () => {
+    it('bağlı olmayan alışkanlıkta null döner', () => {
+      const habit = createHabit(); // no goal_id
+      expect(habitRepo.toggleLog(habit.id, TODAY, true)).toBeNull();
+    });
+
+    it('hedef henüz dolmadıysa null döner', () => {
+      const goal = createNumericGoal(5);
+      const habit = createHabit({ goal_id: goal.id });
+      expect(habitRepo.toggleLog(habit.id, TODAY, true)).toBeNull(); // 1/5
+    });
+
+    it('hedefi tam dolduran katkıda goal id + title döner', () => {
+      const goal = createNumericGoal(1);
+      const habit = createHabit({ goal_id: goal.id });
+      const result = habitRepo.toggleLog(habit.id, TODAY, true); // 1/1 — dolu
+      expect(result).toEqual({ goalId: goal.id, goalTitle: goal.title });
+    });
+
+    it('hedef zaten doluyken gelen ek katkılarda tekrar tekrar dönmez', () => {
+      const goal = createNumericGoal(1);
+      const h1 = createHabit({ goal_id: goal.id });
+      const h2 = createHabit({ goal_id: goal.id });
+
+      expect(habitRepo.toggleLog(h1.id, TODAY, true)).not.toBeNull(); // 0→1: ilk kez dolduruyor
+      expect(habitRepo.toggleLog(h2.id, TODAY, true)).toBeNull(); // zaten doluydu, 1→2
+    });
+
+    it('geri alma (unchecked) null döner', () => {
+      const goal = createNumericGoal(1);
+      const habit = createHabit({ goal_id: goal.id });
+      habitRepo.toggleLog(habit.id, TODAY, true);
+      expect(habitRepo.toggleLog(habit.id, TODAY, false)).toBeNull();
+    });
+
+    it('nicel alışkanlıkta (per_completion) hedefi dolduran eşiğe basınca döner', () => {
+      const goal = createNumericGoal(1);
+      const habit = createHabit({ goal_id: goal.id, target_amount: 8, unit: 'bardak' });
+
+      expect(habitRepo.incrementAmount(habit.id, TODAY, 3, 8)).toBeNull(); // 3/8
+      const result = habitRepo.incrementAmount(habit.id, TODAY, 5, 8); // 8/8 — complete (0→1)
+      expect(result).toEqual({ goalId: goal.id, goalTitle: goal.title });
+      expect(habitRepo.incrementAmount(habit.id, TODAY, 2, 8)).toBeNull(); // still complete
+    });
+  });
 });
 
 describe('hedefe bağlı ilerleme — "amount" katkı modu', () => {
@@ -733,5 +783,21 @@ describe('hedefe bağlı ilerleme — "amount" katkı modu', () => {
     expect(currentValue(goal.id)).toBe(0);
     habitRepo.incrementAmount(habit.id, TODAY, 3, 5); // 5/5 complete → +1
     expect(currentValue(goal.id)).toBe(1);
+  });
+
+  it('"amount" modunda da hedefi dolduran katkı GoalJustCompleted döner, sonraki artışlar dönmez', () => {
+    const goal = createNumericGoal(1, 'litre');
+    const habit = createHabit({
+      goal_id: goal.id,
+      target_amount: 5,
+      unit: 'bardak',
+      goal_contribution: 'amount',
+      goal_factor: 0.25,
+    });
+
+    expect(habitRepo.incrementAmount(habit.id, TODAY, 2, 5)).toBeNull(); // 0.5 litre — not yet
+    const result = habitRepo.incrementAmount(habit.id, TODAY, 2, 5); // 1.0 litre — dolu
+    expect(result).toEqual({ goalId: goal.id, goalTitle: goal.title });
+    expect(habitRepo.incrementAmount(habit.id, TODAY, 1, 5)).toBeNull(); // already past target
   });
 });

@@ -14,6 +14,7 @@ import { highestMilestone } from '@/lib/milestones';
 import { cancelHabitReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
+import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
 import { EmptyState } from '@/ui/EmptyState';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
@@ -38,20 +39,23 @@ export default function HabitsScreen() {
 
   const toggleToday = (h: HabitListItem) => {
     const completing = !h.completedToday;
-    habitRepo.toggleLog(h.id, today, completing);
+    const goalDone = habitRepo.toggleLog(h.id, today, completing);
     completing ? notifySuccess() : tapLight();
     reload();
+    promptUnlinkGoalIfCompleted(h.id, goalDone, t, reload);
   };
 
   const adjustToday = (h: HabitListItem, delta: number) => {
-    habitRepo.incrementAmount(h.id, today, delta, h.target);
+    const goalDone = habitRepo.incrementAmount(h.id, today, delta, h.target);
     tapLight();
     reload();
+    promptUnlinkGoalIfCompleted(h.id, goalDone, t, reload);
   };
 
   const setTodayAmount = (h: HabitListItem, value: number) => {
-    habitRepo.incrementAmount(h.id, today, value - h.amount, h.target);
+    const goalDone = habitRepo.incrementAmount(h.id, today, value - h.amount, h.target);
     reload();
+    promptUnlinkGoalIfCompleted(h.id, goalDone, t, reload);
   };
 
   const openEdit = (h: HabitListItem) => {

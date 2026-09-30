@@ -42,6 +42,28 @@ import type { GoalContribution, Habit, HabitKind, HabitLog, Recurrence } from '.
 import { goalRepo } from './goalRepo';
 import { reminderRepo } from './reminderRepo';
 
+// Returned by toggleLog/incrementAmount when a contribution just pushed the
+// linked goal from not-completed to completed — the caller (UI) uses this to
+// offer unlinking the habit (see app/(tabs)/index.tsx and habits.tsx). null
+// otherwise (not linked, no completion transition, or the goal was already done).
+export interface GoalJustCompleted {
+  goalId: string;
+  goalTitle: string;
+}
+
+// Applies a progress delta to a goal and reports whether THIS delta is what
+// tipped it over into "completed" (false -> true only; already-done goals
+// report null so the prompt doesn't fire on every subsequent contribution).
+function applyGoalDelta(goalId: string, delta: number): GoalJustCompleted | null {
+  if (delta === 0) return null;
+  const before = goalRepo.getById(goalId);
+  const wasDone = before != null && goalRepo.isCompleted(before);
+  goalRepo.addProgress(goalId, delta);
+  if (wasDone) return null;
+  const after = goalRepo.getById(goalId);
+  return after && goalRepo.isCompleted(after) ? { goalId: after.id, goalTitle: after.title } : null;
+}
+
 function rowToHabit(row: any): Habit {
   return {
     id: row.id,
@@ -172,7 +194,7 @@ export const habitRepo = {
 
   // Marks a habit completed/not-completed for a given day.
   // Thanks to UNIQUE(habit_id, log_date), the same day never gets two records - if one exists, it's updated.
-  toggleLog(habitId: string, date: string, completed: boolean): void {
+  toggleLog(habitId: string, date: string, completed: boolean): GoalJustCompleted | null {
     const db = getDb();
     const now = nowIso();
     const existing = db.getFirstSync<any>(
@@ -191,7 +213,7 @@ export const habitRepo = {
         [newId(), habitId, date, completed ? 1 : 0, now]
       );
     }
-    this.bumpGoalIfLinked(habitId, wasCompleted, completed);
+    return this.bumpGoalIfLinked(habitId, wasCompleted, completed);
   },
 
   // If a habit is linked to a goal in "per_completion" mode (the default),
@@ -212,11 +234,11 @@ export const habitRepo = {
     wasCompleted: boolean,
     isCompleted: boolean,
     habit?: Habit | null
-  ): void {
-    if (wasCompleted === isCompleted) return;
+  ): GoalJustCompleted | null {
+    if (wasCompleted === isCompleted) return null;
     const h = habit !== undefined ? habit : this.getById(habitId);
-    if (!h?.goal_id) return;
-    goalRepo.addProgress(h.goal_id, isCompleted ? 1 : -1);
+    if (!h?.goal_id) return null;
+    return applyGoalDelta(h.goal_id, isCompleted ? 1 : -1);
   },
 
   // Whether a habit was completed on a given day.
@@ -292,7 +314,7 @@ export const habitRepo = {
   // Numeric habit: changes that day's amount by a delta (never goes below 0).
   // completed becomes 1 once the target is reached (amount >= target). If
   // target is null/0, completed always stays 0. A single record is kept via UNIQUE(habit_id, log_date).
-  incrementAmount(habitId: string, date: string, delta: number, target: number | null): void {
+  incrementAmount(habitId: string, date: string, delta: number, target: number | null): GoalJustCompleted | null {
     const db = getDb();
     const now = nowIso();
     const existing = db.getFirstSync<any>(
@@ -326,10 +348,9 @@ export const habitRepo = {
     // completion STATE transition applies +1/-1.
     const habit = this.getById(habitId);
     if (habit?.goal_id && habit.goal_contribution === 'amount') {
-      if (appliedDelta !== 0) goalRepo.addProgress(habit.goal_id, appliedDelta * habit.goal_factor);
-    } else {
-      this.bumpGoalIfLinked(habitId, wasCompleted, completed === 1, habit);
+      return applyGoalDelta(habit.goal_id, appliedDelta * habit.goal_factor);
     }
+    return this.bumpGoalIfLinked(habitId, wasCompleted, completed === 1, habit);
   },
 
   // STREAK COMPUTATION: counts backward from today over the habit's SCHEDULED

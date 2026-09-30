@@ -20,6 +20,8 @@ import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
+import { WeekStrip } from '@/ui/WeekStrip';
+import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
 import { DailySummary } from '@/ui/DailySummary';
 import { EmptyState } from '@/ui/EmptyState';
 import { HabitToggle } from '@/ui/HabitToggle';
@@ -105,29 +107,32 @@ export default function TodayScreen() {
   const toggleHabit = (h: HabitView) => {
     if (isFuture) return;
     const completing = !h.completed;
-    habitRepo.toggleLog(h.id, selectedDate, completing);
+    const goalDone = habitRepo.toggleLog(h.id, selectedDate, completing);
     completing ? notifySuccess() : tapLight();
     reload();
     // Checking off uses a local reload (dataVersion doesn't bump); also refresh
     // the home screen widget. refreshWidget always computes for TODAY (not selectedDate).
     refreshWidget(user.id);
+    promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
   };
 
   const adjustHabit = (h: HabitView, delta: number) => {
     if (isFuture) return;
-    habitRepo.incrementAmount(h.id, selectedDate, delta, h.target);
+    const goalDone = habitRepo.incrementAmount(h.id, selectedDate, delta, h.target);
     tapLight();
     reload();
     refreshWidget(user.id);
+    promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
   };
 
   // An absolute value typed on the keyboard — handed off to the existing
   // delta-based incrementAmount by computing the difference; no separate repo function needed.
   const setHabitAmount = (h: HabitView, value: number) => {
     if (isFuture) return;
-    habitRepo.incrementAmount(h.id, selectedDate, value - h.amount, h.target);
+    const goalDone = habitRepo.incrementAmount(h.id, selectedDate, value - h.amount, h.target);
     reload();
     refreshWidget(user.id);
+    promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
   };
 
   const onPickDate = (picked: Date) => setSelectedDate(toYmd(picked));
@@ -153,6 +158,14 @@ export default function TodayScreen() {
             {fullDateLabel(selectedDate, lang)}
           </Text>
         </Pressable>
+
+        <WeekStrip
+          selectedDate={selectedDate}
+          today={today}
+          lang={lang}
+          colors={colors}
+          onSelect={setSelectedDate}
+        />
 
         <DatePickerModal
           visible={showPicker}

@@ -15,6 +15,7 @@ import { reminderRepo } from './repositories/reminderRepo';
 
 export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews, reminderRepo };
 export type { MilestoneView } from './repositories/goalMilestoneRepo';
+export type { GoalJustCompleted } from './repositories/habitRepo';
 export type {
   User,
   Task,
