@@ -29,6 +29,10 @@ export interface AuthUser {
   id: string;
   email: string | null;
   isAnonymous: boolean;
+  // The Google account's profile photo (from the ID token's "picture" claim,
+  // mirrored by Supabase into user_metadata). null for email/password accounts
+  // and anonymous sessions.
+  avatarUrl: string | null;
 }
 
 // Returns the uid sync should use; null if there ISN'T one (sync stays disabled).
@@ -74,7 +78,12 @@ export async function currentAuthUser(): Promise<AuthUser | null> {
   const { data } = await supabase.auth.getSession();
   const u = data.session?.user;
   if (!u) return null;
-  return { id: u.id, email: u.email ?? null, isAnonymous: u.is_anonymous ?? false };
+  return {
+    id: u.id,
+    email: u.email ?? null,
+    isAnonymous: u.is_anonymous ?? false,
+    avatarUrl: u.user_metadata?.avatar_url ?? u.user_metadata?.picture ?? null,
+  };
 }
 
 // Creates a NEW account with email + password.

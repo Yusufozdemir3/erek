@@ -49,8 +49,17 @@ export default function ProfileScreen() {
   // screen ever opening (startup + foregrounding). Keeping a local copy would
   // have hidden the result of those automatic runs — that was exactly the bug
   // that got fixed.
-  const { user, refreshUser, hideCompleted, setHideCompleted, syncResult, lastSyncAt, syncing, syncNow } =
-    useAppData();
+  const {
+    user,
+    refreshUser,
+    refreshAuthUser,
+    hideCompleted,
+    setHideCompleted,
+    syncResult,
+    lastSyncAt,
+    syncing,
+    syncNow,
+  } = useAppData();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -101,6 +110,7 @@ export default function ProfileScreen() {
       await signOutAccount();
       userRepo.downgradeToLocal(user.id);
       refreshUser();
+      refreshAuthUser();
       setAuthUser(null);
       setSignedIn(false);
       promptEraseLocalData();
@@ -132,6 +142,7 @@ export default function ProfileScreen() {
       await deleteAccountAndData();
       userRepo.downgradeToLocal(user.id);
       refreshUser();
+      refreshAuthUser();
       setAuthUser(null);
       setSignedIn(false);
       Alert.alert(t('profile.deletedTitle'), t('profile.deletedBody'), [

@@ -54,7 +54,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
   // The first pass after sign-in also goes through AppData's syncNow (runSync is
   // NOT called directly): keeps the "last backup" timestamp and sync error state
   // consolidated in one place.
-  const { user, refreshUser, syncNow } = useAppData();
+  const { user, refreshUser, refreshAuthUser, syncNow } = useAppData();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -147,6 +147,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
       }
 
       refreshUser();
+      refreshAuthUser();
       onDone();
     } catch (e) {
       // Backing out isn't an error: showing red error text to a user who just

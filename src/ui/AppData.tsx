@@ -8,7 +8,8 @@ import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-nativ
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initDataLayer, userRepo } from '@/db';
 import type { User } from '@/db';
-import type { SyncResult } from '@/sync';
+import type { AuthUser, SyncResult } from '@/sync';
+import { currentAuthUser } from '@/sync';
 import { todayDate } from '@/lib/helpers';
 import { migrateToMultiReminderIfNeeded, rescheduleEverything } from '@/lib/notifications';
 import { maybeShowInterstitial } from '@/lib/ads';
@@ -23,6 +24,13 @@ interface AppData {
   // Re-reads the local user from the DB (e.g. so the email updates after
   // linking an account). Refreshes the user reference held by screens.
   refreshUser: () => void;
+  // The signed-in Google/Supabase account (null = no session, e.g. never
+  // signed in or fully signed out). Kept here (not just in Profile's own
+  // state) because the header's ProfileButton shows the account's avatar on
+  // every screen. Callers re-fetch this after sign-in/out/delete so the
+  // avatar updates without waiting for Profile to regain focus.
+  authUser: AuthUser | null;
+  refreshAuthUser: () => void;
   // Increments whenever data is added from somewhere off-screen (e.g. the
   // central ＋ menu). List hooks put this in their reload dependency, so the
   // visible list refreshes even without a focus change (closing a modal on
@@ -82,6 +90,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const [user, setUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayDate());
@@ -174,6 +183,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         // here used to be DEAD CODE: runSync never throws, it returns the
         // error; so a persistent sync failure never reached anywhere.
         syncUser(user.id);
+        refreshAuthUser();
         // Cold launch — one of the TWO triggers for the full-screen interstitial
         // ad (the other is AppState 'active' below — see the file-header
         // comment in lib/ads.ts). It enforces its own frequency cap, no extra
@@ -185,6 +195,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(() => {
     setUser(userRepo.getOrCreateLocal());
+  }, []);
+
+  const refreshAuthUser = useCallback(() => {
+    currentAuthUser().then(setAuthUser);
   }, []);
 
   // Refresh the home-screen widget once the user is ready and on every data
@@ -240,6 +254,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         ? {
             user,
             refreshUser,
+            authUser,
+            refreshAuthUser,
             dataVersion,
             notifyDataChanged,
             selectedDate,
@@ -255,6 +271,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     [
       user,
       refreshUser,
+      authUser,
+      refreshAuthUser,
       dataVersion,
       notifyDataChanged,
       selectedDate,
