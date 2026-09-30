@@ -1,10 +1,12 @@
 // Habit indicator circle — used on both the "Today" and "Habits" screens.
-// A circle outlined with the habit's color: filled + ✓ when completed, otherwise
-// a faint background + icon (if any, a line glyph tinted with the habit's color —
-// see habitIcons.tsx). Falls back to the default color if no icon/color is set.
+// A circle outlined with the habit's color, always showing the habit's icon
+// (or the default glyph); completion is shown by filling the circle solid
+// (icon color flips to onAccent for contrast) rather than swapping the icon
+// out for a checkmark — the title's strikethrough is what signals "done".
+// Falls back to the default color if no icon/color is set.
 // Purely visual; tap behavior is defined by the calling screen (Pressable).
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
 import { HabitIconGlyph } from '@/ui/habitIcons';
 import { DEFAULT_HABIT_COLOR } from './theme';
@@ -25,11 +27,7 @@ export function HabitToggle({ icon, color, completed }: Props) {
         { borderColor: c, backgroundColor: completed ? c : c + '22' },
       ]}
     >
-      {completed ? (
-        <Text style={[styles.check, { color: colors.onAccent }]}>✓</Text>
-      ) : (
-        <HabitIconGlyph id={icon} size={15} color={c} />
-      )}
+      <HabitIconGlyph id={icon} size={15} color={completed ? colors.onAccent : c} />
     </View>
   );
 }
@@ -44,5 +42,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  check: { fontSize: 15, fontWeight: '800' },
 });
