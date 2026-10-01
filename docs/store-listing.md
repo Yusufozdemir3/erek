@@ -34,9 +34,9 @@ Alternatif (arama görünürlüğü için, sınırın altında kalıyor):
 ### Kısa açıklama (80)
 
 ```
-Alışkanlık, görev ve hedeflerini takip et. Çevrimdışı çalışır, reklam yok.
+Alışkanlık, görev ve hedeflerini takip et. Çevrimdışı çalışır, verin satılmaz.
 ```
-(74)
+(78)
 
 ### Tam açıklama (4000)
 
@@ -88,6 +88,10 @@ Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma saati ekleyebi
 
 Bugünkü görev ve alışkanlıklarını ana ekranından görürsün; dokunarak uygulamayı açarsın.
 
+▸ REKLAMLAR
+
+Uygulamayı ön plana getirdiğinde ara sıra (en fazla 30 dakikada bir) tam ekran bir reklam görebilirsin. İlk açılışta ya da bir alışkanlık/görev tamamladığında asla reklam gösterilmez.
+
 ▸ GÖRÜNÜM
 
 Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi seçimi. Uygulama Türkçe, İngilizce ve Almanca kullanılabilir.
@@ -96,9 +100,9 @@ Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi
 
 Erek çevrimdışı çalışır ve hesap gerektirmez. İstersen Google hesabınla giriş yapıp verilerini buluta yedekleyebilir ve cihazların arasında eşitleyebilirsin — bu tamamen isteğe bağlıdır. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin.
 
-Reklam yok. Takip yok. Analitik yok. Verilerin satılmaz.
+Takip yok. Analitik yok. Verilerin satılmaz.
 ```
-(2701)
+(2887)
 
 ---
 
@@ -107,9 +111,9 @@ Reklam yok. Takip yok. Analitik yok. Verilerin satılmaz.
 ### Short description (80)
 
 ```
-Track habits, tasks and goals. Works offline, no ads, no tracking.
+Track habits, tasks and goals. Works offline. Your data is never sold.
 ```
-(66)
+(70)
 
 ### Full description (4000)
 
@@ -161,6 +165,10 @@ Add as many reminder times as you like to habits, tasks and goals. Notifications
 
 See today's tasks and habits on your home screen, and tap to open the app.
 
+▸ ADS
+
+When you bring the app to the foreground, you may occasionally see a full-screen ad (no more than once every 30 minutes). No ad is ever shown on first launch or right after completing a habit or task.
+
 ▸ APPEARANCE
 
 Light, dark and system themes. Two different dark tones, plus an accent colour of your choice. Available in Turkish, English and German.
@@ -169,9 +177,9 @@ Light, dark and system themes. Two different dark tones, plus an accent colour o
 
 Erek works offline and requires no account. If you want to, you can sign in with your Google account to back up your data and sync it across your devices — this is entirely optional. You can permanently delete your account and all of your cloud data from within the app.
 
-No ads. No tracking. No analytics. Your data is never sold.
+No tracking. No analytics. Your data is never sold.
 ```
-(2706)
+(2907)
 
 ---
 
@@ -180,9 +188,9 @@ No ads. No tracking. No analytics. Your data is never sold.
 ### Kurzbeschreibung (80)
 
 ```
-Gewohnheiten, Aufgaben und Ziele verfolgen. Offline, ohne Werbung.
+Gewohnheiten, Aufgaben und Ziele verfolgen. Offline, ohne Tracking.
 ```
-(66)
+(67)
 
 ### Vollständige Beschreibung (4000)
 
@@ -234,6 +242,10 @@ Füge Gewohnheiten, Aufgaben und Zielen beliebig viele Erinnerungszeiten hinzu. 
 
 Sieh die heutigen Aufgaben und Gewohnheiten auf deinem Startbildschirm und tippe, um die App zu öffnen.
 
+▸ WERBUNG
+
+Wenn du die App in den Vordergrund holst, siehst du gelegentlich (höchstens alle 30 Minuten) eine Vollbildanzeige. Beim ersten Start und direkt nach dem Erledigen einer Gewohnheit oder Aufgabe wird nie Werbung gezeigt.
+
 ▸ DARSTELLUNG
 
 Helles, dunkles und Systemdesign. Zwei dunkle Töne sowie eine frei wählbare Akzentfarbe. Verfügbar auf Türkisch, Englisch und Deutsch.
@@ -242,9 +254,9 @@ Helles, dunkles und Systemdesign. Zwei dunkle Töne sowie eine frei wählbare Ak
 
 Erek funktioniert offline und benötigt kein Konto. Wenn du möchtest, kannst du dich mit deinem Google-Konto anmelden, um deine Daten zu sichern und zwischen Geräten zu synchronisieren — das ist völlig freiwillig. Dein Konto und alle Cloud-Daten kannst du in der App dauerhaft löschen.
 
-Keine Werbung. Kein Tracking. Keine Analyse. Deine Daten werden nicht verkauft.
+Kein Tracking. Keine Analyse. Deine Daten werden nicht verkauft.
 ```
-(3021)
+(3237)
 
 ---
 
@@ -295,9 +307,10 @@ Bu bölüm gizlilik politikasıyla (docs/privacy-policy.md) BİREBİR tutarlı o
 | E-posta adresi | Evet | Yalnız kullanıcı giriş yaparsa | Hesap yönetimi | Hayır | Hayır (isteğe bağlı) |
 | Kullanıcı kimliği | Evet | Yalnız giriş yaparsa | Hesap yönetimi | Hayır | Hayır |
 | Uygulama içeriği (alışkanlık/görev/hedef kayıtları) | Evet | Yalnız giriş yaparsa | Uygulama işlevi (yedekleme + eşitleme) | Hayır | Hayır |
+| Reklam kimliği (Advertising ID) | Evet | Her zaman (AdMob) | Reklam gösterimi ve ölçümü | Evet — Google/AdMob ile | Hayır |
 
 **Toplanmayanlar:** konum, kişiler, fotoğraf/video, ses kaydı, sağlık verisi,
-finansal bilgi, reklam kimliği, kullanım analitiği, çökme günlükleri.
+finansal bilgi, kullanım analitiği, çökme günlükleri.
 
 **Diğer beyanlar:**
 - Veriler aktarım sırasında şifrelenir (HTTPS): **Evet**
