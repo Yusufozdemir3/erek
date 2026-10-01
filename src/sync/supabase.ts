@@ -72,8 +72,18 @@ function isValidHttpUrl(value: string | undefined): boolean {
 // Is sync configured? (.env filled in and the URL valid)
 export const isSyncConfigured = isValidHttpUrl(url) && Boolean(anonKey);
 
+// CLIENT CAPABILITY HEADER — sent with every request. The tasks SELECT policy
+// only returns tasks shared WITH the caller when this header is present (see
+// public.client_supports_sharing() in supabase/schema.sql). Older app versions
+// don't send it, so they never see a friend's task: they'd store it as their
+// OWN, and the first edit/check-off would be rejected by RLS and permanently
+// wedge that device's sync. It is a compatibility gate, not a security one —
+// sending it only reveals rows the caller is already entitled to.
+export const SHARING_CAPABILITY_HEADER = 'x-erek-sharing';
+
 export const supabase: SupabaseClient | null = isSyncConfigured
   ? createClient(url!, anonKey!, {
+      global: { headers: { [SHARING_CAPABILITY_HEADER]: '1' } },
       auth: {
         storage: secureSessionStorage, // encrypted session persistence (see LargeSecureStore above)
         autoRefreshToken: true,

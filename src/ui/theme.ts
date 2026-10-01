@@ -270,6 +270,27 @@ export function deadlineLabel(
 }
 
 // Generates shared styles for the active palette. Components: const { shared } = useTheme().
+// A percentage label in the reader's convention: Turkish puts the sign first
+// ("%53"), English after ("53%"), German after a (non-breaking) space ("53 %").
+// It used to be the Turkish form everywhere, so English/German screens read "%100".
+export function percentLabel(n: number, lang: Lang = 'tr'): string {
+  if (lang === 'tr') return `%${n}`;
+  if (lang === 'de') return `${n} %`;
+  return `${n}%`;
+}
+
+// Switch colors that stay visible in every theme. The thumb was always the
+// CARD color: fine on the accent track (ON, ≥5:1), but in the OFF state it was
+// a card-colored circle on a border-colored track (~1.3:1) — invisible, so you
+// couldn't tell an off switch was there at all. OFF now uses the faint gray
+// (≥3.3:1 in all three palettes; see contrast.ui.test.tsx).
+export function switchColors(c: Colors, value: boolean) {
+  return {
+    trackColor: { false: c.border, true: c.primary },
+    thumbColor: value ? c.card : c.faint,
+  };
+}
+
 export function makeShared(c: Colors) {
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: c.bg },

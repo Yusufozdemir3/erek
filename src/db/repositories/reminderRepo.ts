@@ -1,9 +1,8 @@
 // Reminder repository — a habit/task/goal can have ZERO OR MORE reminder
 // times (see models.Reminder). UI never sees SQL.
-// replaceAll: replaces the existing records with the "HH:MM" list coming from
-// the form — the simplest consistent approach (instead of individually
-// adding/removing like subtask/milestone, the form submits its WHOLE list at
-// once; see HabitForm/TaskForm/GoalForm).
+// replaceAll: syncs the existing records to the "HH:MM" list coming from the
+// form (the form submits its WHOLE list at once instead of adding/removing
+// one by one like subtask/milestone; see HabitForm/TaskForm/GoalForm).
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -73,11 +72,34 @@ export const reminderRepo = {
     );
   },
 
-  // Replaces the existing records with the time list coming from the form
-  // (old ones are deleted, new ones are created) — a reminder's own identity
-  // doesn't matter, only its time.
+  // Makes the entity's active reminders match the time list coming from the
+  // form. DIFF-BASED: a time that stays keeps its row (and id) untouched; only
+  // removed times are deleted and only new times are created.
+  // It used to delete everything and re-create the whole list on EVERY save —
+  // even when the user never touched the reminders. That churned a tombstone +
+  // a new row per time on each edit, and the delete/re-create pair (same time,
+  // same millisecond, different id) is exactly what made the other device drop
+  // the reminder during sync (see syncEngine.applyRemoteRow).
   replaceAll(entityType: ReminderEntityType, entityId: string, times: string[]): Reminder[] {
-    this.deleteAllForEntity(entityType, entityId);
-    return [...times].sort().map((time) => this.create(entityType, entityId, time));
+    const db = getDb();
+    const wanted = new Set(times);
+    const existing = this.listByEntity(entityType, entityId);
+    const kept = new Set<string>();
+    const now = nowIso();
+    for (const r of existing) {
+      if (wanted.has(r.time) && !kept.has(r.time)) {
+        kept.add(r.time);
+      } else {
+        // Removed from the form (or a duplicate of a time already kept).
+        db.runSync(
+          `UPDATE reminders SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+          [now, now, r.id]
+        );
+      }
+    }
+    for (const time of wanted) {
+      if (!kept.has(time)) this.create(entityType, entityId, time);
+    }
+    return [...this.listByEntity(entityType, entityId)];
   },
 };

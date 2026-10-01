@@ -86,6 +86,12 @@ export function useAppData(): AppData {
   return value;
 }
 
+// For components that also render outside the provider (e.g. shared form
+// fields under test): null instead of throwing.
+export function useOptionalAppData(): AppData | null {
+  return useContext(AppDataContext);
+}
+
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
   const { t } = useI18n();
@@ -131,6 +137,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         const at = r.at ?? Date.now();
         setLastSyncAt(at);
         AsyncStorage.setItem(LAST_SYNC_KEY, String(at)).catch(() => {});
+        // The pull changed local rows (another device's edits landed): the OS
+        // notification queue, the open screen and the widget were all built
+        // from the old state. Without this, a habit deleted on another device
+        // kept its daily reminder here, and one added there wasn't scheduled
+        // until the next cold start / day rollover. Pull is idempotent, so
+        // pulled > 0 only when something really changed.
+        if ((r.pulled ?? 0) > 0) {
+          rescheduleEverything(userId);
+          setDataVersion((v) => v + 1);
+        }
       }
       return r;
     } finally {

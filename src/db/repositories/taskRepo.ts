@@ -5,7 +5,7 @@
 import { getDb } from '../database';
 import { reminderRepo } from './reminderRepo';
 import { subtaskRepo } from './subtaskRepo';
-import { newId, nextTaskOccurrence, nowIso, parseJson, toJson, todayDate } from '../../lib/helpers';
+import { chunk, newId, nextTaskOccurrence, nowIso, parseJson, toJson, todayDate } from '../../lib/helpers';
 import type { Task, Priority, Recurrence } from '../../types/models';
 
 // Priority sort key: high->low.
@@ -38,6 +38,8 @@ function rowToTask(row: any): Task {
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
+    shared_with_id: row.shared_with_id ?? null,
+    shared_owner_uid: row.shared_owner_uid ?? null,
   };
 }
 
@@ -49,6 +51,23 @@ export interface CreateTaskInput {
   priority?: Priority;
   recurrence?: Recurrence | null;
   remind_at?: string | null;
+  shared_with_id?: string | null; // friend's cloud uid; ignored for recurring tasks
+}
+
+// A task shared WITH me is someone else's row: it must never be edited
+// locally (it'd be queued for push, the server would reject it and sync would
+// wedge). Mutations on it are dropped with a warning — not thrown, because an
+// uncaught throw in a UI handler closes the app in a release build.
+function isSharedWithMe(id: string): boolean {
+  const row = getDb().getFirstSync<{ shared_owner_uid: string | null }>(
+    `SELECT shared_owner_uid FROM tasks WHERE id = ?`,
+    [id]
+  );
+  if (row?.shared_owner_uid) {
+    console.warn('[taskRepo] Ignored a local edit to a task shared with this user:', id);
+    return true;
+  }
+  return false;
 }
 
 export const taskRepo = {
@@ -59,8 +78,8 @@ export const taskRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO tasks
-       (id, user_id, title, due_date, end_time, priority, recurrence, remind_at, completed_at, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0)`,
+       (id, user_id, title, due_date, end_time, priority, recurrence, remind_at, completed_at, updated_at, deleted_at, synced, shared_with_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0, ?)`,
       [
         id,
         input.user_id,
@@ -71,6 +90,8 @@ export const taskRepo = {
         toJson(input.recurrence ?? null),
         input.remind_at ?? null,
         now,
+        // Mirrors the server guard: recurring tasks can't be shared.
+        input.recurrence ? null : input.shared_with_id ?? null,
       ]
     );
     return this.getById(id)!;
@@ -196,6 +217,7 @@ export const taskRepo = {
   // (nextTaskOccurrence returns null), it falls back to normal completion.
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
+    if (isSharedWithMe(id)) return;
     if (completed) {
       const task = this.getById(id);
       if (task && task.recurrence) {
@@ -220,6 +242,7 @@ export const taskRepo = {
   // Updates task fields.
   update(id: string, fields: Partial<CreateTaskInput>): void {
     const db = getDb();
+    if (isSharedWithMe(id)) return;
     const sets: string[] = [];
     const vals: any[] = [];
     if (fields.title !== undefined) { sets.push('title = ?'); vals.push(fields.title); }
@@ -228,6 +251,9 @@ export const taskRepo = {
     if (fields.priority !== undefined) { sets.push('priority = ?'); vals.push(fields.priority); }
     if (fields.recurrence !== undefined) { sets.push('recurrence = ?'); vals.push(toJson(fields.recurrence)); }
     if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
+    // Recurring tasks can't be shared (mirrors the server guard).
+    if (fields.recurrence) { sets.push('shared_with_id = NULL'); }
+    else if (fields.shared_with_id !== undefined) { sets.push('shared_with_id = ?'); vals.push(fields.shared_with_id); }
     if (sets.length === 0) return;
     sets.push('updated_at = ?'); vals.push(nowIso());
     sets.push('synced = 0');
@@ -239,11 +265,59 @@ export const taskRepo = {
   // The task's reminder rows are cleaned up here too (rationale: habitRepo.softDelete).
   softDelete(id: string): void {
     const db = getDb();
+    if (isSharedWithMe(id)) return;
     const now = nowIso();
     db.runSync(
       `UPDATE tasks SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
       [now, now, id]
     );
     reminderRepo.deleteAllForEntity('task', id);
+  },
+
+  // Writes the server's answer to a check-off of a task shared WITH me
+  // (toggle_shared_task RPC). synced stays 1: this mirrors the cloud row, it
+  // isn't a local edit to push. Only ever touches shared-with-me rows.
+  applySharedCompletion(id: string, completedAt: string | null, updatedAt: string): void {
+    getDb().runSync(
+      `UPDATE tasks SET completed_at = ?, updated_at = ?, synced = 1
+       WHERE id = ? AND shared_owner_uid IS NOT NULL`,
+      [completedAt, updatedAt, id]
+    );
+  },
+
+  listSharedWithMeIds(): string[] {
+    return getDb()
+      .getAllSync<{ id: string }>(`SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL`)
+      .map((r) => r.id);
+  },
+
+  // Deletes tasks shared WITH me (all of them, or just `ids`). They're someone
+  // else's data: dropped when the share ends, on sign-out and on account
+  // switch (so they can't be re-pushed as a copy under a new account).
+  // No sync tombstone: these rows were never ours to push.
+  purgeSharedWithMe(ids?: string[]): number {
+    const db = getDb();
+    const targets = ids ?? this.listSharedWithMeIds();
+    for (const part of chunk(targets)) {
+      const ph = part.map(() => '?').join(', ');
+      db.runSync(`DELETE FROM subtasks WHERE task_id IN (${ph})`, part);
+      db.runSync(`DELETE FROM reminders WHERE entity_type = 'task' AND entity_id IN (${ph})`, part);
+      db.runSync(`DELETE FROM tasks WHERE shared_owner_uid IS NOT NULL AND id IN (${ph})`, part);
+    }
+    return targets.length;
+  },
+
+  // Whether any task is shared in either direction (drives the Today screen's
+  // freshness sync; zero cost for users who never share).
+  hasSharedTasks(userId: string): boolean {
+    const row = getDb().getFirstSync<{ n: number }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM tasks
+         WHERE user_id = ? AND deleted_at IS NULL
+           AND (shared_owner_uid IS NOT NULL OR shared_with_id IS NOT NULL)
+       ) AS n`,
+      [userId]
+    );
+    return (row?.n ?? 0) === 1;
   },
 };

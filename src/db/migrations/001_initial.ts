@@ -374,6 +374,31 @@ UPDATE goals SET value_baseline = current_value - COALESCE((
 UPDATE goals SET synced = 0;
 `;
 
+// Migration 020: shared tasks (friends/sharing, phase 3).
+//   shared_with_id   — SYNCED. The friend's raw cloud uid (NOT mapped to a
+//                      local id: the friend has no local identity on this device).
+//   shared_owner_uid — LOCAL-ONLY. NULL = my own task; set = someone else's task
+//                      shared with me. Such rows are never pushed (see
+//                      syncEngine TableCfg.pushWhere) and never edited locally.
+// No synced=0 reset: existing rows have no share, so there's nothing to send.
+export const migration020 = `
+ALTER TABLE tasks ADD COLUMN shared_with_id TEXT;
+ALTER TABLE tasks ADD COLUMN shared_owner_uid TEXT;
+CREATE INDEX IF NOT EXISTS idx_tasks_shared_owner ON tasks(shared_owner_uid) WHERE shared_owner_uid IS NOT NULL;
+`;
+
+// Migration 021: shared goals (friends/sharing, phase 4).
+//   goal_entries.added_by — SYNCED. The raw cloud uid of the FRIEND who added
+//   this entry to one of my goals shared with them (via the server-side
+//   add_shared_goal_entry RPC). NULL = added by me (the owner), which covers
+//   every existing row and every entry this device creates. Not mapped to a
+//   local id: the friend has no identity on this device (same as
+//   tasks.shared_with_id).
+// No synced=0 reset: existing rows are all NULL, same as the cloud default.
+export const migration021 = `
+ALTER TABLE goal_entries ADD COLUMN added_by TEXT;
+`;
+
 // Migration list - runs in order. A new schema change = a new element.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -395,4 +420,6 @@ export const migrations = [
   { version: 17, sql: migration017 },
   { version: 18, sql: migration018 },
   { version: 19, sql: migration019 },
+  { version: 20, sql: migration020 },
+  { version: 21, sql: migration021 },
 ];

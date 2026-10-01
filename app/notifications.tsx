@@ -30,7 +30,7 @@ import { pickNotificationSound } from '@/lib/ringtonePicker';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { type Colors } from '@/ui/theme';
+import { switchColors, type Colors } from '@/ui/theme';
 
 // Reminder type rows (all faded + disabled while the master switch is off).
 const TYPE_ROWS: { key: BoolPrefKey; labelKey: string }[] = [
@@ -100,8 +100,7 @@ export default function NotificationsScreen() {
           <Switch
             value={prefs.enabled}
             onValueChange={(v) => toggle('enabled', v)}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor={colors.card}
+            {...switchColors(colors, prefs.enabled)}
           />
         </View>
 
@@ -115,8 +114,7 @@ export default function NotificationsScreen() {
               value={prefs[key]}
               onValueChange={(v) => toggle(key, v)}
               disabled={off}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.card}
+              {...switchColors(colors, prefs[key])}
             />
           </View>
         ))}
@@ -132,8 +130,7 @@ export default function NotificationsScreen() {
             value={prefs.sound}
             onValueChange={(v) => toggle('sound', v)}
             disabled={off}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor={colors.card}
+            {...switchColors(colors, prefs.sound)}
           />
         </View>
         <View style={[styles.switchRow, styles.switchRowSpaced, off && styles.rowDisabled]}>
@@ -142,8 +139,7 @@ export default function NotificationsScreen() {
             value={prefs.vibration}
             onValueChange={(v) => toggle('vibration', v)}
             disabled={off}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor={colors.card}
+            {...switchColors(colors, prefs.vibration)}
           />
         </View>
         <Text style={styles.hint}>{t('notifications.soundVibrationHint')}</Text>

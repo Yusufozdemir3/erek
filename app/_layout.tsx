@@ -80,12 +80,15 @@ function ThemedStack() {
             could be reproduced again. */}
         <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
+        <Stack.Screen name="friends" options={{ headerShown: true, title: t('friends.title'), presentation: 'modal' }} />
         <Stack.Screen
           name="login"
           options={{ headerShown: true, title: t('login.title'), presentation: 'modal' }}
         />
         <Stack.Screen name="habit/[id]" />
+        <Stack.Screen name="shared-habit/[id]" />
         <Stack.Screen name="goal/[id]" />
+        <Stack.Screen name="shared-goal/[id]" />
       </Stack>
       {/* Onboarding shown once on first launch (manages its own flag). */}
       <OnboardingGate />

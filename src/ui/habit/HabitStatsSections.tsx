@@ -270,6 +270,7 @@ export function HabitDarkStatsCard({
                 color={color}
                 gridColor={themeColors.line}
                 labelColor={themeColors.faint}
+                lang={lang}
               />
             </View>
           )}
@@ -330,7 +331,9 @@ export function MonthCalendar({
                   done && { backgroundColor: color },
                 ]}
               >
-                <Text style={[styles.calDayText, done && styles.calDayTextOn]}>{dayNum}</Text>
+                <Text style={[styles.calDayText, done && styles.calDayTextOn, missed && styles.calDayTextMissed]}>
+                  {dayNum}
+                </Text>
               </View>
             );
           })}

@@ -28,11 +28,12 @@ import {
   type AuthUser,
 } from '@/sync';
 import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
+import { cancelAllReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { LANG_LABELS, SUPPORTED_LANGS } from '@/i18n/translations';
-import { ACCENT_ORDER, ACCENT_THEMES, dateTimeLabel, type Colors } from '@/ui/theme';
+import { ACCENT_ORDER, ACCENT_THEMES, dateTimeLabel, switchColors, type Colors } from '@/ui/theme';
 import { ACCOUNTS_ENABLED } from '@/config';
 
 const THEME_OPTIONS: { mode: ThemeMode; labelKey: string }[] = [
@@ -53,6 +54,7 @@ export default function ProfileScreen() {
     user,
     refreshUser,
     refreshAuthUser,
+    notifyDataChanged,
     hideCompleted,
     setHideCompleted,
     syncResult,
@@ -97,6 +99,10 @@ export default function ProfileScreen() {
         style: 'destructive',
         onPress: async () => {
           await clearLocalData();
+          // The erased habits/tasks/goals' triggers are still in the OS queue
+          // and would keep firing with their titles; nothing is left to schedule.
+          await cancelAllReminders();
+          notifyDataChanged();
           refreshUser();
           Alert.alert(t('profile.eraseDataDoneTitle'), t('profile.eraseDataDoneBody'));
         },
@@ -267,8 +273,7 @@ export default function ProfileScreen() {
           <Switch
             value={hideCompleted}
             onValueChange={setHideCompleted}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor={colors.card}
+            {...switchColors(colors, hideCompleted)}
           />
         </View>
         <Text style={styles.hint}>{t('profile.hideCompletedHint')}</Text>
@@ -283,8 +288,7 @@ export default function ProfileScreen() {
           <Switch
             value={haptics}
             onValueChange={toggleHaptics}
-            trackColor={{ false: colors.border, true: colors.primary }}
-            thumbColor={colors.card}
+            {...switchColors(colors, haptics)}
           />
         </View>
         <Text style={styles.hint}>{t('profile.hapticsHint')}</Text>

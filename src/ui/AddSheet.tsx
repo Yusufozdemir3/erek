@@ -19,6 +19,7 @@ import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
+import { useFriends } from '@/ui/sharedTaskUi';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { EntityIcon, type EntityType } from '@/ui/EntityIcon';
@@ -49,6 +50,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
   const styles = makeStyles(colors);
   const { user, notifyDataChanged, selectedDate } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
+  const friends = useFriends(visible);
 
   // Return to the requested step (default menu) on every open.
   useEffect(() => {
@@ -72,6 +74,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       due_date: values.due_date,
       end_time: values.end_time,
       recurrence: values.recurrence,
+      shared_with_id: values.shared_with_id,
     });
     // Create the draft subtasks in order, after the task itself is written.
     values.subtasks?.forEach((sub) => subtaskRepo.create(created.id, sub));
@@ -181,6 +184,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   submitLabel={t('common.add')}
                   autoFocusTitle
                   enableSubtaskDraft
+                  shareFriends={friends}
                   onSubmit={addTask}
                 />
               ) : (

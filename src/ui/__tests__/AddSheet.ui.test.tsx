@@ -26,6 +26,8 @@ jest.mock('@/ui/AppData', () => ({
     notifyDataChanged: mockNotifyDataChanged,
     selectedDate: '2026-01-15',
   }),
+  // Signed out: the task form's "share with a friend" section stays hidden.
+  useOptionalAppData: () => null,
 }));
 
 jest.mock('@/lib/notifications', () => ({

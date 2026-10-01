@@ -20,7 +20,7 @@ import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
-import { ProfileButton } from '@/ui/ProfileButton';
+import { HeaderActions } from '@/ui/HeaderActions';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -79,7 +79,7 @@ export default function HabitsScreen() {
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
         <View style={shared.headerRow}>
           <Text style={shared.greeting}>{t('tabs.habits')}</Text>
-          <ProfileButton />
+          <HeaderActions />
         </View>
         <Text style={shared.subtitle}>{t('screen.habitsSubtitle')}</Text>
 

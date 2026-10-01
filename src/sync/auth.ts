@@ -23,6 +23,7 @@ import {
   isSuccessResponse,
 } from '@react-native-google-signin/google-signin';
 import { supabase } from './supabase';
+import { clearSharedData } from './friends';
 
 // Summary of the session's user (for showing account state in the UI).
 export interface AuthUser {
@@ -216,6 +217,7 @@ export async function deleteAccountAndData(): Promise<void> {
   // account. If the ownership marker stayed, the next sign-in would be
   // wrongly classified as an "account switch" and the user would needlessly get the merge/replace prompt.
   await AsyncStorage.removeItem('sync:ownerUid');
+  await clearSharedData();
   // The user is already deleted server-side; if the local sign-out errors
   // (invalid token, etc.) it doesn't matter: sync only works with a VALID
   // account session, and a push made with a deleted user's token gets rejected server-side anyway.
@@ -242,4 +244,6 @@ export async function signOutAccount(): Promise<void> {
   }
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+  // Friends' names/avatars (and later their shared data) must not outlive the session.
+  await clearSharedData();
 }

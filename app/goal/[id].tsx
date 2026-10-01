@@ -28,11 +28,13 @@ import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { useGoalStats } from '@/ui/useGoalStats';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { deadlineLabel, shortDate } from '@/ui/theme';
+import { deadlineLabel, percentLabel, shortDate } from '@/ui/theme';
 import { makeGoalStyles, type GoalStyles } from '@/ui/goal/goalStyles';
 import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';
 import { LinkedHabitRow } from '@/ui/goal/GoalStatCards';
 import { fmtAmount, fmtEntryWhen, fmtGoalValue } from '@/ui/goal/goalFormat';
+import { GoalShareSection } from '@/ui/goal/GoalShareSection';
+import { useFriendNames } from '@/ui/sharedTaskUi';
 
 type Styles = GoalStyles;
 type GoalTab = 'overview' | 'stats' | 'milestones' | 'edit';
@@ -55,6 +57,8 @@ export default function GoalDetailScreen() {
   const [entryText, setEntryText] = useState('');
 
   const goal = stats.goal;
+  // Names for entries a friend added to this goal (shared goal, see sharedGoals.ts).
+  const contributorNames = useFriendNames(stats.entries.map((e) => e.added_by));
 
   // — Overview tab: data entry ("entry") — the user types whatever amount they
   // want, and "Add" applies it as a DELTA on top of the accumulated progress
@@ -301,7 +305,12 @@ export default function GoalDetailScreen() {
                                 ? fmtClock(Math.abs(e.amount))
                                 : `${fmtAmount(Math.abs(e.amount))}${goal.unit ? ` ${goal.unit}` : ''}`}
                             </Text>
-                            <Text style={styles.entryHistoryDate}>{fmtEntryWhen(e.updated_at, lang)}</Text>
+                            <Text style={styles.entryHistoryDate}>
+                              {e.added_by
+                                ? `👥 ${contributorNames.get(e.added_by) ?? t('friends.unknownName')} · `
+                                : ''}
+                              {fmtEntryWhen(e.updated_at, lang)}
+                            </Text>
                           </View>
                         ))}
                       </View>
@@ -341,6 +350,8 @@ export default function GoalDetailScreen() {
                     </View>
                   </>
                 )}
+
+                <GoalShareSection goal={goal} />
               </View>
             )}
 
@@ -374,7 +385,7 @@ export default function GoalDetailScreen() {
                               {m.title}
                             </Text>
                             <Text style={[styles.milestonePct, done && styles.milestonePctDone]}>
-                              {done ? '✓' : `%${Math.round(v.ratio * 100)}`}
+                              {done ? '✓' : percentLabel(Math.round(v.ratio * 100), lang)}
                             </Text>
                           </View>
                           <View style={styles.milestoneBarTrack}>

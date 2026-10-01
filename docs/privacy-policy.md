@@ -54,11 +54,38 @@ bize hiçbir zaman ulaşmaz; doğrulamayı Google yapar.
 
 **Nerede saklanır:** Veriler, altyapı sağlayıcımız **Supabase** üzerinde
 barındırılan bir veritabanında tutulur. Her kullanıcı yalnızca kendi
-kayıtlarına erişebilir; bu kısıt veritabanı düzeyinde uygulanır.
+kayıtlarına ve kendisiyle açıkça paylaşılanlara erişebilir; bu kısıt
+veritabanı düzeyinde uygulanır.
 
 **Ne için kullanılır:** Yalnızca verinizi yedeklemek ve cihazlarınız arasında
 eşitlemek için. Veriniz üçüncü taraflara satılmaz, reklam veya profilleme için
 kullanılmaz.
+
+**Arkadaşlarla bağlantı (isteğe bağlı):** Hesapla giriş yaptıysanız ekranın
+sağ üstündeki Arkadaşlar düğmesinden bir davet kodu oluşturabilir ya da bir arkadaşınızın
+kodunu girebilirsiniz. Kod tek kullanımlıktır ve 48 saat sonra geçersizleşir.
+Bağlandığınız kişi **Google hesabınızdaki görünen adınızı ve profil
+fotoğrafınızı** görür; e-posta adresiniz hiçbir zaman gösterilmez. Bunun
+dışında yalnızca **sizin açıkça paylaştığınız** öğeler, yalnızca seçtiğiniz
+arkadaşa görünür:
+- **Paylaşılan alışkanlık:** adı, simgesi/rengi, sıklığı, hedef miktarı ve
+  tamamlama geçmişi (serileri ve takvimi). Arkadaşınız bunları değiştiremez;
+  hedef bağlantıları ve hatırlatma saatleri paylaşılmaz.
+- **Paylaşılan görev:** başlığı, tarihi/saati, önceliği ve tamamlanma durumu.
+  Arkadaşınız görevi yalnızca tamamlandı olarak işaretleyebilir; alt görevler
+  ve hatırlatmalar paylaşılmaz.
+- **Paylaşılan hedef:** adı, hedef değeri/birimi, son tarihi, adımları ve
+  ilerleme geçmişi (her girişi kimin eklediğiyle birlikte). Arkadaşınız
+  sayısal bir hedefe kendi ilerlemesini ekleyebilir; eklediği girişler sizin
+  hedefinizin geçmişine onun adıyla kaydedilir ve bağlantı kaldırılsa da
+  geçmişte kalır. Hedefin kendisini değiştiremez; hatırlatmalar ve bağlı
+  alışkanlıklar paylaşılmaz.
+
+Paylaşımı ya da bağlantıyı istediğiniz an kaldırabilirsiniz; bağlantı
+kaldırılınca aranızdaki tüm paylaşımlar da sona erer ve paylaşılan veriler
+arkadaşınızın cihazından silinir. Hesabınızı sildiğinizde tüm bağlantılarınız,
+paylaşımlarınız ve davet kodlarınız da silinir. Kod tahminini önlemek için
+hatalı kod denemeleri bir gün süreyle kaydedilir.
 
 ### 3. Bildirimler
 
@@ -194,11 +221,35 @@ never reaches us; Google performs the authentication.
 
 **Where it is stored:** the data is held in a database hosted on our
 infrastructure provider, **Supabase.** Each user can access only their own
-records; this restriction is enforced at the database level.
+records and items explicitly shared with them; this restriction is enforced
+at the database level.
 
 **What it is used for:** solely to back up your data and sync it across your
 devices. Your data is not sold to third parties and is not used for advertising
 or profiling.
+
+**Connecting with friends (optional):** once signed in, you can create an
+invite code or enter a friend's code via the Friends button at the top right. A code works only
+once and expires after 48 hours. People you connect with see **your Google
+display name and profile photo**; your email address is never shown. Beyond
+that, only items **you explicitly share** become visible, and only to the friend
+you choose:
+- **A shared habit:** its name, icon/color, frequency, target amount and
+  completion history (streaks and calendar). Your friend can't change any of
+  it; goal links and reminder times are not shared.
+- **A shared task:** its title, date/time, priority and completion state. Your
+  friend can only mark it as done; subtasks and reminders are not shared.
+- **A shared goal:** its name, target/unit, deadline, milestones and progress
+  history (including who added each entry). Your friend can add their own
+  progress to a numeric goal; those entries are recorded in your goal's history
+  under their name and stay there even if the connection is removed. They can't
+  change the goal itself; reminders and linked habits are not shared.
+
+You can stop sharing or remove a connection at any time; removing a connection
+ends everything shared between you and removes the shared data from your
+friend's device. Deleting your account deletes all your connections, shares and
+invite codes. To prevent code guessing, failed code attempts are recorded for
+one day.
 
 ### 3. Notifications
 

@@ -20,6 +20,7 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
+import { useFriends } from '@/ui/sharedTaskUi';
 
 interface Props {
   task: Task | null; // null = panel closed
@@ -33,6 +34,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const styles = makeStyles(colors);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
+  const friends = useFriends(true);
 
   // Load subtasks for the selected task every time the panel opens.
   useEffect(() => {
@@ -102,6 +104,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       due_date: values.due_date,
       end_time: values.end_time,
       recurrence: values.recurrence,
+      shared_with_id: values.shared_with_id,
     });
     const reminders = reminderRepo.replaceAll('task', task.id, values.remind_times);
     // Date/time/reminders may have changed — reminders are rescheduled based on the current values.
@@ -137,7 +140,9 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
           end_time: task.end_time,
           recurrence: task.recurrence,
           remind_times: reminderRepo.listByEntity('task', task.id).map((r) => r.time),
+          shared_with_id: task.shared_with_id,
         }}
+        shareFriends={friends}
         submitLabel={tr('common.save')}
         onSubmit={handleSave}
         onDelete={handleDelete}

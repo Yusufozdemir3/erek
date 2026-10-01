@@ -10,6 +10,7 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Priority, Recurrence } from '@/db';
+import type { Friend } from '@/sync/friends';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
@@ -61,10 +62,13 @@ export interface TaskFormValues {
   // the task. Not populated during editing (undefined), since subtasks are
   // written immediately there.
   subtasks?: string[];
+  // Friend's cloud uid the task is shared with (they can only check it off).
+  // Always null for a recurring task.
+  shared_with_id: string | null;
 }
 
 interface Props {
-  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[] }>;
+  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[]; shared_with_id: string | null }>;
   submitLabel: string;                  // "Save" | "Add"
   onSubmit: (values: TaskFormValues) => void;
   onDelete?: () => void;                // edit mode only: the Delete button
@@ -74,9 +78,12 @@ interface Props {
   // yet, subtasks are collected as strings and handed up via onSubmit (AddSheet
   // creates them after writing the task).
   enableSubtaskDraft?: boolean;
+  // Connected friends the task can be shared with; the section is hidden when
+  // empty (signed out, or no friends yet). Passed in so this form stays pure.
+  shareFriends?: Friend[];
 }
 
-export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children, enableSubtaskDraft }: Props) {
+export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children, enableSubtaskDraft, shareFriends = [] }: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeTaskFormStyles(colors);
@@ -138,6 +145,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   // Draft subtasks during creation (no task exists yet → a list of strings).
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
   const [newSub, setNewSub] = useState('');
+  const [sharedWith, setSharedWith] = useState<string | null>(initial?.shared_with_id ?? null);
+  // Recurring tasks can't be shared (the server would drop the share anyway).
+  const shareBlocked = repeatMode !== 'none';
+  // Keep a current share visible even if that person is no longer in the list,
+  // so it can still be removed.
+  const shareOptions: { id: string; name: string }[] = shareFriends.map((f) => ({
+    id: f.id,
+    name: f.displayName ?? t('friends.unknownName'),
+  }));
+  if (sharedWith && !shareOptions.some((o) => o.id === sharedWith)) {
+    shareOptions.push({ id: sharedWith, name: t('friends.unknownName') });
+  }
 
   const addDraftSub = () => {
     const t = newSub.trim();
@@ -196,6 +215,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       recurrence,
       remind_times: remindTimes,
       subtasks: enableSubtaskDraft ? draftSubs : undefined,
+      shared_with_id: recurrence ? null : sharedWith,
     });
   };
 
@@ -435,6 +455,33 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
               setYearDates((prev) => (prev.includes(md) ? prev : [...prev, md].sort()));
             }}
           />
+        </>
+      )}
+
+      {/* Share with a friend — they see it in their lists and can only check it off. */}
+      {shareOptions.length > 0 && (
+        <>
+          <Text style={styles.label}>{t('share.taskSection')}</Text>
+          <View style={[styles.row, { flexWrap: 'wrap' }]}>
+            {[{ id: null as string | null, name: t('share.nobody') }, ...shareOptions].map((o) => {
+              const selected = !shareBlocked && sharedWith === o.id;
+              return (
+                <Pressable
+                  key={o.id ?? 'none'}
+                  style={[styles.chip, selected && styles.chipShareSelected, shareBlocked && { opacity: 0.4 }]}
+                  onPress={() => setSharedWith(o.id)}
+                  disabled={shareBlocked}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected, disabled: shareBlocked }}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]} numberOfLines={1}>
+                    {o.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={styles.hint}>{shareBlocked ? t('share.recurringBlocked') : t('share.taskHint')}</Text>
         </>
       )}
 

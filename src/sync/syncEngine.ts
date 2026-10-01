@@ -23,8 +23,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDb } from '../db/database';
 import { goalRepo } from '../db/repositories/goalRepo';
+import { taskRepo } from '../db/repositories/taskRepo';
+import { chunk } from '../lib/helpers';
+import { emitLocalDataWillChange } from '../lib/localDataEvents';
 import { supabase } from './supabase';
 import { ensureSignedIn } from './auth';
+import { clearSharedData } from './friends';
 import { reassignLocalIds } from './localIds';
 
 export interface TableCfg {
@@ -44,6 +48,14 @@ export interface TableCfg {
   // every round). This shouldn't happen with a correctly set up cloud schema;
   // this defense just keeps a hand-edited or stale cloud schema from letting one row lock up everything.
   defaults?: Record<string, unknown>;
+  // Extra SQL condition on which pending rows may be PUSHED. Used to keep rows
+  // owned by someone else (shared with me) out of the push entirely: pushing
+  // one would be rejected by RLS and wedge the sync. Enforced here, in SQL, so
+  // even prepareFullResync (which marks everything synced=0) can't leak them.
+  pushWhere?: string;
+  // LOCAL-ONLY columns derived from a pulled remote row BEFORE user_id is
+  // mapped to the local id (that mapping erases who really owns the row).
+  derivePulled?: (remote: Record<string, unknown>, myUid: string) => Record<string, unknown>;
 }
 
 // Ordered by FK dependency (parent first).
@@ -78,7 +90,9 @@ export const TABLES: TableCfg[] = [
   },
   {
     table: 'goal_entries',
-    cols: ['id', 'goal_id', 'amount', 'updated_at', 'deleted_at'],
+    // added_by: the RAW cloud uid of a friend who contributed to a shared goal
+    // (NULL = the owner). No local-id mapping, same as tasks.shared_with_id.
+    cols: ['id', 'goal_id', 'amount', 'updated_at', 'deleted_at', 'added_by'],
     hasUserId: false, // ownership flows through the parent goal (RLS too)
   },
   {
@@ -96,9 +110,15 @@ export const TABLES: TableCfg[] = [
   },
   {
     table: 'tasks',
-    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at'],
+    // shared_with_id is the friend's RAW cloud uid (no local-id mapping: the
+    // friend has no identity on this device).
+    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at', 'shared_with_id'],
     hasUserId: true,
     defaults: { priority: 'medium' },
+    pushWhere: 'shared_owner_uid IS NULL',
+    derivePulled: (remote, myUid) => ({
+      shared_owner_uid: remote.user_id === myUid ? null : (remote.user_id as string),
+    }),
   },
   {
     table: 'reminders',
@@ -300,6 +320,12 @@ export async function prepareFullResync(): Promise<void> {
 // it INSERTS one; the old account's cloud rows are left untouched and an RLS
 // conflict becomes mathematically impossible. Local data is preserved.
 export async function prepareMergeIntoAccount(): Promise<void> {
+  // Before any id changes: in-memory holders of ids (the running timer) flush
+  // while the old ids are still valid (see lib/localDataEvents.ts).
+  emitLocalDataWillChange();
+  // FIRST: tasks shared with me belong to the previous account's friends. If
+  // they got new ids below, they'd be pushed as COPIES owned by the new account.
+  await clearSharedData();
   reassignLocalIds();
   await prepareFullResync();
   // Timer state holds the old habit id; since identities changed it no longer
@@ -313,6 +339,7 @@ export async function prepareMergeIntoAccount(): Promise<void> {
 export async function prepareReplaceWithAccount(): Promise<void> {
   await clearLocalData();
   await AsyncStorage.removeItem('timer:active');
+  await clearSharedData();
 }
 
 // Completely deletes the local user's DATA (users/the local identity is
@@ -323,6 +350,7 @@ export async function prepareReplaceWithAccount(): Promise<void> {
 // data instead. Must only be called from the "replace" flow; misuse causes data loss.
 // FK safety: TABLES is walked in reverse order so child tables are deleted first.
 export async function clearLocalData(): Promise<void> {
+  emitLocalDataWillChange(); // see prepareMergeIntoAccount
   const db = getDb();
   db.execSync('BEGIN;');
   try {
@@ -357,7 +385,8 @@ async function pushTable(cfg: TableCfg, uid: string): Promise<number> {
   for (;;) {
     const batch = db.getAllSync<any>(
       `SELECT ${cfg.cols.join(', ')} FROM ${cfg.table}
-       WHERE synced = 0 AND id > ? ORDER BY id LIMIT ?`,
+       WHERE synced = 0 AND id > ? ${cfg.pushWhere ? `AND (${cfg.pushWhere})` : ''}
+       ORDER BY id LIMIT ?`,
       [cursor, PUSH_PAGE_SIZE]
     );
     if (batch.length === 0) break;
@@ -382,16 +411,21 @@ async function pushTable(cfg: TableCfg, uid: string): Promise<number> {
 }
 
 // Upserts into local storage (a row coming from remote). Writes synced=1 (same state as remote).
-function upsertLocal(cfg: TableCfg, obj: any): void {
+function upsertLocal(cfg: TableCfg, obj: any, derived: Record<string, unknown> = {}): void {
   const db = getDb();
-  const allCols = [...cfg.cols, 'synced'];
+  const derivedCols = Object.keys(derived);
+  const dataCols = [...cfg.cols, ...derivedCols];
+  const allCols = [...dataCols, 'synced'];
   const placeholders = allCols.map(() => '?').join(', ');
-  const updates = cfg.cols
+  const updates = dataCols
     .map((c) => `${c} = excluded.${c}`)
     .concat('synced = excluded.synced')
     .join(', ');
   // `defaults` only kicks in for columns that are NOT NULL locally (see TableCfg).
-  const vals = cfg.cols.map((c) => obj[c] ?? cfg.defaults?.[c] ?? null).concat(1);
+  const vals = cfg.cols
+    .map((c) => obj[c] ?? cfg.defaults?.[c] ?? null)
+    .concat(derivedCols.map((c) => derived[c] ?? null))
+    .concat(1);
   db.runSync(
     `INSERT INTO ${cfg.table} (${allCols.join(', ')}) VALUES (${placeholders})
      ON CONFLICT(id) DO UPDATE SET ${updates}`,
@@ -401,8 +435,9 @@ function upsertLocal(cfg: TableCfg, obj: any): void {
 
 // Applies a single remote row locally under the last-writer-wins rule.
 // Returns true if applied, false if skipped because the local one is newer.
-function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
+function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string, myUid: string): boolean {
   const db = getDb();
+  const derived = cfg.derivePulled ? cfg.derivePulled(r, myUid) : {};
   const mapped = cfg.hasUserId ? { ...r, user_id: localUserId } : r;
 
   // 1) If the same id exists locally: classic last-writer-wins (local wins on a tie).
@@ -412,15 +447,29 @@ function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
   );
   if (byId) {
     if (ts(byId.updated_at) >= ts(r.updated_at)) return false;
-    upsertLocal(cfg, mapped);
+    upsertLocal(cfg, mapped, derived);
     return true;
   }
 
   // 2) The id doesn't exist locally, but the natural key collides: two devices
   // produced the same logical record under different ids. The winner is
   // chosen by updated_at; if remote wins, the local rival row is deleted and the remote one is written.
-  if (cfg.naturalKey) {
-    const where = cfg.naturalKey.map((k) => `${k} = ?`).join(' AND ');
+  //
+  // ONLY LIVE ROWS COMPETE (tables with soft delete, i.e. reminders): a
+  // tombstone says "THIS id was deleted", not "this time slot is forbidden".
+  // Letting tombstones take part lost reminders on the other device: saving a
+  // form deletes a reminder and re-creates the same time under a new id, both
+  // stamped in the same millisecond. If the tombstone arrived first, it won
+  // the tie ("local wins") and the live row was silently skipped — for good,
+  // since the watermark moved past it. A device clock running slightly ahead
+  // produced the same loss without a tie. So: a remote tombstone never
+  // displaces a live row with a different id (it's stored under its own id),
+  // and a live remote row never loses to a local tombstone. habit_logs (no
+  // soft delete, local UNIQUE) is unaffected.
+  const softDelete = cfg.cols.includes('deleted_at');
+  if (cfg.naturalKey && !(softDelete && r.deleted_at)) {
+    const where =
+      cfg.naturalKey.map((k) => `${k} = ?`).join(' AND ') + (softDelete ? ' AND deleted_at IS NULL' : '');
     const rival = db.getFirstSync<any>(
       `SELECT id, updated_at FROM ${cfg.table} WHERE ${where}`,
       cfg.naturalKey.map((k) => r[k])
@@ -431,7 +480,7 @@ function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
     }
   }
 
-  upsertLocal(cfg, mapped);
+  upsertLocal(cfg, mapped, derived);
   return true;
 }
 
@@ -441,7 +490,12 @@ function applyRemoteRow(cfg: TableCfg, r: any, localUserId: string): boolean {
 // Pagination is mandatory: if the response gets cut off at 1000 rows and the
 // watermark still advances, the cut-off rows are NEVER pulled again (silent
 // data loss). Hence the loop runs until all pages are exhausted.
-async function pullTable(cfg: TableCfg, localUserId: string, since: string): Promise<{ count: number; maxServerTs: string }> {
+async function pullTable(
+  cfg: TableCfg,
+  localUserId: string,
+  myUid: string,
+  since: string
+): Promise<{ count: number; maxServerTs: string }> {
   let maxServerTs = since;
   let count = 0;
 
@@ -459,7 +513,7 @@ async function pullTable(cfg: TableCfg, localUserId: string, since: string): Pro
 
     for (const remote of data ?? []) {
       const r = remote as any;
-      if (applyRemoteRow(cfg, r, localUserId)) count++;
+      if (applyRemoteRow(cfg, r, localUserId, myUid)) count++;
       if (ts(r[SERVER_TS_COL]) > ts(maxServerTs)) maxServerTs = r[SERVER_TS_COL];
     }
 
@@ -468,6 +522,30 @@ async function pullTable(cfg: TableCfg, localUserId: string, since: string): Pro
   }
 
   return { count, maxServerTs };
+}
+
+// A task shared WITH me simply vanishes from my pull when the share ends
+// (unshared, unfriended, owner deleted their account) — no tombstone ever
+// arrives. So after each pull, ask which of my local shared-with-me rows are
+// still visible and drop the rest. The request is keyed by the LOCAL ids
+// (chunked), so it's bounded and needs no pagination; and it's skipped
+// entirely when there are none, so users who never share pay nothing.
+async function reconcileSharedTasks(uid: string): Promise<number> {
+  const local = taskRepo.listSharedWithMeIds();
+  if (local.length === 0) return 0;
+  const live = new Set<string>();
+  for (const ids of chunk(local)) {
+    const { data, error } = await supabase!
+      .from('tasks')
+      .select('id')
+      .in('id', ids)
+      .eq('shared_with_id', uid)
+      .is('deleted_at', null);
+    if (error) throw new Error(`tasks reconcile: ${error.message}`);
+    for (const r of data ?? []) live.add((r as any).id);
+  }
+  const gone = local.filter((id) => !live.has(id));
+  return gone.length > 0 ? taskRepo.purgeSharedWithMe(gone) : 0;
 }
 
 // A full sync round: push everything, then pull everything.
@@ -488,13 +566,15 @@ export async function runSync(localUserId: string): Promise<SyncResult> {
     let pulled = 0;
     for (const cfg of TABLES) {
       const since = (await AsyncStorage.getItem(watermarkKey(cfg.table))) ?? EPOCH;
-      const { count, maxServerTs } = await pullTable(cfg, localUserId, since);
+      const { count, maxServerTs } = await pullTable(cfg, localUserId, uid, since);
       pulled += count;
       const next = nextWatermark(maxServerTs, since);
       if (ts(next) > ts(since)) {
         await AsyncStorage.setItem(watermarkKey(cfg.table), next);
       }
     }
+
+    await reconcileSharedTasks(uid);
 
     // 3) RE-DERIVE goal progress from entries. The current_value coming from
     // remote is a stale cache that doesn't see the other device's entries;

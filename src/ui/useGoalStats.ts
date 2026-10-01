@@ -67,8 +67,8 @@ export interface GoalStats {
   nextMilestone: NextMilestoneStat | null;
   // Habits linked to this goal (marked via goal_id) — see HabitForm.linkGoal.
   linkedHabits: LinkedHabit[];
-  // History of free-form amount entries on the "Overview" tab (newest to
-  // oldest) — a log only, NOT the source of current_value.
+  // Progress entries (newest to oldest) — since migration019 these ARE the
+  // source of current_value (baseline + sum of entries).
   entries: GoalEntry[];
   reload: () => void;
 }
@@ -99,6 +99,104 @@ const EMPTY_BASE = {
   entries: [] as GoalEntry[],
 };
 
+// PURE: every number the goal screens show, from already-loaded rows. Shared
+// by the owner's own goal screen (useGoalStats, rows from SQLite) and a
+// friend's shared goal (useSharedGoal, rows from the server) — so both show
+// exactly the same pace, projection and milestone math.
+export function computeGoalStats(
+  goal: Goal,
+  milestones: GoalMilestone[],
+  entries: GoalEntry[],
+  linkedHabits: LinkedHabit[],
+  today: string
+): Omit<GoalStats, 'reload'> {
+  const ratio = goalRepo.progressRatio(goal);
+  const remaining =
+    goal.goal_type === 'numeric' && goal.target_value != null
+      ? Math.max(0, goal.target_value - goal.current_value)
+      : null;
+  const completed = goalRepo.isCompleted(goal);
+
+  let daysLeft: number | null = null;
+  if (goal.deadline) {
+    const target = new Date(`${goal.deadline}T00:00:00`);
+    const todayD = new Date(`${today}T00:00:00`);
+    daysLeft = Math.round((target.getTime() - todayD.getTime()) / 86_400_000);
+  }
+  const isOverdue = daysLeft != null && daysLeft < 0;
+  const overdueDays = isOverdue ? -daysLeft! : null;
+
+  // Pace is only meaningful for a not-yet-completed goal with a deadline in
+  // the future (today included). "Today is the deadline" (daysLeft=0) -> all
+  // of the remainder falls on today, the divisor is treated as at least 1.
+  const effectiveDays = daysLeft != null && daysLeft >= 0 ? Math.max(1, daysLeft) : null;
+  const dailyPace =
+    !completed && remaining != null && effectiveDays != null ? remaining / effectiveDays : null;
+  const weeklyPace = dailyPace != null ? dailyPace * 7 : null;
+
+  // Steps: a required part of a 'milestone' goal; on a 'numeric' goal either a
+  // quantity-based threshold or (if quantity-less) a checklist that does NOT
+  // affect completion. "Done" comes from the views: thresholds are counted
+  // from current_value, checklist steps from the completed column.
+  const views = computeMilestoneViews(milestones, goal.current_value);
+  const milestonesDone = views.filter((v) => v.reached).length;
+  const milestonesTotal = views.length;
+  const milestonesRemaining = Math.max(0, milestonesTotal - milestonesDone);
+  // Next step: the single threshold the user is currently working on.
+  const nextMilestone = nextMilestoneStat(views, goal.current_value, today);
+
+  // Actual pace + projections (only meaningful for numeric goals). Extracted
+  // into a pure function (see lib/goalProjection.ts — design decisions + tests).
+  const projection =
+    goal.goal_type === 'numeric'
+      ? goalProjection({
+          entries,
+          target: goal.target_value,
+          current: goal.current_value,
+          remaining,
+          daysLeft,
+          completed,
+          today,
+          startDate: goal.start_date,
+        })
+      : {
+          avgDaily: null,
+          daysElapsed: null,
+          last7Total: null,
+          projectedAtDeadline: null,
+          projectedFinishDate: null,
+          behindAmount: null,
+        };
+
+  return {
+    goal,
+    ratio,
+    remaining,
+    completed,
+    daysLeft,
+    isOverdue,
+    overdueDays,
+    dailyPace,
+    weeklyPace,
+    avgDaily: projection.avgDaily,
+    projectedAtDeadline: projection.projectedAtDeadline,
+    projectedFinishDate: projection.projectedFinishDate,
+    behindAmount: projection.behindAmount,
+    daysElapsed: projection.daysElapsed,
+    last7Total: projection.last7Total,
+    milestones,
+    milestoneViews: views,
+    milestonesDone,
+    milestonesTotal,
+    milestonesRemaining,
+    nextMilestone,
+    linkedHabits,
+    entries,
+  };
+}
+
+export const EMPTY_GOAL_STATS: Omit<GoalStats, 'reload'> = EMPTY_BASE;
+
 export function useGoalStats(goalId: string): GoalStats {
   const [stats, setStats] = useState<Omit<GoalStats, 'reload'>>(EMPTY_BASE);
 
@@ -108,109 +206,21 @@ export function useGoalStats(goalId: string): GoalStats {
       setStats(EMPTY_BASE);
       return;
     }
-
-    const ratio = goalRepo.progressRatio(goal);
-    const remaining =
-      goal.goal_type === 'numeric' && goal.target_value != null
-        ? Math.max(0, goal.target_value - goal.current_value)
-        : null;
-    const completed = goalRepo.isCompleted(goal);
-
-    let daysLeft: number | null = null;
-    if (goal.deadline) {
-      const target = new Date(`${goal.deadline}T00:00:00`);
-      const today = new Date(`${todayDate()}T00:00:00`);
-      daysLeft = Math.round((target.getTime() - today.getTime()) / 86_400_000);
-    }
-    const isOverdue = daysLeft != null && daysLeft < 0;
-    const overdueDays = isOverdue ? -daysLeft! : null;
-
-    // Pace is only meaningful for a not-yet-completed goal with a deadline in
-    // the future (today included). "Today is the deadline" (daysLeft=0) -> all
-    // of the remainder falls on today, the divisor is treated as at least 1.
-    const effectiveDays = daysLeft != null && daysLeft >= 0 ? Math.max(1, daysLeft) : null;
-    const dailyPace =
-      !completed && remaining != null && effectiveDays != null ? remaining / effectiveDays : null;
-    const weeklyPace = dailyPace != null ? dailyPace * 7 : null;
-
-    // Steps are fetched regardless of type: they're a required part of the
-    // workflow for a 'milestone' goal, and either a quantity-based threshold or
-    // (if quantity-less) a checklist for a 'numeric' goal (does NOT AFFECT
-    // completion status — see the type guard in goalRepo.setCompleted). The
-    // "done" count comes from the views: threshold steps are counted from
-    // current_value, checklist steps from the completed column.
-    const milestones = goalMilestoneRepo.listByGoal(goal.id);
-    const views = computeMilestoneViews(milestones, goal.current_value);
-    const milestonesDone = views.filter((v) => v.reached).length;
-    const milestonesTotal = views.length;
-    const milestonesRemaining = Math.max(0, milestonesTotal - milestonesDone);
-    // Next step: the single threshold the user is currently working on.
-    const nextMilestone = nextMilestoneStat(views, goal.current_value, todayDate());
-
     // Habits linked to this goal — instead of a separate query, all of the
     // user's habits are already fetched in a single list (the list size is small).
     const linkedHabits: LinkedHabit[] = habitRepo
       .listByUser(goal.user_id)
       .filter((h) => h.goal_id === goal.id)
       .map((h) => ({ id: h.id, title: h.title, icon: h.icon, color: h.color }));
-
-    const entries = goalEntryRepo.listByGoal(goal.id);
-
-    // Actual pace + projections (only meaningful for numeric goals). Extracted
-    // into a pure function (see lib/goalProjection.ts — design decisions + tests).
-    const {
-      avgDaily,
-      daysElapsed,
-      last7Total,
-      projectedAtDeadline,
-      projectedFinishDate,
-      behindAmount,
-    } =
-      goal.goal_type === 'numeric'
-        ? goalProjection({
-            entries,
-            target: goal.target_value,
-            current: goal.current_value,
-            remaining,
-            daysLeft,
-            completed,
-            today: todayDate(),
-            startDate: goal.start_date,
-          })
-        : {
-            avgDaily: null,
-            daysElapsed: null,
-            last7Total: null,
-            projectedAtDeadline: null,
-            projectedFinishDate: null,
-            behindAmount: null,
-          };
-
-    setStats({
-      goal,
-      ratio,
-      remaining,
-      completed,
-      daysLeft,
-      isOverdue,
-      overdueDays,
-      dailyPace,
-      weeklyPace,
-      avgDaily,
-      projectedAtDeadline,
-      projectedFinishDate,
-      behindAmount,
-      daysElapsed,
-      last7Total,
-      milestones,
-      milestoneViews: views,
-      milestonesDone,
-      milestonesTotal,
-      milestonesRemaining,
-      nextMilestone,
-      linkedHabits,
-      entries,
-    });
+    setStats(
+      computeGoalStats(
+        goal,
+        goalMilestoneRepo.listByGoal(goal.id),
+        goalEntryRepo.listByGoal(goal.id),
+        linkedHabits,
+        todayDate()
+      )
+    );
   }, [goalId]);
 
   useFocusEffect(reload);

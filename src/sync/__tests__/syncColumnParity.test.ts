@@ -32,7 +32,10 @@ import { TABLES } from '../syncEngine';
 // Local columns that aren't synced (deliberately).
 //   synced — the "waiting to be pushed to the cloud" flag; it's device-specific
 //            and has, and must have, no remote counterpart.
-const LOCAL_ONLY_COLUMNS = new Set(['synced']);
+//   shared_owner_uid — tasks only: whose task this really is when it was shared
+//            WITH me. Derived on pull (TableCfg.derivePulled) from the remote
+//            user_id before that gets mapped to the local id; never pushed.
+const LOCAL_ONLY_COLUMNS = new Set(['synced', 'shared_owner_uid']);
 
 // Local tables that aren't synced (deliberately).
 //   users — the device identity; the cloud identity is auth.users, this table

@@ -1,6 +1,7 @@
 // reminderRepo testleri: create/listByEntity, replaceAll, mapByType, soft delete.
 
 import { habitRepo } from '../repositories/habitRepo';
+import { getDb } from '../database';
 import { reminderRepo } from '../repositories/reminderRepo';
 import { taskRepo } from '../repositories/taskRepo';
 import { userRepo } from '../repositories/userRepo';
@@ -64,6 +65,37 @@ describe('replaceAll', () => {
 
     expect(result.map((r) => r.time)).toEqual(['09:00', '21:00']);
     expect(reminderRepo.listByEntity('habit', habitId).map((r) => r.time)).toEqual(['09:00', '21:00']);
+  });
+
+  // Re-creating unchanged times on every save churned tombstones AND made the
+  // other device drop the reminder during sync (see syncEngine.applyRemoteRow).
+  it('değişmeyen saatlerin satırına (id\'sine) dokunmaz, yalnız farkı yazar', () => {
+    const keep = reminderRepo.create('habit', habitId, '08:00');
+    const drop = reminderRepo.create('habit', habitId, '20:00');
+
+    const result = reminderRepo.replaceAll('habit', habitId, ['08:00', '21:00']);
+
+    expect(result.map((r) => r.time)).toEqual(['08:00', '21:00']);
+    expect(result.find((r) => r.time === '08:00')!.id).toBe(keep.id);
+    const all = getDb().getAllSync<{ id: string; deleted_at: string | null }>(
+      `SELECT id, deleted_at FROM reminders WHERE entity_id = ?`,
+      [habitId]
+    );
+    expect(all).toHaveLength(3); // 08:00 kept, 20:00 tombstoned, 21:00 new
+    expect(all.find((r) => r.id === drop.id)!.deleted_at).not.toBeNull();
+  });
+
+  it('aynı listeyle kaydedince hiçbir satır değişmez', () => {
+    const r = reminderRepo.create('habit', habitId, '08:00');
+    getDb().runSync(`UPDATE reminders SET synced = 1 WHERE id = ?`, [r.id]);
+
+    reminderRepo.replaceAll('habit', habitId, ['08:00']);
+
+    const row = getDb().getFirstSync<{ synced: number; updated_at: string }>(
+      `SELECT synced, updated_at FROM reminders WHERE id = ?`,
+      [r.id]
+    );
+    expect(row).toEqual({ synced: 1, updated_at: r.updated_at });
   });
 
   it('boş liste verilince tüm hatırlatmaları kaldırır', () => {

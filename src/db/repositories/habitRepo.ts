@@ -17,27 +17,12 @@ import {
   toYmd,
   weekStartOf,
 } from '../../lib/helpers';
-
-// — QUOTA ("X times a week") streak helpers —
-// Under a quota rule no single day is due on its own, so streaks are counted
-// in WEEKS, not days: a week is "done" once the number of completed days
-// within it reaches the quota. Weeks start on Monday (weekStartOf).
-
-// Counts completed log dates keyed by their week-start.
-function weekCompletionCounts(dates: string[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const d of dates) {
-    const ws = weekStartOf(d);
-    counts.set(ws, (counts.get(ws) ?? 0) + 1);
-  }
-  return counts;
-}
-
-function shiftWeek(weekStart: string, weeks: number): string {
-  const d = new Date(`${weekStart}T00:00:00`);
-  d.setDate(d.getDate() + weeks * 7);
-  return toYmd(d);
-}
+import {
+  currentStreakFrom,
+  longestStreakFrom,
+  shiftWeek,
+  weekCompletionCounts,
+} from '../../lib/streaks';
 import type { GoalContribution, Habit, HabitKind, HabitLog, Recurrence } from '../../types/models';
 import { goalRepo } from './goalRepo';
 import { reminderRepo } from './reminderRepo';
@@ -369,57 +354,11 @@ export const habitRepo = {
   currentStreak(habitId: string, preloaded?: Habit | null): number {
     const db = getDb();
     const habit = preloaded !== undefined ? preloaded : this.getById(habitId);
-    const isDue = (d: string) =>
-      isScheduledOn(habit?.schedule ?? null, d) &&
-      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);
-    const rows = db.getAllSync<any>(
-      `SELECT log_date FROM habit_logs
-       WHERE habit_id = ? AND completed = 1
-       ORDER BY log_date DESC`,
+    const rows = db.getAllSync<{ log_date: string }>(
+      `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1`,
       [habitId]
     );
-    if (rows.length === 0) return 0;
-
-    if (isQuotaSchedule(habit?.schedule ?? null)) {
-      const quota = habit!.schedule!.timesPerWeek!;
-      const counts = weekCompletionCounts(rows.map((r) => r.log_date));
-      let cursor = weekStartOf(todayDate());
-      let streak = 0;
-      if ((counts.get(cursor) ?? 0) >= quota) streak++;
-      // The current week not being done yet doesn't break it — continue from previous weeks.
-      cursor = shiftWeek(cursor, -1);
-      while ((counts.get(cursor) ?? 0) >= quota) {
-        streak++;
-        cursor = shiftWeek(cursor, -1);
-      }
-      return streak;
-    }
-
-    const completed = new Set<string>(rows.map((r) => r.log_date));
-    const today = todayDate();
-    let streak = 0;
-    const cursor = new Date(`${today}T00:00:00`);
-
-    // Walk backward day by day; only evaluate scheduled days.
-    // The upper bound covers ~2+ years (generous for sparse days in a weekly schedule).
-    for (let i = 0; i < 800; i++) {
-      const y = cursor.getFullYear();
-      const m = String(cursor.getMonth() + 1).padStart(2, '0');
-      const d = String(cursor.getDate()).padStart(2, '0');
-      const dateStr = `${y}-${m}-${d}`;
-
-      if (isDue(dateStr)) {
-        if (completed.has(dateStr)) {
-          streak++;
-        } else if (dateStr === today) {
-          // Today isn't marked yet — don't break the streak, skip it.
-        } else {
-          break;
-        }
-      }
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return streak;
+    return currentStreakFrom(habit, rows.map((r) => r.log_date), todayDate());
   },
 
   // Completion records from the last N days (for stats/calendar).
@@ -497,60 +436,11 @@ export const habitRepo = {
   longestStreak(habitId: string): number {
     const db = getDb();
     const habit = this.getById(habitId);
-    const isDue = (d: string) =>
-      isScheduledOn(habit?.schedule ?? null, d) &&
-      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);
-    const rows = db.getAllSync<any>(
-      `SELECT log_date FROM habit_logs
-       WHERE habit_id = ? AND completed = 1
-       ORDER BY log_date ASC`,
+    const rows = db.getAllSync<{ log_date: string }>(
+      `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1`,
       [habitId]
     );
-    if (rows.length === 0) return 0;
-
-    if (isQuotaSchedule(habit?.schedule ?? null)) {
-      const quota = habit!.schedule!.timesPerWeek!;
-      const counts = weekCompletionCounts(rows.map((r) => r.log_date));
-      const currentWeek = weekStartOf(todayDate());
-      let cursor = weekStartOf(rows[0].log_date);
-      let run = 0;
-      let best = 0;
-      while (cursor <= currentWeek) {
-        if ((counts.get(cursor) ?? 0) >= quota) {
-          run++;
-          if (run > best) best = run;
-        } else if (cursor !== currentWeek) {
-          run = 0;
-        }
-        cursor = shiftWeek(cursor, 1);
-      }
-      return best;
-    }
-
-    const completed = new Set<string>(rows.map((r) => r.log_date));
-    const today = todayDate();
-    let run = 0;
-    let best = 0;
-    const cursor = new Date(`${rows[0].log_date}T00:00:00`);
-    const end = new Date(`${today}T00:00:00`);
-
-    while (cursor <= end) {
-      const y = cursor.getFullYear();
-      const m = String(cursor.getMonth() + 1).padStart(2, '0');
-      const d = String(cursor.getDate()).padStart(2, '0');
-      const dateStr = `${y}-${m}-${d}`;
-
-      if (isDue(dateStr)) {
-        if (completed.has(dateStr)) {
-          run++;
-          if (run > best) best = run;
-        } else {
-          run = 0;
-        }
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return best;
+    return longestStreakFrom(habit, rows.map((r) => r.log_date), todayDate());
   },
 
   // ALL STREAKS: the SAME walk and SAME scheduled-day rule as longestStreak,

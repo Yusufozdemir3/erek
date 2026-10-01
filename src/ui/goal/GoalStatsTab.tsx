@@ -11,7 +11,7 @@
 
 import { Text, View } from 'react-native';
 import { diffDays } from '@/lib/helpers';
-import { shortDate } from '@/ui/theme';
+import { percentLabel, shortDate } from '@/ui/theme';
 import { fmtGoalValue } from '@/ui/goal/goalFormat';
 import { StatCard, StatGroupTitle } from '@/ui/goal/GoalStatCards';
 import type { GoalStyles } from '@/ui/goal/goalStyles';
@@ -104,7 +104,7 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
         <View style={styles.statsGrid}>
           {goal.goal_type === 'numeric' && (
             <>
-              <StatCard label={t('goal.statRatio')} value={`%${Math.round(stats.ratio * 100)}`} styles={styles} />
+              <StatCard label={t('goal.statRatio')} value={percentLabel(Math.round(stats.ratio * 100), lang)} styles={styles} />
               <StatCard
                 label={t('goal.statRemaining')}
                 value={stats.remaining != null ? fmtGoalValue(stats.remaining, goal.unit) : '–'}
@@ -223,7 +223,7 @@ export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps
                 <View style={styles.statsGrid}>
                   <StatCard
                     label={t('goalStats.nextMilestoneRatioLabel')}
-                    value={`%${Math.round(stats.nextMilestone.ratio * 100)}`}
+                    value={percentLabel(Math.round(stats.nextMilestone.ratio * 100), lang)}
                     accent="primary"
                     styles={styles}
                   />

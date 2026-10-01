@@ -34,6 +34,7 @@ export const makeTaskFormStyles = (c: Colors) =>
     },
     chipText: { fontSize: 14, fontWeight: '600', color: c.muted },
     chipTextSelected: { color: c.onAccent },
+    chipShareSelected: { backgroundColor: c.primary, borderColor: c.primary },
     dateBtn: {
       flex: 1,
       paddingVertical: 12,

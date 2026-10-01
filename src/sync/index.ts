@@ -19,6 +19,42 @@ export {
   type AuthUser,
 } from './auth';
 export {
+  getInvite,
+  redeemInvite,
+  listConnections,
+  removeConnection,
+  getCachedFriends,
+  clearSharedData,
+  normalizeInviteCode,
+  INVITE_CODE_LENGTH,
+  type Friend,
+  type Invite,
+} from './friends';
+export { SharingError, sharingErrorKey, toSharingError, type SharingErrorCode } from './sharingErrors';
+export {
+  shareHabit,
+  unshareHabit,
+  listHabitShares,
+  getSharedHabits,
+  getCachedSharedHabits,
+  getCachedSharedHabitLogs,
+  syncSharedHabitLogs,
+  type SharedHabit,
+} from './sharedHabits';
+export {
+  shareGoal,
+  unshareGoal,
+  listGoalShares,
+  getSharedGoals,
+  getCachedSharedGoals,
+  getSharedGoalDetail,
+  getCachedSharedGoalDetail,
+  addSharedGoalEntry,
+  type SharedGoal,
+  type SharedGoalDetail,
+} from './sharedGoals';
+export { toggleSharedTask } from './sharedTasks';
+export {
   runSync,
   prepareFullResync,
   clearLocalData,

@@ -15,7 +15,7 @@
 // revealed with a single tap if wanted.
 
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -27,8 +27,9 @@ import { cancelTaskReminders, refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { PriorityMark } from '@/ui/PriorityMark';
-import { ProfileButton } from '@/ui/ProfileButton';
+import { HeaderActions } from '@/ui/HeaderActions';
 import { SwipeableRow } from '@/ui/SwipeableRow';
+import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -77,6 +78,8 @@ export default function TasksScreen() {
   }, [user.id, dataVersion, showAllCompleted]);
 
   useFocusEffect(reload);
+  useSharedTasksFreshness(reload);
+  const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
 
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
 
@@ -84,7 +87,25 @@ export default function TasksScreen() {
   // Every year: ...") — see helpers.buildScheduleLabels.
   const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
+  const sharedLabel = (t: Task): string | null => {
+    const uid = t.shared_owner_uid ?? t.shared_with_id;
+    return uid ? `👥 ${friendNames.get(uid) ?? tr('friends.unknownName')}` : null;
+  };
+
+  // A task shared WITH me: read-only except the check-off (see sharedTaskUi).
+  const openTask = (t: Task) => {
+    if (t.shared_owner_uid) {
+      Alert.alert(t.title, tr('share.readOnlyTask', { name: friendNames.get(t.shared_owner_uid) ?? tr('friends.unknownName') }));
+      return;
+    }
+    setEditingTask(t);
+  };
+
   const toggleTask = (t: Task) => {
+    if (t.shared_owner_uid) {
+      toggleSharedTaskOptimistic(t, reload, tr);
+      return;
+    }
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
@@ -105,6 +126,24 @@ export default function TasksScreen() {
     reload();
   };
 
+  // Swipe edit/delete only on my own tasks; a task shared WITH me can't be
+  // edited or deleted here (only the owner can).
+  const wrapRow = (t: Task, card: JSX.Element) =>
+    t.shared_owner_uid ? (
+      card
+    ) : (
+      <SwipeableRow
+        isOpen={openRowId === t.id}
+        onOpenChange={(open) => setOpenRowId(open ? t.id : null)}
+        onEdit={() => setEditingTask(t)}
+        onDelete={() => removeTask(t)}
+        editA11yLabel={tr('common.editA11y', { title: t.title })}
+        deleteA11yLabel={tr('common.deleteA11y', { title: t.title })}
+      >
+        {card}
+      </SwipeableRow>
+    );
+
   const renderItem = useCallback(
     ({ item: t, index: i }: { item: Task; index: number }) => {
       const done = t.completed_at !== null;
@@ -114,20 +153,12 @@ export default function TasksScreen() {
           layout={LinearTransition.duration(260)}
           style={[styles.rowSpacing, i === 0 && { marginTop: 20 }]}
         >
-          <SwipeableRow
-            isOpen={openRowId === t.id}
-            onOpenChange={(open) => setOpenRowId(open ? t.id : null)}
-            onEdit={() => setEditingTask(t)}
-            onDelete={() => removeTask(t)}
-            editA11yLabel={tr('common.editA11y', { title: t.title })}
-            deleteA11yLabel={tr('common.deleteA11y', { title: t.title })}
-          >
-            {/* marginBottom removed (0) — shared.card's bottom spacing now
-                lives on the outer wrapper (rowSpacing); otherwise the card's
-                own unpainted margin would let the action panel's color bleed
-                through as a thin strip right under the card. */}
+          {/* marginBottom removed (0) — shared.card's bottom spacing now
+              lives on the outer wrapper (rowSpacing); otherwise the card's
+              own unpainted margin would let the action panel's color bleed
+              through as a thin strip right under the card. */}
+          {wrapRow(t, (
             <View style={[shared.card, styles.noMargin]}>
-              {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
               <Pressable
                 onPress={() => toggleTask(t)}
                 hitSlop={8}
@@ -146,14 +177,15 @@ export default function TasksScreen() {
               </Pressable>
               <Pressable
                 style={shared.cardBody}
-                onPress={() => setEditingTask(t)}
+                onPress={() => openTask(t)}
                 accessibilityRole="button"
                 accessibilityLabel={tr('common.editA11y', { title: t.title })}
               >
                 <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                {((t.due_date && !done) || subtaskCounts[t.id] || t.recurrence) && (
+                {((t.due_date && !done) || subtaskCounts[t.id] || t.recurrence || sharedLabel(t)) && (
                   <Text style={styles.due}>
                     {[
+                      sharedLabel(t),
                       t.recurrence
                         ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
                         : null,
@@ -167,15 +199,16 @@ export default function TasksScreen() {
                   </Text>
                 )}
               </Pressable>
+              {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
               {!done && <PriorityMark priority={t.priority} />}
             </View>
-          </SwipeableRow>
+          ))}
         </Animated.View>
       );
     },
     // Rows must re-render when openRowId/subtaskCounts change, so they stay in
     // the dependency list (together with FlatList's extraData).
-    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr]
+    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames]
   );
 
   return (
@@ -193,7 +226,7 @@ export default function TasksScreen() {
           <>
             <View style={shared.headerRow}>
               <Text style={shared.greeting}>{tr('tabs.tasks')}</Text>
-              <ProfileButton />
+              <HeaderActions />
             </View>
             <Text style={shared.subtitle}>{tr('screen.tasksSubtitle', { n: remaining })}</Text>
           </>

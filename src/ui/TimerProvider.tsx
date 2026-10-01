@@ -22,6 +22,7 @@ import { goalRepo, habitRepo } from '@/db';
 import { isTimeUnit, todayDate } from '@/lib/helpers';
 import { notifySuccess } from '@/lib/haptics';
 import { cancelTimerDone, scheduleTimerDone } from '@/lib/notifications';
+import { onLocalDataWillChange } from '@/lib/localDataEvents';
 // Pure time math lives in a separate module (testable); the midnight-rollover decision is there too.
 import {
   commitDelta,
@@ -84,7 +85,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const commit = useCallback((a: ActiveTimer, seconds?: number) => {
     const delta = seconds ?? commitDelta(a);
     if (delta > 0) {
-      if (a.kind === 'habit') habitRepo.incrementAmount(a.targetId, a.date, delta, a.targetSeconds);
+      // The habit may be gone by now (deleted here or on another device and
+      // pulled, local data cleared): a log for a missing habit fails the FOREIGN
+      // KEY check, and this runs inside press handlers / the tick interval where
+      // a throw closes the app in a release build. Nothing left to credit -> skip.
+      // (goalRepo.addProgress already ignores a missing goal on its own.)
+      if (a.kind === 'habit') {
+        if (habitRepo.getById(a.targetId)) {
+          habitRepo.incrementAmount(a.targetId, a.date, delta, a.targetSeconds);
+        }
+      }
       // There used to be a separate addTimeProgress (its only difference was not
       // applying the target cap). Since addProgress's cap was removed, the two
       // became the same function and were merged into a single write path —
@@ -144,6 +154,24 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // first mount only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Local data is about to be replaced wholesale (account merge regenerates
+  // every id; account replace / erase deletes everything). Commit the running
+  // seconds NOW, while the timer's id still points at a real row, and close the
+  // session — otherwise the next pause/tick would write to an id that no longer
+  // exists (see lib/localDataEvents.ts).
+  useEffect(
+    () =>
+      onLocalDataWillChange(() => {
+        const a = activeRef.current;
+        if (!a) return;
+        commit(a);
+        activeRef.current = null;
+        setActive(null);
+        persist(null);
+      }),
+    [commit]
+  );
 
   // Every second while active: on first reaching the target, write progress to
   // the DB + give a success haptic, but do NOT stop the timer — the counter base

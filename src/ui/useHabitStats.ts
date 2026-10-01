@@ -18,6 +18,7 @@ import {
   weekStartOf,
 } from '@/lib/helpers';
 import { buildSeries, type HabitChartSeries } from '@/lib/habitSeries';
+import { currentStreakFrom, longestStreakFrom } from '@/lib/streaks';
 
 // The score chart's data generation and types moved to lib/habitSeries.ts (pure
 // logic, no React dependency — so its tests run fast in the 'logic' project).
@@ -70,7 +71,7 @@ export interface HabitStats {
   historyTotals: HistoryTotals | null; // "History" card — populated only for numeric/timer habits
 }
 
-const EMPTY: HabitStats = {
+export const EMPTY_HABIT_STATS: HabitStats = {
   habit: null,
   currentStreak: 0,
   longestStreak: 0,
@@ -213,40 +214,44 @@ function buildGoalPeriods(habit: Habit, allLogs: HabitLog[], today: string): Goa
     });
 }
 
+// Pure: everything on the stats screen derived from the habit + its full log
+// history. Shared by the local screen (logs from SQLite) and a friend's shared
+// habit (logs fetched from the server, see useSharedHabit).
+export function computeHabitStats(habit: Habit, allLogs: HabitLog[], today: string): HabitStats {
+  // The WINDOW_DAYS window is only read for the total amount; the
+  // scheduled/completed day counts and completion-rate calculation were
+  // REMOVED (see the HabitStats comment).
+  const windowStart = new Date(`${today}T00:00:00`);
+  windowStart.setDate(windowStart.getDate() - (WINDOW_DAYS - 1));
+  const windowStartYmd = toYmd(windowStart);
+  const totalAmount =
+    habit.target_amount != null
+      ? allLogs
+          .filter((l) => l.log_date >= windowStartYmd)
+          .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+      : null;
+  const completedDates = allLogs.filter((l) => l.completed === 1).map((l) => l.log_date);
+
+  return {
+    habit,
+    currentStreak: currentStreakFrom(habit, completedDates, today),
+    longestStreak: longestStreakFrom(habit, completedDates, today),
+    totalAmount,
+    // Gate REMOVED (2026-07-23): since the score now starts at 0 and climbs
+    // step by step, the low value on early days isn't misleading — it IS the
+    // model; hiding it was hiding exactly the climb the user was meant to see.
+    series: buildSeries(habit, allLogs),
+    goalPeriods: buildGoalPeriods(habit, allLogs, today),
+    historyTotals: buildHistoryTotals(habit, allLogs, today),
+  };
+}
+
 export function useHabitStats(habitId: string): HabitStats {
-  const [stats, setStats] = useState<HabitStats>(EMPTY);
+  const [stats, setStats] = useState<HabitStats>(EMPTY_HABIT_STATS);
 
   const reload = useCallback(() => {
     const habit = habitRepo.getById(habitId);
-    if (!habit) {
-      setStats(EMPTY);
-      return;
-    }
-
-    // The WINDOW_DAYS window is only read for the total amount; the
-    // scheduled/completed day counts and completion-rate calculation were
-    // REMOVED (see the HabitStats comment).
-    const dates = lastDays(WINDOW_DAYS);
-    const logs = habitRepo.logsInRange(habitId, dates[0]);
-
-    const totalAmount =
-      habit.target_amount != null ? logs.reduce((sum, l) => sum + (l.amount ?? 0), 0) : null;
-
-    const allLogs = habitRepo.allLogs(habitId);
-    const currentStreak = habitRepo.currentStreak(habitId);
-    const longestStreak = habitRepo.longestStreak(habitId);
-    setStats({
-      habit,
-      currentStreak,
-      longestStreak,
-      totalAmount,
-      // Gate REMOVED (2026-07-23): since the score now starts at 0 and climbs
-      // step by step, the low value on early days isn't misleading — it IS the
-      // model; hiding it was hiding exactly the climb the user was meant to see.
-      series: buildSeries(habit, allLogs),
-      goalPeriods: buildGoalPeriods(habit, allLogs, todayDate()),
-      historyTotals: buildHistoryTotals(habit, allLogs, todayDate()),
-    });
+    setStats(habit ? computeHabitStats(habit, habitRepo.allLogs(habitId), todayDate()) : EMPTY_HABIT_STATS);
   }, [habitId]);
 
   useFocusEffect(reload);

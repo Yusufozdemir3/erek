@@ -6,7 +6,7 @@
 // Architecture rule: no SQL; only taskRepo / habitRepo are called.
 
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { habitRepo, reminderRepo, taskRepo } from '@/db';
@@ -22,13 +22,14 @@ import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { WeekStrip } from '@/ui/WeekStrip';
 import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
+import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { DailySummary } from '@/ui/DailySummary';
 import { EmptyState } from '@/ui/EmptyState';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { PriorityMark } from '@/ui/PriorityMark';
-import { ProfileButton } from '@/ui/ProfileButton';
+import { HeaderActions } from '@/ui/HeaderActions';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -65,6 +66,8 @@ export default function TodayScreen() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
   const { tasks, habits, subtaskCounts, reload } = useTodayData(user.id, selectedDate, today);
+  const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
+  useSharedTasksFreshness(reload);
 
   // Filters only narrow the view — the summary (DailySummary) and the real
   // "is the day empty" state are always computed against the full list.
@@ -93,7 +96,26 @@ export default function TodayScreen() {
   // every 3 days ..." badge — see helpers.buildScheduleLabels.
   const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
+  // Someone else's task shared with me: the check-off goes to the server (my
+  // only write path); editing stays with the owner.
+  const sharedLabel = (t: Task): string | null => {
+    const uid = t.shared_owner_uid ?? t.shared_with_id;
+    return uid ? `👥 ${friendNames.get(uid) ?? tr('friends.unknownName')}` : null;
+  };
+
+  const openTask = (t: Task) => {
+    if (t.shared_owner_uid) {
+      Alert.alert(t.title, tr('share.readOnlyTask', { name: friendNames.get(t.shared_owner_uid) ?? tr('friends.unknownName') }));
+      return;
+    }
+    setEditingTask(t);
+  };
+
   const toggleTask = (t: Task) => {
+    if (t.shared_owner_uid) {
+      toggleSharedTaskOptimistic(t, reload, tr);
+      return;
+    }
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
@@ -148,7 +170,7 @@ export default function TodayScreen() {
                 <Text style={styles.backToday}>{tr('today.backToday')}</Text>
               </Pressable>
             )}
-            <ProfileButton />
+            <HeaderActions />
           </View>
         </View>
 
@@ -227,7 +249,6 @@ export default function TodayScreen() {
                 const time = extractTime(t.due_date);
                 return (
                   <Animated.View key={t.id} layout={LIST_LAYOUT} style={shared.card}>
-                    {time && <TimeBadge time={time} endTime={t.end_time} />}
                     <Pressable
                       onPress={() => toggleTask(t)}
                       hitSlop={8}
@@ -246,14 +267,15 @@ export default function TodayScreen() {
                     </Pressable>
                     <Pressable
                       style={shared.cardBody}
-                      onPress={() => setEditingTask(t)}
+                      onPress={() => openTask(t)}
                       accessibilityRole="button"
                       accessibilityLabel={tr('common.editA11y', { title: t.title })}
                     >
                       <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                      {(t.recurrence || subtaskCounts[t.id]) && (
+                      {(t.recurrence || subtaskCounts[t.id] || sharedLabel(t)) && (
                         <Text style={styles.subCount}>
                           {[
+                            sharedLabel(t),
                             t.recurrence
                               ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
                               : null,
@@ -266,6 +288,7 @@ export default function TodayScreen() {
                         </Text>
                       )}
                     </Pressable>
+                    {time && <TimeBadge time={time} endTime={t.end_time} />}
                     {!done && <PriorityMark priority={t.priority} />}
                   </Animated.View>
                 );

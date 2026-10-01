@@ -54,7 +54,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
   // The first pass after sign-in also goes through AppData's syncNow (runSync is
   // NOT called directly): keeps the "last backup" timestamp and sync error state
   // consolidated in one place.
-  const { user, refreshUser, refreshAuthUser, syncNow } = useAppData();
+  const { user, refreshUser, refreshAuthUser, notifyDataChanged, syncNow } = useAppData();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,7 +91,6 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
       // sync — so we ask up front what to do. See sync/syncEngine.ts (classifySignIn).
       const uid = await currentUid();
       const kind = uid ? await classifySignIn(uid) : 'fresh';
-      let switched = false;
       if (kind === 'switch') {
         const choice = await askSwitchStrategy();
         if (choice === 'cancel') {
@@ -108,7 +107,16 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
         }
         if (choice === 'merge') await prepareMergeIntoAccount();
         else await prepareReplaceWithAccount();
-        switched = true;
+        // Merge regenerated every id, replace deleted every row: the triggers in
+        // the OS notification queue now point at ids that no longer exist
+        // (cancelHabitReminders(newId) can never find them, so they'd fire
+        // forever, next to the rebuilt ones). Nuke + rebuild RIGHT HERE, not
+        // after the sync: this used to sit behind the sync-error early return
+        // below, so a switch made offline left the orphans in place. Whatever
+        // the sync pulls in afterwards gets scheduled by AppData.syncNow.
+        await cancelAllReminders();
+        await rescheduleEverything(user.id);
+        notifyDataChanged();
       } else if (kind === 'fresh') {
         // This device's data was never sent to any account (or the account it was
         // linked to was deleted — deleteAccountAndData clears the ownership stamp).
@@ -135,15 +143,6 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
           result.ownershipConflict ? t('sync.ownershipConflict') : (result.message ?? '')
         );
         return;
-      }
-
-      if (switched) {
-        // Merge generated new ids, replace deleted and re-downloaded all rows —
-        // either way, triggers scheduled in the OS notification queue under the
-        // OLD ids become orphaned (see the cancelAllReminders header comment in
-        // notifications.ts). Nuke them and rebuild from the current DB.
-        await cancelAllReminders();
-        await rescheduleEverything(user.id);
       }
 
       refreshUser();

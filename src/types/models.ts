@@ -61,6 +61,8 @@ export interface Task extends SyncFields {
   recurrence: Recurrence | null; // null = one-off
   remind_at: string | null;      // "09:00"; remind at this time ON the due date (null = no reminder). Independent of due_date's time.
   completed_at: string | null;   // null = not completed
+  shared_with_id: string | null;   // friend's cloud uid this task is shared with (owner side)
+  shared_owner_uid: string | null; // LOCAL-ONLY: set = someone else's task shared with me (read + check-off only)
 }
 
 export interface Goal extends SyncFields {
@@ -111,6 +113,9 @@ export interface GoalMilestone extends SyncFields {
 export interface GoalEntry extends SyncFields {
   goal_id: string;
   amount: number; // can be positive or negative (a correction)
+  // Cloud uid of the friend who added this entry to a goal shared with them
+  // (see migration021); null = added by the goal's owner.
+  added_by: string | null;
 }
 
 // How contribution to a linked goal works: 'per_completion' (+1 per

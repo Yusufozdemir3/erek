@@ -6,9 +6,9 @@
 // rows sat in the DB forever, got re-pushed on every full re-sync, and grew
 // the table that `SELECT *` queries had to scan.
 //
-// The fastest-growing source is reminders: reminderRepo.replaceAll soft-
-// deletes the existing rows on every edit and creates new ones, so editing a
-// habit's reminder time 20 times leaves 20 dead rows behind.
+// The fastest-growing source is reminders: every changed reminder time leaves
+// a dead row behind (reminderRepo.replaceAll used to do this on EVERY save,
+// even unchanged ones; it's diff-based now, but real edits still add up).
 //
 // RULE: a tombstone is only deleted once it's (a) old enough AND (b) already
 // pushed to the cloud (synced = 1). Without (b), a deletion that hasn't been

@@ -23,7 +23,7 @@ import { fmtClock, isTimeUnit } from '@/lib/helpers';
 import { cancelGoalReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
-import { ProfileButton } from '@/ui/ProfileButton';
+import { HeaderActions } from '@/ui/HeaderActions';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -79,7 +79,7 @@ export default function GoalsScreen() {
       <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
         <View style={shared.headerRow}>
           <Text style={shared.greeting}>{t('tabs.goals')}</Text>
-          <ProfileButton />
+          <HeaderActions />
         </View>
         <Text style={shared.subtitle}>{t('screen.goalsSubtitle')}</Text>
 

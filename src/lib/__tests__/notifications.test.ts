@@ -8,7 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { setNotificationPref } from '@/lib/notificationPrefs';
-import { reminderRepo } from '@/db';
+import { habitRepo, reminderRepo, taskRepo, userRepo } from '@/db';
 import type { Goal, Habit, Reminder, Task } from '@/db';
 import { resetTestDb } from '@/test/dbTestUtils';
 import {
@@ -22,6 +22,7 @@ import {
   scheduleGoalReminders,
   scheduleHabitReminders,
   scheduleTaskReminders,
+  sweepOrphanReminders,
 } from '@/lib/notifications';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
@@ -367,5 +368,58 @@ describe('migrateToMultiReminderIfNeeded', () => {
 
     await migrateToMultiReminderIfNeeded();
     expect(mockCancelAll).toHaveBeenCalledTimes(1); // didn't increase the second time
+  });
+});
+
+describe('sweepOrphanReminders', () => {
+  // A habit deleted on ANOTHER device (arrives via pull), a reminder removed
+  // there, local data cleared: none of these go through a local delete handler,
+  // and the rescheduleAll* passes only visit LIVE entities — so the old
+  // trigger stayed in the OS queue and fired every day. The sweep reconciles
+  // the queue against the DB.
+  it('DB\'de karşılığı olmayan tetikleyicileri iptal eder, canlıları ve zamanlayıcıyı bırakır', async () => {
+    const userId = userRepo.getOrCreateLocal().id;
+    const habit = habitRepo.create({ user_id: userId, title: 'Su iç' });
+    const deleted = habitRepo.create({ user_id: userId, title: 'Silinen' });
+    const kept = reminderRepo.create('habit', habit.id, '08:00');
+    const removed = reminderRepo.create('habit', habit.id, '20:00');
+    const onDeleted = reminderRepo.create('habit', deleted.id, '09:00');
+    reminderRepo.replaceAll('habit', habit.id, ['08:00']); // 20:00 removed
+    habitRepo.softDelete(deleted.id);
+    const task = taskRepo.create({ user_id: userId, title: 'Bitti', due_date: '2999-01-01' });
+    const taskRem = reminderRepo.create('task', task.id, '10:00');
+    taskRepo.setCompleted(task.id, true); // completed elsewhere -> no trigger should stay
+
+    mockGetAll.mockResolvedValue([
+      { identifier: `habit:${habit.id}:${kept.id}` },
+      { identifier: `habit:${habit.id}:${kept.id}#3` }, // weekly suffix of a live reminder
+      { identifier: `habit:${habit.id}:${removed.id}` },
+      { identifier: `habit:${deleted.id}:${onDeleted.id}#i0` },
+      { identifier: `task:${task.id}:${taskRem.id}` },
+      { identifier: `timer:${habit.id}` },
+      { identifier: 'something-else' },
+    ]);
+
+    const n = await sweepOrphanReminders(userId);
+
+    const cancelled = mockCancel.mock.calls.map((c) => c[0]).sort();
+    expect(cancelled).toEqual(
+      [
+        `habit:${habit.id}:${removed.id}`,
+        `habit:${deleted.id}:${onDeleted.id}#i0`,
+        `task:${task.id}:${taskRem.id}`,
+      ].sort()
+    );
+    expect(n).toBe(3);
+  });
+
+  it('izin olmasa da çalışır (iptal izin gerektirmez)', async () => {
+    const userId = userRepo.getOrCreateLocal().id;
+    mockGetPerms.mockResolvedValue({ granted: false, canAskAgain: false });
+    mockGetAll.mockResolvedValue([{ identifier: 'goal:yok:r1' }]);
+
+    await sweepOrphanReminders(userId);
+
+    expect(mockCancel).toHaveBeenCalledWith('goal:yok:r1');
   });
 });

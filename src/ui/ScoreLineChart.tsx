@@ -28,6 +28,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, ScrollView, Text, View } from 'react-native';
 import { AXIS_W, chartLayout } from '@/ui/scoreChartLayout';
+import { percentLabel } from '@/ui/theme';
+import type { Lang } from '@/i18n/translations';
 
 // SCALE: reference is the Loop Habit Tracker's score chart (from a user video).
 // The old values (110px height, 8px text) looked squashed next to the "History"
@@ -111,9 +113,10 @@ export interface ScoreLineChartProps {
   color: string;
   gridColor: string;
   labelColor: string;
+  lang: Lang;
 }
 
-export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLineChartProps) {
+export function ScoreLineChart({ points, color, gridColor, labelColor, lang }: ScoreLineChartProps) {
   const n = points.length;
   const [containerWidth, setContainerWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setContainerWidth(e.nativeEvent.layout.width);
@@ -177,7 +180,7 @@ export function ScoreLineChart({ points, color, gridColor, labelColor }: ScoreLi
                   textAlign: 'right',
                 }}
               >
-                {`%${g}`}
+                {percentLabel(g, lang)}
               </Text>
             ))}
           </View>

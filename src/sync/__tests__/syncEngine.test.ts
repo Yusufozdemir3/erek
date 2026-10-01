@@ -57,6 +57,7 @@ let upsertErrorMessage: string;
 let upsertErrorAtCall: number | null;
 let gtCalls: Array<{ table: string; since: string }>;
 let rangeCalls: Array<{ table: string; from: number; to: number }>;
+let reconcileCalls: Array<{ table: string; ids: string[] }>;
 
 // The timestamp the server writes via trigger (see supabase/schema.sql). When
 // fixtures don't supply one, the server is assumed to have received the record at the same time as the client.
@@ -78,7 +79,33 @@ function fakeFrom(table: string) {
     },
     select: () => {
       let since = '';
+      // Filters used by the shared-task reconciliation query (.in/.eq/.is, awaited directly).
+      let inIds: string[] | null = null;
+      const eqs: Array<[string, unknown]> = [];
+      const nulls: string[] = [];
       const q = {
+        in: (_col: string, ids: string[]) => {
+          inIds = ids;
+          reconcileCalls.push({ table, ids });
+          return q;
+        },
+        eq: (col: string, value: unknown) => {
+          eqs.push([col, value]);
+          return q;
+        },
+        is: (col: string, _value: null) => {
+          nulls.push(col);
+          return q;
+        },
+        then: (resolve: (v: unknown) => void) => {
+          const rows = (remoteData[table] ?? []).filter(
+            (r) =>
+              (inIds == null || inIds.includes(String(r.id))) &&
+              eqs.every(([c, v]) => r[c] === v) &&
+              nulls.every((c) => r[c] == null)
+          );
+          resolve({ data: rows.map((r) => ({ id: r.id })), error: null });
+        },
         gt: (_col: string, value: string) => {
           since = value;
           gtCalls.push({ table, since: value });
@@ -144,6 +171,7 @@ beforeEach(async () => {
   upsertErrorAtCall = null;
   gtCalls = [];
   rangeCalls = [];
+  reconcileCalls = [];
   mockFrom.mockImplementation(fakeFrom);
   mockEnsureSignedIn.mockResolvedValue(UID);
   await AsyncStorage.clear();
@@ -446,6 +474,58 @@ describe('runSync — reminders doğal anahtar birleştirme', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe('11111111-2222-3333-4444-555555555555');
   });
+
+  // The field bug: another device saved the form (delete 08:30 as id-1 +
+  // re-create 08:30 as id-2, both in the same millisecond). Here the tombstone
+  // for id-1 has already landed; the live id-2 then arrives with the SAME
+  // timestamp. The tombstone used to win the tie ("local wins") and id-2 was
+  // skipped for good — the reminder vanished from this device.
+  it('silinmiş (tombstone) yerel rakip, aynı damgalı canlı uzak satırı ezmez', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
+    const old = reminderRepo.create('habit', habit.id, '08:30');
+    const stamp = isoShift(3600_000);
+    getDb().runSync(`UPDATE reminders SET deleted_at = ?, updated_at = ?, synced = 1 WHERE id = ?`, [
+      stamp,
+      stamp,
+      old.id,
+    ]);
+
+    remoteData['reminders'] = [{
+      id: 'aaaaaaaa-0000-0000-0000-000000000002',
+      entity_type: 'habit',
+      entity_id: habit.id,
+      time: '08:30',
+      updated_at: stamp, // exactly the tombstone's timestamp
+      deleted_at: null,
+    }];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    const rows = reminderRepo.listByEntity('habit', habit.id);
+    expect(rows.map((r) => r.id)).toEqual(['aaaaaaaa-0000-0000-0000-000000000002']);
+  });
+
+  it('uzak tombstone, farklı id\'li CANLI yerel hatırlatmayı silmez (yalnız kendi id\'siyle saklanır)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
+    const live = reminderRepo.create('habit', habit.id, '08:30');
+
+    remoteData['reminders'] = [{
+      id: 'aaaaaaaa-0000-0000-0000-000000000009',
+      entity_type: 'habit',
+      entity_id: habit.id,
+      time: '08:30',
+      updated_at: isoShift(3600_000), // newer, but it's a deletion of a DIFFERENT id
+      deleted_at: isoShift(3600_000),
+    }];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    expect(reminderRepo.listByEntity('habit', habit.id).map((r) => r.id)).toEqual([live.id]);
+  });
 });
 
 describe('runSync — habit_logs doğal anahtar birleştirme', () => {
@@ -615,6 +695,30 @@ describe('runSync — hedef ilerlemesi çok cihazda birleşir', () => {
     // History and the value now confirm each other.
     const sum = goalEntryRepo.listByGoal(goal.id).reduce((s, e) => s + e.amount, 0);
     expect(sum).toBe(8);
+  });
+
+  // Shared goal (phase 4): a friend's contribution is written server-side as an
+  // ordinary goal_entries row on MY goal, stamped with their uid. It must land
+  // through the normal pull, keep who added it, and count toward the total.
+  it('arkadaşın ortak hedefe eklediği girdi pull ile gelir, added_by korunur ve toplama katılır', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const goal = goalRepo.create({ user_id: user.id, title: 'Koş', goal_type: 'numeric', target_value: 100 });
+    goalRepo.addProgress(goal.id, 10);
+    const FRIEND = '00000000-0000-0000-0000-00000000000b';
+
+    remoteData['goal_entries'] = [
+      { id: 'arkadas-girdi', goal_id: goal.id, amount: 4, updated_at: isoShift(60_000), deleted_at: null, added_by: FRIEND },
+    ];
+
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    expect(goalRepo.getById(goal.id)!.current_value).toBe(14);
+    const byFriend = goalEntryRepo.listByGoal(goal.id).find((e) => e.id === 'arkadas-girdi');
+    expect(byFriend?.added_by).toBe(FRIEND);
+    // My own entries stay unattributed (NULL = the owner) and push that way.
+    const mine = upserts.find((u) => u.table === 'goal_entries')!.payload[0];
+    expect(mine.added_by).toBeNull();
   });
 
   it('elle yapılan düzeltme (baseline) girdilerin ÜSTÜNE biner', async () => {
@@ -837,5 +941,129 @@ describe('hesap değişimi — iki çözüm yolu', () => {
     await prepareMergeIntoAccount();
 
     expect(await AsyncStorage.getItem('timer:active')).toBeNull();
+  });
+});
+
+// SHARED TASKS (friends/sharing phase 3). The owner's row reaches the friend
+// through the normal pull (RLS widens SELECT). The invariant that matters most:
+// the friend's copy must NEVER be pushed — RLS would reject it and wedge sync.
+describe('paylaşılan görevler', () => {
+  const FRIEND = 'friend-uid';
+
+  function remoteTask(overrides: Row & { id: string }): Row {
+    return {
+      user_id: FRIEND,
+      title: 'Ortak görev',
+      due_date: '2026-07-01',
+      end_time: null,
+      priority: 'medium',
+      recurrence: null,
+      remind_at: null,
+      completed_at: null,
+      updated_at: '2026-07-01T10:00:00.000Z',
+      deleted_at: null,
+      shared_with_id: UID,
+      ...overrides,
+    };
+  }
+
+  const sharedRows = () =>
+    getDb().getAllSync<{ id: string; shared_owner_uid: string | null; user_id: string }>(
+      `SELECT id, shared_owner_uid, user_id FROM tasks WHERE shared_owner_uid IS NOT NULL`
+    );
+
+  it('başkasının görevi pull ile gelir, sahibi işaretlenir ve kendi listemde görünür', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask({ id: 't-shared' })];
+
+    await runSync(user.id);
+
+    expect(sharedRows()).toEqual([{ id: 't-shared', shared_owner_uid: FRIEND, user_id: user.id }]);
+    expect(taskRepo.listByUser(user.id).map((t) => t.id)).toContain('t-shared');
+  });
+
+  it('kendi görevim pull ile gelince sahibi boş kalır', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask({ id: 't-own', user_id: UID, shared_with_id: FRIEND })];
+
+    await runSync(user.id);
+
+    expect(taskRepo.getById('t-own')).toMatchObject({ shared_owner_uid: null, shared_with_id: FRIEND });
+  });
+
+  it('prepareFullResync her şeyi synced=0 yapsa bile başkasının görevi push edilmez', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const own = taskRepo.create({ user_id: user.id, title: 'Benim' });
+    remoteData['tasks'] = [remoteTask({ id: 't-shared' })];
+    await runSync(user.id);
+    upserts = [];
+
+    await prepareFullResync();
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    const pushedIds = upserts.filter((u) => u.table === 'tasks').flatMap((u) => u.payload.map((p) => p.id));
+    expect(pushedIds).toContain(own.id);
+    expect(pushedIds).not.toContain('t-shared');
+  });
+
+  it('paylaşım bitince (satır artık görünmüyor) yerel kopya silinir', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask({ id: 't-shared' })];
+    await runSync(user.id);
+
+    remoteData['tasks'] = [remoteTask({ id: 't-shared', shared_with_id: null })];
+    await runSync(user.id);
+
+    expect(sharedRows()).toEqual([]);
+  });
+
+  it('paylaşılan görev yokken uzlaştırma sorgusu hiç atılmaz', async () => {
+    const user = userRepo.getOrCreateLocal();
+    taskRepo.create({ user_id: user.id, title: 'Benim' });
+
+    await runSync(user.id);
+
+    expect(reconcileCalls).toEqual([]);
+  });
+
+  it('başkasının görevinde yerel düzenleme yok sayılır (kuyruğa girmez)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask({ id: 't-shared' })];
+    await runSync(user.id);
+
+    taskRepo.setCompleted('t-shared', true);
+    taskRepo.update('t-shared', { title: 'Değiştirdim' });
+    taskRepo.softDelete('t-shared');
+
+    expect(taskRepo.getById('t-shared')).toMatchObject({
+      title: 'Ortak görev',
+      completed_at: null,
+      deleted_at: null,
+      synced: 1,
+    });
+  });
+
+  it('hesap birleştirmede başkasının görevi yeni hesaba kopyalanmaz', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask({ id: 't-shared' })];
+    await runSync(user.id);
+
+    await prepareMergeIntoAccount();
+
+    expect(sharedRows()).toEqual([]);
+  });
+
+  it('arkadaşın işaretlemesi (RPC sonucu) yerel satıra push kuyruğuna girmeden yazılır', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask({ id: 't-shared' })];
+    await runSync(user.id);
+
+    taskRepo.applySharedCompletion('t-shared', '2026-07-01T12:00:00.000Z', '2026-07-01T12:00:00.000Z');
+
+    expect(taskRepo.getById('t-shared')).toMatchObject({
+      completed_at: '2026-07-01T12:00:00.000Z',
+      synced: 1,
+    });
   });
 });

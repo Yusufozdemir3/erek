@@ -135,9 +135,10 @@ alter table public.goals add column if not exists start_date text;
 -- aynı gerekçe): kolon bulutta yoksa yeni istemcinin push'u şema hatasıyla patlar.
 alter table public.goals add column if not exists value_baseline double precision not null default 0;
 
--- Hedefin 'Genel' sekmesinde serbest miktar girişiyle ("Ekle") eklenen kayıtların
--- günlüğü. Yalnızca görüntüleme içindir — goals.current_value tek doğru kaynak
--- olmaya devam eder, bu tablodan TÜRETİLMEZ.
+-- Hedefe eklenen ilerleme girdileri. Yerel migration019'dan beri ilerlemenin
+-- KAYNAĞI bunlardır: current_value = value_baseline + aktif girdilerin toplamı
+-- (goals.current_value yalnızca bir önbellek). Paylaşılan hedefte arkadaşın
+-- katkısı da buraya satır olarak düşer (added_by, bkz. PHASE 4).
 create table if not exists public.goal_entries (
   id         uuid primary key,
   goal_id    uuid not null,
@@ -343,3 +344,910 @@ $$;
 -- Yalnızca oturumlu kullanıcılar çağırabilsin.
 revoke all on function public.delete_account() from public, anon;
 grant execute on function public.delete_account() to authenticated;
+
+-- =============================================================================
+-- FRIENDS / SHARING — PHASE 1: connections via invite code
+-- =============================================================================
+-- Security model:
+--   - Clients never write these tables directly. Every write goes through a
+--     SECURITY DEFINER RPC that validates the caller (auth.uid()).
+--   - Every new function pins `search_path = ''` and uses fully-qualified
+--     names, so an object planted on the search path can't hijack it.
+--   - Policies use `(select auth.uid())` so Postgres evaluates it once per
+--     query (InitPlan) instead of once per row.
+--   - A user's display name/avatar are derived server-side from auth.users
+--     (trigger below); the avatar is restricted to Google's image host so a
+--     crafted URL can't be used as a tracking pixel against friends.
+--   - All new tables reference auth.users ON DELETE CASCADE, so
+--     delete_account() (which deletes the auth.users row) removes them too.
+
+create or replace function public.safe_avatar_url(p_url text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when p_url ~ '^https://[a-z0-9-]+\.googleusercontent\.com/' and char_length(p_url) <= 1000
+      then p_url
+    else null
+  end
+$$;
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  display_name text check (display_name is null or char_length(display_name) <= 80),
+  avatar_url text check (avatar_url is null or avatar_url ~ '^https://[a-z0-9-]+\.googleusercontent\.com/'),
+  updated_at timestamptz not null default now()
+);
+
+-- One canonical row per friendship (user_a < user_b): there is no second,
+-- mirrored row that could get out of sync with the first.
+create table if not exists public.connections (
+  user_a uuid not null references auth.users(id) on delete cascade,
+  user_b uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_a, user_b),
+  check (user_a < user_b)
+);
+create index if not exists idx_connections_user_b on public.connections(user_b);
+
+create table if not exists public.friend_invites (
+  code text primary key,
+  inviter_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '48 hours'),
+  used_by uuid references auth.users(id) on delete set null,
+  used_at timestamptz
+);
+create index if not exists idx_friend_invites_inviter on public.friend_invites(inviter_id);
+
+-- Failed redeem attempts, for rate limiting code guessing.
+create table if not exists public.invite_redeem_attempts (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  attempted_at timestamptz not null default now()
+);
+create index if not exists idx_invite_redeem_attempts
+  on public.invite_redeem_attempts(user_id, attempted_at);
+
+alter table public.profiles               enable row level security;
+alter table public.connections            enable row level security;
+alter table public.friend_invites         enable row level security;
+alter table public.invite_redeem_attempts enable row level security;
+
+-- Read-only access to your OWN rows; friends' profiles are only reachable
+-- through list_connections()/redeem_invite(). No insert/update/delete policies
+-- anywhere: only the SECURITY DEFINER functions below can write.
+drop policy if exists "profiles self read" on public.profiles;
+create policy "profiles self read" on public.profiles
+  for select using (id = (select auth.uid()));
+
+drop policy if exists "connections member read" on public.connections;
+create policy "connections member read" on public.connections
+  for select using ((select auth.uid()) in (user_a, user_b));
+
+drop policy if exists "invites own read" on public.friend_invites;
+create policy "invites own read" on public.friend_invites
+  for select using (inviter_id = (select auth.uid()));
+-- invite_redeem_attempts: RLS on and NO policy = no direct client access at all.
+
+-- Profile maintained from the auth record (Google full_name/avatar_url).
+create or replace function public.sync_profile_from_auth()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.profiles (id, display_name, avatar_url, updated_at)
+  values (
+    new.id,
+    left(coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name'), 80),
+    public.safe_avatar_url(coalesce(new.raw_user_meta_data->>'avatar_url', new.raw_user_meta_data->>'picture')),
+    now()
+  )
+  on conflict (id) do update
+    set display_name = excluded.display_name,
+        avatar_url   = excluded.avatar_url,
+        updated_at   = now();
+  return new;
+end;
+$$;
+revoke all on function public.sync_profile_from_auth() from public, anon, authenticated;
+
+drop trigger if exists trg_profile_from_auth on auth.users;
+create trigger trg_profile_from_auth
+  after insert or update of raw_user_meta_data on auth.users
+  for each row execute function public.sync_profile_from_auth();
+
+-- One-time backfill for users who signed up before this trigger existed (idempotent).
+insert into public.profiles (id, display_name, avatar_url, updated_at)
+select
+  u.id,
+  left(coalesce(u.raw_user_meta_data->>'full_name', u.raw_user_meta_data->>'name'), 80),
+  public.safe_avatar_url(coalesce(u.raw_user_meta_data->>'avatar_url', u.raw_user_meta_data->>'picture')),
+  now()
+from auth.users u
+on conflict (id) do update
+  set display_name = excluded.display_name,
+      avatar_url   = excluded.avatar_url,
+      updated_at   = now();
+
+create or replace function public.are_connected(a uuid, b uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.connections c
+    where c.user_a = least(a, b) and c.user_b = greatest(a, b)
+  )
+$$;
+revoke all on function public.are_connected(uuid, uuid) from public, anon;
+grant execute on function public.are_connected(uuid, uuid) to authenticated;
+
+-- Returns the caller's live invite, creating one if needed. Repeated calls
+-- return the SAME code (no row per tap); p_rotate discards it and issues a new one.
+-- Code: 8 symbols from a 31-letter alphabet without look-alikes (0/O, 1/I/L),
+-- ~8.5e11 combinations, drawn from a CSPRNG. Bytes >= 248 (= 31*8) are
+-- rejected so every symbol is equally likely (no modulo bias).
+create or replace function public.get_or_create_invite(p_rotate boolean default false)
+returns table (code text, expires_at timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+  v_uid uuid := auth.uid();
+  v_alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  v_code text;
+  v_bytes bytea;
+  v_b int;
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+
+  -- Housekeeping: this user's expired or already-used invites are dead weight.
+  delete from public.friend_invites fi
+  where fi.inviter_id = v_uid and (fi.expires_at <= now() or fi.used_by is not null);
+
+  if p_rotate then
+    delete from public.friend_invites fi where fi.inviter_id = v_uid;
+  else
+    return query
+      select fi.code, fi.expires_at
+      from public.friend_invites fi
+      where fi.inviter_id = v_uid
+      order by fi.created_at desc
+      limit 1;
+    if found then
+      return;
+    end if;
+  end if;
+
+  loop
+    v_code := '';
+    while char_length(v_code) < 8 loop
+      v_bytes := extensions.gen_random_bytes(16);
+      for i in 0..15 loop
+        v_b := get_byte(v_bytes, i);
+        if v_b < 248 and char_length(v_code) < 8 then
+          v_code := v_code || substr(v_alphabet, (v_b % 31) + 1, 1);
+        end if;
+      end loop;
+    end loop;
+    begin
+      insert into public.friend_invites (code, inviter_id) values (v_code, v_uid);
+      exit;
+    exception when unique_violation then
+      -- Astronomically rare collision: draw a new code.
+    end;
+  end loop;
+
+  return query
+    select fi.code, fi.expires_at from public.friend_invites fi where fi.code = v_code;
+end;
+$$;
+revoke all on function public.get_or_create_invite(boolean) from public, anon;
+grant execute on function public.get_or_create_invite(boolean) to authenticated;
+
+-- Redeems a friend's code and creates the connection.
+-- Expected failures are RETURNED as {"error": "ERK_..."} instead of raised: a
+-- raise would roll back the failed-attempt row below and silently disable the
+-- rate limit. Unknown, expired and already-used codes all return the same
+-- ERK_INVITE_INVALID so the response never reveals which codes exist.
+create or replace function public.redeem_invite(p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_code text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
+  v_inviter uuid;
+  v_friend jsonb;
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+
+  delete from public.invite_redeem_attempts a
+  where a.user_id = v_uid and a.attempted_at < now() - interval '1 day';
+
+  if (select count(*) from public.invite_redeem_attempts a
+      where a.user_id = v_uid and a.attempted_at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('error', 'ERK_RATE_LIMITED');
+  end if;
+
+  -- FOR UPDATE: two people redeeming the same code at once can't both win.
+  select fi.inviter_id into v_inviter
+  from public.friend_invites fi
+  where fi.code = v_code and fi.used_by is null and fi.expires_at > now()
+  for update;
+
+  if v_inviter is null then
+    insert into public.invite_redeem_attempts (user_id) values (v_uid);
+    return jsonb_build_object('error', 'ERK_INVITE_INVALID');
+  end if;
+  if v_inviter = v_uid then
+    return jsonb_build_object('error', 'ERK_INVITE_SELF');
+  end if;
+  if public.are_connected(v_uid, v_inviter) then
+    return jsonb_build_object('error', 'ERK_ALREADY_CONNECTED');
+  end if;
+  if (select count(*) from public.connections c where v_uid in (c.user_a, c.user_b)) >= 50
+     or (select count(*) from public.connections c where v_inviter in (c.user_a, c.user_b)) >= 50 then
+    return jsonb_build_object('error', 'ERK_CONNECTION_LIMIT');
+  end if;
+
+  insert into public.connections (user_a, user_b)
+  values (least(v_uid, v_inviter), greatest(v_uid, v_inviter))
+  on conflict do nothing;
+
+  update public.friend_invites fi
+  set used_by = v_uid, used_at = now()
+  where fi.code = v_code;
+
+  select jsonb_build_object('id', p.id, 'display_name', p.display_name, 'avatar_url', p.avatar_url)
+  into v_friend
+  from public.profiles p
+  where p.id = v_inviter;
+
+  return jsonb_build_object('friend', coalesce(v_friend, jsonb_build_object('id', v_inviter)));
+end;
+$$;
+revoke all on function public.redeem_invite(text) from public, anon;
+grant execute on function public.redeem_invite(text) to authenticated;
+
+create or replace function public.list_connections()
+returns table (id uuid, display_name text, avatar_url text, connected_at timestamptz)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select f.friend_id, p.display_name, p.avatar_url, f.created_at
+  from (
+    select
+      case when c.user_a = (select auth.uid()) then c.user_b else c.user_a end as friend_id,
+      c.created_at
+    from public.connections c
+    where c.user_a = (select auth.uid()) or c.user_b = (select auth.uid())
+  ) f
+  left join public.profiles p on p.id = f.friend_id
+  order by p.display_name nulls last
+$$;
+revoke all on function public.list_connections() from public, anon;
+grant execute on function public.list_connections() to authenticated;
+
+-- =============================================================================
+-- FRIENDS / SHARING — PHASE 2: read-only habit sharing
+-- =============================================================================
+-- The habits/habit_logs policies are deliberately NOT widened: sync pulls
+-- rely purely on RLS for visibility, so a wider SELECT policy would drop a
+-- friend's habit into the recipient's own habit list (and make every owner
+-- pull costlier). A friend's habit is only reachable through the functions
+-- below, which verify the share and return display fields only (no goal link,
+-- no reminder times).
+
+create table if not exists public.habit_shares (
+  habit_id uuid not null,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  shared_with_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (habit_id, shared_with_id)
+);
+create index if not exists idx_habit_shares_recipient on public.habit_shares(shared_with_id);
+create index if not exists idx_habit_shares_owner on public.habit_shares(owner_id);
+-- Keyset scan of one habit's logs in server-time order (get_shared_habit_logs).
+create index if not exists idx_habit_logs_habit_server on public.habit_logs(habit_id, server_updated_at, id);
+
+alter table public.habit_shares enable row level security;
+drop policy if exists "habit_shares member read" on public.habit_shares;
+create policy "habit_shares member read" on public.habit_shares
+  for select using ((select auth.uid()) in (owner_id, shared_with_id));
+-- No write policies: share_habit()/unshare_habit() are the only writers.
+
+create or replace function public.share_habit(p_habit_id uuid, p_friend uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  -- Also the answer for "not yours": indistinguishable on purpose.
+  if not exists (
+    select 1 from public.habits h
+    where h.id = p_habit_id and h.user_id = v_uid and h.deleted_at is null
+  ) then
+    return jsonb_build_object('error', 'ERK_HABIT_NOT_SYNCED');
+  end if;
+  if not public.are_connected(v_uid, p_friend) then
+    return jsonb_build_object('error', 'ERK_NOT_CONNECTED');
+  end if;
+  if (select count(*) from public.habit_shares s where s.habit_id = p_habit_id) >= 20 then
+    return jsonb_build_object('error', 'ERK_SHARE_LIMIT');
+  end if;
+  insert into public.habit_shares (habit_id, owner_id, shared_with_id)
+  values (p_habit_id, v_uid, p_friend)
+  on conflict do nothing;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+revoke all on function public.share_habit(uuid, uuid) from public, anon;
+grant execute on function public.share_habit(uuid, uuid) to authenticated;
+
+-- The owner stops sharing with p_friend, or a recipient removes a habit shared
+-- with them (p_friend is ignored in that case).
+create or replace function public.unshare_habit(p_habit_id uuid, p_friend uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  delete from public.habit_shares s
+  where s.habit_id = p_habit_id
+    and ((s.owner_id = v_uid and s.shared_with_id = p_friend) or s.shared_with_id = v_uid);
+end;
+$$;
+revoke all on function public.unshare_habit(uuid, uuid) from public, anon;
+grant execute on function public.unshare_habit(uuid, uuid) to authenticated;
+
+-- Habits shared with the caller. The share row's owner must still own the
+-- habit and still be connected (defense in depth on top of remove_connection).
+create or replace function public.get_shared_habits()
+returns table (
+  id uuid, title text, kind text, icon text, color text, schedule text,
+  target_amount double precision, unit text, start_date text, end_date text,
+  owner_id uuid, owner_name text, owner_avatar text, shared_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select h.id, h.title, h.kind, h.icon, h.color, h.schedule,
+         h.target_amount, h.unit, h.start_date, h.end_date,
+         s.owner_id, p.display_name, p.avatar_url, s.created_at
+  from public.habit_shares s
+  join public.habits h
+    on h.id = s.habit_id and h.user_id = s.owner_id and h.deleted_at is null
+  left join public.profiles p on p.id = s.owner_id
+  where s.shared_with_id = (select auth.uid())
+    and public.are_connected(s.owner_id, s.shared_with_id)
+  order by p.display_name nulls last, h.title
+$$;
+revoke all on function public.get_shared_habits() from public, anon;
+grant execute on function public.get_shared_habits() to authenticated;
+
+-- One page (max 2000) of a shared habit's logs after the keyset cursor
+-- (server_updated_at, id). The client fetches incrementally and caches.
+create or replace function public.get_shared_habit_logs(
+  p_habit_id uuid,
+  p_after_ts timestamptz default '-infinity',
+  p_after_id uuid default '00000000-0000-0000-0000-000000000000'
+)
+returns table (
+  id uuid, log_date text, completed integer, amount double precision,
+  updated_at timestamptz, server_updated_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+begin
+  if not exists (
+    select 1
+    from public.habit_shares s
+    join public.habits h
+      on h.id = s.habit_id and h.user_id = s.owner_id and h.deleted_at is null
+    where s.habit_id = p_habit_id
+      and s.shared_with_id = (select auth.uid())
+      and public.are_connected(s.owner_id, s.shared_with_id)
+  ) then
+    raise exception using message = 'ERK_NOT_SHARED';
+  end if;
+
+  return query
+    select l.id, l.log_date, l.completed, l.amount, l.updated_at, l.server_updated_at
+    from public.habit_logs l
+    where l.habit_id = p_habit_id
+      and (l.server_updated_at, l.id) > (coalesce(p_after_ts, '-infinity'::timestamptz),
+                                         coalesce(p_after_id, '00000000-0000-0000-0000-000000000000'::uuid))
+    order by l.server_updated_at, l.id
+    limit 2000;
+end;
+$$;
+revoke all on function public.get_shared_habit_logs(uuid, timestamptz, uuid) from public, anon;
+grant execute on function public.get_shared_habit_logs(uuid, timestamptz, uuid) to authenticated;
+
+-- =============================================================================
+-- FRIENDS / SHARING — PHASE 3: shared tasks (the friend may only check off)
+-- =============================================================================
+-- Unlike habits, a shared task DOES flow through the normal sync pull (it must
+-- appear in the friend's own task lists), so the tasks SELECT policy is widened.
+-- Writes stay owner-only: the friend's device never pushes the row (client
+-- guarantees it) and its only write path is toggle_shared_task().
+-- Triggers on the push path NEVER raise — a raise would permanently wedge the
+-- owner's sync on that row. Invalid values are corrected instead, and the
+-- correction bumps updated_at so every device adopts it via last-writer-wins.
+
+-- MUST RUN BEFORE THE CLIENT UPDATE ships (same rule as goal_contribution):
+-- the new client pushes shared_with_id, and a cloud without the column fails
+-- every tasks push with "Could not find the 'shared_with_id' column".
+alter table public.tasks add column if not exists shared_with_id uuid references auth.users(id) on delete set null;
+create index if not exists idx_tasks_shared_with on public.tasks(shared_with_id) where shared_with_id is not null;
+-- Lets the planner answer "user_id = me OR shared_with_id = me" with a BitmapOr.
+create index if not exists idx_tasks_user on public.tasks(user_id);
+
+-- CLIENT CAPABILITY GATE. A task shared WITH me is only returned to clients
+-- that understand sharing (they send the `x-erek-sharing: 1` header, see
+-- src/sync/supabase.ts). An OLDER app version (e.g. the same account's second
+-- device not yet updated) has no idea such rows exist: it would store the
+-- friend's task as its own, and the first edit/check-off would be rejected by
+-- RLS — wedging that device's sync for good. Without the header the policy
+-- behaves exactly like the old "own tasks" one. Not a security boundary: the
+-- header can only reveal rows the caller is already entitled to.
+create or replace function public.client_supports_sharing()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(current_setting('request.headers', true)::json ->> 'x-erek-sharing', '') = '1'
+$$;
+revoke all on function public.client_supports_sharing() from public, anon;
+grant execute on function public.client_supports_sharing() to authenticated;
+
+drop policy if exists "own tasks" on public.tasks;
+drop policy if exists "tasks select" on public.tasks;
+drop policy if exists "tasks insert" on public.tasks;
+drop policy if exists "tasks update" on public.tasks;
+drop policy if exists "tasks delete" on public.tasks;
+create policy "tasks select" on public.tasks for select
+  using (
+    user_id = (select auth.uid())
+    or (shared_with_id = (select auth.uid()) and (select public.client_supports_sharing()))
+  );
+create policy "tasks insert" on public.tasks for insert
+  with check (user_id = (select auth.uid()));
+create policy "tasks update" on public.tasks for update
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+create policy "tasks delete" on public.tasks for delete
+  using (user_id = (select auth.uid()));
+
+create or replace function public.tasks_sharing_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- 1) Lost-update guard, only on shared tasks: an owner's OFFLINE edit made
+  --    before the friend's check-off must not undo that check-off. Other
+  --    columns (title, date...) still go through; completion keeps the newer value.
+  if tg_op = 'UPDATE' and old.shared_with_id is not null and new.updated_at < old.updated_at then
+    new.completed_at := old.completed_at;
+    new.updated_at := old.updated_at;
+  end if;
+
+  -- 2) A share is only valid toward a connected friend, never to yourself,
+  --    never on a recurring task (recurrence is computed client-side).
+  if new.shared_with_id is not null and (
+       new.shared_with_id = new.user_id
+       or new.recurrence is not null
+       or not public.are_connected(new.user_id, new.shared_with_id)) then
+    new.shared_with_id := null;
+    new.updated_at := greatest(new.updated_at, now());
+  end if;
+
+  -- 3) A share cleared WITHOUT a newer client timestamp (ON DELETE SET NULL
+  --    when the friend deletes their account): make it win on the owner's devices.
+  if tg_op = 'UPDATE' and old.shared_with_id is not null and new.shared_with_id is null
+     and new.updated_at <= old.updated_at then
+    new.updated_at := now();
+  end if;
+
+  return new;
+end;
+$$;
+revoke all on function public.tasks_sharing_guard() from public, anon, authenticated;
+
+drop trigger if exists trg_tasks_sharing_guard on public.tasks;
+create trigger trg_tasks_sharing_guard
+  before insert or update on public.tasks
+  for each row execute function public.tasks_sharing_guard();
+
+-- The friend's ONLY write path: flips completion and nothing else.
+-- completed_at is stored as text by the app (JS toISOString format).
+create or replace function public.toggle_shared_task(p_task_id uuid, p_completed boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_completed_at text;
+  v_updated_at timestamptz;
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  update public.tasks t
+  set completed_at = case
+        when p_completed then to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        else null
+      end,
+      -- Strictly newer than the current row even if the owner's device clock
+      -- runs ahead of the server, so the lost-update guard never eats this toggle.
+      updated_at = greatest(now(), t.updated_at + interval '1 millisecond')
+  where t.id = p_task_id
+    and t.shared_with_id = v_uid
+    and t.deleted_at is null
+    and t.recurrence is null
+    and public.are_connected(t.user_id, v_uid)
+  returning t.completed_at, t.updated_at into v_completed_at, v_updated_at;
+  if not found then
+    return jsonb_build_object('error', 'ERK_NOT_SHARED');
+  end if;
+  return jsonb_build_object('completed_at', v_completed_at, 'updated_at', v_updated_at);
+end;
+$$;
+revoke all on function public.toggle_shared_task(uuid, boolean) from public, anon;
+grant execute on function public.toggle_shared_task(uuid, boolean) to authenticated;
+
+-- Removes a friendship AND, in the same transaction, everything the two share
+-- with each other — no half-revoked state is possible.
+create or replace function public.remove_connection(p_friend uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  delete from public.connections c
+  where c.user_a = least(v_uid, p_friend) and c.user_b = greatest(v_uid, p_friend);
+  delete from public.habit_shares s
+  where (s.owner_id = v_uid and s.shared_with_id = p_friend)
+     or (s.owner_id = p_friend and s.shared_with_id = v_uid);
+  -- Entries a friend already contributed to a shared goal STAY: they're part
+  -- of that goal's history. Only the ability to see/contribute ends.
+  delete from public.goal_shares s
+  where (s.owner_id = v_uid and s.shared_with_id = p_friend)
+     or (s.owner_id = p_friend and s.shared_with_id = v_uid);
+  -- updated_at bump: owners' devices adopt the cleared share via LWW; the
+  -- friend's device drops the task in its post-pull reconciliation.
+  update public.tasks t
+  set shared_with_id = null, updated_at = now()
+  where (t.user_id = v_uid and t.shared_with_id = p_friend)
+     or (t.user_id = p_friend and t.shared_with_id = v_uid);
+end;
+$$;
+revoke all on function public.remove_connection(uuid) from public, anon;
+grant execute on function public.remove_connection(uuid) to authenticated;
+
+-- =============================================================================
+-- FRIENDS / SHARING — PHASE 4: shared goals (the friend may view AND contribute)
+-- =============================================================================
+-- Same read path as habits (PHASE 2): the goals/goal_entries policies stay
+-- owner-only, so a friend's goal never lands in the recipient's own sync pull;
+-- it's reachable only through the functions below. The friend's ONLY write path
+-- is add_shared_goal_entry(): it appends a goal_entries row to the OWNER's goal,
+-- stamped with added_by. The owner's devices pull that row like any other entry
+-- (goal_entries RLS goes through goal ownership) and re-derive current_value
+-- from baseline + entries, so contributions merge without conflict.
+
+-- Who added an entry. NULL = the goal's owner (every row written before this
+-- phase, and every row the owner's own devices create). Deliberately NO foreign
+-- key: if a contributor deletes their account, their past contributions stay in
+-- the owner's history (unattributed), instead of the uid being nulled into
+-- "added by the owner".
+-- MUST RUN BEFORE THE CLIENT UPDATE ships (same rule as goal_contribution): the
+-- new client pushes added_by, and a cloud without the column fails every
+-- goal_entries push with "Could not find the 'added_by' column".
+alter table public.goal_entries add column if not exists added_by uuid;
+-- Rate limit lookup in add_shared_goal_entry.
+create index if not exists idx_goal_entries_added_by
+  on public.goal_entries(added_by, server_updated_at) where added_by is not null;
+
+create table if not exists public.goal_shares (
+  goal_id uuid not null,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  shared_with_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (goal_id, shared_with_id)
+);
+create index if not exists idx_goal_shares_recipient on public.goal_shares(shared_with_id);
+create index if not exists idx_goal_shares_owner on public.goal_shares(owner_id);
+
+alter table public.goal_shares enable row level security;
+drop policy if exists "goal_shares member read" on public.goal_shares;
+create policy "goal_shares member read" on public.goal_shares
+  for select using ((select auth.uid()) in (owner_id, shared_with_id));
+-- No write policies: share_goal()/unshare_goal() are the only writers.
+
+-- A goal's current value, derived exactly like the client does it (see local
+-- migration019): baseline + active entries, never below zero. Computed here
+-- rather than read from goals.current_value, which is only the owner's cache
+-- and lags behind a friend's contribution until the owner syncs.
+create or replace function public.goal_current_value(p_goal_id uuid)
+returns double precision
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select greatest(0, g.value_baseline + coalesce((
+    select sum(e.amount) from public.goal_entries e
+    where e.goal_id = g.id and e.deleted_at is null
+  ), 0))
+  from public.goals g
+  where g.id = p_goal_id
+$$;
+revoke all on function public.goal_current_value(uuid) from public, anon, authenticated;
+
+create or replace function public.share_goal(p_goal_id uuid, p_friend uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  -- Also the answer for "not yours": indistinguishable on purpose.
+  if not exists (
+    select 1 from public.goals g
+    where g.id = p_goal_id and g.user_id = v_uid and g.deleted_at is null
+  ) then
+    return jsonb_build_object('error', 'ERK_GOAL_NOT_SYNCED');
+  end if;
+  if not public.are_connected(v_uid, p_friend) then
+    return jsonb_build_object('error', 'ERK_NOT_CONNECTED');
+  end if;
+  if (select count(*) from public.goal_shares s where s.goal_id = p_goal_id) >= 20 then
+    return jsonb_build_object('error', 'ERK_SHARE_LIMIT');
+  end if;
+  insert into public.goal_shares (goal_id, owner_id, shared_with_id)
+  values (p_goal_id, v_uid, p_friend)
+  on conflict do nothing;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+revoke all on function public.share_goal(uuid, uuid) from public, anon;
+grant execute on function public.share_goal(uuid, uuid) to authenticated;
+
+-- The owner stops sharing with p_friend, or a recipient removes a goal shared
+-- with them (p_friend is ignored in that case).
+create or replace function public.unshare_goal(p_goal_id uuid, p_friend uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  delete from public.goal_shares s
+  where s.goal_id = p_goal_id
+    and ((s.owner_id = v_uid and s.shared_with_id = p_friend) or s.shared_with_id = v_uid);
+end;
+$$;
+revoke all on function public.unshare_goal(uuid, uuid) from public, anon;
+grant execute on function public.unshare_goal(uuid, uuid) to authenticated;
+
+-- Goals shared with the caller (display fields only: no reminders, no habit
+-- links). The share row's owner must still own the goal and still be connected.
+create or replace function public.get_shared_goals()
+returns table (
+  id uuid, title text, goal_type text, target_value double precision,
+  current_value double precision, unit text, deadline text, completed_at text,
+  start_date text, owner_id uuid, owner_name text, owner_avatar text, shared_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select g.id, g.title, g.goal_type, g.target_value,
+         public.goal_current_value(g.id),
+         g.unit, g.deadline, g.completed_at, g.start_date,
+         s.owner_id, p.display_name, p.avatar_url, s.created_at
+  from public.goal_shares s
+  join public.goals g
+    on g.id = s.goal_id and g.user_id = s.owner_id and g.deleted_at is null
+  left join public.profiles p on p.id = s.owner_id
+  where s.shared_with_id = (select auth.uid())
+    and public.are_connected(s.owner_id, s.shared_with_id)
+  order by p.display_name nulls last, g.title
+$$;
+revoke all on function public.get_shared_goals() from public, anon;
+grant execute on function public.get_shared_goals() to authenticated;
+
+-- Everything the friend's goal screen needs, in one round trip: the goal (with
+-- a fresh current value), its milestones, and its entry history (newest 2000)
+-- with who added each one. added_by is resolved to the owner for the owner's
+-- own rows (stored as NULL), so the client never has to guess.
+create or replace function public.get_shared_goal_detail(p_goal_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_owner uuid;
+begin
+  select s.owner_id into v_owner
+  from public.goal_shares s
+  join public.goals g
+    on g.id = s.goal_id and g.user_id = s.owner_id and g.deleted_at is null
+  where s.goal_id = p_goal_id
+    and s.shared_with_id = (select auth.uid())
+    and public.are_connected(s.owner_id, s.shared_with_id);
+  if v_owner is null then
+    raise exception using message = 'ERK_NOT_SHARED';
+  end if;
+
+  return jsonb_build_object(
+    'goal', (
+      select jsonb_build_object(
+        'id', g.id, 'title', g.title, 'goal_type', g.goal_type,
+        'target_value', g.target_value, 'current_value', public.goal_current_value(g.id),
+        'unit', g.unit, 'deadline', g.deadline, 'completed_at', g.completed_at,
+        'start_date', g.start_date, 'owner_id', g.user_id,
+        'owner_name', p.display_name, 'owner_avatar', p.avatar_url
+      )
+      from public.goals g
+      left join public.profiles p on p.id = g.user_id
+      where g.id = p_goal_id
+    ),
+    'milestones', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', m.id, 'title', m.title, 'completed', m.completed, 'position', m.position,
+        'amount', m.amount, 'due_date', m.due_date, 'updated_at', m.updated_at
+      ) order by m.position)
+      from public.goal_milestones m
+      where m.goal_id = p_goal_id and m.deleted_at is null
+    ), '[]'::jsonb),
+    'entries', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', x.id, 'amount', x.amount, 'updated_at', x.updated_at,
+        'added_by', x.added_by, 'added_by_name', x.added_by_name
+      ) order by x.updated_at desc)
+      from (
+        select e.id, e.amount, e.updated_at,
+               coalesce(e.added_by, v_owner) as added_by,
+               p.display_name as added_by_name
+        from public.goal_entries e
+        left join public.profiles p on p.id = coalesce(e.added_by, v_owner)
+        where e.goal_id = p_goal_id and e.deleted_at is null
+        order by e.updated_at desc
+        limit 2000
+      ) x
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+revoke all on function public.get_shared_goal_detail(uuid) from public, anon;
+grant execute on function public.get_shared_goal_detail(uuid) to authenticated;
+
+-- The friend's ONLY write path: appends a progress entry to a NUMERIC goal
+-- shared with them. Expected failures are RETURNED (not raised), same contract
+-- as the other sharing RPCs.
+--   * A negative amount (a correction) may only undo the caller's OWN
+--     contributions, never the owner's or another friend's progress.
+--   * The goal never goes below zero (same floor as goalRepo.addProgress).
+--   * At most 120 contributions per hour per user.
+-- FOR UPDATE on the goal serializes concurrent contributions, so the floor and
+-- the "own contributions" limit are computed on a consistent total.
+create or replace function public.add_shared_goal_entry(p_goal_id uuid, p_amount double precision)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_goal uuid;
+  v_type text;
+  v_current double precision;
+  v_mine double precision;
+  v_applied double precision;
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+
+  select g.id, g.goal_type into v_goal, v_type
+  from public.goals g
+  join public.goal_shares s on s.goal_id = g.id and s.owner_id = g.user_id
+  where g.id = p_goal_id
+    and s.shared_with_id = v_uid
+    and g.deleted_at is null
+    and public.are_connected(g.user_id, v_uid)
+  for update of g;
+  if v_goal is null then
+    return jsonb_build_object('error', 'ERK_NOT_SHARED');
+  end if;
+  -- Only a numeric goal takes amounts; NULL, zero, NaN and ±Infinity are
+  -- rejected (NaN compares greater than every number in Postgres).
+  if v_type <> 'numeric' or p_amount is null or p_amount = 0 or abs(p_amount) > 1e9 then
+    return jsonb_build_object('error', 'ERK_INVALID_AMOUNT');
+  end if;
+  if (select count(*) from public.goal_entries e
+      where e.added_by = v_uid and e.server_updated_at > now() - interval '1 hour') >= 120 then
+    return jsonb_build_object('error', 'ERK_RATE_LIMITED');
+  end if;
+
+  v_current := public.goal_current_value(v_goal);
+  if p_amount > 0 then
+    v_applied := p_amount;
+  else
+    select coalesce(sum(e.amount), 0) into v_mine
+    from public.goal_entries e
+    where e.goal_id = v_goal and e.added_by = v_uid and e.deleted_at is null;
+    v_applied := greatest(p_amount, -least(greatest(v_mine, 0), v_current));
+    if v_applied = 0 then
+      return jsonb_build_object('error', 'ERK_CORRECTION_LIMIT');
+    end if;
+  end if;
+
+  insert into public.goal_entries (id, goal_id, amount, updated_at, deleted_at, added_by)
+  values (gen_random_uuid(), v_goal, v_applied, now(), null, v_uid);
+
+  return jsonb_build_object('applied', v_applied, 'current_value', v_current + v_applied);
+end;
+$$;
+revoke all on function public.add_shared_goal_entry(uuid, double precision) from public, anon;
+grant execute on function public.add_shared_goal_entry(uuid, double precision) to authenticated;

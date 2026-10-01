@@ -28,7 +28,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { goalRepo, habitRepo, reminderRepo, taskRepo } from '@/db';
-import type { Goal, Habit, Reminder, Task } from '@/db';
+import type { Goal, Habit, Reminder, ReminderEntityType, Task } from '@/db';
 import { isScheduledOn, isWithinHabitDates, todayDate, toYmd } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
@@ -543,6 +543,45 @@ export async function migrateToMultiReminderIfNeeded(): Promise<void> {
   await AsyncStorage.setItem(MIGRATED_KEY, '1');
 }
 
+// ORPHAN SWEEP: cancels every scheduled habit/task/goal trigger whose
+// (entity, reminder) pair no longer has a live counterpart in the DB.
+//
+// Why the rescheduleAll* passes can't do this: they only visit entities that
+// CURRENTLY exist and have reminders. Anything that disappeared without going
+// through a local delete handler (which cancels its own triggers) stayed in the
+// OS queue forever and kept firing daily: a habit deleted on ANOTHER device and
+// pulled, a reminder removed there, a task completed there, or local data
+// cleared. The DB is the single source of truth, so the queue is reconciled
+// against it. Cancelling needs no permission, so this runs even when scheduling
+// can't. `timer:` triggers (and anything else) are left alone.
+const REMINDER_PREFIX = /^(habit|task|goal):([^:]+):([^#]+)/;
+
+export async function sweepOrphanReminders(userId: string): Promise<number> {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  if (scheduled.length === 0) return 0;
+
+  const live = new Set<string>();
+  const add = (type: ReminderEntityType, ids: Iterable<string>) => {
+    const map = reminderRepo.mapByType(type);
+    for (const id of ids) for (const r of map.get(id) ?? []) live.add(`${type}:${id}:${r.id}`);
+  };
+  add('habit', habitRepo.listByUser(userId).map((h) => h.id));
+  // Completed / date-less tasks never get a trigger (see scheduleTaskReminders).
+  add('task', taskRepo.listByUser(userId).filter((t) => !t.completed_at && t.due_date).map((t) => t.id));
+  add('goal', goalRepo.listByUser(userId).map((g) => g.id));
+
+  const orphans = scheduled
+    .map((n) => n.identifier)
+    .filter((id) => {
+      const m = REMINDER_PREFIX.exec(id);
+      return m != null && !live.has(`${m[1]}:${m[2]}:${m[3]}`);
+    });
+  await Promise.all(
+    orphans.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => {}))
+  );
+  return orphans.length;
+}
+
 // REBUILDS THE REMINDERS OF ALL THREE ENTITY TYPES FROM THE CURRENT DB STATE.
 //
 // Why a single function: this same triple call was being repeated on startup
@@ -560,6 +599,9 @@ export async function migrateToMultiReminderIfNeeded(): Promise<void> {
 //
 // NEVER REJECTS UNDER ANY CONDITION: this is a side-effect layer, it must not disrupt the caller's flow.
 export async function rescheduleEverything(userId: string): Promise<void> {
+  await sweepOrphanReminders(userId).catch((e) =>
+    console.warn('[Bildirim] Yetim hatırlatmalar temizlenemedi:', e)
+  );
   await rescheduleAllReminders(habitRepo.listByUser(userId)).catch((e) =>
     console.warn('[Bildirim] Alışkanlık hatırlatmaları kurulamadı:', e)
   );

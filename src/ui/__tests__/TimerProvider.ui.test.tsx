@@ -19,9 +19,11 @@
 import { useEffect } from 'react';
 import { Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { waitFor } from '@testing-library/react-native';
+import { act, waitFor } from '@testing-library/react-native';
 import { habitRepo, userRepo } from '@/db';
 import { todayDate } from '@/lib/helpers';
+import { emitLocalDataWillChange } from '@/lib/localDataEvents';
+import { getDb } from '@/db/database';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { renderUI } from '@/test/renderWithProviders';
 import { TimerProvider, useTimer } from '@/ui/TimerProvider';
@@ -188,6 +190,76 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
     );
 
     await waitFor(() => expect(api).not.toBeNull());
+    expect(api!.active()).toBeNull();
+  });
+});
+
+describe('TimerProvider — yerel veri toptan değişirken (hesap birleştirme / silme)', () => {
+  // Merge regenerates every id; the running timer kept the OLD habit id, and
+  // pausing it afterwards inserted a log for a habit that no longer existed
+  // -> FOREIGN KEY failure inside a press handler -> crash in a release build.
+  it('değişimden ÖNCE çalışan süreyi yazar ve seansı kapatır', async () => {
+    const habit = habitRepo.create({ user_id: userId, title: 'Kitap oku', kind: 'timer', target_amount: 20 * 60 });
+    const today = todayDate();
+    await AsyncStorage.setItem(
+      ACTIVE_KEY,
+      JSON.stringify({
+        kind: 'habit',
+        targetId: habit.id,
+        date: today,
+        startedAt: Date.now() - 5 * 60_000,
+        baseSeconds: 0,
+        targetSeconds: 20 * 60,
+      })
+    );
+
+    let api: ReturnType<typeof useTimer> | null = null;
+    await renderUI(
+      <TimerProvider>
+        <Probe onReady={(t) => (api = t)} />
+      </TimerProvider>
+    );
+    await waitFor(() => expect(api!.isRunning('habit', habit.id)).toBe(true));
+
+    await act(async () => {
+      emitLocalDataWillChange();
+    });
+
+    const written = habitRepo.getAmountOn(habit.id, today);
+    expect(written).toBeGreaterThanOrEqual(5 * 60 - 2);
+    expect(written).toBeLessThanOrEqual(5 * 60 + 2);
+    expect(api!.active()).toBeNull();
+    expect(await AsyncStorage.getItem(ACTIVE_KEY)).toBeNull();
+  });
+
+  it('alışkanlık artık yoksa duraklatmak çökmez (hiçbir şey yazılmaz)', async () => {
+    const habit = habitRepo.create({ user_id: userId, title: 'Kitap oku', kind: 'timer', target_amount: 20 * 60 });
+    await AsyncStorage.setItem(
+      ACTIVE_KEY,
+      JSON.stringify({
+        kind: 'habit',
+        targetId: habit.id,
+        date: todayDate(),
+        startedAt: Date.now() - 60_000,
+        baseSeconds: 0,
+        targetSeconds: 20 * 60,
+      })
+    );
+
+    let api: ReturnType<typeof useTimer> | null = null;
+    await renderUI(
+      <TimerProvider>
+        <Probe onReady={(t) => (api = t)} />
+      </TimerProvider>
+    );
+    await waitFor(() => expect(api!.isRunning('habit', habit.id)).toBe(true));
+
+    // The row vanishes under the running timer (e.g. local data cleared elsewhere).
+    getDb().runSync(`DELETE FROM habits WHERE id = ?`, [habit.id]);
+
+    await act(async () => {
+      expect(() => api!.pause()).not.toThrow();
+    });
     expect(api!.active()).toBeNull();
   });
 });

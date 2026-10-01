@@ -12,7 +12,8 @@
 // (border, line, track) are NOT text and aren't subject to the AA body
 // threshold — deliberately excluded.
 
-import { blackColors, darkColors, lightColors, type Colors } from '@/ui/theme';
+import { blackColors, darkColors, lightColors, percentLabel, switchColors, type Colors } from '@/ui/theme';
+import { MISSED_CELL_BG, MISSED_CELL_TEXT } from '@/ui/habit/habitStatsStyles';
 
 // Linearizes an sRGB channel (WCAG 2.x definition).
 function channel(v: number): number {
@@ -79,5 +80,29 @@ describe('metin kontrastı — WCAG AA', () => {
     // onAccent is white in both themes; its background is the accent color.
     // We measure against the default accent — other accents the user can pick are a separate concern.
     expect(ratio(lightColors.onAccent, lightColors.primary)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // The day number on a missed calendar cell used to be the muted gray on red
+  // (~2:1) — 8th–16th of a month read as blank squares in the field screenshots.
+  it('takvimde kaçırılan günün rakamı kırmızı hücrede okunur', () => {
+    expect(ratio(MISSED_CELL_TEXT, MISSED_CELL_BG)).toBeGreaterThanOrEqual(AA_BODY);
+  });
+
+  // Not text, so the 3:1 non-text threshold (WCAG 1.4.11): the thumb must
+  // stand out from its track in both states. OFF used to be a card-colored
+  // thumb on a border-colored track (~1.3:1).
+  it.each(PALETTES)('%s tema: açma-kapama düğmesinin yuvarlağı izinden ayırt edilir', (_name, colors) => {
+    const on = switchColors(colors, true);
+    const off = switchColors(colors, false);
+    expect(ratio(on.thumbColor, on.trackColor.true)).toBeGreaterThanOrEqual(3);
+    expect(ratio(off.thumbColor, off.trackColor.false)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('percentLabel', () => {
+  it('her dilin kendi yazımını kullanır', () => {
+    expect(percentLabel(53, 'tr')).toBe('%53');
+    expect(percentLabel(53, 'en')).toBe('53%');
+    expect(percentLabel(53, 'de')).toBe('53 %');
   });
 });

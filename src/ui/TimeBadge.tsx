@@ -1,5 +1,11 @@
-// Shows the task time as a small badge on the far left of the card.
-// Used on both the "Today" and "Tasks" screens, for tasks that have a time.
+// Shows the task time as a small badge on the RIGHT of the card, just before
+// the priority mark. Used on both the "Today" and "Tasks" screens, for tasks
+// that have a time.
+// It used to sit on the far LEFT, in front of the checkbox — only on timed
+// tasks, so their checkbox and title were pushed right and no longer lined up
+// with the untimed cards below. On the right, every card's checkbox and title
+// start at the same x, and since timed tasks sort first, the times form a
+// tidy column of their own.
 
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -25,6 +31,7 @@ const makeStyles = (c: Colors) =>
       borderRadius: 8,
       backgroundColor: c.primarySoft,
       alignItems: 'center',
+      marginLeft: 10,
       marginRight: 10,
     },
     text: { fontSize: 12, fontWeight: '700', color: c.primary },
