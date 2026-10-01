@@ -43,6 +43,8 @@
       text-transform: uppercase; color: var(--primary); background: var(--card);
       border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; margin-bottom: 4px;
     }
+    ul { margin: 8px 0; padding-left: 22px; }
+    li { margin: 4px 0; }
     footer { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 48px; }
   </style>
 </head>
@@ -51,209 +53,210 @@
     <header>
       <div class="logo">E</div>
       <h1>Erek — Gizlilik Politikası</h1>
-      <p class="eff">Yürürlük tarihi / Effective date: 4 Ağustos 2026 / August 4, 2026</p>
+      <p class="eff">Yürürlük tarihi / Effective date: 1 Ekim 2026 / October 1, 2026</p>
     </header>
 
     <!-- Türkçe -->
     <span class="lang-tag">Türkçe</span>
+
     <div class="lead">
-      <strong>Kısaca:</strong> Erek önce cihazınızda çalışır. Hesap açmadan, internete hiç
-      bağlanmadan tam olarak kullanılabilir. <strong>İsterseniz</strong> Google hesabınızla giriş
-      yapıp verilerinizi buluta yedekleyebilir ve cihazlarınız arasında eşitleyebilirsiniz.
-      Uygulamada tam ekran reklamlar gösterilir (Google AdMob); bu reklamları göstermek için Google
-      cihazınızın reklam kimliğini işler, ama alışkanlık/görev/hedef içerikleriniz reklam sistemine
-      hiç ulaşmaz (bkz. §4). Veriniz satılmaz veya kendi pazarlama amacımız için kullanılmaz.
-      Uygulama çökerse içeriğinizi taşımayan teknik bir hata raporu gönderilir (bkz. §6).
+      <strong>Kısaca:</strong> Erek önce cihazınızda çalışır. Hesap açmadan, internete hiç bağlanmadan tam olarak kullanılabilir. <strong>İsterseniz</strong> Google hesabınızla giriş yapıp verilerinizi buluta yedekleyebilir ve cihazlarınız arasında eşitleyebilirsiniz. Uygulamada tam ekran reklamlar gösterilir (Google AdMob); bu reklamları göstermek için Google cihazınızın reklam kimliğini işler, ama alışkanlık/görev/hedef içerikleriniz reklam sistemine hiç ulaşmaz (bkz. §4). Veriniz satılmaz veya kendi pazarlama amacımız için kullanılmaz. Uygulama çökerse içeriğinizi taşımayan teknik bir hata raporu gönderilir (bkz. §6).
     </div>
 
     <h3>1. Hesapsız kullanım (varsayılan)</h3>
-    <p>Giriş yapmazsanız oluşturduğunuz her şey — alışkanlıklar, görevler, hedefler, tamamlama
-    işaretleri, süre/miktar kayıtları, hatırlatma saatleri ve uygulama tercihleriniz (tema, dil) —
-    yalnızca <strong>cihazınızdaki yerel veritabanında</strong> tutulur ve cihazınızdan çıkmaz.</p>
-    <p>Tek istisna, uygulama çöktüğünde gönderilen teknik hata raporudur; içeriğiniz oraya dahil
-    edilmez (bkz. §6).</p>
-    <p>Uygulamanın kendi sistemleri konum verisi ya da genel kullanım analitiği
-    <strong>toplamaz</strong>. Tek istisna reklamlardır (bkz. §4): reklam gösterilirken Google,
-    cihazınızın reklam kimliğini kendi AdMob sistemine göre işler — bu, hesapsız kullanımda da
-    geçerlidir ve alışkanlık/görev/hedef verilerinizden tamamen bağımsızdır.</p>
+
+    <p>Giriş yapmazsanız oluşturduğunuz her şey — alışkanlıklar, görevler, hedefler, tamamlama işaretleri, süre/miktar kayıtları, hatırlatma saatleri ve uygulama tercihleriniz (tema, dil) — yalnızca <strong>cihazınızdaki yerel veritabanında</strong> tutulur ve Erek’in sunucularına gönderilmez.</p>
+
+    <p><strong>Android yedeklemesi:</strong> Cihazınızda Android’in kendi yedekleme özelliği açıksa, sistem bu yerel veritabanını Google hesabınızın cihaz yedeğine (Google Drive) dahil edebilir; böylece telefon değiştirdiğinizde verileriniz geri gelir. Bu yedek Google tarafından, sizin hesabınızda tutulur; Erek’in sunucularına gitmez ve biz ona erişemeyiz. Giriş oturumunuz bu yedeğe dahil edilmez. Yedeklemeyi cihazınızın Ayarlar &gt; Google &gt; Yedekleme bölümünden kapatabilirsiniz.</p>
+
+    <p>Tek istisna, uygulama çöktüğünde gönderilen teknik hata raporudur; içeriğiniz oraya dahil edilmez (bkz. §6).</p>
+
+    <p>Uygulamanın kendi sistemleri konum verisi ya da genel kullanım analitiği toplamaz. Tek istisna reklamlardır (bkz. §4): reklam gösterilirken Google, cihazınızın reklam kimliğini kendi AdMob sistemine göre işler — bu, hesapsız kullanımda da geçerlidir ve alışkanlık/görev/hedef verilerinizden tamamen bağımsız çalışır.</p>
 
     <h3>2. Hesapla kullanım (isteğe bağlı bulut yedekleme)</h3>
-    <p>Uygulama ilk açılışta giriş öneren bir ekran gösterir; bu ekranı “Şimdilik geç” ile
-    atlayabilir, sonradan Profil ekranından istediğiniz zaman giriş yapabilirsiniz. Giriş
-    <strong>yalnızca Google ile</strong> yapılır.</p>
-    <p><strong>Giriş yaptığınızda buluta gönderilen veriler:</strong> hedefleriniz, hedef adımlarınız
-    ve hedef ilerleme kayıtlarınız; alışkanlıklarınız ve günlük alışkanlık kayıtlarınız (tamamlandı
-    işareti, miktar/süre); görevleriniz ve alt görevleriniz; hatırlatma saatleriniz; bu kayıtlara ait
-    teknik alanlar (kayıt kimlikleri, oluşturma/güncelleme zamanları).</p>
-    <p><strong>Kimlik bilgisi olarak:</strong> Google ile giriş yaptığınızda kimlik doğrulama
-    sağlayıcımız e-posta adresinizi ve size ait bir hesap kimliğini saklar. Şifreniz bize hiçbir
-    zaman ulaşmaz; doğrulamayı Google yapar.</p>
-    <p><strong>Nerede saklanır:</strong> veriler, altyapı sağlayıcımız <strong>Supabase</strong>
-    üzerinde barındırılan bir veritabanında tutulur. Her kullanıcı yalnızca kendi kayıtlarına
-    erişebilir; bu kısıt veritabanı düzeyinde uygulanır.</p>
-    <p><strong>Ne için kullanılır:</strong> yalnızca verinizi yedeklemek ve cihazlarınız arasında
-    eşitlemek için. Veriniz üçüncü taraflara satılmaz, reklam veya profilleme için kullanılmaz.</p>
+
+    <p>Uygulama ilk açılışta giriş öneren bir ekran gösterir; bu ekranı “” ile atlayabilir, sonradan Profil ekranından istediğiniz zaman giriş yapabilirsiniz. Giriş <strong>yalnızca Google ile</strong> yapılır.</p>
+
+    <p><strong>Giriş yaptığınızda buluta gönderilen veriler:</strong></p>
+
+    <ul>
+      <li>Hedefleriniz, hedef adımlarınız ve hedef ilerleme kayıtlarınız</li>
+      <li>Alışkanlıklarınız ve günlük alışkanlık kayıtlarınız (tamamlandı işareti, miktar/süre)</li>
+      <li>Görevleriniz ve alt görevleriniz</li>
+      <li>Hatırlatma saatleriniz</li>
+      <li>Bu kayıtlara ait teknik alanlar (kayıt kimlikleri, oluşturma/güncelleme zamanları)</li>
+    </ul>
+
+    <p><strong>Kimlik bilgisi olarak:</strong> Google ile giriş yaptığınızda kimlik doğrulama sağlayıcımız e-posta adresinizi ve size ait bir hesap kimliğini saklar. Ayrıca Google hesabınızdaki <strong>görünen adınız ve profil fotoğrafınızın bağlantısı</strong> saklanır; bunlar yalnızca arkadaş olarak bağlandığınız kişilere gösterilir (aşağıya bakın). Şifreniz bize hiçbir zaman ulaşmaz; doğrulamayı Google yapar.</p>
+
+    <p><strong>Nerede saklanır:</strong> Veriler, altyapı sağlayıcımız <strong>Supabase</strong> üzerinde barındırılan bir veritabanında tutulur. Her kullanıcı yalnızca kendi kayıtlarına ve kendisiyle açıkça paylaşılanlara erişebilir; bu kısıt veritabanı düzeyinde uygulanır.</p>
+
+    <p><strong>Ne için kullanılır:</strong> Yalnızca verinizi yedeklemek ve cihazlarınız arasında eşitlemek için. Veriniz üçüncü taraflara satılmaz, reklam veya profilleme için kullanılmaz.</p>
+
+    <p><strong>Arkadaşlarla bağlantı (isteğe bağlı):</strong> Hesapla giriş yaptıysanız ekranın sağ üstündeki Arkadaşlar düğmesinden bir davet kodu oluşturabilir ya da bir arkadaşınızın kodunu girebilirsiniz. Kod tek kullanımlıktır ve 48 saat sonra geçersizleşir. Bağlandığınız kişi <strong>Google hesabınızdaki görünen adınızı ve profil fotoğrafınızı</strong> görür; e-posta adresiniz hiçbir zaman gösterilmez. Bunun dışında yalnızca <strong>sizin açıkça paylaştığınız</strong> öğeler, yalnızca seçtiğiniz arkadaşa görünür:</p>
+
+    <ul>
+      <li><strong>Paylaşılan alışkanlık:</strong> adı, simgesi/rengi, sıklığı, hedef miktarı ve tamamlama geçmişi (serileri ve takvimi). Arkadaşınız bunları değiştiremez; hedef bağlantıları ve hatırlatma saatleri paylaşılmaz.</li>
+      <li><strong>Paylaşılan görev:</strong> başlığı, tarihi/saati, önceliği ve tamamlanma durumu. Arkadaşınız görevi yalnızca tamamlandı olarak işaretleyebilir; alt görevler ve hatırlatmalar paylaşılmaz.</li>
+      <li><strong>Paylaşılan hedef:</strong> adı, hedef değeri/birimi, son tarihi, adımları ve ilerleme geçmişi (her girişi kimin eklediğiyle birlikte). Arkadaşınız sayısal bir hedefe kendi ilerlemesini ekleyebilir; eklediği girişler sizin hedefinizin geçmişine onun adıyla kaydedilir ve bağlantı kaldırılsa da geçmişte kalır. Hedefin kendisini değiştiremez; hatırlatmalar ve bağlı alışkanlıklar paylaşılmaz.</li>
+    </ul>
+
+    <p>Paylaşımı ya da bağlantıyı istediğiniz an kaldırabilirsiniz; bağlantı kaldırılınca aranızdaki tüm paylaşımlar da sona erer ve paylaşılan veriler, arkadaşınızın uygulaması bir sonraki eşitlemede cihazından silinir. Hesabınızı sildiğinizde tüm bağlantılarınız, paylaşımlarınız ve davet kodlarınız da silinir. Bir arkadaşınızın ortak hedefine daha önce eklediğiniz ilerleme girişleri o hedefin geçmişinin parçası olduğu için onda kalır, ancak adınız artık gösterilmez. Kod tahminini önlemek için hatalı kod denemeleri bir gün süreyle kaydedilir.</p>
 
     <h3>3. Bildirimler</h3>
-    <p>Kurduğunuz hatırlatmalar <strong>cihazınızda yerel olarak</strong> planlanır; içerikleri hiçbir
-    sunucuya gönderilmez. Bildirim iznini reddedebilir veya sistem ayarlarından kapatabilirsiniz.</p>
+
+    <p>Kurduğunuz hatırlatmalar <strong>cihazınızda yerel olarak</strong> planlanır; bildirim içerikleri hiçbir sunucuya gönderilmez. Bildirim izni istendiğinde reddedebilir veya sistem ayarlarından dilediğiniz zaman kapatabilirsiniz.</p>
 
     <h3>4. Reklamlar</h3>
-    <p>Uygulamada <strong>Google AdMob</strong> aracılığıyla tam ekran reklamlar gösterilir.
-    Reklamlar yalnızca uygulama öne geldiğinde (açılış dahil) ve en fazla belirli bir sıklıkta
-    gösterilir; bir alışkanlığı ya da görevi tamamladığınız anda reklam çıkmaz.</p>
-    <p><strong>Reklam gösterebilmek için Google’ın işlediği veriler:</strong> cihazınızın reklam
-    kimliği (Android Advertising ID) ve reklam sunumuyla ilgili teknik sinyaller (ör. IP adresi,
-    cihaz modeli). Bu işlem Google’ın kendi AdMob altyapısında gerçekleşir.
-    <strong>Alışkanlık, görev, hedef ve diğer içerikleriniz reklam sistemine hiç gönderilmez</strong>
-    — reklam katmanı uygulamanın veri katmanından tamamen ayrı çalışır ve ona hiç erişmez.</p>
-    <p><strong>AB/İngiltere kullanıcıları:</strong> uygulama açıldığında Google’ın onay akışı
-    (User Messaging Platform) devreye girer; kişiselleştirilmiş reklam gösterilip gösterilmeyeceğine
-    dair tercihinizi orada belirtirsiniz.</p>
-    <p><strong>Reklam kimliğinizi sıfırlamak veya kişiselleştirmeyi kapatmak isterseniz:</strong>
-    cihazınızın Ayarlar &gt; Google &gt; Reklamlar bölümünden yapabilirsiniz (yol, Android sürümüne
-    göre değişebilir). Google’ın reklam verilerini nasıl işlediği hakkında:
-    <a href="https://policies.google.com/technologies/ads">policies.google.com/technologies/ads</a></p>
+
+    <p>Uygulamada <strong>Google AdMob</strong> aracılığıyla tam ekran reklamlar gösterilir. Reklamlar yalnızca uygulama öne geldiğinde (açılış dahil) ve en fazla belirli bir sıklıkta gösterilir; bir alışkanlığı ya da görevi tamamladığınız anda reklam çıkmaz.</p>
+
+    <p><strong>Reklam gösterebilmek için Google’ın işlediği veriler:</strong> cihazınızın reklam kimliği (Android Advertising ID) ve reklam sunumuyla ilgili teknik sinyaller (ör. IP adresi, cihaz modeli). Bu işlem Google’ın kendi AdMob altyapısında gerçekleşir. <strong>Alışkanlık, görev, hedef ve diğer içerikleriniz reklam sistemine hiç gönderilmez</strong> — reklam katmanı uygulamanın veri katmanından tamamen ayrı çalışır ve ona hiç erişmez.</p>
+
+    <p><strong>AB/İngiltere kullanıcıları:</strong> uygulama açıldığında Google’ın onay akışı (User Messaging Platform) devreye girer; kişiselleştirilmiş reklam gösterilip gösterilmeyeceğine dair tercihinizi orada belirtirsiniz.</p>
+
+    <p><strong>Reklam kimliğinizi sıfırlamak veya kişiselleştirmeyi kapatmak isterseniz:</strong> cihazınızın Ayarlar &gt; Google &gt; Reklamlar bölümünden yapabilirsiniz (yol, Android sürümüne göre değişebilir).</p>
+
+    <p>Google’ın reklam verilerini nasıl işlediği hakkında: <a href=“”>policies.google.com/technologies/ads</a></p>
 
     <h3>5. Yapay zeka özellikleri</h3>
-    <p>Uygulamada yapay zeka özelliği <strong>yoktur</strong>. Daha önceki sürümlerde denenen “AI ile
-    hızlı ekleme” özelliği tamamen <strong>kaldırılmıştır</strong>; yazdığınız hiçbir metin yapay
-    zeka işlemesi için dışarı gönderilmez. Böyle bir özellik ileride eklenirse politika güncellenecek
-    ve özellik açıkça isteğe bağlı olacaktır.</p>
+
+    <p>Uygulamada yapay zeka özelliği <strong>yoktur</strong>. Daha önceki sürümlerde denenen “” özelliği tamamen <strong>kaldırılmıştır</strong>; yazdığınız hiçbir metin yapay zeka işlemesi için dışarı gönderilmez. Böyle bir özellik ileride eklenirse politika güncellenecek ve özellik açıkça isteğe bağlı olacaktır.</p>
 
     <h3>6. Çökme raporları</h3>
-    <p>Uygulama beklenmedik şekilde kapandığında ya da bir hata oluştuğunda, sorunu bulup
-    düzeltebilmek için <strong>teknik bir hata raporu</strong> gönderilir. Bu raporlar hizmet
-    sağlayıcımız <strong>Sentry</strong> üzerinde tutulur.</p>
-    <p><strong>Raporda ne var:</strong> hatanın teknik ayrıntısı (hata mesajı ve kodun hangi
-    noktasında oluştuğu), uygulama sürümü, işletim sistemi sürümü ve cihaz modeli.</p>
-    <p><strong>Nerede saklanır:</strong> Sentry’nin <strong>Avrupa Birliği</strong> bölgesindeki
-    sunucularında. Raporlar kimliğinizle ilişkilendirilmediği için tek tek silinmeleri istenemez;
-    sağlayıcının saklama süresi dolduğunda otomatik olarak silinirler.</p>
-    <p><strong>Göndermediklerimiz:</strong> alışkanlıklarınızın, görevlerinizin veya hedeflerinizin
-    içeriği, adınız, e-posta adresiniz ve kayıtlarınız çökme raporlarına dahil edilmez; uygulama
-    kimlik bilgilerinizi rapora eklemeyecek şekilde yapılandırılmıştır. Çökme raporları yalnızca
-    uygulamanın kararlılığını iyileştirmek için kullanılır; reklam veya profilleme amacıyla
-    kullanılmaz, üçüncü taraflara satılmaz.</p>
+
+    <p>Uygulama beklenmedik şekilde kapandığında ya da bir hata oluştuğunda, sorunu bulup düzeltebilmek için <strong>teknik bir hata raporu</strong> gönderilir. Bu raporlar hizmet sağlayıcımız <strong>Sentry</strong> üzerinde tutulur.</p>
+
+    <p><strong>Raporda ne var:</strong> hatanın teknik ayrıntısı (hata mesajı ve kodun hangi noktasında oluştuğu), uygulama sürümü, işletim sistemi sürümü ve cihaz modeli.</p>
+
+    <p><strong>Nerede saklanır:</strong> Sentry’nin <strong>Avrupa Birliği</strong> bölgesindeki sunucularında. Raporlar kimliğinizle ilişkilendirilmediği için tek tek silinmeleri istenemez; sağlayıcının saklama süresi dolduğunda otomatik olarak silinirler.</p>
+
+    <p><strong>Göndermediklerimiz:</strong> alışkanlıklarınızın, görevlerinizin veya hedeflerinizin içeriği, adınız, e-posta adresiniz ve kayıtlarınız çökme raporlarına dahil edilmez; uygulama kimlik bilgilerinizi rapora eklemeyecek şekilde yapılandırılmıştır. Çökme raporları yalnızca uygulamanın kararlılığını iyileştirmek için kullanılır; reklam veya profilleme amacıyla kullanılmaz, üçüncü taraflara satılmaz.</p>
 
     <h3 id="hesap-silme">7. Verilerinizin silinmesi</h3>
-    <p><strong>Cihazdaki veri:</strong> uygulamayı kaldırdığınızda silinir. Ayrıca uygulama içinden
-    kayıtlarınızı tek tek silebilirsiniz.</p>
-    <p><strong>Buluttaki veri:</strong> Profil ekranındaki <strong>“Hesabı sil”</strong> düğmesiyle
-    bulut hesabınız ve buluttaki tüm verileriniz kalıcı olarak silinir. Bu işlem geri alınamaz.
-    Cihazınızdaki veriler silinmez — uygulamayı hesapsız kullanmaya devam edebilirsiniz.</p>
-    <p><strong>Yalnızca çıkış yapmak</strong> verinizi silmez; bulut kopyası hesabınızda kalır. Bulut
-    verileriniz, siz hesabınızı silene kadar saklanır.</p>
+
+    <p><strong>Cihazdaki veri:</strong> Uygulamayı kaldırdığınızda silinir. Ayrıca uygulama içinden kayıtlarınızı tek tek silebilirsiniz.</p>
+
+    <p><strong>Buluttaki veri:</strong> Profil ekranındaki <strong>“”</strong> düğmesiyle bulut hesabınız ve buluttaki tüm verileriniz kalıcı olarak silinir. Bu işlem geri alınamaz. Cihazınızdaki veriler silinmez — uygulamayı hesapsız kullanmaya devam edebilirsiniz.</p>
+
+    <p><strong>Yalnızca çıkış yapmak</strong> verinizi silmez; bulut kopyası hesabınızda kalır. Çıkış yaparken cihazdaki verileri de silmeyi seçebilirsiniz.</p>
+
+    <p><strong>Uygulamaya erişemiyorsanız:</strong> hesabınızın ve buluttaki tüm verilerinizin silinmesini, hesabınıza bağlı e-posta adresinden <a href=“”>yazgandev@gmail.com</a> adresine yazarak isteyebilirsiniz. Talebiniz en geç 30 gün içinde yerine getirilir ve size bildirilir.</p>
+
+    <p>Bulut verileriniz, siz hesabınızı silene kadar saklanır.</p>
 
     <h3>8. Çocuklar</h3>
+
     <p>Uygulama 13 yaş altı çocuklara yönelik değildir ve bilerek onlardan veri toplamaz.</p>
 
     <h3>9. Değişiklikler</h3>
+
     <p>Bu politika güncellenirse yeni sürüm bu sayfada yayınlanır ve yürürlük tarihi güncellenir.</p>
 
     <h3>10. İletişim</h3>
-    <p>Sorularınız, veri erişim veya silme talepleriniz için:
-    <a href="mailto:yazgandev@gmail.com">yazgandev@gmail.com</a></p>
+
+    <p>Sorularınız, veri erişim veya silme talepleriniz için: <a href=“”>yazgandev@gmail.com</a></p>
 
     <!-- English -->
     <h2><span class="lang-tag">English</span></h2>
+
     <div class="lead">
-      <strong>In short:</strong> Erek works on your device first. It is fully usable without an
-      account and without an internet connection. <strong>If you choose to,</strong> you can sign in
-      with your Google account to back up your data and sync it across your devices. The app shows
-      full-screen ads (Google AdMob); to serve them, Google processes your device's advertising
-      identifier, but your habit/task/goal content never reaches the ad system (see §4). Your data is
-      never sold or used for our own marketing. If the app crashes, a technical error report that
-      carries none of your content is sent (see §6).
+      <strong>In short:</strong> Erek works on your device first. It is fully usable without an account and without an internet connection. <strong>If you choose to,</strong> you can sign in with your Google account to back up your data and sync it across your devices. The app shows full-screen ads (Google AdMob); to serve them, Google processes your device’s advertising identifier, but your habit/task/goal content never reaches the ad system (see §4). Your data is never sold or used for our own marketing. If the app crashes, a technical error report that carries none of your content is sent (see §6).
     </div>
 
     <h3>1. Using Erek without an account (default)</h3>
-    <p>If you do not sign in, everything you create — habits, tasks, goals, completion marks,
-    duration/amount logs, reminder times, and your app preferences (theme, language) — is stored only
-    in a <strong>local database on your device</strong> and does not leave it.</p>
-    <p>The one exception is the technical error report sent when the app crashes; your content is not
-    included in it (see §6).</p>
-    <p>The app's own systems do not collect location data or general usage analytics. The one
-    exception is advertising (see §4): while an ad is being shown, Google processes your device's
-    advertising identifier through its AdMob system — this applies even without an account and
-    operates entirely independently of your habit/task/goal data.</p>
+
+    <p>If you do not sign in, everything you create — habits, tasks, goals, completion marks, duration/amount logs, reminder times, and your app preferences (theme, language) — is stored only in a <strong>local database on your device</strong> and is not sent to Erek’s servers.</p>
+
+    <p><strong>Android backup:</strong> if Android’s own backup is turned on for your device, the system may include this local database in your Google account’s device backup (Google Drive), so your data comes back when you switch phones. That backup is kept by Google, in your account; it never reaches Erek’s servers and we cannot access it. Your sign-in session is excluded from it. You can turn backup off on your device under Settings &gt; Google &gt; Backup.</p>
+
+    <p>The one exception is the technical error report sent when the app crashes; your content is not included in it (see §6).</p>
+
+    <p>The app’s own systems do not collect location data or general usage analytics. The one exception is advertising (see §4): while an ad is being shown, Google processes your device’s advertising identifier through its AdMob system — this applies even without an account and operates entirely independently of your habit/task/goal data.</p>
 
     <h3>2. Using Erek with an account (optional cloud backup)</h3>
-    <p>On first launch the app shows a screen offering sign-in; you can skip it with “Not now” and
-    sign in later from the Profile screen at any time. Sign-in is <strong>only via Google.</strong></p>
-    <p><strong>Data sent to the cloud when you are signed in:</strong> your goals, goal milestones and
-    goal progress entries; your habits and daily habit logs (completion marks, amounts/durations);
-    your tasks and subtasks; your reminder times; technical fields belonging to these records
-    (record identifiers, creation/update timestamps).</p>
-    <p><strong>As account information:</strong> when you sign in with Google, our authentication
-    provider stores your email address and an account identifier. Your password never reaches us;
-    Google performs the authentication.</p>
-    <p><strong>Where it is stored:</strong> the data is held in a database hosted on our
-    infrastructure provider, <strong>Supabase.</strong> Each user can access only their own records;
-    this restriction is enforced at the database level.</p>
-    <p><strong>What it is used for:</strong> solely to back up your data and sync it across your
-    devices. Your data is not sold to third parties and is not used for advertising or profiling.</p>
+
+    <p>On first launch the app shows a screen offering sign-in; you can skip it with “” and sign in later from the Profile screen at any time. Sign-in is <strong>only via Google.</strong></p>
+
+    <p><strong>Data sent to the cloud when you are signed in:</strong></p>
+
+    <ul>
+      <li>Your goals, goal milestones and goal progress entries</li>
+      <li>Your habits and daily habit logs (completion marks, amounts/durations)</li>
+      <li>Your tasks and subtasks</li>
+      <li>Your reminder times</li>
+      <li>Technical fields belonging to these records (record identifiers, creation/update timestamps)</li>
+    </ul>
+
+    <p><strong>As account information:</strong> when you sign in with Google, our authentication provider stores your email address and an account identifier. Your Google <strong>display name and a link to your profile photo</strong> are stored as well; they are shown only to people you connect with as friends (see below). Your password never reaches us; Google performs the authentication.</p>
+
+    <p><strong>Where it is stored:</strong> the data is held in a database hosted on our infrastructure provider, <strong>Supabase.</strong> Each user can access only their own records and items explicitly shared with them; this restriction is enforced at the database level.</p>
+
+    <p><strong>What it is used for:</strong> solely to back up your data and sync it across your devices. Your data is not sold to third parties and is not used for advertising or profiling.</p>
+
+    <p><strong>Connecting with friends (optional):</strong> once signed in, you can create an invite code or enter a friend’s code via the Friends button at the top right. A code works only once and expires after 48 hours. People you connect with see <strong>your Google display name and profile photo</strong>; your email address is never shown. Beyond that, only items <strong>you explicitly share</strong> become visible, and only to the friend you choose:</p>
+
+    <ul>
+      <li><strong>A shared habit:</strong> its name, icon/color, frequency, target amount and completion history (streaks and calendar). Your friend can’t change any of it; goal links and reminder times are not shared.</li>
+      <li><strong>A shared task:</strong> its title, date/time, priority and completion state. Your friend can only mark it as done; subtasks and reminders are not shared.</li>
+      <li><strong>A shared goal:</strong> its name, target/unit, deadline, milestones and progress history (including who added each entry). Your friend can add their own progress to a numeric goal; those entries are recorded in your goal’s history under their name and stay there even if the connection is removed. They can’t change the goal itself; reminders and linked habits are not shared.</li>
+    </ul>
+
+    <p>You can stop sharing or remove a connection at any time; removing a connection ends everything shared between you, and your friend’s app removes the shared data from their device at its next sync. Deleting your account deletes all your connections, shares and invite codes. Progress entries you previously added to a friend’s shared goal stay in that goal’s history, since they are part of it, but your name is no longer shown. To prevent code guessing, failed code attempts are recorded for one day.</p>
 
     <h3>3. Notifications</h3>
-    <p>Reminders you set are scheduled <strong>locally on your device</strong>; their content is not
-    sent to any server. You may decline the notification permission or disable it in system settings.</p>
+
+    <p>Reminders you set are scheduled <strong>locally on your device</strong>; notification content is not sent to any server. You may decline the notification permission or disable it in system settings at any time.</p>
 
     <h3>4. Advertising</h3>
-    <p>The app shows full-screen ads through <strong>Google AdMob</strong>. Ads are shown only when
-    the app comes to the foreground (including app launch), and at most at a limited frequency; no ad
-    is shown the moment you complete a habit or task.</p>
-    <p><strong>Data Google processes to serve ads:</strong> your device's advertising identifier
-    (Android Advertising ID) and technical signals related to ad delivery (e.g. IP address, device
-    model). This happens within Google's own AdMob infrastructure.
-    <strong>Your habits, tasks, goals and other content are never sent to the ad system</strong> —
-    the ad layer runs entirely separately from the app's data layer and never accesses it.</p>
-    <p><strong>EEA/UK users:</strong> when the app opens, Google's consent flow (User Messaging
-    Platform) runs and lets you choose whether personalized ads are shown.</p>
-    <p><strong>To reset your advertising identifier or turn off personalization:</strong> on your
-    device, go to Settings &gt; Google &gt; Ads (the exact path varies by Android version). More on
-    how Google processes advertising data:
-    <a href="https://policies.google.com/technologies/ads">policies.google.com/technologies/ads</a></p>
+
+    <p>The app shows full-screen ads through <strong>Google AdMob</strong>. Ads are shown only when the app comes to the foreground (including app launch), and at most at a limited frequency; no ad is shown the moment you complete a habit or task.</p>
+
+    <p><strong>Data Google processes to serve ads:</strong> your device’s advertising identifier (Android Advertising ID) and technical signals related to ad delivery (e.g. IP address, device model). This happens within Google’s own AdMob infrastructure. <strong>Your habits, tasks, goals and other content are never sent to the ad system</strong> — the ad layer runs entirely separately from the app’s data layer and never accesses it.</p>
+
+    <p><strong>EEA/UK users:</strong> when the app opens, Google’s consent flow (User Messaging Platform) runs and lets you choose whether personalized ads are shown.</p>
+
+    <p><strong>To reset your advertising identifier or turn off personalization:</strong> on your device, go to Settings &gt; Google &gt; Ads (the exact path varies by Android version).</p>
+
+    <p>More on how Google processes advertising data: <a href=“”>policies.google.com/technologies/ads</a></p>
 
     <h3>5. AI features</h3>
-    <p>The app has <strong>no AI features</strong>. The “AI quick add” feature tried in earlier
-    versions has been <strong>removed entirely</strong>; no text you write is sent out for AI
-    processing. If such a feature is added in the future, this policy will be updated and the feature
-    will remain clearly optional.</p>
+
+    <p>The app has <strong>no AI features</strong>. The “” feature tried in earlier versions has been <strong>removed entirely</strong>; no text you write is sent out for AI processing. If such a feature is added in the future, this policy will be updated and the feature will remain clearly optional.</p>
 
     <h3>6. Crash reports</h3>
-    <p>When the app closes unexpectedly or hits an error, a <strong>technical error report</strong>
-    is sent so we can find and fix the problem. These reports are stored with our service provider
-    <strong>Sentry</strong>.</p>
-    <p><strong>What the report contains:</strong> the technical details of the error (the error
-    message and where in the code it occurred), the app version, the operating system version and
-    the device model.</p>
-    <p><strong>Where it is stored:</strong> on Sentry’s servers in the <strong>European Union</strong>
-    region. Because the reports are not linked to your identity they cannot be deleted individually;
-    they are removed automatically when the provider’s retention period expires.</p>
-    <p><strong>What we do not send:</strong> the content of your habits, tasks or goals, your name,
-    your email address and your records are not included in crash reports; the app is configured
-    not to attach identifying information to them. Crash reports are used only to improve the
-    stability of the app; they are never used for advertising or profiling and are never sold to
-    third parties.</p>
+
+    <p>When the app closes unexpectedly or hits an error, a <strong>technical error report</strong> is sent so we can find and fix the problem. These reports are stored with our service provider <strong>Sentry</strong>.</p>
+
+    <p><strong>What the report contains:</strong> the technical details of the error (the error message and where in the code it occurred), the app version, the operating system version and the device model.</p>
+
+    <p><strong>Where it is stored:</strong> on Sentry’s servers in the <strong>European Union</strong> region. Because the reports are not linked to your identity they cannot be deleted individually; they are removed automatically when the provider’s retention period expires.</p>
+
+    <p><strong>What we do not send:</strong> the content of your habits, tasks or goals, your name, your email address and your records are not included in crash reports; the app is configured not to attach identifying information to them. Crash reports are used only to improve the stability of the app; they are never used for advertising or profiling and are never sold to third parties.</p>
 
     <h3 id="delete-account">7. Deleting your data</h3>
-    <p><strong>Data on your device:</strong> deleted when you uninstall the app. You can also delete
-    individual records from within the app.</p>
-    <p><strong>Data in the cloud:</strong> the <strong>“Delete account”</strong> button on the Profile
-    screen permanently deletes your cloud account and all of your cloud data. This cannot be undone.
-    The data on your device is not deleted — you can keep using the app without an account.</p>
-    <p><strong>Signing out alone</strong> does not delete your data; the cloud copy remains in your
-    account. Your cloud data is retained until you delete your account.</p>
+
+    <p><strong>Data on your device:</strong> deleted when you uninstall the app. You can also delete individual records from within the app.</p>
+
+    <p><strong>Data in the cloud:</strong> the <strong>“”</strong> button on the Profile screen permanently deletes your cloud account and all of your cloud data. This cannot be undone. The data on your device is not deleted — you can keep using the app without an account.</p>
+
+    <p><strong>Signing out alone</strong> does not delete your data; the cloud copy remains in your account. When signing out you can choose to erase the data on the device too.</p>
+
+    <p><strong>If you can’t access the app:</strong> you can request deletion of your account and all of your cloud data by writing to <a href=“”>yazgandev@gmail.com</a> from the email address linked to your account. Requests are completed within 30 days and you will be notified.</p>
+
+    <p>Your cloud data is retained until you delete your account.</p>
 
     <h3>8. Children</h3>
+
     <p>The app is not directed at children under 13 and does not knowingly collect data from them.</p>
 
     <h3>9. Changes</h3>
+
     <p>Updates to this policy will be published on this page with a revised effective date.</p>
 
     <h3>10. Contact</h3>
-    <p>For questions, data access or deletion requests:
-    <a href="mailto:yazgandev@gmail.com">yazgandev@gmail.com</a></p>
+
+    <p>For questions, data access or deletion requests: <a href=“”>yazgandev@gmail.com</a></p>
 
     <footer>© 2026 Erek</footer>
   </div>

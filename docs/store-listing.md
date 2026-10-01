@@ -80,13 +80,17 @@ Hedef ekranı sana şunları söyler:
 
 Bir alışkanlığı hedefe bağlayabilirsin: alışkanlığı her tamamladığında hedefin kendiliğinden ilerler.
 
+▸ ARKADAŞLARLA
+
+Google hesabınla giriş yaptıysan bir davet koduyla arkadaşlarına bağlanabilirsin. Bir alışkanlığını paylaş, serilerini ve takvimini görsünler. Bir görevi paylaş, kendi listelerinde görüp tamamlasınlar. Bir hedefi paylaş, birlikte ilerleme ekleyin. Neyin kiminle paylaşılacağına sen karar verirsin; e-posta adresin hiç gösterilmez.
+
 ▸ HATIRLATMALAR
 
 Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma saati ekleyebilirsin. Bildirimler cihazında yerel olarak planlanır. Bildirim sesini ve titreşimi ayarlayabilir, kendi ses dosyanı seçebilirsin.
 
 ▸ ANA EKRAN WIDGET'I
 
-Bugünkü görev ve alışkanlıklarını ana ekranından görürsün; dokunarak uygulamayı açarsın.
+Bugünün alışkanlıklarını ve kaçını tamamladığını ana ekranından görürsün; dokunarak uygulamayı açarsın.
 
 ▸ REKLAMLAR
 
@@ -100,9 +104,9 @@ Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi
 
 Erek çevrimdışı çalışır ve hesap gerektirmez. İstersen Google hesabınla giriş yapıp verilerini buluta yedekleyebilir ve cihazların arasında eşitleyebilirsin — bu tamamen isteğe bağlıdır. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin.
 
-Takip yok. Analitik yok. Verilerin satılmaz.
+Uygulama içi analitik yok. Verilerin satılmaz.
 ```
-(2887)
+(3252)
 
 ---
 
@@ -157,13 +161,17 @@ The goal screen tells you:
 
 You can link a habit to a goal: every time you complete the habit, the goal advances by itself.
 
+▸ WITH FRIENDS
+
+If you sign in with Google, you can connect with friends using an invite code. Share a habit so they can follow your streaks and calendar. Share a task so it shows up in their list and they can check it off. Share a goal and add progress to it together. You decide what is shared with whom; your email address is never shown.
+
 ▸ REMINDERS
 
 Add as many reminder times as you like to habits, tasks and goals. Notifications are scheduled locally on your device. You can configure sound and vibration, including your own sound file.
 
 ▸ HOME SCREEN WIDGET
 
-See today's tasks and habits on your home screen, and tap to open the app.
+See today's habits and how many you have completed on your home screen, and tap to open the app.
 
 ▸ ADS
 
@@ -177,9 +185,9 @@ Light, dark and system themes. Two different dark tones, plus an accent colour o
 
 Erek works offline and requires no account. If you want to, you can sign in with your Google account to back up your data and sync it across your devices — this is entirely optional. You can permanently delete your account and all of your cloud data from within the app.
 
-No tracking. No analytics. Your data is never sold.
+No in-app analytics. Your data is never sold.
 ```
-(2907)
+(3266)
 
 ---
 
@@ -188,9 +196,9 @@ No tracking. No analytics. Your data is never sold.
 ### Kurzbeschreibung (80)
 
 ```
-Gewohnheiten, Aufgaben und Ziele verfolgen. Offline, ohne Tracking.
+Gewohnheiten, Aufgaben und Ziele verfolgen. Offline nutzbar, Daten nie verkauft.
 ```
-(67)
+(80)
 
 ### Vollständige Beschreibung (4000)
 
@@ -234,13 +242,17 @@ Der Zielbildschirm zeigt dir:
 
 Du kannst eine Gewohnheit mit einem Ziel verknüpfen: Jedes Mal, wenn du die Gewohnheit erledigst, rückt das Ziel von selbst vor.
 
+▸ MIT FREUNDEN
+
+Wenn du dich mit Google anmeldest, kannst du dich per Einladungscode mit Freunden verbinden. Teile eine Gewohnheit, damit sie deine Serien und deinen Kalender sehen. Teile eine Aufgabe, damit sie in ihrer Liste erscheint und abgehakt werden kann. Teile ein Ziel und tragt gemeinsam Fortschritt ein. Du entscheidest, was du mit wem teilst; deine E-Mail-Adresse wird nie angezeigt.
+
 ▸ ERINNERUNGEN
 
 Füge Gewohnheiten, Aufgaben und Zielen beliebig viele Erinnerungszeiten hinzu. Benachrichtigungen werden lokal auf deinem Gerät geplant. Ton und Vibration sind einstellbar, auch mit eigener Audiodatei.
 
 ▸ HOMESCREEN-WIDGET
 
-Sieh die heutigen Aufgaben und Gewohnheiten auf deinem Startbildschirm und tippe, um die App zu öffnen.
+Sieh die heutigen Gewohnheiten und wie viele du schon erledigt hast auf deinem Startbildschirm und tippe, um die App zu öffnen.
 
 ▸ WERBUNG
 
@@ -254,9 +266,9 @@ Helles, dunkles und Systemdesign. Zwei dunkle Töne sowie eine frei wählbare Ak
 
 Erek funktioniert offline und benötigt kein Konto. Wenn du möchtest, kannst du dich mit deinem Google-Konto anmelden, um deine Daten zu sichern und zwischen Geräten zu synchronisieren — das ist völlig freiwillig. Dein Konto und alle Cloud-Daten kannst du in der App dauerhaft löschen.
 
-Kein Tracking. Keine Analyse. Deine Daten werden nicht verkauft.
+Keine In-App-Analyse. Deine Daten werden nicht verkauft.
 ```
-(3237)
+(3650)
 
 ---
 
@@ -291,43 +303,130 @@ yazan `adb shell input text` ASCII dışı karakter kabul etmiyor (Türkçe
 karakterlerde NullPointerException). "Su iç", "Koşu" gibi başlıklar isteniyorsa
 uygulama içinden elle yeniden adlandırılıp kare yeniden alınmalı.
 
-**Hâlâ eksik:** öne çıkan görsel (feature graphic) **1024×500** — Play'de zorunlu.
-Uygulama simgesi (`assets/icon.png`) hazır.
+**Öne çıkan görsel (feature graphic) 1024×500:** üretildi —
+Masaüstü'nde `feature-{light,dark}-{tr,en,de}-1024x500.png` (dil başına açık ve
+koyu iki seçenek). Uygulama simgesi (`assets/icon.png`) hazır.
+
+**Not:** ekran görüntüleri Temmuz'dan; arkadaşlar/paylaşım, hafta şeridi ve
+👥 düğmesi görünmüyor. Zorunlu değil, ama paylaşımı tanıtmak istersen Arkadaşlar
+ekranından ve paylaşılan bir hedeften birer kare eklemek iyi olur.
 
 ---
 
-## Play Data Safety formu için özet
+## Play Data Safety formu (Veri güvenliği)
 
 Bu bölüm gizlilik politikasıyla (docs/privacy-policy.md) BİREBİR tutarlı olmalı.
+Koddaki gerçeğe göre yazıldı (2026-10-01): AdMob ve Sentry açık, Google ile
+isteğe bağlı giriş, arkadaşlar/paylaşım var.
 
-**Toplanan/paylaşılan veri:**
+**Toplanan veriler** (Play'in kategori adlarıyla):
 
-| Veri türü | Toplanıyor mu | Koşul | Amaç | Paylaşılıyor mu | Zorunlu mu |
+| Play kategorisi › veri türü | Toplanıyor | Paylaşılıyor | Ne zaman | Amaç | Kullanıcı seçebilir mi |
 |---|---|---|---|---|---|
-| E-posta adresi | Evet | Yalnız kullanıcı giriş yaparsa | Hesap yönetimi | Hayır | Hayır (isteğe bağlı) |
-| Kullanıcı kimliği | Evet | Yalnız giriş yaparsa | Hesap yönetimi | Hayır | Hayır |
-| Uygulama içeriği (alışkanlık/görev/hedef kayıtları) | Evet | Yalnız giriş yaparsa | Uygulama işlevi (yedekleme + eşitleme) | Hayır | Hayır |
-| Reklam kimliği (Advertising ID) | Evet | Her zaman (AdMob) | Reklam gösterimi ve ölçümü | Evet — Google/AdMob ile | Hayır |
+| Kişisel bilgiler › E-posta adresi | Evet | Hayır | Yalnız Google ile giriş yaparsa | Hesap yönetimi | Evet (giriş isteğe bağlı) |
+| Kişisel bilgiler › Ad | Evet | Hayır | Yalnız giriş yaparsa (Google görünen adı) | Uygulama işlevi (arkadaşlar), hesap yönetimi | Evet |
+| Kişisel bilgiler › Kullanıcı kimlikleri | Evet | Hayır | Yalnız giriş yaparsa | Hesap yönetimi, uygulama işlevi | Evet |
+| Kişisel bilgiler › Diğer bilgiler (profil fotoğrafı bağlantısı) | Evet | Hayır | Yalnız giriş yaparsa | Uygulama işlevi (arkadaşlar) | Evet |
+| Uygulama etkinliği › Diğer kullanıcı tarafından oluşturulan içerik (alışkanlık/görev/hedef kayıtları) | Evet | Hayır | Yalnız giriş yaparsa | Uygulama işlevi (yedekleme, eşitleme, paylaşım) | Evet |
+| Uygulama bilgileri ve performans › Kilitlenme günlükleri | Evet | Hayır | Her zaman (Sentry) | Analiz (kararlılık) | Hayır |
+| Uygulama bilgileri ve performans › Teşhis bilgileri | Evet | Hayır | Her zaman (Sentry: cihaz modeli, OS sürümü) | Analiz (kararlılık) | Hayır |
+| Cihaz veya diğer kimlikler (reklam kimliği) | Evet | **Evet — Google AdMob** | Her zaman | Reklam veya pazarlama | Hayır |
 
-**Toplanmayanlar:** konum, kişiler, fotoğraf/video, ses kaydı, sağlık verisi,
-finansal bilgi, kullanım analitiği, çökme günlükleri.
+**Neden "paylaşılıyor: hayır":**
+- Arkadaşla paylaşım kullanıcının kendi başlattığı bir işlem; Play'in tanımında
+  bu "paylaşım" sayılmaz.
+- Supabase (bulut veritabanı) ve Sentry (çökme raporu) bizim adımıza çalışan
+  hizmet sağlayıcılar; bunlara aktarım da "paylaşım" sayılmaz.
+- Paylaşılan tek veri reklam kimliği (Google AdMob).
 
-**Diğer beyanlar:**
+**Toplanmayanlar:** konum, kişiler, fotoğraf/video dosyaları, ses, sağlık,
+finans, tarama geçmişi, uygulama içi analitik.
+
+**Güvenlik uygulamaları:**
 - Veriler aktarım sırasında şifrelenir (HTTPS): **Evet**
-- Kullanıcı verisinin silinmesini talep edebilir: **Evet** — uygulama içinde
-  Profil > "Hesabı sil" (bulut hesabı ve tüm bulut verisi kalıcı silinir).
-- Veriler üçüncü taraflarla paylaşılmıyor.
+- Kullanıcı verilerinin silinmesini isteyebilir: **Evet** — uygulama içinde
+  Profil › "Hesabı sil", ya da uygulama dışından e-postayla (gizlilik
+  politikası §7).
+- Bağımsız güvenlik incelemesi: Hayır
 
 **Gizlilik politikası URL'i:** https://yusufozdemir3.github.io/erek-privacy/
 
 ---
 
+## Play Console › Uygulama içeriği beyanları
+
+| Beyan | Cevap |
+|---|---|
+| Reklamlar | **Evet, uygulamada reklam var** (AdMob, tam ekran) |
+| Reklam kimliği | **Evet, kullanılıyor** — amaç: reklam (`AD_ID` izni manifestte) |
+| Hesap silme | Uygulama içi yol: Profil › Hesabı sil. **Web bağlantısı:** https://yusufozdemir3.github.io/erek-privacy/#hesap-silme (EN: `#delete-account`) — sayfa uygulama dışından e-postayla silme talebini anlatıyor |
+| Veri güvenliği | Yukarıdaki tablo |
+| Hedef kitle | 13 yaş ve üstü; çocuklara yönelik DEĞİL (reklam var) |
+| İçerik derecelendirmesi | Ankette "kullanıcılar birbiriyle etkileşebilir / içerik paylaşabilir mi" → **Evet**: yalnız davet koduyla bağlanan arkadaşlar arasında alışkanlık/görev/hedef paylaşımı. Paylaşım yeni olduğu için anketi yeniden doldur |
+| Giriş bilgileri (inceleme için) | Uygulama hesapsız tam çalışır; giriş isteğe bağlı (Google). Arkadaş özelliği için giriş gerektiğini belirt; incelemeci kendi Google hesabıyla girebilir |
+
+---
+
+## Yenilikler (bu sürüm — en fazla 500 karakter)
+
+Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
+
+**TR**
+```
+• Arkadaşlar: davet koduyla bağlan; alışkanlık, görev ve hedeflerini paylaş. Ortak hedeflere birlikte ilerleme ekleyin.
+• Bugün ekranında 7 günlük tarih şeridi.
+• Profilde Google hesabının fotoğrafı.
+• Görev saati artık kartın sağında.
+• Tarih değiştirirken yaşanan çökme giderildi; senkron ve bildirimlerde güvenilirlik düzeltmeleri.
+```
+
+**EN**
+```
+• Friends: connect with an invite code and share habits, tasks and goals. Add progress to shared goals together.
+• A 7-day date strip on the Today screen.
+• Your Google profile photo in the header.
+• Task times now sit on the right of the card.
+• Fixed a crash when changing the date; reliability fixes for sync and notifications.
+```
+
+**DE**
+```
+• Freunde: per Einladungscode verbinden und Gewohnheiten, Aufgaben und Ziele teilen. Gemeinsam Fortschritt zu geteilten Zielen eintragen.
+• 7-Tage-Datumsleiste auf dem Heute-Bildschirm.
+• Dein Google-Profilbild in der Kopfzeile.
+• Die Uhrzeit von Aufgaben steht jetzt rechts auf der Karte.
+• Absturz beim Datumswechsel behoben; Zuverlässigkeitskorrekturen bei Synchronisierung und Benachrichtigungen.
+```
+
+---
+
 ## Yayın öncesi son kontrol
 
-- [ ] Supabase panelinde `supabase/schema.sql` çalıştırıldı (server_updated_at
-      kolonu yoksa senkron komple durur)
-- [ ] Ekran görüntüleri (en az 2) ve feature graphic üretildi
-- [ ] Data Safety formu yukarıdaki tabloya göre dolduruldu
-- [ ] Hesap silme beyanı (Play'in ayrı formu) verildi
-- [ ] Gizlilik politikası URL'i girildi
-- [ ] versionCode bir önceki yüklemeden büyük (son yüklenen AAB: 4)
+**Sunucu**
+- [x] `supabase/schema.sql` son hâli çalıştırıldı (paylaşım faz 1–4, `added_by`
+      dahil). Şema her değiştiğinde istemciden ÖNCE tekrar çalıştırılmalı.
+- [ ] `supabase/tests/sharing_checks.sql` çalıştırıldı → "ALL SHARING CHECKS PASSED"
+- [ ] Supabase › Authentication › Providers › **Anonymous sign-ins KAPALI**
+
+**Gizlilik politikası**
+- [ ] `docs/index.html` (1 Ekim 2026 sürümü) canlıya alındı: ayrı
+      `Yusufozdemir3/erek-privacy` deposu → GitHub Pages; canlı sayfada
+      "Arkadaşlarla bağlantı" bölümü görünüyor
+
+**Play Console**
+- [ ] Veri güvenliği formu yukarıdaki tabloya göre güncellendi (ad, profil
+      fotoğrafı, çökme günlükleri, teşhis, reklam kimliği)
+- [ ] Uygulama içeriği beyanları (reklam, reklam kimliği, hesap silme URL'i,
+      hedef kitle, içerik derecelendirmesi anketi)
+- [ ] "Yenilikler" metni girildi (TR/EN/DE)
+- [ ] (İsteğe bağlı) arkadaşlar/paylaşım ekran görüntüsü eklendi
+- [ ] AdMob: açılışta gösterilen interstitial'ın politikaya uygunluğu kontrol
+      edildi (denetim B8)
+
+**Build**
+- [ ] AAB: `eas build --platform android --profile production` (versionCode EAS'in
+      uzak sayacından otomatik artar; son yüklenen 10). Yerel Gradle ile alınırsa
+      `build.gradle`'daki versionCode elle 11+ yapılmalı ve release imzası
+      eklenmeli (bkz. yerel build reçetesi)
+- [ ] Telefondaki yerel test sürümü (vc19, debug imzalı) Play sürümünü
+      kurmadan önce kaldırıldı — imzalar farklı

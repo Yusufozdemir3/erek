@@ -1,7 +1,7 @@
 # Gizlilik Politikası / Privacy Policy
 
 **Erek** ("Uygulama")
-Yürürlük tarihi / Effective date: **4 Ağustos 2026 / August 4, 2026**
+Yürürlük tarihi / Effective date: **1 Ekim 2026 / October 1, 2026**
 
 ---
 
@@ -21,7 +21,15 @@ Veriniz satılmaz veya kendi pazarlama amacımız için kullanılmaz. Uygulama
 Giriş yapmazsanız oluşturduğunuz her şey — alışkanlıklar, görevler, hedefler,
 tamamlama işaretleri, süre/miktar kayıtları, hatırlatma saatleri ve uygulama
 tercihleriniz (tema, dil) — yalnızca **cihazınızdaki yerel veritabanında**
-tutulur ve cihazınızdan çıkmaz.
+tutulur ve Erek'in sunucularına gönderilmez.
+
+**Android yedeklemesi:** Cihazınızda Android'in kendi yedekleme özelliği
+açıksa, sistem bu yerel veritabanını Google hesabınızın cihaz yedeğine
+(Google Drive) dahil edebilir; böylece telefon değiştirdiğinizde verileriniz
+geri gelir. Bu yedek Google tarafından, sizin hesabınızda tutulur; Erek'in
+sunucularına gitmez ve biz ona erişemeyiz. Giriş oturumunuz bu yedeğe dahil
+edilmez. Yedeklemeyi cihazınızın Ayarlar > Google > Yedekleme bölümünden
+kapatabilirsiniz.
 
 Tek istisna, uygulama çöktüğünde gönderilen teknik hata raporudur; içeriğiniz
 oraya dahil edilmez (bkz. §6).
@@ -49,8 +57,10 @@ yapabilirsiniz. Giriş **yalnızca Google ile** yapılır.
   zamanları)
 
 **Kimlik bilgisi olarak:** Google ile giriş yaptığınızda kimlik doğrulama
-sağlayıcımız e-posta adresinizi ve size ait bir hesap kimliğini saklar. Şifreniz
-bize hiçbir zaman ulaşmaz; doğrulamayı Google yapar.
+sağlayıcımız e-posta adresinizi ve size ait bir hesap kimliğini saklar. Ayrıca
+Google hesabınızdaki **görünen adınız ve profil fotoğrafınızın bağlantısı**
+saklanır; bunlar yalnızca arkadaş olarak bağlandığınız kişilere gösterilir
+(aşağıya bakın). Şifreniz bize hiçbir zaman ulaşmaz; doğrulamayı Google yapar.
 
 **Nerede saklanır:** Veriler, altyapı sağlayıcımız **Supabase** üzerinde
 barındırılan bir veritabanında tutulur. Her kullanıcı yalnızca kendi
@@ -82,10 +92,13 @@ arkadaşa görünür:
   alışkanlıklar paylaşılmaz.
 
 Paylaşımı ya da bağlantıyı istediğiniz an kaldırabilirsiniz; bağlantı
-kaldırılınca aranızdaki tüm paylaşımlar da sona erer ve paylaşılan veriler
-arkadaşınızın cihazından silinir. Hesabınızı sildiğinizde tüm bağlantılarınız,
-paylaşımlarınız ve davet kodlarınız da silinir. Kod tahminini önlemek için
-hatalı kod denemeleri bir gün süreyle kaydedilir.
+kaldırılınca aranızdaki tüm paylaşımlar da sona erer ve paylaşılan veriler,
+arkadaşınızın uygulaması bir sonraki eşitlemede cihazından silinir. Hesabınızı
+sildiğinizde tüm bağlantılarınız, paylaşımlarınız ve davet kodlarınız da
+silinir. Bir arkadaşınızın ortak hedefine daha önce eklediğiniz ilerleme
+girişleri o hedefin geçmişinin parçası olduğu için onda kalır, ancak adınız
+artık gösterilmez. Kod tahminini önlemek için hatalı kod denemeleri bir gün
+süreyle kaydedilir.
 
 ### 3. Bildirimler
 
@@ -154,6 +167,11 @@ profilleme amacıyla kullanılmaz, üçüncü taraflara satılmaz.
   alınamaz. Cihazınızdaki veriler silinmez — uygulamayı hesapsız kullanmaya
   devam edebilirsiniz.
 - **Yalnızca çıkış yapmak** verinizi silmez; bulut kopyası hesabınızda kalır.
+  Çıkış yaparken cihazdaki verileri de silmeyi seçebilirsiniz.
+- **Uygulamaya erişemiyorsanız:** hesabınızın ve buluttaki tüm verilerinizin
+  silinmesini, hesabınıza bağlı e-posta adresinden **yazgandev@gmail.com**
+  adresine yazarak isteyebilirsiniz. Talebiniz en geç 30 gün içinde yerine
+  getirilir ve size bildirilir.
 
 Bulut verileriniz, siz hesabınızı silene kadar saklanır.
 
@@ -188,8 +206,15 @@ carries none of your content is sent (see §6).
 
 If you do not sign in, everything you create — habits, tasks, goals, completion
 marks, duration/amount logs, reminder times, and your app preferences (theme,
-language) — is stored only in a **local database on your device** and does not
-leave it.
+language) — is stored only in a **local database on your device** and is not
+sent to Erek's servers.
+
+**Android backup:** if Android's own backup is turned on for your device, the
+system may include this local database in your Google account's device backup
+(Google Drive), so your data comes back when you switch phones. That backup is
+kept by Google, in your account; it never reaches Erek's servers and we cannot
+access it. Your sign-in session is excluded from it. You can turn backup off on
+your device under Settings > Google > Backup.
 
 The one exception is the technical error report sent when the app crashes; your
 content is not included in it (see §6).
@@ -216,7 +241,9 @@ On first launch the app shows a screen offering sign-in; you can skip it with
   creation/update timestamps)
 
 **As account information:** when you sign in with Google, our authentication
-provider stores your email address and an account identifier. Your password
+provider stores your email address and an account identifier. Your Google
+**display name and a link to your profile photo** are stored as well; they are
+shown only to people you connect with as friends (see below). Your password
 never reaches us; Google performs the authentication.
 
 **Where it is stored:** the data is held in a database hosted on our
@@ -246,10 +273,12 @@ you choose:
   change the goal itself; reminders and linked habits are not shared.
 
 You can stop sharing or remove a connection at any time; removing a connection
-ends everything shared between you and removes the shared data from your
-friend's device. Deleting your account deletes all your connections, shares and
-invite codes. To prevent code guessing, failed code attempts are recorded for
-one day.
+ends everything shared between you, and your friend's app removes the shared
+data from their device at its next sync. Deleting your account deletes all your
+connections, shares and invite codes. Progress entries you previously added to
+a friend's shared goal stay in that goal's history, since they are part of it,
+but your name is no longer shown. To prevent code guessing, failed code attempts
+are recorded for one day.
 
 ### 3. Notifications
 
@@ -318,7 +347,12 @@ are never sold to third parties.
   be undone. The data on your device is not deleted — you can keep using the app
   without an account.
 - **Signing out alone** does not delete your data; the cloud copy remains in
-  your account.
+  your account. When signing out you can choose to erase the data on the device
+  too.
+- **If you can't access the app:** you can request deletion of your account and
+  all of your cloud data by writing to **yazgandev@gmail.com** from the email
+  address linked to your account. Requests are completed within 30 days and
+  you will be notified.
 
 Your cloud data is retained until you delete your account.
 
