@@ -22,6 +22,7 @@ import { HeaderActions } from '@/ui/HeaderActions';
 import { MetaLine } from '@/ui/MetaLine';
 import { StreakBadge } from '@/ui/StreakBadge';
 import { usePullRefresh } from '@/ui/usePullRefresh';
+import { SharedHabitsSection, useSharedLists } from '@/ui/SharedLists';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -37,7 +38,11 @@ export default function HabitsScreen() {
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   const { today, habits, reload } = useHabitsData(user.id);
-  const { refreshing, onRefresh } = usePullRefresh(reload);
+  const shared_ = useSharedLists();
+  const { refreshing, onRefresh } = usePullRefresh(() => {
+    reload();
+    shared_.reload();
+  });
 
   // Weekday letters for the 7-day squares (oldest → today); the squares used to
   // be unlabeled, so you couldn't tell which square was which day.
@@ -180,6 +185,8 @@ export default function HabitsScreen() {
             </View>
           ))
         )}
+
+        <SharedHabitsSection items={shared_.sharedHabits} onHide={shared_.hideHabit} />
       </ScrollView>
 
       <HabitEditModal

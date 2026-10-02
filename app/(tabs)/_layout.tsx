@@ -1,6 +1,5 @@
 // Bottom tab bar layout: Today, Tasks, [＋], Habits, Goals.
-// (Friends is NOT a tab: it's the 👥 button next to the profile photo in every
-// tab's header — see ui/HeaderActions.tsx.)
+// (Friends is NOT a tab: it's a row inside the Profile menu — see app/profile.tsx.)
 // The square ＋ in the middle isn't a tab — tapping it rotates 45° into an ×
 // and springs open three options (Task·Habit·Goal) (AddFab); the chosen type
 // opens straight into the add form (AddSheet). Settings stopped being a tab:

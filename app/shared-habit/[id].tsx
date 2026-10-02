@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSharedHabit } from '@/ui/useSharedHabit';
+import { NudgeButton } from '@/ui/NudgeButton';
 import { HabitStatsBody } from '@/ui/habit/HabitStatsBody';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -42,7 +43,17 @@ export default function SharedHabitScreen() {
             {status === 'offline' ? t('friends.err.ERK_NETWORK') : t('sharedHabit.loading')}
           </Text>
         ) : (
-          <HabitStatsBody stats={{ ...stats, habit }} calendar={calendar} subtitle={subtitle} />
+          <>
+            {shared && (
+              <NudgeButton
+                message={t('friends.nudgeHabitMessage', {
+                  name: shared.owner.displayName ?? t('friends.unknownName'),
+                  title: habit.title,
+                })}
+              />
+            )}
+            <HabitStatsBody stats={{ ...stats, habit }} calendar={calendar} subtitle={subtitle} />
+          </>
         )}
       </ScrollView>
     </SafeAreaView>

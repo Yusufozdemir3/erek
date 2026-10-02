@@ -25,6 +25,7 @@ import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { HeaderActions } from '@/ui/HeaderActions';
 import { usePullRefresh } from '@/ui/usePullRefresh';
+import { SharedGoalsSection, useSharedLists } from '@/ui/SharedLists';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -66,7 +67,11 @@ export default function GoalsScreen() {
   }, [user.id, dataVersion]);
 
   useFocusEffect(reload);
-  const { refreshing, onRefresh } = usePullRefresh(reload);
+  const shared_ = useSharedLists();
+  const { refreshing, onRefresh } = usePullRefresh(() => {
+    reload();
+    shared_.reload();
+  });
 
   // Delete confirmation now lives in SwipeableRow's own two-tap action button
   // (the panel that opens to the right) — deletion here is immediate.
@@ -195,6 +200,8 @@ export default function GoalsScreen() {
             );
           })
         )}
+
+        <SharedGoalsSection items={shared_.sharedGoals} onHide={shared_.hideGoal} />
       </ScrollView>
     </SafeAreaView>
   );

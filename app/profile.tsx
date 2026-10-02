@@ -10,6 +10,7 @@ import { makeProfileStyles } from '@/ui/profileStyles';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { ACCOUNTS_ENABLED } from '@/config';
+import { useAppData } from '@/ui/AppData';
 
 type MenuRow = { icon: keyof typeof Feather.glyphMap; label: string; href: string };
 
@@ -17,10 +18,14 @@ export default function ProfileScreen() {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeProfileStyles(colors);
+  const { authUser } = useAppData();
+  // Friends/sharing needs a real (non-anonymous) account.
+  const signedIn = ACCOUNTS_ENABLED && authUser != null && !authUser.isAnonymous;
 
   const rows: MenuRow[] = [
     { icon: 'sliders', label: t('profile.appearance'), href: '/appearance' },
     { icon: 'bell', label: t('profile.notifications'), href: '/notifications' },
+    ...(signedIn ? [{ icon: 'users', label: t('friends.title'), href: '/friends' } as MenuRow] : []),
     // Hidden in builds where accounts are switched off (see src/config.ts).
     ...(ACCOUNTS_ENABLED
       ? [{ icon: 'user', label: t('profile.accountSync'), href: '/account-sync' } as MenuRow]

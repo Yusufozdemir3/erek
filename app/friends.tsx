@@ -1,7 +1,9 @@
-// Friends screen (modal, opened from the 👥 button next to the profile photo,
-// see ui/HeaderActions.tsx): your invite code, entering a friend's code, what
-// friends shared with you (habits, goals) and the people you're connected with.
-// The button only shows while signed in; the signed-out branch below is just a
+// Friends screen (modal, opened from the "Friends" row on Profile): the people
+// you're connected with, plus ONE "Add a friend" card that holds both halves of
+// connecting (share your invite code / enter a friend's code). What friends
+// shared with you no longer lives here — it shows up in the Habits and Goals tabs
+// (see ui/SharedLists.tsx), like shared tasks do in the Tasks tab.
+// The row only shows while signed in; the signed-out branch below is just a
 // fallback for a deep link or signing out while this screen is open.
 // Connections are online-only by design (see src/sync/friends.ts): the list is
 // shown from cache first, then refreshed; every network call is caught here
@@ -20,34 +22,23 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import {
   getCachedFriends,
-  getCachedSharedGoals,
-  getCachedSharedHabits,
   getInvite,
-  getSharedGoals,
-  getSharedHabits,
   INVITE_CODE_LENGTH,
   listConnections,
   normalizeInviteCode,
   redeemInvite,
   removeConnection,
   sharingErrorKey,
-  unshareGoal,
-  unshareHabit,
   type Friend,
   type Invite,
-  type SharedGoal,
-  type SharedHabit,
 } from '@/sync';
-import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { dateTimeLabel, DEFAULT_HABIT_COLOR, percentLabel, type Colors } from '@/ui/theme';
-import { goalRepo } from '@/db';
-import { fmtGoalValue } from '@/ui/goal/goalFormat';
+import { dateTimeLabel, type Colors } from '@/ui/theme';
 
 function FriendAvatar({ friend, styles }: { friend: Friend; styles: ReturnType<typeof makeStyles> }) {
   const [failed, setFailed] = useState(false);
@@ -76,8 +67,6 @@ export default function FriendsScreen() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [code, setCode] = useState('');
   const [redeemBusy, setRedeemBusy] = useState(false);
-  const [sharedHabits, setSharedHabits] = useState<SharedHabit[]>([]);
-  const [sharedGoals, setSharedGoals] = useState<SharedGoal[]>([]);
   // Ignores results that arrive after the screen lost focus / a newer load started.
   const loadSeq = useRef(0);
 
@@ -86,16 +75,8 @@ export default function FriendsScreen() {
   const refresh = useCallback(() => {
     const seq = ++loadSeq.current;
     let fresh = false;
-    let freshShared = false;
-    let freshGoals = false;
     getCachedFriends().then((cached) => {
       if (seq === loadSeq.current && !fresh && cached.length > 0) setFriends(cached);
-    });
-    getCachedSharedHabits().then((cached) => {
-      if (seq === loadSeq.current && !freshShared && cached.length > 0) setSharedHabits(cached);
-    });
-    getCachedSharedGoals().then((cached) => {
-      if (seq === loadSeq.current && !freshGoals && cached.length > 0) setSharedGoals(cached);
     });
     listConnections()
       .then((list) => {
@@ -109,22 +90,6 @@ export default function FriendsScreen() {
       })
       .finally(() => {
         if (seq === loadSeq.current) setListLoading(false);
-      });
-    getSharedHabits()
-      .then((list) => {
-        freshShared = true;
-        if (seq === loadSeq.current) setSharedHabits(list);
-      })
-      .catch(() => {
-        // The friend list's error line already reports connectivity.
-      });
-    getSharedGoals()
-      .then((list) => {
-        freshGoals = true;
-        if (seq === loadSeq.current) setSharedGoals(list);
-      })
-      .catch(() => {
-        // Same as above.
       });
   }, [t]);
 
@@ -191,44 +156,6 @@ export default function FriendsScreen() {
     ]);
   };
 
-  const confirmHideShared = (s: SharedHabit) => {
-    const name = s.owner.displayName ?? t('friends.unknownName');
-    Alert.alert(t('friends.hideSharedTitle'), t('friends.hideSharedBody', { title: s.habit.title, name }), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('friends.remove'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await unshareHabit(s.habit.id, s.owner.id);
-            setSharedHabits((prev) => prev.filter((x) => x.habit.id !== s.habit.id));
-          } catch (e) {
-            showError(e);
-          }
-        },
-      },
-    ]);
-  };
-
-  const confirmHideSharedGoal = (s: SharedGoal) => {
-    const name = s.owner.displayName ?? t('friends.unknownName');
-    Alert.alert(t('friends.hideSharedTitle'), t('friends.hideSharedBody', { title: s.goal.title, name }), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('friends.remove'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await unshareGoal(s.goal.id, s.owner.id);
-            setSharedGoals((prev) => prev.filter((x) => x.goal.id !== s.goal.id));
-          } catch (e) {
-            showError(e);
-          }
-        },
-      },
-    ]);
-  };
-
   if (!signedIn) {
     return (
       <View style={styles.center}>
@@ -242,7 +169,40 @@ export default function FriendsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('friends.inviteTitle')}</Text>
+        <Text style={styles.cardTitle}>{t('friends.listTitle')}</Text>
+        {listError && <Text style={styles.errText}>{listError}</Text>}
+        {friends.length === 0 ? (
+          listLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <Text style={styles.muted}>{t('friends.empty')}</Text>
+          )
+        ) : (
+          friends.map((f) => {
+            const name = f.displayName ?? t('friends.unknownName');
+            return (
+              <View key={f.id} style={styles.friendRow}>
+                <FriendAvatar friend={f} styles={styles} />
+                <Text style={styles.friendName} numberOfLines={1}>
+                  {name}
+                </Text>
+                <Pressable
+                  onPress={() => confirmRemove(f)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('friends.removeA11y', { name })}
+                >
+                  <Text style={styles.removeText}>{t('friends.remove')}</Text>
+                </Pressable>
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      <View style={[styles.card, styles.gap]}>
+        <Text style={styles.cardTitle}>{t('friends.addTitle')}</Text>
+        <Text style={styles.subTitle}>{t('friends.inviteTitle')}</Text>
         <Text style={styles.hint}>{t('friends.inviteHint')}</Text>
         {invite ? (
           <>
@@ -284,10 +244,8 @@ export default function FriendsScreen() {
             )}
           </Pressable>
         )}
-      </View>
-
-      <View style={[styles.card, styles.gap]}>
-        <Text style={styles.cardTitle}>{t('friends.redeemTitle')}</Text>
+        <View style={styles.divider} />
+        <Text style={styles.subTitle}>{t('friends.redeemTitle')}</Text>
         <TextInput
           style={styles.input}
           value={code}
@@ -315,110 +273,6 @@ export default function FriendsScreen() {
           )}
         </Pressable>
       </View>
-
-      <View style={[styles.card, styles.gap]}>
-        <Text style={styles.cardTitle}>{t('friends.sharedHabitsTitle')}</Text>
-        {sharedHabits.length === 0 ? (
-          <Text style={styles.muted}>{t('friends.sharedHabitsEmpty')}</Text>
-        ) : (
-          sharedHabits.map((s) => {
-            const color = s.habit.color ?? DEFAULT_HABIT_COLOR;
-            return (
-              <Pressable
-                key={s.habit.id}
-                style={styles.friendRow}
-                onPress={() => router.push({ pathname: '/shared-habit/[id]', params: { id: s.habit.id } })}
-                onLongPress={() => confirmHideShared(s)}
-                accessibilityRole="button"
-                accessibilityHint={t('friends.hideSharedHint')}
-              >
-                <View style={[styles.avatar, styles.habitIcon, { borderColor: color }]}>
-                  <HabitIconGlyph id={s.habit.icon} size={16} color={color} />
-                </View>
-                <View style={styles.flex}>
-                  <Text style={styles.friendName} numberOfLines={1}>
-                    {s.habit.title}
-                  </Text>
-                  <Text style={styles.sharedBy} numberOfLines={1}>
-                    {t('friends.sharedBy', { name: s.owner.displayName ?? t('friends.unknownName') })}
-                  </Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            );
-          })
-        )}
-      </View>
-
-      <View style={[styles.card, styles.gap]}>
-        <Text style={styles.cardTitle}>{t('friends.sharedGoalsTitle')}</Text>
-        {sharedGoals.length === 0 ? (
-          <Text style={styles.muted}>{t('friends.sharedGoalsEmpty')}</Text>
-        ) : (
-          sharedGoals.map((s) => {
-            const g = s.goal;
-            const pct = Math.round(goalRepo.progressRatio(g) * 100);
-            return (
-              <Pressable
-                key={g.id}
-                style={styles.friendRow}
-                onPress={() => router.push({ pathname: '/shared-goal/[id]', params: { id: g.id } })}
-                onLongPress={() => confirmHideSharedGoal(s)}
-                accessibilityRole="button"
-                accessibilityHint={t('friends.hideSharedHint')}
-              >
-                <View style={[styles.avatar, styles.goalIcon]}>
-                  <Text style={styles.goalIconText}>🎯</Text>
-                </View>
-                <View style={styles.flex}>
-                  <Text style={styles.friendName} numberOfLines={1}>
-                    {g.title}
-                  </Text>
-                  <Text style={styles.sharedBy} numberOfLines={1}>
-                    {t('friends.sharedBy', { name: s.owner.displayName ?? t('friends.unknownName') })}
-                    {g.goal_type === 'numeric' && g.target_value
-                      ? ` · ${fmtGoalValue(g.current_value, g.unit)} / ${fmtGoalValue(g.target_value, g.unit)} (${percentLabel(pct, lang)})`
-                      : ''}
-                  </Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            );
-          })
-        )}
-      </View>
-
-      <View style={[styles.card, styles.gap]}>
-        <Text style={styles.cardTitle}>{t('friends.listTitle')}</Text>
-        {listError && <Text style={styles.errText}>{listError}</Text>}
-        {friends.length === 0 ? (
-          listLoading ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <Text style={styles.muted}>{t('friends.empty')}</Text>
-          )
-        ) : (
-          friends.map((f) => {
-            const name = f.displayName ?? t('friends.unknownName');
-            return (
-              <View key={f.id} style={styles.friendRow}>
-                <FriendAvatar friend={f} styles={styles} />
-                <Text style={styles.friendName} numberOfLines={1}>
-                  {name}
-                </Text>
-                <Pressable
-                  onPress={() => confirmRemove(f)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('friends.removeA11y', { name })}
-                >
-                  <Text style={styles.removeText}>{t('friends.remove')}</Text>
-                </Pressable>
-              </View>
-            );
-          })
-        )}
-      </View>
     </ScrollView>
   );
 }
@@ -436,6 +290,8 @@ const makeStyles = (c: Colors) =>
       padding: 16,
     },
     gap: { marginTop: 16 },
+    subTitle: { fontSize: 14, fontWeight: '700', color: c.text, marginBottom: 6 },
+    divider: { height: 1, backgroundColor: c.border, marginVertical: 18 },
     cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 8 },
     hint: { fontSize: 12, color: c.faint, lineHeight: 17, marginBottom: 14 },
     muted: { fontSize: 14, color: c.muted, lineHeight: 20, textAlign: 'center' },
@@ -491,9 +347,4 @@ const makeStyles = (c: Colors) =>
     avatarInitial: { color: c.primary, fontWeight: '800', fontSize: 15 },
     friendName: { flex: 1, fontSize: 15, fontWeight: '600', color: c.text },
     removeText: { color: c.danger, fontSize: 13, fontWeight: '700' },
-    habitIcon: { borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-    goalIcon: { backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center' },
-    goalIconText: { fontSize: 17 },
-    sharedBy: { fontSize: 12, color: c.muted, marginTop: 2 },
-    chevron: { fontSize: 22, color: c.faint },
   });
