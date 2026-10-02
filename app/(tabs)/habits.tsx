@@ -4,14 +4,13 @@
 // Architecture rule: no SQL; only habitRepo is called.
 
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { habitRepo } from '@/db';
-import { fmtClock } from '@/lib/helpers';
+import { fmtClock, lastDays } from '@/lib/helpers';
 import type { Habit } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { highestMilestone } from '@/lib/milestones';
 import { cancelHabitReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
@@ -20,14 +19,17 @@ import { EmptyState } from '@/ui/EmptyState';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { MetaLine } from '@/ui/MetaLine';
+import { StreakBadge } from '@/ui/StreakBadge';
+import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { type Colors } from '@/ui/theme';
+import { DATE_LOCALE, type Colors } from '@/ui/theme';
 
 export default function HabitsScreen() {
   const { colors, shared } = useTheme();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user } = useAppData();
   const [editing, setEditing] = useState<Habit | null>(null); // null = panel closed
@@ -35,6 +37,13 @@ export default function HabitsScreen() {
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   const { today, habits, reload } = useHabitsData(user.id);
+  const { refreshing, onRefresh } = usePullRefresh(reload);
+
+  // Weekday letters for the 7-day squares (oldest → today); the squares used to
+  // be unlabeled, so you couldn't tell which square was which day.
+  const weekLabels = lastDays(7).map((d) =>
+    new Date(`${d}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], { weekday: 'narrow' })
+  );
 
   const toggleToday = (h: HabitListItem) => {
     const completing = !h.completedToday;
@@ -62,7 +71,19 @@ export default function HabitsScreen() {
 
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={shared.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.card}
+          />
+        }
+      >
         <View style={shared.headerRow}>
           <Text style={shared.greeting}>{t('tabs.habits')}</Text>
           <HeaderActions />
@@ -114,18 +135,16 @@ export default function HabitsScreen() {
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
                     {h.title}
                   </Text>
-                  {(h.days || h.reminderTimes.length > 0 || h.period || h.goalTitle) && (
-                    <Text style={styles.remind}>
-                      {[
-                        h.days,
-                        h.period,
-                        h.reminderTimes.length > 0 ? `🔔 ${h.reminderTimes.join(', ')}` : null,
-                        h.goalTitle ? `🎯 ${h.goalTitle}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join('  ·  ')}
-                    </Text>
-                  )}
+                  <MetaLine
+                    items={[
+                      h.days ? { text: h.days, icon: 'repeat' } : null,
+                      h.period ? { text: h.period, icon: 'calendar' } : null,
+                      h.reminderTimes.length > 0
+                        ? { text: h.reminderTimes.join(', '), icon: 'bell' }
+                        : null,
+                      h.goalTitle ? { text: h.goalTitle, icon: 'target' } : null,
+                    ]}
+                  />
                 </Pressable>
                 {/* No counter on this tab: amounts are entered on Today. Numeric/
                     timer habits show today's progress as plain text instead. */}
@@ -136,11 +155,7 @@ export default function HabitsScreen() {
                       : `${h.amount}/${h.target}${h.unit ? ` ${h.unit}` : ''}`}
                   </Text>
                 ) : (
-                  h.streak > 0 && (
-                    <Text style={shared.streak}>
-                      {highestMilestone(h.streak)?.emoji ?? '🔥'} {h.streak}
-                    </Text>
-                  )
+                  h.streak > 0 && <StreakBadge streak={h.streak} />
                 )}
               </View>
               {/* Last 7 days — tapping it opens the stats screen */}
@@ -152,7 +167,12 @@ export default function HabitsScreen() {
                 accessibilityLabel={t('habit.statsA11y', { title: h.title })}
               >
                 {h.week.map((on, i) => (
-                  <View key={i} style={[styles.dayDot, on && styles.dayDotOn]} />
+                  <View key={i} style={styles.dayCol}>
+                    <View style={[styles.dayDot, on && styles.dayDotOn]} />
+                    <Text style={[styles.dayLabel, i === 6 && styles.dayLabelToday]}>
+                      {weekLabels[i]}
+                    </Text>
+                  </View>
                 ))}
               </Pressable>
             </View>
@@ -180,8 +200,10 @@ const makeStyles = (c: Colors) =>
     titleArea: { flex: 1 },
     progress: { fontSize: 13, fontWeight: '700', color: c.muted, marginLeft: 8 },
     progressDone: { color: c.done },
-    remind: { fontSize: 12, color: c.muted, marginTop: 2 },
     week: { flexDirection: 'row', gap: 6, marginTop: 12, marginLeft: 42 },
+    dayCol: { alignItems: 'center', gap: 2 },
+    dayLabel: { fontSize: 9, fontWeight: '600', color: c.faint, textTransform: 'uppercase' },
+    dayLabelToday: { color: c.primary, fontWeight: '800' },
     dayDot: {
       width: 16,
       height: 16,

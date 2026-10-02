@@ -206,7 +206,6 @@ export const tr: Dict = {
   'screen.goalsSubtitle': 'Büyük resmi takip et',
   'today.backToday': 'Bugüne dön',
   'today.filterAll': 'Tümü',
-  'today.hideCompleted': 'Tamamlananları gizle',
   'today.filterEmpty': 'Bu filtreye uyan bir şey yok',
 
   // Home screen widget
@@ -324,8 +323,6 @@ export const tr: Dict = {
   'profile.darkWarm': 'Sıcak',
   'profile.darkBlack': 'Tam siyah',
   'profile.footnoteLocal': 'Verilerin yalnızca bu cihazda saklanır.',
-  'profile.todayScreen': 'Bugün ekranı',
-  'profile.hideCompletedHint': 'Açıksa, Bugün ekranındaki tamamlanmış görev ve alışkanlıklar listeden gizlenir.',
   'profile.notifications': 'Bildirimler',
   'profile.notifEnabled': 'Bildirimler açık',
   'profile.notifHabitReminders': 'Alışkanlık hatırlatmaları',

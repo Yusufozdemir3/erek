@@ -8,10 +8,10 @@
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
 
-// Missed-day calendar cell (see cellMissed / calDayTextMissed). Exported so the
-// contrast test can hold the pair to WCAG AA.
-export const MISSED_CELL_BG = '#f87171';
-export const MISSED_CELL_TEXT = '#450a0a';
+// Missed-day calendar cell: the danger color as a soft TINT (hex alpha) over
+// the card, so a month with many misses doesn't turn into a solid red wall.
+// Exported so the contrast test can hold the day number to WCAG AA on it.
+export const MISSED_TINT_ALPHA = '33'; // ≈ 20 %
 
 // — MEASUREMENTS for the 'History' bar chart — used by both the styles and
 // the drawing logic — how many buckets fit on screen AT ONCE. Column width is
@@ -93,14 +93,12 @@ export const makeHabitStatsStyles = (c: Colors) =>
     badgeFill: { height: '100%', borderRadius: 3 },
     badgeAllEarned: { fontSize: 13, fontWeight: '700', color: c.text },
 
-    // Missed day (monthly calendar): a red that reads in both themes. Not
-    // scheduled: a faint gray that stands out from the background (not bg —
+    // Missed day (monthly calendar): a soft tint of the danger color. The day
+    // number keeps the normal text color — readable on the tint in every theme.
+    // Not scheduled: a faint gray that stands out from the background (not bg —
     // bg was the same as the background and stayed invisible).
-    cellMissed: { backgroundColor: MISSED_CELL_BG },
-    // The day number ON a missed cell: a deep red ink. It used to be the muted
-    // gray, which on this red was close to invisible (~2:1). Fixed values, not
-    // theme tokens, because the cell itself is the same red in every theme.
-    calDayTextMissed: { color: MISSED_CELL_TEXT, fontWeight: '800' },
+    cellMissed: { backgroundColor: c.danger + MISSED_TINT_ALPHA },
+    calDayTextMissed: { color: c.text, fontWeight: '800' },
     cellUnscheduled: { backgroundColor: c.border },
 
     // — Day/Week/Month tabs (shared by Score + History) —

@@ -15,7 +15,7 @@
 // revealed with a single tap if wanted.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -29,6 +29,8 @@ import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { MetaLine } from '@/ui/MetaLine';
+import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { TaskEditModal } from '@/ui/TaskEditModal';
@@ -87,6 +89,7 @@ export default function TasksScreen() {
 
   useFocusEffect(reload);
   useSharedTasksFreshness(reload);
+  const { refreshing, onRefresh } = usePullRefresh(reload);
   const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
 
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
@@ -109,7 +112,7 @@ export default function TasksScreen() {
 
   const sharedLabel = (t: Task): string | null => {
     const uid = t.shared_owner_uid ?? t.shared_with_id;
-    return uid ? `👥 ${friendNames.get(uid) ?? tr('friends.unknownName')}` : null;
+    return uid ? (friendNames.get(uid) ?? tr('friends.unknownName')) : null;
   };
 
   // A task shared WITH me: read-only except the check-off (see sharedTaskUi).
@@ -225,30 +228,22 @@ export default function TasksScreen() {
                 accessibilityLabel={tr('common.editA11y', { title: t.title })}
               >
                 <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                {((t.due_date && !done) || subtaskCounts[t.id] || t.recurrence || sharedLabel(t)) && (
-                  <Text style={styles.due}>
-                    {[
-                      sharedLabel(t),
-                      t.recurrence
-                        ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join('  ·  ')}
-                    {(sharedLabel(t) || t.recurrence) && t.due_date && !done ? '  ·  ' : ''}
-                    {t.due_date && !done ? (
-                      <Text style={overdue ? styles.overdue : undefined}>
-                        {shortDate(t.due_date, lang)}
-                      </Text>
-                    ) : null}
-                    {(sharedLabel(t) || t.recurrence || (t.due_date && !done)) && subtaskCounts[t.id]
-                      ? '  ·  '
-                      : ''}
-                    {subtaskCounts[t.id]
-                      ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`
-                      : ''}
-                  </Text>
-                )}
+                <MetaLine
+                  items={[
+                    sharedLabel(t) ? { text: sharedLabel(t)!, icon: 'users' } : null,
+                    t.recurrence
+                      ? { text: scheduleLabel(t.recurrence, schedLabels), icon: 'repeat' }
+                      : null,
+                    t.due_date && !done
+                      ? { text: shortDate(t.due_date, lang), icon: 'calendar', danger: overdue }
+                      : null,
+                    subtaskCounts[t.id]
+                      ? {
+                          text: `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`,
+                        }
+                      : null,
+                  ]}
+                />
               </Pressable>
               {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
               {!done && <PriorityMark priority={t.priority} />}
@@ -273,6 +268,15 @@ export default function TasksScreen() {
         extraData={`${openRowId}|${tasks.length}|${completedOpen}`}
         contentContainerStyle={shared.content}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.card}
+          />
+        }
         ListHeaderComponent={
           <>
             <View style={shared.headerRow}>
@@ -311,8 +315,6 @@ export default function TasksScreen() {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    due: { fontSize: 12, color: c.muted, marginTop: 3 },
-    overdue: { color: c.danger, fontWeight: '700' },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',

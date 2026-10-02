@@ -193,7 +193,6 @@ export const de: Dict = {
   'screen.goalsSubtitle': 'Behalte das große Ganze im Blick',
   'today.backToday': 'Zurück zu heute',
   'today.filterAll': 'Alle',
-  'today.hideCompleted': 'Erledigte ausblenden',
   'today.filterEmpty': 'Nichts entspricht diesem Filter',
 
   // Startbildschirm-Widget
@@ -307,8 +306,6 @@ export const de: Dict = {
   'profile.darkWarm': 'Warm',
   'profile.darkBlack': 'Tiefschwarz',
   'profile.footnoteLocal': 'Deine Daten werden nur auf diesem Gerät gespeichert.',
-  'profile.todayScreen': 'Heute-Bildschirm',
-  'profile.hideCompletedHint': 'Wenn aktiv, werden erledigte Aufgaben und Gewohnheiten in der Heute-Liste ausgeblendet.',
   'profile.notifications': 'Benachrichtigungen',
   'profile.notifEnabled': 'Benachrichtigungen an',
   'profile.notifHabitReminders': 'Gewohnheits-Erinnerungen',

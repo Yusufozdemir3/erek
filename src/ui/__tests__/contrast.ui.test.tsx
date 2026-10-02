@@ -13,7 +13,7 @@
 // threshold — deliberately excluded.
 
 import { blackColors, darkColors, lightColors, percentLabel, switchColors, type Colors } from '@/ui/theme';
-import { MISSED_CELL_BG, MISSED_CELL_TEXT } from '@/ui/habit/habitStatsStyles';
+import { MISSED_TINT_ALPHA } from '@/ui/habit/habitStatsStyles';
 
 // Linearizes an sRGB channel (WCAG 2.x definition).
 function channel(v: number): number {
@@ -84,8 +84,16 @@ describe('metin kontrastı — WCAG AA', () => {
 
   // The day number on a missed calendar cell used to be the muted gray on red
   // (~2:1) — 8th–16th of a month read as blank squares in the field screenshots.
-  it('takvimde kaçırılan günün rakamı kırmızı hücrede okunur', () => {
-    expect(ratio(MISSED_CELL_TEXT, MISSED_CELL_BG)).toBeGreaterThanOrEqual(AA_BODY);
+  // The cell is now a soft tint (danger @ MISSED_TINT_ALPHA) over the card; the
+  // day number is the normal text color, which must stay readable on it.
+  it.each(PALETTES)('%s tema: takvimde kaçırılan günün rakamı tonlu hücrede okunur', (_name, colors) => {
+    const a = parseInt(MISSED_TINT_ALPHA, 16) / 255;
+    const mix = (fg: string, bg: string) => {
+      const ch = (h: string, i: number) => parseInt(h.replace('#', '').slice(i, i + 2), 16);
+      const out = [0, 2, 4].map((i) => Math.round(ch(fg, i) * a + ch(bg, i) * (1 - a)));
+      return '#' + out.map((v) => v.toString(16).padStart(2, '0')).join('');
+    };
+    expect(ratio(colors.text, mix(colors.danger, colors.card))).toBeGreaterThanOrEqual(AA_BODY);
   });
 
   // Not text, so the 3:1 non-text threshold (WCAG 1.4.11): the thumb must

@@ -193,7 +193,6 @@ export const en: Dict = {
   'screen.goalsSubtitle': 'Track the big picture',
   'today.backToday': 'Back to today',
   'today.filterAll': 'All',
-  'today.hideCompleted': 'Hide completed',
   'today.filterEmpty': 'Nothing matches this filter',
 
   // Home screen widget
@@ -307,8 +306,6 @@ export const en: Dict = {
   'profile.darkWarm': 'Warm',
   'profile.darkBlack': 'Pure black',
   'profile.footnoteLocal': 'Your data is stored only on this device.',
-  'profile.todayScreen': 'Today screen',
-  'profile.hideCompletedHint': 'When on, completed tasks and habits are hidden from the Today list.',
   'profile.notifications': 'Notifications',
   'profile.notifEnabled': 'Notifications on',
   'profile.notifHabitReminders': 'Habit reminders',

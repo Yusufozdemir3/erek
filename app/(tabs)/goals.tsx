@@ -13,7 +13,7 @@
 // Architecture rule: no SQL; only goalRepo/goalMilestoneRepo are called.
 
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -24,6 +24,7 @@ import { cancelGoalReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -65,6 +66,7 @@ export default function GoalsScreen() {
   }, [user.id, dataVersion]);
 
   useFocusEffect(reload);
+  const { refreshing, onRefresh } = usePullRefresh(reload);
 
   // Delete confirmation now lives in SwipeableRow's own two-tap action button
   // (the panel that opens to the right) — deletion here is immediate.
@@ -76,7 +78,19 @@ export default function GoalsScreen() {
 
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={shared.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={shared.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.card}
+          />
+        }
+      >
         <View style={shared.headerRow}>
           <Text style={shared.greeting}>{t('tabs.goals')}</Text>
           <HeaderActions />

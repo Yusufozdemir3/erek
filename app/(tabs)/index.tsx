@@ -5,10 +5,11 @@
 // Tapping the date opens the calendar; you can jump to another day and check it off.
 // Architecture rule: no SQL; only taskRepo / habitRepo are called.
 
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { habitRepo, reminderRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
@@ -30,6 +31,10 @@ import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { Confetti } from '@/ui/Confetti';
+import { MetaLine } from '@/ui/MetaLine';
+import { StreakBadge } from '@/ui/StreakBadge';
+import { usePullRefresh } from '@/ui/usePullRefresh';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -58,27 +63,36 @@ export default function TodayScreen() {
   const styles = makeStyles(colors);
   // selectedDate is shared (AppData): the central ＋ menu reads it from here to
   // add a new task with the viewed day as its default date.
-  const { user, selectedDate, setSelectedDate, hideCompleted } = useAppData();
+  const { user, selectedDate, setSelectedDate } = useAppData();
   const today = todayDate();
 
   const [showPicker, setShowPicker] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  // Finished items sit in a collapsed "Completed (N)" section (like the Tasks tab).
+  const [completedOpen, setCompletedOpen] = useState(false);
+  // Confetti: bumping the id plays one burst.
+  const [burstId, setBurstId] = useState(0);
 
   const { tasks, habits, subtaskCounts, weekProgress, reload } = useTodayData(user.id, selectedDate, today);
   const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
   useSharedTasksFreshness(reload);
+  const { refreshing, onRefresh } = usePullRefresh(reload);
 
   // Filters only narrow the view — the summary (DailySummary) and the real
   // "is the day empty" state are always computed against the full list.
   const showTasks = typeFilter !== 'habit';
   const showHabits = typeFilter !== 'task';
-  const filteredTasks = showTasks
-    ? tasks.filter((t) => !hideCompleted || t.completed_at === null)
-    : [];
-  const filteredHabits = showHabits
-    ? habits.filter((h) => !hideCompleted || !h.completed)
-    : [];
+  const filteredTasks = showTasks ? tasks : [];
+  const filteredHabits = showHabits ? habits : [];
+  // Only plain check-off habits fold away once done; counter/timer habits stay
+  // put (a timer keeps running past its target, a stepper can keep counting).
+  const isFoldable = (h: HabitView) => h.completed && h.kind !== 'timer' && h.target == null;
+  const openTasks = filteredTasks.filter((t) => t.completed_at === null);
+  const doneTasks = filteredTasks.filter((t) => t.completed_at !== null);
+  const openHabits = filteredHabits.filter((h) => !isFoldable(h));
+  const doneHabits = filteredHabits.filter(isFoldable);
+  const doneCount = doneTasks.length + doneHabits.length;
   const dayIsEmpty = tasks.length === 0 && habits.length === 0;
   const filterHidesEverything =
     !dayIsEmpty && filteredTasks.length === 0 && filteredHabits.length === 0;
@@ -92,6 +106,34 @@ export default function TodayScreen() {
   const habitsDone = habits.filter((h) => h.completed).length;
   const tasksDone = tasks.filter((t) => t.completed_at !== null).length;
 
+  // CELEBRATION — confetti when the day becomes fully done, or a habit earns a
+  // streak medal. Armed by the user's own check-off (so merely opening an
+  // already-complete day never fires), judged once the reloaded data arrives.
+  const medalDays = (h: HabitView) => (h.weekQuota ? h.streak * 7 : h.streak);
+  const dayFullyDone = () =>
+    tasks.length + habits.length > 0 &&
+    tasks.every((t) => t.completed_at !== null) &&
+    habits.every((h) => h.completed);
+  const armed = useRef<{ habitId: string | null; prevMedal: number; wasAllDone: boolean } | null>(null);
+  const armCelebration = (h?: HabitView) => {
+    armed.current = {
+      habitId: h?.id ?? null,
+      prevMedal: h ? highestMilestone(medalDays(h))?.days ?? 0 : 0,
+      wasAllDone: dayFullyDone(),
+    };
+  };
+  useEffect(() => {
+    const a = armed.current;
+    if (!a) return;
+    armed.current = null;
+    if (!isToday) return;
+    const newDay = !a.wasAllDone && dayFullyDone();
+    const h = a.habitId ? habits.find((x) => x.id === a.habitId) : undefined;
+    const newMedal = !!h && (highestMilestone(medalDays(h))?.days ?? 0) > a.prevMedal;
+    if (newDay || newMedal) setBurstId((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, habits]);
+
   // Label set for the recurring-task card's "🔁 Every day / Mon·Wed·Fri /
   // every 3 days ..." badge — see helpers.buildScheduleLabels.
   const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
@@ -100,7 +142,7 @@ export default function TodayScreen() {
   // only write path); editing stays with the owner.
   const sharedLabel = (t: Task): string | null => {
     const uid = t.shared_owner_uid ?? t.shared_with_id;
-    return uid ? `👥 ${friendNames.get(uid) ?? tr('friends.unknownName')}` : null;
+    return uid ? (friendNames.get(uid) ?? tr('friends.unknownName')) : null;
   };
 
   const openTask = (t: Task) => {
@@ -117,6 +159,7 @@ export default function TodayScreen() {
       return;
     }
     const completing = t.completed_at === null;
+    if (completing) armCelebration();
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
     // Completing a recurring task may fast-forward it to its next date instead
@@ -129,6 +172,7 @@ export default function TodayScreen() {
   const toggleHabit = (h: HabitView) => {
     if (isFuture) return;
     const completing = !h.completed;
+    if (completing) armCelebration(h);
     const goalDone = habitRepo.toggleLog(h.id, selectedDate, completing);
     completing ? notifySuccess() : tapLight();
     reload();
@@ -140,6 +184,7 @@ export default function TodayScreen() {
 
   const adjustHabit = (h: HabitView, delta: number) => {
     if (isFuture) return;
+    if (delta > 0) armCelebration(h);
     const goalDone = habitRepo.incrementAmount(h.id, selectedDate, delta, h.target);
     tapLight();
     reload();
@@ -151,6 +196,7 @@ export default function TodayScreen() {
   // delta-based incrementAmount by computing the difference; no separate repo function needed.
   const setHabitAmount = (h: HabitView, value: number) => {
     if (isFuture) return;
+    if (value > h.amount) armCelebration(h);
     const goalDone = habitRepo.incrementAmount(h.id, selectedDate, value - h.amount, h.target);
     reload();
     refreshWidget(user.id);
@@ -159,9 +205,136 @@ export default function TodayScreen() {
 
   const onPickDate = (picked: Date) => setSelectedDate(toYmd(picked));
 
+  const renderTask = (t: Task) => {
+    const done = t.completed_at !== null;
+    const time = extractTime(t.due_date);
+    return (
+      <Animated.View key={t.id} layout={LIST_LAYOUT} style={shared.card}>
+        <Pressable
+          onPress={() => toggleTask(t)}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: done }}
+          accessibilityLabel={t.title}
+        >
+          <View
+            style={[
+              shared.checkbox,
+              done ? shared.checkboxDone : { borderColor: PRIORITY_COLOR[t.priority] },
+            ]}
+          >
+            {done && <Text style={shared.checkmark}>✓</Text>}
+          </View>
+        </Pressable>
+        <Pressable
+          style={shared.cardBody}
+          onPress={() => openTask(t)}
+          accessibilityRole="button"
+          accessibilityLabel={tr('common.editA11y', { title: t.title })}
+        >
+          <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
+          <MetaLine
+        items={[
+          sharedLabel(t) ? { text: sharedLabel(t)!, icon: 'users' } : null,
+          t.recurrence ? { text: scheduleLabel(t.recurrence, schedLabels), icon: 'repeat' } : null,
+          subtaskCounts[t.id]
+            ? {
+                text: `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`,
+              }
+            : null,
+        ]}
+      />
+    </Pressable>
+        {time && <TimeBadge time={time} endTime={t.end_time} />}
+        {!done && <PriorityMark priority={t.priority} />}
+      </Animated.View>
+    );
+  };
+
+  const renderHabit = (h: HabitView) =>
+    h.kind === 'timer' ? (
+      // Timer habit: read-only progress (control is in Phase B).
+      <Animated.View
+        key={h.id}
+        layout={LIST_LAYOUT}
+        style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+      >
+        <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
+        <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
+          {h.title}
+        </Text>
+        <HabitTimer
+          habitId={h.id}
+          amount={h.amount}
+          target={h.target ?? 0}
+          editable={isToday}
+          onSet={(v) => setHabitAmount(h, v)}
+        />
+      </Animated.View>
+    ) : h.target != null ? (
+      // Numeric habit: enter an amount with the stepper (disabled on a future day).
+      <Animated.View
+        key={h.id}
+        layout={LIST_LAYOUT}
+        style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+      >
+        <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
+        <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
+          {h.title}
+        </Text>
+        <AmountStepper
+          amount={h.amount}
+          target={h.target}
+          unit={h.unit}
+          onDec={() => adjustHabit(h, -1)}
+          onInc={() => adjustHabit(h, 1)}
+          onSet={(v) => setHabitAmount(h, v)}
+          disabled={isFuture}
+        />
+      </Animated.View>
+    ) : (
+      // Binary habit: tap the card to check it off (disabled on a future day).
+      <AnimatedPressable
+        key={h.id}
+        layout={LIST_LAYOUT}
+        style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+        onPress={() => toggleHabit(h)}
+        disabled={isFuture}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: h.completed, disabled: isFuture }}
+        accessibilityLabel={tr('habit.checkboxA11y', { title: h.title })}
+      >
+        <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
+        <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
+          {h.title}
+        </Text>
+        {/* Quota habit: weekly progress ("2/3"). Since the streak is
+            weekly, the badge threshold is scaled by week×7. */}
+        {h.weekQuota && (
+          <Text style={styles.quotaChip}>
+            {h.weekQuota.done}/{h.weekQuota.target}
+          </Text>
+        )}
+        {h.streak > 0 && (
+          <StreakBadge streak={h.streak} medalDays={medalDays(h)} />
+        )}
+      </AnimatedPressable>
+    );
+
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={shared.content}>
+      <ScrollView
+        contentContainerStyle={shared.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.card}
+          />
+        }
+      >
         <View style={styles.headRow}>
           <Text style={shared.greeting}>{titleFor(selectedDate, today, lang, tr('tabs.today'))}</Text>
           <View style={styles.headRight}>
@@ -245,132 +418,34 @@ export default function TodayScreen() {
             <EmptyState emoji="🔍" title={tr('today.filterEmpty')} />
           ) : (
             <>
-              {filteredTasks.map((t) => {
-                const done = t.completed_at !== null;
-                const time = extractTime(t.due_date);
-                return (
-                  <Animated.View key={t.id} layout={LIST_LAYOUT} style={shared.card}>
-                    <Pressable
-                      onPress={() => toggleTask(t)}
-                      hitSlop={8}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: done }}
-                      accessibilityLabel={t.title}
-                    >
-                      <View
-                        style={[
-                          shared.checkbox,
-                          done ? shared.checkboxDone : { borderColor: PRIORITY_COLOR[t.priority] },
-                        ]}
-                      >
-                        {done && <Text style={shared.checkmark}>✓</Text>}
-                      </View>
-                    </Pressable>
-                    <Pressable
-                      style={shared.cardBody}
-                      onPress={() => openTask(t)}
-                      accessibilityRole="button"
-                      accessibilityLabel={tr('common.editA11y', { title: t.title })}
-                    >
-                      <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
-                      {(t.recurrence || subtaskCounts[t.id] || sharedLabel(t)) && (
-                        <Text style={styles.subCount}>
-                          {[
-                            sharedLabel(t),
-                            t.recurrence
-                              ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
-                              : null,
-                            subtaskCounts[t.id]
-                              ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join('  ·  ')}
-                        </Text>
-                      )}
-                    </Pressable>
-                    {time && <TimeBadge time={time} endTime={t.end_time} />}
-                    {!done && <PriorityMark priority={t.priority} />}
-                  </Animated.View>
-                );
-              })}
-
-              {filteredHabits.map((h) =>
-                h.kind === 'timer' ? (
-                  // Timer habit: read-only progress (control is in Phase B).
-                  <Animated.View
-                    key={h.id}
-                    layout={LIST_LAYOUT}
-                    style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
-                  >
-                    <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
-                    <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
-                      {h.title}
-                    </Text>
-                    <HabitTimer
-                      habitId={h.id}
-                      amount={h.amount}
-                      target={h.target ?? 0}
-                      editable={isToday}
-                      onSet={(v) => setHabitAmount(h, v)}
-                    />
-                  </Animated.View>
-                ) : h.target != null ? (
-                  // Numeric habit: enter an amount with the stepper (disabled on a future day).
-                  <Animated.View
-                    key={h.id}
-                    layout={LIST_LAYOUT}
-                    style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
-                  >
-                    <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
-                    <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
-                      {h.title}
-                    </Text>
-                    <AmountStepper
-                      amount={h.amount}
-                      target={h.target}
-                      unit={h.unit}
-                      onDec={() => adjustHabit(h, -1)}
-                      onInc={() => adjustHabit(h, 1)}
-                      onSet={(v) => setHabitAmount(h, v)}
-                      disabled={isFuture}
-                    />
-                  </Animated.View>
-                ) : (
-                  // Binary habit: tap the card to check it off (disabled on a future day).
-                  <AnimatedPressable
-                    key={h.id}
-                    layout={LIST_LAYOUT}
-                    style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
-                    onPress={() => toggleHabit(h)}
-                    disabled={isFuture}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: h.completed, disabled: isFuture }}
-                    accessibilityLabel={tr('habit.checkboxA11y', { title: h.title })}
-                  >
-                    <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
-                    <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
-                      {h.title}
-                    </Text>
-                    {/* Quota habit: weekly progress ("2/3"). Since the streak is
-                        weekly, the badge threshold is scaled by week×7. */}
-                    {h.weekQuota && (
-                      <Text style={styles.quotaChip}>
-                        {h.weekQuota.done}/{h.weekQuota.target}
-                      </Text>
-                    )}
-                    {h.streak > 0 && (
-                      <Text style={shared.streak}>
-                        {highestMilestone(h.weekQuota ? h.streak * 7 : h.streak)?.emoji ?? '🔥'} {h.streak}
-                      </Text>
-                    )}
-                  </AnimatedPressable>
-                )
+              {openTasks.map(renderTask)}
+              {openHabits.map(renderHabit)}
+              {doneCount > 0 && (
+                <Pressable
+                  style={styles.sectionHeader}
+                  onPress={() => setCompletedOpen((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: completedOpen }}
+                  accessibilityLabel={tr('tasks.completedSection', { n: doneCount })}
+                >
+                  <Text style={styles.sectionHeaderText}>
+                    {tr('tasks.completedSection', { n: doneCount })}
+                  </Text>
+                  <Feather
+                    name={completedOpen ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={colors.faint}
+                  />
+                </Pressable>
               )}
+              {completedOpen && doneTasks.map(renderTask)}
+              {completedOpen && doneHabits.map(renderHabit)}
             </>
           )}
         </View>
       </ScrollView>
+
+      <Confetti burstId={burstId} />
 
       <TaskEditModal task={editingTask} onClose={() => setEditingTask(null)} onChanged={reload} />
     </SafeAreaView>
@@ -399,7 +474,15 @@ const makeStyles = (c: Colors) =>
     filterChipText: { fontSize: 13, fontWeight: '600', color: c.muted },
     filterChipTextActive: { color: c.onAccent },
     list: { marginTop: 16 },
-    subCount: { fontSize: 12, color: c.muted, marginTop: 3 },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+      marginBottom: 4,
+    },
+    sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.muted },
     // The quota habit's "2/3" weekly progress indicator (on the right side of the card).
     quotaChip: {
       fontSize: 13,

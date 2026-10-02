@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
-import { useAppData } from '@/ui/AppData';
 import { makeProfileStyles } from '@/ui/profileStyles';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -22,7 +21,6 @@ export default function AppearanceScreen() {
   const { colors, scheme, mode, setMode, accent, setAccent, darkStyle, setDarkStyle } = useTheme();
   const { t, lang, setLang } = useI18n();
   const styles = makeProfileStyles(colors);
-  const { hideCompleted, setHideCompleted } = useAppData();
   // Haptics preference; the cache is loaded at startup (see _layout), so the
   // initial value here is correct right away.
   const [haptics, setHaptics] = useState(isHapticsEnabled);
@@ -131,20 +129,6 @@ export default function AppearanceScreen() {
             );
           })}
         </View>
-      </View>
-
-      {/* Today screen preferences */}
-      <View style={[styles.card, { marginTop: 16 }]}>
-        <Text style={styles.cardTitle}>{t('profile.todayScreen')}</Text>
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>{t('today.hideCompleted')}</Text>
-          <Switch
-            value={hideCompleted}
-            onValueChange={setHideCompleted}
-            {...switchColors(colors, hideCompleted)}
-          />
-        </View>
-        <Text style={styles.hint}>{t('profile.hideCompletedHint')}</Text>
       </View>
 
       {/* Haptics (in-app tactile feedback) — SEPARATE from notification vibration:

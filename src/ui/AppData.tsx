@@ -42,11 +42,6 @@ interface AppData {
   // day is displayed; sharing it here lets a new task default to the viewed day.
   selectedDate: string;
   setSelectedDate: (d: string) => void;
-  // Preference to hide completed tasks/habits on the "Today" screen — set in
-  // Profile (persisted in AsyncStorage), a persistent preference rather than a
-  // screen-specific filter.
-  hideCompleted: boolean;
-  setHideCompleted: (v: boolean) => void;
   // — SYNC STATE —
   // The result of the last round (automatic or manual, doesn't matter). The
   // Profile screen shows this; the reason it's kept HERE is that automatic
@@ -70,7 +65,6 @@ interface AppData {
   clearSyncStatus: () => void;
 }
 
-const HIDE_COMPLETED_KEY = 'today:hideCompleted';
 const LAST_SYNC_KEY = 'sync:lastSuccessAt';
 
 // We don't want to sync EVERY time the app comes to the foreground (needless
@@ -104,7 +98,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [selectedDate, setSelectedDate] = useState(todayDate());
-  const [hideCompleted, setHideCompletedState] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -164,15 +157,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.removeItem(LAST_SYNC_KEY).catch(() => {});
   }, []);
 
-  const setHideCompleted = useCallback((v: boolean) => {
-    setHideCompletedState(v);
-    AsyncStorage.setItem(HIDE_COMPLETED_KEY, v ? '1' : '0').catch(() => {});
-  }, []);
-
   useEffect(() => {
-    AsyncStorage.getItem(HIDE_COMPLETED_KEY).then((v) => {
-      if (v === '1') setHideCompletedState(true);
-    });
     // Last successful sync timestamp: the answer to "how old is my backup"
     // must survive an app restart too.
     AsyncStorage.getItem(LAST_SYNC_KEY).then((v) => {
@@ -286,8 +271,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             notifyDataChanged,
             selectedDate,
             setSelectedDate,
-            hideCompleted,
-            setHideCompleted,
             syncResult,
             lastSyncAt,
             syncing,
@@ -303,8 +286,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       dataVersion,
       notifyDataChanged,
       selectedDate,
-      hideCompleted,
-      setHideCompleted,
       syncResult,
       lastSyncAt,
       syncing,
