@@ -34,6 +34,9 @@ import {
   prepareReplaceWithAccount,
   runSync,
   setSyncOwner,
+  pendingChangeCount,
+  forgetAccountOnDevice,
+  resolveAccountSwitch,
 } from '../syncEngine';
 
 const LEGACY_KEY = 'sync:lastPulledAt';
@@ -1065,5 +1068,66 @@ describe('paylaşılan görevler', () => {
       completed_at: '2026-07-01T12:00:00.000Z',
       synced: 1,
     });
+  });
+});
+
+// DATA BELONGS TO THE ACCOUNT (2026-10-01): sign-out forgets the account's data
+// on the device; the only thing that may stop it is a real data-loss warning
+// based on pendingChangeCount().
+describe('çıkış — veri hesaba ait', () => {
+  const OWNER_KEY = 'sync:ownerUid';
+
+  it('pendingChangeCount yalnız buluta gitmemiş satırları sayar (başkasının paylaştığı görev hariç)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    expect(pendingChangeCount()).toBe(0);
+
+    const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
+    habitRepo.toggleLog(habit.id, '2026-09-01', true);
+    expect(pendingChangeCount()).toBe(2); // habit + its log
+
+    await runSync(user.id); // both pushed
+    expect(pendingChangeCount()).toBe(0);
+
+    // A friend's task shared with me is never pushed, so it never counts as
+    // "not backed up" (it would block sign-out forever otherwise).
+    getDb().runSync(
+      `INSERT INTO tasks (id, user_id, title, priority, updated_at, synced, shared_owner_uid)
+       VALUES ('t-x', ?, 'Arkadaşın', 'medium', ?, 0, 'friend-uid')`,
+      [user.id, new Date().toISOString()]
+    );
+    expect(pendingChangeCount()).toBe(0);
+  });
+
+  it('forgetAccountOnDevice cihazdaki veriyi ve sahiplik işaretini siler — sonraki giriş "fresh" olur', async () => {
+    const user = userRepo.getOrCreateLocal();
+    habitRepo.create({ user_id: user.id, title: 'Su iç' });
+    await runSync(user.id);
+    expect(await AsyncStorage.getItem(OWNER_KEY)).toBe(UID);
+
+    await forgetAccountOnDevice();
+
+    expect(habitRepo.listByUser(user.id)).toEqual([]);
+    expect(await AsyncStorage.getItem(OWNER_KEY)).toBeNull();
+    expect(await classifySignIn('baska-hesap')).toBe('fresh');
+    expect(userRepo.getOrCreateLocal().id).toBe(user.id); // the device identity stays
+  });
+
+  it('resolveAccountSwitch: bekleyen değişiklik YOKSA cihazı yeni hesaba göre sıfırlar (replace)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    habitRepo.create({ user_id: user.id, title: 'Eski hesabın alışkanlığı' });
+    await runSync(user.id); // safely in the old account's cloud
+
+    expect(await resolveAccountSwitch()).toBe('replace');
+    expect(habitRepo.listByUser(user.id)).toEqual([]);
+  });
+
+  it('resolveAccountSwitch: bekleyen değişiklik VARSA hiçbir şeyi kaybetmez (merge)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const h = habitRepo.create({ user_id: user.id, title: 'Hiç yedeklenmemiş' });
+
+    expect(await resolveAccountSwitch()).toBe('merge');
+    const list = habitRepo.listByUser(user.id);
+    expect(list.map((x) => x.title)).toEqual(['Hiç yedeklenmemiş']);
+    expect(list[0].id).not.toBe(h.id); // copied under a fresh id (no RLS clash)
   });
 });

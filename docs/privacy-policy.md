@@ -44,7 +44,8 @@ bağımsız çalışır.
 
 Uygulama ilk açılışta giriş öneren bir ekran gösterir; bu ekranı "Şimdilik geç"
 ile atlayabilir, sonradan Profil ekranından istediğiniz zaman giriş
-yapabilirsiniz. Giriş **yalnızca Google ile** yapılır.
+yapabilirsiniz. Giriş **yalnızca Google ile** yapılır. Giriş yaptığınızda,
+hesapsız kullanırken cihazda biriken verileriniz hesabınıza eklenir.
 
 **Giriş yaptığınızda buluta gönderilen veriler:**
 
@@ -166,8 +167,10 @@ profilleme amacıyla kullanılmaz, üçüncü taraflara satılmaz.
   hesabınız ve buluttaki tüm verileriniz kalıcı olarak silinir. Bu işlem geri
   alınamaz. Cihazınızdaki veriler silinmez — uygulamayı hesapsız kullanmaya
   devam edebilirsiniz.
-- **Yalnızca çıkış yapmak** verinizi silmez; bulut kopyası hesabınızda kalır.
-  Çıkış yaparken cihazdaki verileri de silmeyi seçebilirsiniz.
+- **Çıkış yapmak** buluttaki verinizi silmez. Çıkışta, değişiklikleriniz
+  buluta yedeklendikten sonra verilerinizin bu cihazdaki kopyası kaldırılır;
+  yeniden giriş yaptığınızda buluttan geri gelir. Henüz yedeklenmemiş
+  değişiklik varsa çıkıştan önce uyarılırsınız.
 - **Uygulamaya erişemiyorsanız:** hesabınızın ve buluttaki tüm verilerinizin
   silinmesini, hesabınıza bağlı e-posta adresinden **yazgandev@gmail.com**
   adresine yazarak isteyebilirsiniz. Talebiniz en geç 30 gün içinde yerine
@@ -229,7 +232,8 @@ habit/task/goal data.
 
 On first launch the app shows a screen offering sign-in; you can skip it with
 "Not now" and sign in later from the Profile screen at any time. Sign-in is
-**only via Google.**
+**only via Google.** When you sign in, the data you created on the device
+without an account is added to your account.
 
 **Data sent to the cloud when you are signed in:**
 
@@ -346,9 +350,10 @@ are never sold to third parties.
   permanently deletes your cloud account and all of your cloud data. This cannot
   be undone. The data on your device is not deleted — you can keep using the app
   without an account.
-- **Signing out alone** does not delete your data; the cloud copy remains in
-  your account. When signing out you can choose to erase the data on the device
-  too.
+- **Signing out** does not delete your cloud data. When you sign out, the copy
+  of your data on this device is removed once your changes are backed up to
+  the cloud; it comes back when you sign in again. If some changes are not
+  backed up yet, you are warned before signing out.
 - **If you can't access the app:** you can request deletion of your account and
   all of your cloud data by writing to **yazgandev@gmail.com** from the email
   address linked to your account. Requests are completed within 30 days and

@@ -65,6 +65,9 @@ export {
   isOwnershipConflict,
   prepareMergeIntoAccount,
   prepareReplaceWithAccount,
+  pendingChangeCount,
+  forgetAccountOnDevice,
+  resolveAccountSwitch,
   type SignInKind,
   type SyncResult,
 } from './syncEngine';

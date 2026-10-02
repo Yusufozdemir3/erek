@@ -64,6 +64,10 @@ interface AppData {
   // (LoginScreen) branch their flow on it — but they must all go through here so
   // the "last backup" timestamp and error state stay collected in one place.
   syncNow: () => Promise<SyncResult>;
+  // Forgets the sync status (result + "last backup" time). Called when the
+  // device stops belonging to an account (sign-out, account deletion):
+  // otherwise "Last backup: 10:42" would keep describing an account that's gone.
+  clearSyncStatus: () => void;
 }
 
 const HIDE_COMPLETED_KEY = 'today:hideCompleted';
@@ -152,6 +156,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setSyncing(false);
     }
+  }, []);
+
+  const clearSyncStatus = useCallback(() => {
+    setSyncResult(null);
+    setLastSyncAt(null);
+    AsyncStorage.removeItem(LAST_SYNC_KEY).catch(() => {});
   }, []);
 
   const setHideCompleted = useCallback((v: boolean) => {
@@ -282,6 +292,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
             lastSyncAt,
             syncing,
             syncNow: () => syncUser(user.id),
+            clearSyncStatus,
           }
         : null,
     [
@@ -298,6 +309,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       lastSyncAt,
       syncing,
       syncUser,
+      clearSyncStatus,
     ]
   );
 

@@ -13,7 +13,7 @@
 //     in later from here; that's why the "skip" button is hidden there).
 
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { ACCOUNTS_ENABLED } from '@/config';
@@ -27,10 +27,8 @@ import {
   isGoogleSignInConfigured,
   isSyncConfigured,
   prepareFullResync,
-  prepareMergeIntoAccount,
-  prepareReplaceWithAccount,
+  resolveAccountSwitch,
   signInWithGoogle,
-  signOutAccount,
 } from '@/sync';
 import { onOnboardingDone, ONBOARDING_SEEN_KEY } from '@/ui/Onboarding';
 import { useAppData } from '@/ui/AppData';
@@ -58,55 +56,25 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Asks the user "merge or replace?" The promised behavior:
-  //   Merge   -> local items are COPIED into this account (with new ids; the old
-  //              account's cloud data stays untouched),
-  //   Replace -> the data on this device is DELETED, this account's cloud data is
-  //              downloaded.
-  const askSwitchStrategy = (): Promise<'merge' | 'replace' | 'cancel'> =>
-    new Promise((resolve) => {
-      Alert.alert(
-        t('sync.switchTitle'),
-        t('sync.switchBody'),
-        [
-          { text: t('common.cancel'), style: 'cancel', onPress: () => resolve('cancel') },
-          { text: t('sync.switchMerge'), onPress: () => resolve('merge') },
-          { text: t('sync.switchReplace'), style: 'destructive', onPress: () => resolve('replace') },
-        ],
-        { cancelable: true, onDismiss: () => resolve('cancel') }
-      );
-    });
-
   const onGoogle = async () => {
     setBusy(true);
     setError(null);
     try {
       await signInWithGoogle();
 
-      // ACCOUNT-SWITCH CHECK (BEFORE any conflict happens, before the email is
-      // written — if the user backs out below, the local record must not end up
-      // looking "linked" to the wrong account's email). Since local ids don't
+      // ACCOUNT-SWITCH CHECK (before the first push). Since local ids don't
       // change when the account changes, pushing data that was already sent to a
       // different account as-is would get rejected by RLS and permanently lock up
-      // sync — so we ask up front what to do. See sync/syncEngine.ts (classifySignIn).
+      // sync. See sync/syncEngine.ts (classifySignIn).
+      // NO QUESTION IS ASKED any more ("merge or replace?" used to be — a
+      // technical decision users shouldn't have to make). Sign-out now forgets
+      // the account's data on the device (see "DATA BELONGS TO THE ACCOUNT" in
+      // syncEngine.ts), so 'switch' only happens with data left behind by an
+      // older version — and resolveAccountSwitch settles it so nothing is lost.
       const uid = await currentUid();
       const kind = uid ? await classifySignIn(uid) : 'fresh';
       if (kind === 'switch') {
-        const choice = await askSwitchStrategy();
-        if (choice === 'cancel') {
-          // signInWithGoogle() has ALREADY switched the Supabase session to the
-          // new account; if we don't undo that on cancel, the silent sync on next
-          // launch will try with this account, RLS will reject the old account's
-          // rows, and sync locks up permanently — with the user seeing nothing
-          // (a class of bug seen in the field, see the OWNER_UID_KEY note in
-          // syncEngine.ts).
-          await signOutAccount().catch((e) =>
-            console.warn('[Login] failed to sign out after cancel:', e)
-          );
-          return;
-        }
-        if (choice === 'merge') await prepareMergeIntoAccount();
-        else await prepareReplaceWithAccount();
+        await resolveAccountSwitch();
         // Merge regenerated every id, replace deleted every row: the triggers in
         // the OS notification queue now point at ids that no longer exist
         // (cancelHabitReminders(newId) can never find them, so they'd fire
@@ -131,9 +99,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
       // every table from scratch on every sign-in — a costly round trip in mobile
       // data and battery that gained nothing.
 
-      // Write the email into the local user record (upgrade to an account-linked
-      // state) — AFTER the decision (the 'cancel' branch above already returned).
-      // Same as the account-linking flow in account.tsx.
+      // Write the email into the local user record (upgrade to an account-linked state).
       const authUser = await currentAuthUser();
       if (authUser?.email) userRepo.upgradeToAccount(user.id, authUser.email);
 

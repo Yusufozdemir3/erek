@@ -342,6 +342,57 @@ export async function prepareReplaceWithAccount(): Promise<void> {
   await clearSharedData();
 }
 
+// — DATA BELONGS TO THE ACCOUNT (2026-10-01) —
+// The user is never asked a technical question about their data any more:
+//   - signing in: local data is uploaded to the account (the 'fresh' path),
+//   - signing OUT: once everything is backed up, the device forgets the
+//     account's data (forgetAccountOnDevice); signing back in brings it back.
+//     So the next sign-in — with ANY account — starts from a clean device and
+//     the old "merge or replace?" dialog can't come up.
+// The only question left is a real data-loss warning: changes that never
+// reached the cloud (pendingChangeCount > 0) at sign-out time.
+
+// How many local changes have NOT reached the cloud yet (synced=0 rows that
+// push would send). Purely local, so it's correct offline too: 0 means every
+// local change is already in the account's cloud copy.
+export function pendingChangeCount(): number {
+  const db = getDb();
+  let n = 0;
+  for (const cfg of TABLES) {
+    const row = db.getFirstSync<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM ${cfg.table} WHERE synced = 0${cfg.pushWhere ? ` AND (${cfg.pushWhere})` : ''}`
+    );
+    n += row?.n ?? 0;
+  }
+  return n;
+}
+
+// Sign-out, device side: wipe the account's data from this device (it lives in
+// the cloud) and drop the ownership marker, so the next sign-in is a clean
+// 'fresh' one. The caller signs out of the session first and has already
+// warned about pendingChangeCount().
+export async function forgetAccountOnDevice(): Promise<void> {
+  await clearLocalData(); // also flushes/stops a running timer (localDataEvents)
+  await clearSharedData();
+  await AsyncStorage.multiRemove([OWNER_UID_KEY, 'timer:active']);
+}
+
+// The device still holds data stamped with ANOTHER account (only possible for
+// data left behind by an older version, whose sign-out kept everything). It is
+// resolved without asking:
+//   - nothing pending  -> every row is safely in that other account's cloud:
+//     REPLACE (the device mirrors the account just signed into),
+//   - pending changes  -> some rows exist nowhere else (e.g. created offline
+//     after an old-style sign-out): MERGE, so not a single one is lost.
+export async function resolveAccountSwitch(): Promise<'merge' | 'replace'> {
+  if (pendingChangeCount() > 0) {
+    await prepareMergeIntoAccount();
+    return 'merge';
+  }
+  await prepareReplaceWithAccount();
+  return 'replace';
+}
+
 // Completely deletes the local user's DATA (users/the local identity is
 // preserved) and resets the pull watermark. Exists for the "REPLACE account"
 // semantics: for switching to a different account, wiping local data and

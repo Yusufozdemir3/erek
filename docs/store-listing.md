@@ -409,9 +409,11 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
 - [ ] Supabase › Authentication › Providers › **Anonymous sign-ins KAPALI**
 
 **Gizlilik politikası**
-- [ ] `docs/index.html` (1 Ekim 2026 sürümü) canlıya alındı: ayrı
-      `Yusufozdemir3/erek-privacy` deposu → GitHub Pages; canlı sayfada
-      "Arkadaşlarla bağlantı" bölümü görünüyor
+- [x] `docs/index.html` 1 Ekim 2026 sürümü canlıda (erek-privacy e33fdee)
+- [ ] **Bu sürüm Play'e çıkarken** `docs/index.html` YENİDEN canlıya alınmalı:
+      §2/§7'deki yeni oturum modeli (çıkışta veriler cihazdan kaldırılır, girişte
+      cihazdaki veri hesaba eklenir) canlıdaki metinde henüz yok — canlı metin
+      Play'deki mevcut sürümün davranışını anlatıyor
 
 **Play Console**
 - [ ] Veri güvenliği formu yukarıdaki tabloya göre güncellendi (ad, profil
