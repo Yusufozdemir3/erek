@@ -188,6 +188,7 @@ export const de: Dict = {
   'screen.tasksSubtitle_one': '{n} Aufgabe wartet',
   'tasks.showOlderCompleted': '{n} ältere erledigte Aufgaben anzeigen',
   'tasks.showOlderCompleted_one': '{n} ältere erledigte Aufgabe anzeigen',
+  'tasks.completedSection': 'Erledigt ({n})',
   'screen.habitsSubtitle': 'Jeden Tag ein kleiner Schritt',
   'screen.goalsSubtitle': 'Behalte das große Ganze im Blick',
   'today.backToday': 'Zurück zu heute',
@@ -248,6 +249,7 @@ export const de: Dict = {
   'goal.statRemaining': 'Verbleibend',
   'goal.statDeadline': 'Fälligkeitsdatum',
   'goal.statsA11y': '{title}-Statistiken öffnen',
+  'goal.statsLabel': 'Statistik',
   'goal.markComplete': 'Als erledigt markieren',
   'goal.markIncomplete': 'Als nicht erledigt markieren',
   'goal.entryHistory': 'Verlauf',
@@ -484,10 +486,16 @@ export const de: Dict = {
 
   'profile.account': 'Konto',
   'profile.cloudSync': 'Cloud-Synchronisierung',
+  'profile.accountSync': 'Konto & Synchronisierung',
   'profile.syncNotConfigured':
     'Um ein Konto zu verknüpfen, konfiguriere zuerst die Cloud-Synchronisierung (siehe unten).',
   'profile.linkedAccount': 'Verknüpftes Konto',
   'profile.signOut': 'Abmelden',
+  'profile.signOutHint': 'Beim Abmelden werden deine Daten von diesem Gerät entfernt; nach der nächsten Anmeldung kommen sie aus der Cloud zurück.',
+  'profile.signOutUnsyncedTitle': 'Nicht gesicherte Änderungen',
+  'profile.signOutUnsyncedBody': '{n} Änderungen sind noch nicht in der Cloud gesichert (keine Internetverbindung oder Server nicht erreichbar). Wenn du dich jetzt abmeldest, werden sie von diesem Gerät gelöscht und können nicht wiederhergestellt werden.',
+  'profile.signOutAnyway': 'Trotzdem abmelden',
+  'profile.signOutFailedTitle': 'Abmelden fehlgeschlagen',
   'profile.deleteAccount': 'Konto löschen',
   'profile.deleteAccountHint':
     'Das Löschen des Kontos entfernt alle deine Daten in der Cloud dauerhaft; die Daten auf diesem Gerät bleiben erhalten.',
@@ -515,21 +523,9 @@ export const de: Dict = {
   'profile.deletedBody':
     'Dein Cloud-Konto und deine Cloud-Daten wurden gelöscht. Die Daten auf diesem Gerät bleiben erhalten.',
   'profile.deleteFailedTitle': 'Löschen fehlgeschlagen',
-  'profile.eraseDataTitle': 'Auch die Daten auf diesem Gerät löschen?',
-  'profile.eraseDataBody':
-    'Du kannst auch alle Habit-/Aufgaben-/Ziel-Daten auf diesem Gerät dauerhaft löschen. Empfohlen, wenn es sich um ein gemeinsam genutztes oder weitergegebenes Gerät handelt.',
-  'profile.eraseDataKeep': 'Daten auf dem Gerät behalten',
-  'profile.eraseDataConfirm': 'Gerätedaten auch löschen',
-  'profile.eraseDataDoneTitle': 'Gerätedaten gelöscht',
-  'profile.eraseDataDoneBody': 'Alle Daten auf diesem Gerät wurden dauerhaft gelöscht.',
 
   // Kontowechsel — Anmeldung, wenn die lokalen Daten zu einem anderen Konto
   // gehören (siehe sync/syncEngine.ts classifySignIn).
-  'sync.switchTitle': 'Die Daten dieses Ger\u00e4ts geh\u00f6ren zu einem anderen Konto',
-  'sync.switchBody':
-    'Die Daten auf diesem Ger\u00e4t wurden zuvor in einem anderen Konto gesichert. Was m\u00f6chtest du tun?\n\n\u2022 In dieses Konto kopieren: alles vom Ger\u00e4t wird auch diesem Konto hinzugef\u00fcgt (die Sicherung des anderen Kontos bleibt unver\u00e4ndert).\n\u2022 Aus der Cloud laden: DIE DATEN AUF DIESEM GER\u00c4T WERDEN GEL\u00d6SCHT und die Daten dieses Kontos werden geladen.',
-  'sync.switchMerge': 'In dieses Konto kopieren',
-  'sync.switchReplace': 'Aus der Cloud laden',
   'sync.ownershipConflict':
     'Das Hochladen ist fehlgeschlagen, weil die Daten dieses Ger\u00e4ts zu einem anderen Konto geh\u00f6ren. Melde dich ab und wieder an, um \u201eIn dieses Konto kopieren\u201c oder \u201eAus der Cloud laden\u201c zu w\u00e4hlen.',
   'friends.title': 'Freunde',

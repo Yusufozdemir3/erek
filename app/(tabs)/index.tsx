@@ -65,7 +65,7 @@ export default function TodayScreen() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
-  const { tasks, habits, subtaskCounts, reload } = useTodayData(user.id, selectedDate, today);
+  const { tasks, habits, subtaskCounts, weekProgress, reload } = useTodayData(user.id, selectedDate, today);
   const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
   useSharedTasksFreshness(reload);
 
@@ -186,6 +186,7 @@ export default function TodayScreen() {
           today={today}
           lang={lang}
           colors={colors}
+          progress={weekProgress}
           onSelect={setSelectedDate}
         />
 
@@ -300,7 +301,7 @@ export default function TodayScreen() {
                   <Animated.View
                     key={h.id}
                     layout={LIST_LAYOUT}
-                    style={[shared.card, isFuture && styles.futureCard]}
+                    style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
                   >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
@@ -319,7 +320,7 @@ export default function TodayScreen() {
                   <Animated.View
                     key={h.id}
                     layout={LIST_LAYOUT}
-                    style={[shared.card, isFuture && styles.futureCard]}
+                    style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
                   >
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
                     <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
@@ -340,7 +341,7 @@ export default function TodayScreen() {
                   <AnimatedPressable
                     key={h.id}
                     layout={LIST_LAYOUT}
-                    style={[shared.card, isFuture && styles.futureCard]}
+                    style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
                     onPress={() => toggleHabit(h)}
                     disabled={isFuture}
                     accessibilityRole="checkbox"
@@ -382,6 +383,8 @@ const makeStyles = (c: Colors) =>
     headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     backToday: { fontSize: 14, fontWeight: '700', color: c.primary },
     futureCard: { opacity: 0.5 },
+    // A finished habit recedes so what's still to do stands out.
+    doneCard: { opacity: 0.6 },
     dateLink: { color: c.primary, fontWeight: '600' },
     filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 },
     filterChip: {

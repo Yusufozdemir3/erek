@@ -10,12 +10,15 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { toYmd } from '@/lib/helpers';
 import { DATE_LOCALE, type Colors } from '@/ui/theme';
 import type { Lang } from '@/i18n/translations';
+import type { WeekProgress } from '@/ui/weekProgress';
 
 interface Props {
   selectedDate: string;
   today: string;
   lang: Lang;
   colors: Colors;
+  // Per-day completion → the dot under each date (omitted = no dots).
+  progress?: WeekProgress;
   onSelect: (ymd: string) => void;
 }
 
@@ -27,7 +30,7 @@ function addDays(ymd: string, delta: number): string {
   return toYmd(d);
 }
 
-export function WeekStrip({ selectedDate, today, lang, colors, onSelect }: Props) {
+export function WeekStrip({ selectedDate, today, lang, colors, progress, onSelect }: Props) {
   const styles = makeStyles(colors);
   const locale = DATE_LOCALE[lang];
   const days = Array.from({ length: WINDOW_RADIUS * 2 + 1 }, (_, i) =>
@@ -40,6 +43,16 @@ export function WeekStrip({ selectedDate, today, lang, colors, onSelect }: Props
         const d = new Date(`${ymd}T00:00:00`);
         const isSelected = ymd === selectedDate;
         const isToday = ymd === today;
+        const p = progress?.[ymd];
+        // all done = filled · some done = ring · nothing done yet = faint dot · empty day = no dot
+        const dotStyle =
+          !p || p.total === 0
+            ? null
+            : p.done >= p.total
+              ? styles.dotAll
+              : p.done > 0
+                ? styles.dotSome
+                : styles.dotNone;
         return (
           <Pressable
             key={ymd}
@@ -62,6 +75,7 @@ export function WeekStrip({ selectedDate, today, lang, colors, onSelect }: Props
                 {d.getDate()}
               </Text>
             </View>
+            <View style={[styles.dot, dotStyle]} />
           </Pressable>
         );
       })}
@@ -82,5 +96,9 @@ const makeStyles = (c: Colors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    dot: { width: 6, height: 6, borderRadius: 3 },
+    dotAll: { backgroundColor: c.done },
+    dotSome: { borderWidth: 1.5, borderColor: c.done },
+    dotNone: { backgroundColor: c.faint, opacity: 0.6 },
     dayText: { fontSize: 14, fontWeight: '600', color: c.text },
   });

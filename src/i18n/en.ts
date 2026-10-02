@@ -188,6 +188,7 @@ export const en: Dict = {
   'screen.tasksSubtitle_one': '{n} task waiting',
   'tasks.showOlderCompleted': 'Show {n} older completed tasks',
   'tasks.showOlderCompleted_one': 'Show {n} older completed task',
+  'tasks.completedSection': 'Completed ({n})',
   'screen.habitsSubtitle': 'A small step every day',
   'screen.goalsSubtitle': 'Track the big picture',
   'today.backToday': 'Back to today',
@@ -248,6 +249,7 @@ export const en: Dict = {
   'goal.statRemaining': 'Remaining',
   'goal.statDeadline': 'Due date',
   'goal.statsA11y': 'Open {title} statistics',
+  'goal.statsLabel': 'Stats',
   'goal.markComplete': 'Mark as completed',
   'goal.markIncomplete': 'Mark as incomplete',
   'goal.entryHistory': 'Entry history',
@@ -483,9 +485,15 @@ export const en: Dict = {
 
   'profile.account': 'Account',
   'profile.cloudSync': 'Cloud sync',
+  'profile.accountSync': 'Account & sync',
   'profile.syncNotConfigured': 'To link an account, first configure cloud sync (see below).',
   'profile.linkedAccount': 'Linked account',
   'profile.signOut': 'Sign out',
+  'profile.signOutHint': 'Signing out removes your data from this device; it comes back from the cloud when you sign in again.',
+  'profile.signOutUnsyncedTitle': 'Some changes are not backed up',
+  'profile.signOutUnsyncedBody': "{n} changes haven't been backed up to the cloud yet (no internet connection, or the server couldn't be reached). If you sign out now, they will be deleted from this device and can't be recovered.",
+  'profile.signOutAnyway': 'Sign out anyway',
+  'profile.signOutFailedTitle': "Couldn't sign out",
   'profile.deleteAccount': 'Delete account',
   'profile.deleteAccountHint':
     'Deleting the account permanently removes all your data in the cloud; data on this device stays.',
@@ -511,21 +519,9 @@ export const en: Dict = {
   'profile.deletedTitle': 'Account deleted',
   'profile.deletedBody': 'Your cloud account and cloud data were deleted. Data on this device remains.',
   'profile.deleteFailedTitle': 'Deletion failed',
-  'profile.eraseDataTitle': 'Also erase data on this device?',
-  'profile.eraseDataBody':
-    "You can also permanently delete all habit/task/goal data on this device. Recommended if this is a shared device or one you're handing off to someone else.",
-  'profile.eraseDataKeep': 'Keep data on device',
-  'profile.eraseDataConfirm': 'Also erase device data',
-  'profile.eraseDataDoneTitle': 'Device data erased',
-  'profile.eraseDataDoneBody': 'All data on this device was permanently deleted.',
 
   // Account switch — signing in while local data belongs to a different account
   // (see sync/syncEngine.ts classifySignIn).
-  'sync.switchTitle': 'This device\u2019s data belongs to another account',
-  'sync.switchBody':
-    'The data on this device was previously backed up to a different account. What would you like to do?\n\n\u2022 Copy to this account: everything on this device is added to this account too (the other account\u2019s backup stays untouched).\n\u2022 Download from cloud: THE DATA ON THIS DEVICE IS DELETED and this account\u2019s data is downloaded.',
-  'sync.switchMerge': 'Copy to this account',
-  'sync.switchReplace': 'Download from cloud',
   'sync.ownershipConflict':
     'Upload failed because this device\u2019s data belongs to another account. Sign out and sign in again to choose \u201cCopy to this account\u201d or \u201cDownload from cloud\u201d.',
   'friends.title': 'Friends',

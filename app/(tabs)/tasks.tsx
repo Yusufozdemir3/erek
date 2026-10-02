@@ -18,6 +18,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
@@ -46,6 +47,10 @@ function shiftDays(ymd: string, days: number): string {
   return toYmd(d);
 }
 
+// The list mixes task rows with ONE divider row ("Completed (N)") that
+// toggles the completed section — a single FlatList keeps virtualization.
+type Row = { kind: 'task'; task: Task } | { kind: 'divider'; count: number };
+
 export default function TasksScreen() {
   const { colors, shared } = useTheme();
   // Note: i18n's `t` is aliased to `tr` so it doesn't clash with the `t` (task) map variable below.
@@ -65,6 +70,9 @@ export default function TasksScreen() {
   // to show all (stays expanded for the session).
   const [showAllCompleted, setShowAllCompleted] = useState(false);
   const [olderCompletedCount, setOlderCompletedCount] = useState(0);
+  // The completed section starts collapsed so finished work doesn't push
+  // pending tasks off screen; the header row shows how many are hidden.
+  const [completedOpen, setCompletedOpen] = useState(false);
 
   const reload = useCallback(() => {
     // Ordering (completed ones to the bottom) now happens in SQL — no need to sort again in JS.
@@ -82,6 +90,18 @@ export default function TasksScreen() {
   const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
 
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
+
+  const rows = useMemo<Row[]>(() => {
+    const pending = tasks.filter((t) => t.completed_at === null);
+    const completed = tasks.filter((t) => t.completed_at !== null);
+    const out: Row[] = pending.map((task) => ({ kind: 'task', task }));
+    const completedCount = completed.length + olderCompletedCount;
+    if (completedCount > 0) {
+      out.push({ kind: 'divider', count: completedCount });
+      if (completedOpen) completed.forEach((task) => out.push({ kind: 'task', task }));
+    }
+    return out;
+  }, [tasks, olderCompletedCount, completedOpen]);
 
   // Label set for the recurring-task badge ("🔁 Every day / Mon·Wed·Fri /
   // Every year: ...") — see helpers.buildScheduleLabels.
@@ -145,9 +165,32 @@ export default function TasksScreen() {
     );
 
   const renderItem = useCallback(
-    ({ item: t, index: i }: { item: Task; index: number }) => {
+    ({ item: row, index: i }: { item: Row; index: number }) => {
+      if (row.kind === 'divider') {
+        return (
+          <Pressable
+            style={[styles.sectionHeader, i === 0 && { marginTop: 20 }]}
+            onPress={() => setCompletedOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: completedOpen }}
+            accessibilityLabel={tr('tasks.completedSection', { n: row.count })}
+          >
+            <Text style={styles.sectionHeaderText}>
+              {tr('tasks.completedSection', { n: row.count })}
+            </Text>
+            <Feather
+              name={completedOpen ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.faint}
+            />
+          </Pressable>
+        );
+      }
+      const t = row.task;
       const done = t.completed_at !== null;
       const time = extractTime(t.due_date);
+      // Past-due and still open → the date is shown in the danger color.
+      const overdue = !done && !!t.due_date && t.due_date.slice(0, 10) < todayDate();
       return (
         <Animated.View
           layout={LinearTransition.duration(260)}
@@ -189,13 +232,21 @@ export default function TasksScreen() {
                       t.recurrence
                         ? `🔁 ${scheduleLabel(t.recurrence, schedLabels)}`
                         : null,
-                      t.due_date && !done ? shortDate(t.due_date, lang) : null,
-                      subtaskCounts[t.id]
-                        ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`
-                        : null,
                     ]
                       .filter(Boolean)
                       .join('  ·  ')}
+                    {(sharedLabel(t) || t.recurrence) && t.due_date && !done ? '  ·  ' : ''}
+                    {t.due_date && !done ? (
+                      <Text style={overdue ? styles.overdue : undefined}>
+                        {shortDate(t.due_date, lang)}
+                      </Text>
+                    ) : null}
+                    {(sharedLabel(t) || t.recurrence || (t.due_date && !done)) && subtaskCounts[t.id]
+                      ? '  ·  '
+                      : ''}
+                    {subtaskCounts[t.id]
+                      ? `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`
+                      : ''}
                   </Text>
                 )}
               </Pressable>
@@ -208,18 +259,18 @@ export default function TasksScreen() {
     },
     // Rows must re-render when openRowId/subtaskCounts change, so they stay in
     // the dependency list (together with FlatList's extraData).
-    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames]
+    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors]
   );
 
   return (
     <SafeAreaView style={shared.safe} edges={['top']}>
       <FlatList
-        data={tasks}
+        data={rows}
         renderItem={renderItem}
-        keyExtractor={(t) => t.id}
+        keyExtractor={(r) => (r.kind === 'divider' ? 'completed-divider' : r.task.id)}
         // Row appearance also depends on state outside the list (an open swipe,
         // subtask badges) — FlatList doesn't know about these, so we declare them explicitly.
-        extraData={`${openRowId}|${tasks.length}`}
+        extraData={`${openRowId}|${tasks.length}|${completedOpen}`}
         contentContainerStyle={shared.content}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
@@ -238,7 +289,7 @@ export default function TasksScreen() {
           // If older completed tasks are hidden, they can be revealed with one
           // tap. The button only shows up when something is genuinely hidden —
           // it never promises an empty result.
-          olderCompletedCount > 0 ? (
+          completedOpen && olderCompletedCount > 0 ? (
             <Pressable
               style={styles.showOlderBtn}
               onPress={() => setShowAllCompleted(true)}
@@ -261,6 +312,16 @@ export default function TasksScreen() {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     due: { fontSize: 12, color: c.muted, marginTop: 3 },
+    overdue: { color: c.danger, fontWeight: '700' },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+      marginBottom: 4,
+    },
+    sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.muted },
     rowSpacing: { marginBottom: 8 },
     noMargin: { marginBottom: 0 },
     showOlderBtn: { alignItems: 'center', paddingVertical: 16, marginTop: 4 },

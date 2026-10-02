@@ -201,6 +201,7 @@ export const tr: Dict = {
   // unbounded over the years); this button reveals them all.
   'tasks.showOlderCompleted': 'Daha eski {n} tamamlanan görevi göster',
   'tasks.showOlderCompleted_one': 'Daha eski {n} tamamlanan görevi göster',
+  'tasks.completedSection': 'Tamamlananlar ({n})',
   'screen.habitsSubtitle': 'Her gün küçük bir adım',
   'screen.goalsSubtitle': 'Büyük resmi takip et',
   'today.backToday': 'Bugüne dön',
@@ -263,6 +264,7 @@ export const tr: Dict = {
   'goal.statRemaining': 'Kalan',
   'goal.statDeadline': 'Son tarih',
   'goal.statsA11y': '{title} istatistiklerini aç',
+  'goal.statsLabel': 'İstatistik',
   'goal.markComplete': 'Tamamlandı işaretle',
   'goal.markIncomplete': 'Tamamlanmadı işaretle',
   'goal.entryHistory': 'Girdi geçmişi',
@@ -508,9 +510,15 @@ export const tr: Dict = {
   // Profile — account/sync block (visible once ACCOUNTS_ENABLED is turned on)
   'profile.account': 'Hesap',
   'profile.cloudSync': 'Bulut senkron',
+  'profile.accountSync': 'Hesap ve senkron',
   'profile.syncNotConfigured': 'Hesap bağlamak için önce bulut senkronu yapılandır (aşağıya bak).',
   'profile.linkedAccount': 'Bağlı hesap',
   'profile.signOut': 'Çıkış yap',
+  'profile.signOutHint': 'Çıkış yapınca verilerin bu cihazdan kaldırılır; tekrar giriş yaptığında buluttan geri gelir.',
+  'profile.signOutUnsyncedTitle': 'Yedeklenmemiş değişiklikler var',
+  'profile.signOutUnsyncedBody': '{n} değişiklik henüz buluta yedeklenmedi (internet bağlantısı yok ya da sunucuya ulaşılamadı). Şimdi çıkış yaparsan bunlar bu cihazdan silinir ve geri getirilemez.',
+  'profile.signOutAnyway': 'Yine de çık',
+  'profile.signOutFailedTitle': 'Çıkış yapılamadı',
   'profile.deleteAccount': 'Hesabı sil',
   'profile.deleteAccountHint':
     'Hesabı silmek buluttaki tüm verini kalıcı olarak kaldırır; cihazındaki veriler kalır.',
@@ -536,21 +544,9 @@ export const tr: Dict = {
   'profile.deletedTitle': 'Hesap silindi',
   'profile.deletedBody': 'Bulut hesabın ve buluttaki verilerin silindi. Cihazındaki veriler duruyor.',
   'profile.deleteFailedTitle': 'Silme başarısız',
-  'profile.eraseDataTitle': 'Cihazdaki veriler de silinsin mi?',
-  'profile.eraseDataBody':
-    'İstersen bu cihazdaki tüm habit/görev/hedef verilerini de kalıcı olarak silebiliriz. Ortak veya başkasına devredilecek bir cihazdaysan bunu seçmen önerilir.',
-  'profile.eraseDataKeep': 'Verileri cihazda tut',
-  'profile.eraseDataConfirm': 'Cihazdaki verileri de sil',
-  'profile.eraseDataDoneTitle': 'Cihaz verileri silindi',
-  'profile.eraseDataDoneBody': 'Bu cihazdaki tüm veriler kalıcı olarak silindi.',
 
   // Account switch — signing in while local data belongs to a DIFFERENT
   // account (see sync/syncEngine.ts classifySignIn).
-  'sync.switchTitle': 'Bu cihazdaki veriler başka bir hesaba ait',
-  'sync.switchBody':
-    'Bu cihazın verisi daha önce başka bir hesaba yedeklenmiş. Ne yapmak istersin?\n\n• Bu hesaba kopyala: cihazdaki her şey bu hesaba da eklenir (diğer hesabın yedeği olduğu gibi kalır).\n• Buluttakini indir: CİHAZDAKİ VERİ SİLİNİR ve bu hesabın verisi indirilir.',
-  'sync.switchMerge': 'Bu hesaba kopyala',
-  'sync.switchReplace': 'Buluttakini indir',
   'sync.ownershipConflict':
     'Bu cihazın verisi başka bir hesaba ait olduğu için yüklenemedi. Çıkış yapıp yeniden girerek "Bu hesaba kopyala" ya da "Buluttakini indir" seçeneğini seçebilirsin.',
   'friends.title': 'Arkadaşlar',

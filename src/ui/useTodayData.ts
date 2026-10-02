@@ -8,6 +8,7 @@ import { habitRepo, subtaskRepo, taskRepo } from '@/db';
 import type { HabitKind, Task } from '@/db';
 import { isQuotaSchedule, isScheduledOn, isWithinHabitDates } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
+import { computeWeekProgress, type WeekProgress } from '@/ui/weekProgress';
 
 export interface HabitView {
   id: string;
@@ -33,6 +34,8 @@ export function useTodayData(userId: string, selectedDate: string, today: string
   const { dataVersion } = useAppData();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<HabitView[]>([]);
+  // Per-day completion for the week strip's dots.
+  const [weekProgress, setWeekProgress] = useState<WeekProgress>({});
   // The "1/3 subtasks" badge on the task card; only tasks with subtasks are included.
   const [subtaskCounts, setSubtaskCounts] = useState<
     Record<string, { done: number; total: number }>
@@ -88,9 +91,10 @@ export function useTodayData(userId: string, selectedDate: string, today: string
         };
       })
     );
+    setWeekProgress(computeWeekProgress(userId, selectedDate, today));
   }, [userId, selectedDate, today, dataVersion]);
 
   useFocusEffect(reload);
 
-  return { tasks, habits, subtaskCounts, reload };
+  return { tasks, habits, subtaskCounts, weekProgress, reload };
 }

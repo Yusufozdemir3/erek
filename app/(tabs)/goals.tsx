@@ -27,11 +27,11 @@ import { HeaderActions } from '@/ui/HeaderActions';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { deadlineLabel, type Colors } from '@/ui/theme';
+import { deadlineLabel, percentLabel, type Colors } from '@/ui/theme';
 
 export default function GoalsScreen() {
   const { colors, shared } = useTheme();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user, dataVersion } = useAppData();
 
@@ -131,39 +131,50 @@ export default function GoalsScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={t('goal.statsA11y', { title: goal.title })}
                   >
-                    <Feather name="bar-chart-2" size={18} color={colors.faint} />
+                    <View style={styles.statsPill}>
+                      <Feather name="bar-chart-2" size={14} color={colors.muted} />
+                      <Text style={styles.statsPillText}>{t('goal.statsLabel')}</Text>
+                    </View>
                   </Pressable>
                 </View>
 
                 {goal.goal_type === 'numeric' && (
-                  <>
-                    <View style={styles.progressTrack}>
-                      <View style={[styles.progressFill, { width: `${Math.round(ratio * 100)}%` }]} />
-                    </View>
-                    <Text style={[styles.goalMeta, styles.standaloneMeta]}>
-                      {isTimeUnit(goal.unit)
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${Math.round(ratio * 100)}%` }]} />
+                  </View>
+                )}
+                {/* One compact meta row: value · percent · steps on the left,
+                    the due-date label on the right. */}
+                {(() => {
+                  const parts: string[] = [];
+                  if (goal.goal_type === 'numeric') {
+                    parts.push(
+                      isTimeUnit(goal.unit)
                         ? `${fmtClock(goal.current_value)}${
                             goal.target_value != null ? ` / ${fmtClock(goal.target_value)}` : ''
                           }`
                         : `${goal.current_value}${
                             goal.target_value != null ? ` / ${goal.target_value}` : ''
-                          }${goal.unit ? ` ${goal.unit}` : ''}`}
-                    </Text>
-                  </>
-                )}
-                {/* The milestone badge can now show on both types — a
-                    'numeric' goal can also get optional milestones (see the file-header comment). */}
-                {counts && counts.total > 0 && (
-                  <Text style={[styles.goalMeta, styles.standaloneMeta]}>
-                    {counts.done}/{counts.total} {t('goal.milestoneCountSuffix', { n: counts.total })}
-                  </Text>
-                )}
-                {/* The due date now sits as a small badge in the card's bottom-right corner. */}
-                {!!dLabel && (
-                  <View style={styles.deadlineRow}>
-                    <Text style={styles.deadlineLeft}>{dLabel}</Text>
-                  </View>
-                )}
+                          }${goal.unit ? ` ${goal.unit}` : ''}`
+                    );
+                    if (goal.target_value != null) parts.push(percentLabel(Math.round(ratio * 100), lang));
+                  }
+                  // Milestones can show on both types (see the file-header comment).
+                  if (counts && counts.total > 0) {
+                    parts.push(
+                      `${counts.done}/${counts.total} ${t('goal.milestoneCountSuffix', { n: counts.total })}`
+                    );
+                  }
+                  if (parts.length === 0 && !dLabel) return null;
+                  return (
+                    <View style={styles.metaRow}>
+                      <Text style={[styles.goalMeta, styles.metaLeft]} numberOfLines={2}>
+                        {parts.join('  ·  ')}
+                      </Text>
+                      {!!dLabel && <Text style={styles.deadlineLeft}>{dLabel}</Text>}
+                    </View>
+                  );
+                })()}
               </View>
               </SwipeableRow>
               </View>
@@ -212,8 +223,21 @@ const makeStyles = (c: Colors) =>
     },
     progressFill: { height: '100%', borderRadius: 5, backgroundColor: c.primary },
     goalMeta: { fontSize: 14, color: c.muted, fontWeight: '600' },
-    standaloneMeta: { marginTop: 8 },
-    // Due date — a small badge in the bottom-right corner.
-    deadlineRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
-    deadlineLeft: { fontSize: 11, color: c.streak, fontWeight: '700' },
+    metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 },
+    metaLeft: { flex: 1 },
+    // Due date — right end of the meta row.
+    deadlineLeft: { fontSize: 12, color: c.streak, fontWeight: '700' },
+    // "Stats" entry: the bare chart icon wasn't self-explanatory, so it gets a label.
+    statsPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: c.inputBg,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    statsPillText: { fontSize: 12, fontWeight: '600', color: c.muted },
   });

@@ -8,6 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { habitRepo } from '@/db';
+import { fmtClock } from '@/lib/helpers';
 import type { Habit } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
@@ -18,8 +19,6 @@ import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
 import { EmptyState } from '@/ui/EmptyState';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
-import { HabitTimer } from '@/ui/HabitTimer';
-import { AmountStepper } from '@/ui/AmountStepper';
 import { HeaderActions } from '@/ui/HeaderActions';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -41,19 +40,6 @@ export default function HabitsScreen() {
     const completing = !h.completedToday;
     const goalDone = habitRepo.toggleLog(h.id, today, completing);
     completing ? notifySuccess() : tapLight();
-    reload();
-    promptUnlinkGoalIfCompleted(h.id, goalDone, t, reload);
-  };
-
-  const adjustToday = (h: HabitListItem, delta: number) => {
-    const goalDone = habitRepo.incrementAmount(h.id, today, delta, h.target);
-    tapLight();
-    reload();
-    promptUnlinkGoalIfCompleted(h.id, goalDone, t, reload);
-  };
-
-  const setTodayAmount = (h: HabitListItem, value: number) => {
-    const goalDone = habitRepo.incrementAmount(h.id, today, value - h.amount, h.target);
     reload();
     promptUnlinkGoalIfCompleted(h.id, goalDone, t, reload);
   };
@@ -141,23 +127,14 @@ export default function HabitsScreen() {
                     </Text>
                   )}
                 </Pressable>
-                {h.kind === 'timer' ? (
-                  <HabitTimer
-                    habitId={h.id}
-                    amount={h.amount}
-                    target={h.target ?? 0}
-                    editable
-                    onSet={(v) => setTodayAmount(h, v)}
-                  />
-                ) : h.target != null ? (
-                  <AmountStepper
-                    amount={h.amount}
-                    target={h.target}
-                    unit={h.unit}
-                    onDec={() => adjustToday(h, -1)}
-                    onInc={() => adjustToday(h, 1)}
-                    onSet={(v) => setTodayAmount(h, v)}
-                  />
+                {/* No counter on this tab: amounts are entered on Today. Numeric/
+                    timer habits show today's progress as plain text instead. */}
+                {h.target != null ? (
+                  <Text style={[styles.progress, h.completedToday && styles.progressDone]}>
+                    {h.kind === 'timer'
+                      ? `${fmtClock(h.amount)} / ${fmtClock(h.target)}`
+                      : `${h.amount}/${h.target}${h.unit ? ` ${h.unit}` : ''}`}
+                  </Text>
                 ) : (
                   h.streak > 0 && (
                     <Text style={shared.streak}>
@@ -201,6 +178,8 @@ const makeStyles = (c: Colors) =>
     noMargin: { marginBottom: 0 },
     habitTop: { flexDirection: 'row', alignItems: 'center' },
     titleArea: { flex: 1 },
+    progress: { fontSize: 13, fontWeight: '700', color: c.muted, marginLeft: 8 },
+    progressDone: { color: c.done },
     remind: { fontSize: 12, color: c.muted, marginTop: 2 },
     week: { flexDirection: 'row', gap: 6, marginTop: 12, marginLeft: 42 },
     dayDot: {

@@ -1,0 +1,104 @@
+// Styles shared by the Profile menu and its sub-screens (appearance,
+// account & sync). Kept in one place so the cards look identical everywhere.
+
+import { StyleSheet } from 'react-native';
+import type { Colors } from '@/ui/theme';
+
+export const makeProfileStyles = (c: Colors) =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bg },
+    content: { padding: 20, paddingBottom: 48 },
+    card: {
+      backgroundColor: c.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 16,
+    },
+    cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12 },
+    // Arrow row that navigates to another page (e.g. Notifications). We reset
+    // cardTitle's bottom margin inline so the title stays vertically centered.
+    navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    // Secondary in-card heading (e.g. "Dark theme style" inside the Appearance card).
+    subCardTitle: { fontSize: 13, fontWeight: '700', color: c.muted, marginTop: 16, marginBottom: 10 },
+    muted: { fontSize: 14, color: c.muted, lineHeight: 20 },
+    hint: { fontSize: 12, color: c.faint, marginTop: 10 },
+    code: { fontWeight: '700', color: c.text },
+    statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    statusRowSpaced: { marginTop: 10 },
+    switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    switchRowSpaced: { marginTop: 12 },
+    switchLabel: { fontSize: 14, color: c.text, flex: 1, marginRight: 12 },
+    rowDisabled: { opacity: 0.4 },
+    statusValue: { fontSize: 14, fontWeight: '700', color: c.text },
+    okText: { fontSize: 13, color: c.done, fontWeight: '600', marginTop: 12 },
+    errText: { fontSize: 13, color: c.danger, fontWeight: '600', marginTop: 12 },
+    // Theme selector segment.
+    segRow: { flexDirection: 'row', gap: 8 },
+    segBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    segBtnOn: { backgroundColor: c.primary, borderColor: c.primary },
+    segText: { fontSize: 14, fontWeight: '700', color: c.muted },
+    segTextOn: { color: c.onAccent },
+    // Accent color picker — colored circles with a short name underneath.
+    accentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+    accentItem: { alignItems: 'center', width: 64 },
+    accentSwatch: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    accentSwatchOn: { borderWidth: 3, borderColor: c.text },
+    accentCheck: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
+    accentLabel: { fontSize: 11, fontWeight: '600', color: c.muted, marginTop: 6, textAlign: 'center' },
+    syncBtn: {
+      backgroundColor: c.primary,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      marginTop: 16,
+      minHeight: 50,
+    },
+    syncBtnDisabled: { opacity: 0.6 },
+    syncBtnText: { color: c.onAccent, fontSize: 15, fontWeight: '700' },
+    outlineBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      marginTop: 16,
+      minHeight: 50,
+    },
+    outlineBtnText: { color: c.primary, fontSize: 15, fontWeight: '700' },
+    dangerBtn: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.danger,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      marginTop: 10,
+      minHeight: 50,
+    },
+    dangerBtnText: { color: c.danger, fontSize: 15, fontWeight: '700' },
+    // Account deletion is deliberately a quiet text link at the very bottom,
+    // not a button sitting next to "Sign out".
+    deleteLink: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 16, marginTop: 24 },
+    deleteLinkText: { color: c.danger, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+    deleteHint: { fontSize: 12, color: c.faint, textAlign: 'center', paddingHorizontal: 12 },
+    footnote: { fontSize: 12, color: c.faint, lineHeight: 18, marginTop: 20 },
+  });

@@ -79,6 +79,8 @@ function ThemedStack() {
             check (classifySignIn), so the RLS lockout we'd already fixed
             could be reproduced again. */}
         <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
+        <Stack.Screen name="appearance" options={{ headerShown: true, title: t('profile.appearance'), presentation: 'modal' }} />
+        <Stack.Screen name="account-sync" options={{ headerShown: true, title: t('profile.accountSync'), presentation: 'modal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
         <Stack.Screen name="friends" options={{ headerShown: true, title: t('friends.title'), presentation: 'modal' }} />
         <Stack.Screen
