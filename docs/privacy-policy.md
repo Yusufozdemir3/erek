@@ -225,7 +225,7 @@ profilleme amacıyla kullanılmaz, üçüncü taraflara satılmaz.
   buluta yedeklendikten sonra verilerinizin bu cihazdaki kopyası kaldırılır;
   yeniden giriş yaptığınızda buluttan geri gelir. Henüz yedeklenmemiş
   değişiklik varsa çıkıştan önce uyarılırsınız.
-- **Uygulama içinden dışa aktarma:** Profil › **"Verilerimi dışa aktar"** ile tüm alışkanlık, görev ve hedeflerinizi tek bir JSON dosyası olarak paylaşabilirsiniz. Dosya yalnızca paylaşım anında geçici olarak oluşturulur, sonra silinir; Erek kopyasını tutmaz. **"Verileri içe aktar"** ile bu dosyayı başka bir telefonda geri yükleyebilirsiniz; dosya cihazınızda okunur, hiçbir yere gönderilmez.
+- **Uygulama içinden dışa aktarma:** Profil › Verilerim › **"Verilerimi dışa aktar"** ile tüm alışkanlık, görev ve hedeflerinizi tek bir JSON dosyası olarak paylaşabilirsiniz. Dosya yalnızca paylaşım anında geçici olarak oluşturulur, sonra silinir; Erek kopyasını tutmaz. **"Verileri içe aktar"** ile bu dosyayı başka bir telefonda geri yükleyebilirsiniz; dosya cihazınızda okunur, hiçbir yere gönderilmez.
 - **Uygulamaya erişemiyorsanız:** hesabınızın ve buluttaki tüm verilerinizin
   silinmesini, hesabınıza bağlı e-posta adresinden **yazgandev@gmail.com**
   adresine yazarak isteyebilirsiniz. Talebiniz en geç 30 gün içinde yerine
@@ -463,7 +463,7 @@ are never sold to third parties.
   of your data on this device is removed once your changes are backed up to
   the cloud; it comes back when you sign in again. If some changes are not
   backed up yet, you are warned before signing out.
-- **Exporting your data:** Profile › **"Export my data"** shares all of your habits, tasks and goals as a single JSON file. The file is created only for the moment of sharing and deleted afterwards; Erek keeps no copy. **"Import data"** restores such a file on another phone; the file is read on your device and sent nowhere.
+- **Exporting your data:** Profile › My data › **"Export my data"** shares all of your habits, tasks and goals as a single JSON file. The file is created only for the moment of sharing and deleted afterwards; Erek keeps no copy. **"Import data"** restores such a file on another phone; the file is read on your device and sent nowhere.
 - **If you can't access the app:** you can request deletion of your account and
   all of your cloud data by writing to **yazgandev@gmail.com** from the email
   address linked to your account. Requests are completed within 30 days and

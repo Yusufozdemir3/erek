@@ -1,9 +1,9 @@
-// Profil › Verileri içe aktar: dosya seç → ne olduğunu göster → onayla → ekle.
+// Verilerim › Verileri içe aktar: dosya seç → ne olduğunu göster → onayla → ekle.
 // Dosya seçici ve dosya sistemi taklit edilir; veritabanı gerçektir.
 
 import { Alert } from 'react-native';
 import { fireEvent, waitFor } from '@testing-library/react-native';
-import ProfileScreen from '../../../app/profile';
+import DataScreen from '../../../app/data';
 import { renderUI } from '@/test/renderWithProviders';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { habitRepo, taskRepo, userRepo } from '@/db';
@@ -62,10 +62,10 @@ const lastAlert = () => {
   return calls[calls.length - 1] as [string, string, { text: string; onPress?: () => void }[]?];
 };
 
-describe('Profil › içe aktar', () => {
+describe('Verilerim › içe aktar', () => {
   it('seçimi iptal edince hiçbir şey olmaz', async () => {
     mockPick.mockResolvedValue({ canceled: true, assets: null });
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     await press(u);
     await waitFor(() => expect(mockPick).toHaveBeenCalled());
     expect(Alert.alert).not.toHaveBeenCalled();
@@ -76,7 +76,7 @@ describe('Profil › içe aktar', () => {
     await resetTestDb(); // yeni telefon
     mockUserId = userRepo.getOrCreateLocal().id;
     picked(text);
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
 
     await press(u);
     await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
@@ -99,7 +99,7 @@ describe('Profil › içe aktar', () => {
     await resetTestDb();
     mockUserId = userRepo.getOrCreateLocal().id;
     picked(text);
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     await press(u);
     await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
     lastAlert()[2]!.find((b) => b.text === 'İptal')?.onPress?.();
@@ -109,7 +109,7 @@ describe('Profil › içe aktar', () => {
 
   it('Erek dosyası olmayan ya da bozuk dosya anlaşılır hata verir, veri değişmez', async () => {
     picked('{"merhaba": 1}');
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     await press(u);
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(ROW, expect.stringContaining('Erek dışa aktarma dosyası değil')));
     expect(mockNotify).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe('Profil › içe aktar', () => {
 
   it('aşırı büyük dosya okunmadan reddedilir', async () => {
     picked('{}', 50 * 1024 * 1024);
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     await press(u);
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(ROW, 'Dosya çok büyük.'));
     expect(mockRead).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe('Profil › içe aktar', () => {
   it('okuma hatası: genel uyarı, çökmez', async () => {
     mockPick.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///cache/x.json', size: 10 }] });
     mockRead.mockRejectedValue(new Error('io'));
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     await press(u);
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(ROW, expect.stringContaining('Hiçbir şey değişmedi')));
   });

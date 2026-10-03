@@ -1,9 +1,9 @@
-// Profil › Verilerimi dışa aktar: dosya yazılır, paylaşım menüsü açılır, geçici
+// Verilerim › dışa aktar: dosya yazılır, paylaşım menüsü açılır, geçici
 // dosya her durumda silinir; paylaşım yoksa ya da hata olursa kullanıcı bilgilendirilir.
 
 import { Alert } from 'react-native';
 import { fireEvent, waitFor } from '@testing-library/react-native';
-import ProfileScreen from '../../../app/profile';
+import DataScreen from '../../../app/data';
 import { renderUI } from '@/test/renderWithProviders';
 import { exportFileName, shareDataExport } from '@/lib/shareExport';
 
@@ -59,9 +59,9 @@ describe('shareDataExport', () => {
   });
 });
 
-describe('Profil satırı', () => {
+describe('Verilerim ekranı: dışa aktar', () => {
   it('dokununca paylaşım açılır', async () => {
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     fireEvent.press(await u.findByLabelText('Verilerimi dışa aktar'));
     await waitFor(() => expect(mockShare).toHaveBeenCalledTimes(1));
     expect(Alert.alert).not.toHaveBeenCalled();
@@ -69,14 +69,14 @@ describe('Profil satırı', () => {
 
   it('paylaşım yoksa açıklayıcı uyarı', async () => {
     mockAvailable.mockResolvedValue(false);
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     fireEvent.press(await u.findByLabelText('Verilerimi dışa aktar'));
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Verilerimi dışa aktar', expect.stringContaining('paylaşma menüsü')));
   });
 
   it('hata olursa uyarı verir, çökmez', async () => {
     mockShare.mockRejectedValueOnce(new Error('x'));
-    const u = await renderUI(<ProfileScreen />);
+    const u = await renderUI(<DataScreen />);
     fireEvent.press(await u.findByLabelText('Verilerimi dışa aktar'));
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Verilerimi dışa aktar', expect.stringContaining('aktarılamadı')));
   });
