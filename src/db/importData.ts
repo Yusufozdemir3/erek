@@ -24,16 +24,17 @@ const MAX_TEXT_LEN = 2000;
 const MAX_JSON_LEN = 4000;
 const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
-// Parents before children (foreign keys are on). `key` is the property in the
-// document; `table` the SQLite table; `owned` = the table has its own user_id.
+// Parents before children (foreign keys are on): a habit can point at a goal
+// (habits.goal_id), so goals go first. `key` is the property in the document;
+// `table` the SQLite table; `owned` = the table has its own user_id.
 const PLAN = [
+  { key: 'goals', table: 'goals', owned: true },
+  { key: 'goalMilestones', table: 'goal_milestones', owned: false },
+  { key: 'goalEntries', table: 'goal_entries', owned: false },
   { key: 'habits', table: 'habits', owned: true },
   { key: 'habitLogs', table: 'habit_logs', owned: false },
   { key: 'tasks', table: 'tasks', owned: true },
   { key: 'subtasks', table: 'subtasks', owned: false },
-  { key: 'goals', table: 'goals', owned: true },
-  { key: 'goalMilestones', table: 'goal_milestones', owned: false },
-  { key: 'goalEntries', table: 'goal_entries', owned: false },
   { key: 'reminders', table: 'reminders', owned: false },
 ] as const;
 type Key = (typeof PLAN)[number]['key'];
@@ -153,6 +154,13 @@ export function importData(userId: string, doc: ExportDocument, now: Date = new 
         if (!usable || !names.includes('id')) {
           skipped++;
           continue;
+        }
+        // A habit linked to a goal that isn't on this phone (and isn't in the file,
+        // e.g. the goal was deleted) comes in unlinked instead of being dropped.
+        const gi = table === 'habits' ? names.indexOf('goal_id') : -1;
+        if (gi >= 0 && values[gi] !== null) {
+          const goal = db.getFirstSync('SELECT 1 AS ok FROM goals WHERE id = ?', [values[gi] as string]);
+          if (!goal) values[gi] = null;
         }
         if (owned) {
           names.push('user_id');

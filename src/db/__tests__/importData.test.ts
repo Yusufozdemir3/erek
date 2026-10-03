@@ -102,6 +102,30 @@ describe('gidiş-dönüş', () => {
   });
 });
 
+describe('hedefe bağlı alışkanlık', () => {
+  it('bağlantı korunur (hedefler alışkanlıklardan önce yazılır)', async () => {
+    const g = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 10 });
+    const h = habitRepo.create({ user_id: uid, title: 'Koşu', goal_id: g.id });
+    const text = JSON.stringify(buildExport(uid));
+    const newUid = await newPhone();
+
+    const report = importData(newUid, parsed(text));
+
+    expect(report.skipped).toBe(0);
+    expect(habitRepo.getById(h.id)?.goal_id).toBe(g.id);
+  });
+
+  it('hedefi olmayan (silinmiş) bir hedefe bağlıysa alışkanlık bağsız gelir, atlanmaz', () => {
+    const doc = parsed(JSON.stringify({
+      app: 'Erek', formatVersion: 1,
+      habits: [{ id: 'habit-0000001', title: 'Yetim', goal_id: 'goal-yok-0001', updated_at: '2026-10-01T00:00:00.000Z' }],
+    }));
+    const report = importData(uid, doc);
+    expect(report.imported.habits).toBe(1);
+    expect(habitRepo.getById('habit-0000001')?.goal_id).toBeNull();
+  });
+});
+
 describe('dosya doğrulama', () => {
   it('JSON olmayan, Erek olmayan, daha yeni sürüm, boş ve aşırı büyük dosyalar reddedilir', () => {
     expect(parseExport('{bozuk')).toEqual({ ok: false, reason: 'notJson' });
