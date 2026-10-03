@@ -3,7 +3,6 @@
 // 'logic' test project (same rationale as lib/timerLogic.ts, lib/goalProjection.ts).
 
 import { fmtClock, isTimeUnit } from '@/lib/helpers';
-import { dateTimeLabel } from '@/ui/theme';
 
 // No decimals for whole numbers, otherwise 1 decimal (same pattern as fmt in AmountStepper).
 export function fmtAmount(n: number): string {
@@ -17,11 +16,4 @@ export function fmtAmount(n: number): string {
 // marker never leaks onto the screen as raw text.
 export function fmtGoalValue(n: number, unit: string | null): string {
   return isTimeUnit(unit) ? fmtClock(n) : `${fmtAmount(n)}${unit ? ` ${unit}` : ''}`;
-}
-
-// Date+time for the entry history row ("Jul 15, 14:32"). Since it's the only
-// date+time format in the app, its body moved next to the other date labels
-// (ui/theme.ts); this name stays in the goal screen's namespace on purpose.
-export function fmtEntryWhen(iso: string, lang: 'tr' | 'en' | 'de'): string {
-  return dateTimeLabel(iso, lang);
 }

@@ -36,10 +36,9 @@
 // — the ad layer silently stays inactive if not found.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { shouldShowInterstitial } from './adsLogic';
+import { INTERSTITIAL_MIN_GAP_MS, shouldShowInterstitial } from './adsLogic';
 
 const LAST_SHOWN_KEY = 'ads:lastInterstitialShownAt';
-const INTERSTITIAL_MIN_GAP_MS = 30 * 60 * 1000; // 30 minutes
 
 // Google's publicly known test ad unit id — see the note at the top of the file.
 const TEST_INTERSTITIAL_UNIT_ID = 'ca-app-pub-3940256099942544/1033173712';

@@ -27,6 +27,8 @@ import {
 } from '@/lib/notificationPrefs';
 import { getCustomSoundTitle } from '@/lib/customNotificationChannel';
 import { pickNotificationSound } from '@/lib/ringtonePicker';
+import { syncPushRegistration } from '@/lib/pushRegistration';
+import { getNudgePrefs, setNudgesEnabled } from '@/sync';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -42,14 +44,30 @@ const TYPE_ROWS: { key: BoolPrefKey; labelKey: string }[] = [
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
-  const { user } = useAppData();
+  const { user, authUser } = useAppData();
+  const uid = authUser && !authUser.isAnonymous ? authUser.id : null;
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  // Friend nudges: an ACCOUNT preference kept on the server (it decides
+  // whether a friend's nudge is delivered), unlike the device prefs above.
+  const [nudgesOn, setNudgesOn] = useState<boolean | null>(null);
 
   useEffect(() => {
     getNotificationPrefs().then(setPrefs);
   }, []);
+
+  useEffect(() => {
+    if (!uid) return;
+    getNudgePrefs()
+      .then((p) => p && setNudgesOn(p.enabled))
+      .catch(() => {});
+  }, [uid]);
+
+  const toggleNudges = async (value: boolean) => {
+    setNudgesOn(value);
+    if (!(await setNudgesEnabled(value).catch(() => false))) setNudgesOn(!value);
+  };
 
   // When sound/vibration/custom-sound changes, rebuild all reminders from the
   // DB (scheduleX's own cancel-then-maybe-schedule logic handles on/off and
@@ -68,8 +86,11 @@ export default function NotificationsScreen() {
 
   const toggle = (key: BoolPrefKey, value: boolean) => {
     setPrefs((p) => ({ ...p, [key]: value }));
-    setNotificationPref(key, value).catch(() => {});
+    const saved = setNotificationPref(key, value).catch(() => {});
     rescheduleAll();
+    // The master switch also decides whether this phone receives friend
+    // nudges (see lib/pushRegistration.ts) — apply it now, not next foreground.
+    if (key === 'enabled') saved.then(() => syncPushRegistration(uid, lang));
   };
 
   // Opens the device's ringtone picker; if a choice is made (including Silent)
@@ -187,6 +208,16 @@ export default function NotificationsScreen() {
             </View>
           </View>
           <Text style={styles.hint}>{t('notifications.customSoundHint')}</Text>
+        </View>
+      )}
+
+      {uid && nudgesOn !== null && (
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t('notifications.friendNudges')}</Text>
+            <Switch value={nudgesOn} onValueChange={toggleNudges} {...switchColors(colors, nudgesOn)} />
+          </View>
+          <Text style={styles.hint}>{t('notifications.friendNudgesHint')}</Text>
         </View>
       )}
     </ScrollView>

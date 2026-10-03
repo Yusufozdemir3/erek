@@ -67,6 +67,8 @@ Her alışkanlığın kendi detay ekranı vardır:
 
 Öncelik, son tarih ve saat verebilir, alt görevlere bölebilirsin. Tekrarlayan görevler tamamlandığında bir sonraki tarihe kendiliğinden taşınır.
 
+Görevi sesle de ekleyebilirsin: mikrofona dokun, "yarın akşam 7'de annemi ara" de — başlık, tarih ve saat kendiliğinden dolar, sen onaylarsın. Ses mümkünse telefonunda yazıya çevrilir; kaydedilmez.
+
 ▸ HEDEFLER
 
 İki tip hedef kurabilirsin: sayısal (200 sayfa oku, 100 km koş) ya da adım listesi. Hedefine ara adımlar ekleyebilir, ilerlemeni tek tek girebilirsin.
@@ -82,15 +84,15 @@ Bir alışkanlığı hedefe bağlayabilirsin: alışkanlığı her tamamladığ�
 
 ▸ ARKADAŞLARLA
 
-Google hesabınla giriş yaptıysan bir davet koduyla arkadaşlarına bağlanabilirsin. Bir alışkanlığını paylaş, serilerini ve takvimini görsünler. Bir görevi paylaş, kendi listelerinde görüp tamamlasınlar. Bir hedefi paylaş, birlikte ilerleme ekleyin. Neyin kiminle paylaşılacağına sen karar verirsin; e-posta adresin hiç gösterilmez.
+Google hesabınla giriş yaptıysan bir davet koduyla arkadaşlarına bağlanabilirsin. Bir alışkanlığını paylaş, serilerini ve takvimini görsünler. Bir görevi paylaş, alt görevleriyle birlikte kendi listelerinde görüp tamamlasınlar. Bir hedefi paylaş, birlikte ilerleme ekleyin. Neyin kiminle paylaşılacağına sen karar verirsin; e-posta adresin hiç gösterilmez.
 
 ▸ HATIRLATMALAR
 
 Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma saati ekleyebilirsin. Bildirimler cihazında yerel olarak planlanır. Bildirim sesini ve titreşimi ayarlayabilir, kendi ses dosyanı seçebilirsin.
 
-▸ ANA EKRAN WIDGET'I
+▸ ANA EKRAN WIDGET'LARI
 
-Bugünün alışkanlıklarını ve kaçını tamamladığını ana ekranından görürsün; dokunarak uygulamayı açarsın.
+Bugünün alışkanlıklarını ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar.
 
 ▸ REKLAMLAR
 
@@ -102,11 +104,11 @@ Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi
 
 ▸ VERİLERİN SENDE
 
-Erek çevrimdışı çalışır ve hesap gerektirmez. İstersen Google hesabınla giriş yapıp verilerini buluta yedekleyebilir ve cihazların arasında eşitleyebilirsin — bu tamamen isteğe bağlıdır. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin.
+Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin.
 
-Uygulama içi analitik yok. Verilerin satılmaz.
+Profil › Gizlilik ve çevrimdışı, neyin nerede durduğunu telefonunun gerçek durumuna göre gösterir. Uygulama içi analitik yok, verilerin satılmaz.
 ```
-(3252)
+(3707)
 
 ---
 
@@ -148,6 +150,8 @@ Every habit has its own detail screen:
 
 Set a priority, a due date and a time, and break a task into subtasks. Recurring tasks move to their next date automatically when you complete them.
 
+You can also add a task by voice: tap the mic and say "call mom tomorrow at 7pm" — the title, date and time fill in, and you confirm. Speech is transcribed on your phone whenever possible and never recorded.
+
 ▸ GOALS
 
 Create two kinds of goals: numeric (read 200 pages, run 100 km) or a list of milestones. Add intermediate milestones and log your progress entry by entry.
@@ -163,15 +167,15 @@ You can link a habit to a goal: every time you complete the habit, the goal adva
 
 ▸ WITH FRIENDS
 
-If you sign in with Google, you can connect with friends using an invite code. Share a habit so they can follow your streaks and calendar. Share a task so it shows up in their list and they can check it off. Share a goal and add progress to it together. You decide what is shared with whom; your email address is never shown.
+If you sign in with Google, you can connect with friends using an invite code. Share a habit so they can follow your streaks and calendar. Share a task so it shows up in their list, subtasks included, and they can check it off. Share a goal and add progress to it together. You decide what is shared with whom; your email address is never shown.
 
 ▸ REMINDERS
 
 Add as many reminder times as you like to habits, tasks and goals. Notifications are scheduled locally on your device. You can configure sound and vibration, including your own sound file.
 
-▸ HOME SCREEN WIDGET
+▸ HOME SCREEN WIDGETS
 
-See today's habits and how many you have completed on your home screen, and tap to open the app.
+Check off today's habits right from your home screen; the Counter widget adds +1 to glasses, pages and the like with one tap.
 
 ▸ ADS
 
@@ -183,11 +187,11 @@ Light, dark and system themes. Two different dark tones, plus an accent colour o
 
 ▸ YOUR DATA IS YOURS
 
-Erek works offline and requires no account. If you want to, you can sign in with your Google account to back up your data and sync it across your devices — this is entirely optional. You can permanently delete your account and all of your cloud data from within the app.
+Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app.
 
-No in-app analytics. Your data is never sold.
+Profile › Privacy and offline shows what is kept where, based on your phone’s actual state. No in-app analytics; your data is never sold.
 ```
-(3266)
+(3697)
 
 ---
 
@@ -229,6 +233,8 @@ Jede Gewohnheit hat ihren eigenen Detailbildschirm:
 
 Lege Priorität, Fälligkeitsdatum und Uhrzeit fest und teile eine Aufgabe in Teilaufgaben auf. Wiederkehrende Aufgaben rücken nach dem Erledigen automatisch auf ihren nächsten Termin.
 
+Aufgaben gehen auch per Sprache: Tippe aufs Mikrofon und sag „morgen um 19 Uhr Mama anrufen" – Titel, Datum und Uhrzeit füllen sich, du bestätigst. Sprache wird nach Möglichkeit auf dem Handy umgewandelt und nie aufgenommen.
+
 ▸ ZIELE
 
 Erstelle zwei Arten von Zielen: numerisch (200 Seiten lesen, 100 km laufen) oder eine Liste von Etappen. Füge Zwischenetappen hinzu und trage deinen Fortschritt einzeln ein.
@@ -244,15 +250,15 @@ Du kannst eine Gewohnheit mit einem Ziel verknüpfen: Jedes Mal, wenn du die Gew
 
 ▸ MIT FREUNDEN
 
-Wenn du dich mit Google anmeldest, kannst du dich per Einladungscode mit Freunden verbinden. Teile eine Gewohnheit, damit sie deine Serien und deinen Kalender sehen. Teile eine Aufgabe, damit sie in ihrer Liste erscheint und abgehakt werden kann. Teile ein Ziel und tragt gemeinsam Fortschritt ein. Du entscheidest, was du mit wem teilst; deine E-Mail-Adresse wird nie angezeigt.
+Wenn du dich mit Google anmeldest, kannst du dich per Einladungscode mit Freunden verbinden. Teile eine Gewohnheit, damit sie deine Serien und deinen Kalender sehen. Teile eine Aufgabe, damit sie samt Teilaufgaben in ihrer Liste erscheint und abgehakt werden kann. Teile ein Ziel und tragt gemeinsam Fortschritt ein. Du entscheidest, was du mit wem teilst; deine E-Mail-Adresse wird nie angezeigt.
 
 ▸ ERINNERUNGEN
 
 Füge Gewohnheiten, Aufgaben und Zielen beliebig viele Erinnerungszeiten hinzu. Benachrichtigungen werden lokal auf deinem Gerät geplant. Ton und Vibration sind einstellbar, auch mit eigener Audiodatei.
 
-▸ HOMESCREEN-WIDGET
+▸ HOMESCREEN-WIDGETS
 
-Sieh die heutigen Gewohnheiten und wie viele du schon erledigt hast auf deinem Startbildschirm und tippe, um die App zu öffnen.
+Hake Gewohnheiten direkt auf dem Startbildschirm ab; das Zähler-Widget zählt Gläser oder Seiten mit einem Tipp.
 
 ▸ WERBUNG
 
@@ -264,11 +270,11 @@ Helles, dunkles und Systemdesign. Zwei dunkle Töne sowie eine frei wählbare Ak
 
 ▸ DEINE DATEN GEHÖREN DIR
 
-Erek funktioniert offline und benötigt kein Konto. Wenn du möchtest, kannst du dich mit deinem Google-Konto anmelden, um deine Daten zu sichern und zwischen Geräten zu synchronisieren — das ist völlig freiwillig. Dein Konto und alle Cloud-Daten kannst du in der App dauerhaft löschen.
+Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App.
 
-Keine In-App-Analyse. Deine Daten werden nicht verkauft.
+Profil › Datenschutz und Offline zeigt, was wo liegt. Keine In-App-Analyse; deine Daten werden nie verkauft.
 ```
-(3650)
+(3938)
 
 ---
 
@@ -317,7 +323,8 @@ ekranından ve paylaşılan bir hedeften birer kare eklemek iyi olur.
 
 Bu bölüm gizlilik politikasıyla (docs/privacy-policy.md) BİREBİR tutarlı olmalı.
 Koddaki gerçeğe göre yazıldı (2026-10-01): AdMob ve Sentry açık, Google ile
-isteğe bağlı giriş, arkadaşlar/paylaşım var.
+isteğe bağlı giriş, arkadaşlar/paylaşım var. 2026-10-02: sesli giriş ve arkadaş
+hatırlatmaları (push) eklendi.
 
 **Toplanan veriler** (Play'in kategori adlarıyla):
 
@@ -330,7 +337,9 @@ isteğe bağlı giriş, arkadaşlar/paylaşım var.
 | Uygulama etkinliği › Diğer kullanıcı tarafından oluşturulan içerik (alışkanlık/görev/hedef kayıtları) | Evet | Hayır | Yalnız giriş yaparsa | Uygulama işlevi (yedekleme, eşitleme, paylaşım) | Evet |
 | Uygulama bilgileri ve performans › Kilitlenme günlükleri | Evet | Hayır | Her zaman (Sentry) | Analiz (kararlılık) | Hayır |
 | Uygulama bilgileri ve performans › Teşhis bilgileri | Evet | Hayır | Her zaman (Sentry: cihaz modeli, OS sürümü) | Analiz (kararlılık) | Hayır |
-| Cihaz veya diğer kimlikler (reklam kimliği) | Evet | **Evet — Google AdMob** | Her zaman | Reklam veya pazarlama | Hayır |
+| Cihaz veya diğer kimlikler (reklam kimliği; giriş yapmışsa bildirim anahtarı) | Evet | **Evet — yalnız reklam kimliği, Google AdMob** | Reklam kimliği her zaman; bildirim anahtarı yalnız giriş yapmış ve bildirim izni vermişse | Reklam (reklam kimliği); Uygulama işlevi (bildirim anahtarı — arkadaş hatırlatmaları) | Reklam kimliği hayır; bildirim anahtarı evet (giriş/izin isteğe bağlı) |
+| Uygulama etkinliği › Diğer işlemler (arkadaş hatırlatma kaydı: kimden, kime, hangi öğe, ne zaman — 30 gün) | Evet | Hayır | Yalnız giriş yapmışsa, hatırlatma gönderdiğinde/aldığında | Uygulama işlevi; dolandırıcılık önleme ve güvenlik (sınırlar) | Evet (özelliği kullanmak isteğe bağlı) |
+| Ses › Ses kayıtları | Evet — **anlık işlenir** (saklanmaz) | Hayır | Yalnız sesli girişte, telefon sesi cihazda yazıya çeviremiyorsa VE kullanıcı bir kez onay verdiyse (telefonun tanıma hizmeti, çoğunlukla Google) | Uygulama işlevi | Evet (isteğe bağlı; Profil › Görünüm'den geri alınır) |
 
 **Neden "paylaşılıyor: hayır":**
 - Arkadaşla paylaşım kullanıcının kendi başlattığı bir işlem; Play'in tanımında
@@ -338,9 +347,23 @@ isteğe bağlı giriş, arkadaşlar/paylaşım var.
 - Supabase (bulut veritabanı) ve Sentry (çökme raporu) bizim adımıza çalışan
   hizmet sağlayıcılar; bunlara aktarım da "paylaşım" sayılmaz.
 - Paylaşılan tek veri reklam kimliği (Google AdMob).
+- Ses: çevrim içi tanımada sesi Erek değil, telefonun kendi tanıma hizmeti
+  kaydedip gönderir; Erek'ten üçüncü tarafa bir aktarım yok.
+- Bildirim anahtarı ve hatırlatma metni (gönderen adı + alışkanlık/hedef adı):
+  Expo (bildirim hizmeti) ve Google FCM, arkadaş hatırlatmasını bizim adımıza
+  ileten hizmet sağlayıcılar; paylaşım sayılmaz.
 
-**Toplanmayanlar:** konum, kişiler, fotoğraf/video dosyaları, ses, sağlık,
-finans, tarama geçmişi, uygulama içi analitik.
+**Ses satırı neden var (temkinli beyan):** Erek'in kodu ses dosyası yazmaz ve
+sesi hiçbir yere göndermez. Cihazda tanımada (Android 13+, dil paketi yüklü)
+ses telefondan hiç çıkmaz. Çevrim içi tanımada ise ses, kullanıcı onay
+verdikten sonra Android'in tanıma hizmeti tarafından gönderilir. Play'in
+tanımına göre bu "uygulamanın topladığı veri" sayılmayabilir, ama kullanıcının
+gözünden ses cihazdan çıktığı için beyan edildi. Satırı kaldırmak istersen bu
+gerekçeyi ve gizlilik politikası §5'i birlikte düşün.
+
+**Toplanmayanlar:** konum, kişiler, fotoğraf/video dosyaları, sağlık, finans,
+tarama geçmişi, uygulama içi analitik. (Ses yalnız yukarıdaki onaylı çevrim içi
+tanıma durumunda; cihazda tanımada hiç toplanmaz.)
 
 **Güvenlik uygulamaları:**
 - Veriler aktarım sırasında şifrelenir (HTTPS): **Evet**
@@ -373,6 +396,7 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
 
 **TR**
 ```
+• Görevleri sesle ekle: mikrofona dokun, söyle — tarih ve saat kendiliğinden dolar.
 • Arkadaşlar: davet koduyla bağlan; alışkanlık, görev ve hedeflerini paylaş. Ortak hedeflere birlikte ilerleme ekleyin.
 • Bugün ekranında 7 günlük tarih şeridi.
 • Profilde Google hesabının fotoğrafı.
@@ -382,6 +406,7 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
 
 **EN**
 ```
+• Add tasks by voice: tap the mic and speak — the date and time fill in for you.
 • Friends: connect with an invite code and share habits, tasks and goals. Add progress to shared goals together.
 • A 7-day date strip on the Today screen.
 • Your Google profile photo in the header.
@@ -391,6 +416,7 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
 
 **DE**
 ```
+• Aufgaben per Sprache: aufs Mikrofon tippen, sprechen – Datum und Uhrzeit füllen sich selbst.
 • Freunde: per Einladungscode verbinden und Gewohnheiten, Aufgaben und Ziele teilen. Gemeinsam Fortschritt zu geteilten Zielen eintragen.
 • 7-Tage-Datumsleiste auf dem Heute-Bildschirm.
 • Dein Google-Profilbild in der Kopfzeile.
@@ -407,6 +433,11 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
       dahil). Şema her değiştiğinde istemciden ÖNCE tekrar çalıştırılmalı.
 - [ ] `supabase/tests/sharing_checks.sql` çalıştırıldı → "ALL SHARING CHECKS PASSED"
 - [ ] Supabase › Authentication › Providers › **Anonymous sign-ins KAPALI**
+- [ ] **Arkadaş hatırlatmaları (push):** `docs/push-setup.md` adımları bitti —
+      schema.sql (PHASE 5) yeniden çalıştırıldı, `supabase/tests/nudge_checks.sql`
+      → "ALL NUDGE CHECKS PASSED", `send-nudge` deploy edildi,
+      `EXPO_ACCESS_TOKEN` secret'ı girildi, Expo'da enhanced push security açık,
+      FCM V1 anahtarı EAS'te
 
 **Gizlilik politikası**
 - [x] `docs/index.html` 1 Ekim 2026 sürümü canlıda (erek-privacy e33fdee)
@@ -414,10 +445,16 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
       §2/§7'deki yeni oturum modeli (çıkışta veriler cihazdan kaldırılır, girişte
       cihazdaki veri hesaba eklenir) canlıdaki metinde henüz yok — canlı metin
       Play'deki mevcut sürümün davranışını anlatıyor
+- [ ] Aynı yayında §1 ve §5'teki **sesli giriş** ve §2/§3'teki **arkadaş
+      hatırlatmaları** metni de canlıya alınmalı (md güncel; `docs/index.html`
+      yeniden üretilecek), yürürlük tarihi yayın günü yapılmalı
 
 **Play Console**
 - [ ] Veri güvenliği formu yukarıdaki tabloya göre güncellendi (ad, profil
-      fotoğrafı, çökme günlükleri, teşhis, reklam kimliği)
+      fotoğrafı, çökme günlükleri, teşhis, reklam kimliği, **ses kayıtları —
+      anlık işlenir, isteğe bağlı**)
+- [ ] Yeni izin: manifestte `RECORD_AUDIO` (sesli giriş). Ayrı beyan formu
+      gerekmez; Play'deki izin listesinde "Mikrofon" görünecek
 - [ ] Uygulama içeriği beyanları (reklam, reklam kimliği, hesap silme URL'i,
       hedef kitle, içerik derecelendirmesi anketi)
 - [ ] "Yenilikler" metni girildi (TR/EN/DE)
@@ -425,7 +462,17 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
 - [ ] AdMob: açılışta gösterilen interstitial'ın politikaya uygunluğu kontrol
       edildi (denetim B8)
 
+**Çevrimdışı sözü (uçak modu turu)**
+- [ ] Uçak modunda: alışkanlık/görev/hedef ekle, işaretle, istatistik aç; hatırlatma çalıyor;
+      widget güncelleniyor; sesli giriş (cihazda tanıma varsa) çalışıyor
+- [ ] Uçak modunda reklam çıkmıyor; arkadaş/paylaşım ekranları anlaşılır hata veriyor, çökmüyor
+- [ ] Profil › Gizlilik ve çevrimdışı sayfası telefonun gerçek durumunu gösteriyor
+      (hesap, mikrofon, çevrim içi tanıma onayı, bildirim izni)
+
 **Build**
+- [ ] `google-services.json` derlemede: yerelde proje kökünde, EAS'te
+      `GOOGLE_SERVICES_JSON` dosya değişkeni (yoksa push sessizce kapalı kalır,
+      hatırlatmalar paylaş penceresine düşer)
 - [ ] AAB: `eas build --platform android --profile production` (versionCode EAS'in
       uzak sayacından otomatik artar; son yüklenen 10). Yerel Gradle ile alınırsa
       `build.gradle`'daki versionCode elle 11+ yapılmalı ve release imzası

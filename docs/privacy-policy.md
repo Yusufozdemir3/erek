@@ -15,6 +15,9 @@ bu reklamları göstermek için Google cihazınızın reklam kimliğini işler, 
 alışkanlık/görev/hedef içerikleriniz reklam sistemine hiç ulaşmaz (bkz. §4).
 Veriniz satılmaz veya kendi pazarlama amacımız için kullanılmaz. Uygulama
 çökerse içeriğinizi taşımayan teknik bir hata raporu gönderilir (bkz. §6).
+Görevi sesle eklediğinizde ses mümkünse cihazınızda yazıya çevrilir; bunun
+mümkün olmadığı telefonlarda yalnızca siz onay verirseniz telefonunuzun
+konuşma tanıma hizmeti (çoğunlukla Google) kullanılır (bkz. §5).
 
 ### 1. Hesapsız kullanım (varsayılan)
 
@@ -32,7 +35,9 @@ edilmez. Yedeklemeyi cihazınızın Ayarlar > Google > Yedekleme bölümünden
 kapatabilirsiniz.
 
 Tek istisna, uygulama çöktüğünde gönderilen teknik hata raporudur; içeriğiniz
-oraya dahil edilmez (bkz. §6).
+oraya dahil edilmez (bkz. §6). Sesli girişte ise ses, telefonunuz onu kendi
+içinde yazıya çeviremiyorsa ve yalnızca siz buna onay verdiyseniz, telefonunuzun
+konuşma tanıma hizmetine gider — Erek'in sunucularına değil (bkz. §5).
 
 Uygulamanın kendi sistemleri konum verisi ya da genel kullanım analitiği
 toplamaz. Tek istisna reklamlardır (bkz. §4): reklam gösterilirken Google,
@@ -82,9 +87,11 @@ arkadaşa görünür:
 - **Paylaşılan alışkanlık:** adı, simgesi/rengi, sıklığı, hedef miktarı ve
   tamamlama geçmişi (serileri ve takvimi). Arkadaşınız bunları değiştiremez;
   hedef bağlantıları ve hatırlatma saatleri paylaşılmaz.
-- **Paylaşılan görev:** başlığı, tarihi/saati, önceliği ve tamamlanma durumu.
-  Arkadaşınız görevi yalnızca tamamlandı olarak işaretleyebilir; alt görevler
-  ve hatırlatmalar paylaşılmaz.
+- **Paylaşılan görev:** başlığı, tarihi/saati, önceliği, tamamlanma durumu ve
+  alt görevleri (başlıkları ve tamamlanma durumları). Arkadaşınız görevi ve
+  alt görevlerini yalnızca tamamlandı olarak işaretleyebilir; hepsi
+  tamamlanınca görev de tamamlanır, biri geri alınınca yeniden açılır.
+  Hatırlatmalar paylaşılmaz.
 - **Paylaşılan hedef:** adı, hedef değeri/birimi, son tarihi, adımları ve
   ilerleme geçmişi (her girişi kimin eklediğiyle birlikte). Arkadaşınız
   sayısal bir hedefe kendi ilerlemesini ekleyebilir; eklediği girişler sizin
@@ -95,17 +102,43 @@ arkadaşa görünür:
 Paylaşımı ya da bağlantıyı istediğiniz an kaldırabilirsiniz; bağlantı
 kaldırılınca aranızdaki tüm paylaşımlar da sona erer ve paylaşılan veriler,
 arkadaşınızın uygulaması bir sonraki eşitlemede cihazından silinir. Hesabınızı
-sildiğinizde tüm bağlantılarınız, paylaşımlarınız ve davet kodlarınız da
-silinir. Bir arkadaşınızın ortak hedefine daha önce eklediğiniz ilerleme
+sildiğinizde tüm bağlantılarınız, paylaşımlarınız, davet kodlarınız ve
+arkadaş hatırlatmalarıyla ilgili kayıtlarınız (bkz. §3) da silinir. Bir arkadaşınızın ortak hedefine daha önce eklediğiniz ilerleme
 girişleri o hedefin geçmişinin parçası olduğu için onda kalır, ancak adınız
 artık gösterilmez. Kod tahminini önlemek için hatalı kod denemeleri bir gün
 süreyle kaydedilir.
 
 ### 3. Bildirimler
 
-Kurduğunuz hatırlatmalar **cihazınızda yerel olarak** planlanır; bildirim
+Kurduğunuz hatırlatmalar **cihazınızda yerel olarak** planlanır; bu bildirimlerin
 içerikleri hiçbir sunucuya gönderilmez. Bildirim izni istendiğinde reddedebilir
 veya sistem ayarlarından dilediğiniz zaman kapatabilirsiniz.
+
+**Arkadaş hatırlatmaları (isteğe bağlı, yalnızca hesapla):** Bir arkadaşınız,
+sizin onunla paylaştığınız bir alışkanlık ya da hedef için "Arkadaşına hatırlat"
+düğmesine bastığında telefonunuza bir bildirim gelir. Bunun için:
+- Bildirim izni verdiyseniz cihazınızın **bildirim anahtarı** (Expo ve Google
+  Firebase Cloud Messaging tarafından verilen, cihazı tanımlayan bir dize) ve
+  uygulama diliniz hesabınızla birlikte sunucumuzda saklanır. Anahtar yalnızca
+  sunucudaki gönderim fonksiyonu tarafından kullanılır; arkadaşlarınız dahil hiç
+  kimseye gösterilmez.
+- Bildirim, Expo'nun bildirim hizmeti ve Google Firebase Cloud Messaging
+  üzerinden iletilir. Bildirimin metni gönderenin adını ve hatırlatılan
+  alışkanlığın ya da hedefin adını içerir ("Bora sana bir hatırlatma gönderdi" /
+  "Sabah koşusu"); bu metin yalnızca bildirimi ileten bu hizmetlerden geçer.
+  Bildirim kanalı kilit ekranında içeriği gizleyecek şekilde ayarlıdır:
+  telefonunuz kilitliyken içerik görünmez, kilidi açınca görünür (telefonunuzun
+  kilit ekranı bildirim ayarları bunu değiştirebilir).
+- Kötüye kullanımı önlemek için gönderilen hatırlatmaların kaydı (kimden, kime,
+  hangi öğe, ne zaman) 30 gün tutulur ve yalnızca sınırlar için kullanılır (aynı
+  öğe için 12 saatte bir; kişi başına günde 20; alıcı başına günde 30).
+- Bir arkadaşınızın hatırlatmalarını Arkadaşlar ekranından sessize alabilir,
+  tümünü Bildirimler ayarından kapatabilirsiniz; bu tercihler karşı tarafa
+  bildirilmez. Bağlantı kaldırıldığında hatırlatmalar da durur.
+- Çıkış yaptığınızda bildirim anahtarı hesabınızdan kaldırılır (çevrimdışıysanız
+  ilk bağlantıda); aynı telefonda başka biri giriş yaparsa anahtar onun hesabına
+  geçer. Hesabınızı sildiğinizde anahtarlarınız, hatırlatma kayıtlarınız ve
+  sessize alma tercihleriniz de silinir.
 
 ### 4. Reklamlar
 
@@ -132,12 +165,33 @@ Android sürümüne göre değişebilir).
 Google'ın reklam verilerini nasıl işlediği hakkında:
 https://policies.google.com/technologies/ads
 
-### 5. Yapay zeka özellikleri
+### 5. Sesli giriş ve yapay zeka
 
-Uygulamada yapay zeka özelliği **yoktur**. Daha önceki sürümlerde denenen "AI
-ile hızlı ekleme" özelliği tamamen **kaldırılmıştır**; yazdığınız hiçbir metin
-yapay zeka işlemesi için dışarı gönderilmez. Böyle bir özellik ileride eklenirse
-politika güncellenecek ve özellik açıkça isteğe bağlı olacaktır.
+**Sesli giriş:** Görev eklerken mikrofon düğmesine dokunup görevi
+söyleyebilirsiniz. Mikrofon yalnızca siz düğmeye dokunduğunuzda açılır ve en
+fazla 30 saniye dinler; uygulama arka plana geçtiğinde dinleme hemen durur. Bunun
+için mikrofon izni istenir; izni reddedebilir veya sistem ayarlarından
+dilediğiniz zaman kapatabilirsiniz.
+
+- Ses, mümkünse **cihazınızda** yazıya çevrilir ve telefondan çıkmaz (Android 13
+  ve üzeri, ilgili dilin konuşma paketi yüklüyse; paket bir kez indirilir).
+- Bu mümkün değilse ya da paketi indirmek yerine çevrim içi tanımayı
+  seçerseniz, ses **yalnızca bir kez vereceğiniz onayla** yazıya çevrilmek üzere
+  telefonunuzun konuşma tanıma hizmetine (çoğu Android telefonda Google)
+  gönderilir. Bu işlem o hizmetin altyapısında gerçekleşir; ses Erek'in
+  sunucularına gelmez. Onayınızı Profil › Görünüm › Sesli giriş bölümünden geri
+  alabilirsiniz. Google'ın verileri nasıl işlediği hakkında:
+  https://policies.google.com/privacy
+- Erek **ses kaydı tutmaz.** Söylediğiniz cümle yalnızca görev formunu
+  doldurmak için kullanılır; siz görevi kaydetmedikçe hiçbir yere yazılmaz.
+  Cümleden tarih, saat ve önceliğin çıkarılması cihazınızda, sabit kurallarla
+  yapılır.
+
+**Yapay zeka:** Konuşma tanıma dışında uygulamada yapay zeka özelliği **yoktur**.
+Daha önceki sürümlerde denenen "AI ile hızlı ekleme" özelliği tamamen
+**kaldırılmıştır**; yazdığınız hiçbir metin yapay zeka işlemesi için dışarı
+gönderilmez. Böyle bir özellik ileride eklenirse politika güncellenecek ve özellik
+açıkça isteğe bağlı olacaktır.
 
 ### 6. Çökme raporları
 
@@ -203,7 +257,10 @@ devices. The app shows full-screen ads (Google AdMob); to serve them, Google
 processes your device's advertising identifier, but your habit/task/goal
 content never reaches the ad system (see §4). Your data is never sold or used
 for our own marketing. If the app crashes, a technical error report that
-carries none of your content is sent (see §6).
+carries none of your content is sent (see §6). When you add a task by voice,
+speech is transcribed on your device whenever possible; on phones where that
+isn't possible, your phone's speech recognition service (usually Google) is
+used only if you agree to it (see §5).
 
 ### 1. Using Erek without an account (default)
 
@@ -220,7 +277,9 @@ access it. Your sign-in session is excluded from it. You can turn backup off on
 your device under Settings > Google > Backup.
 
 The one exception is the technical error report sent when the app crashes; your
-content is not included in it (see §6).
+content is not included in it (see §6). With voice input, audio goes to your
+phone's speech recognition service only if your phone can't transcribe it on
+its own and you have agreed to that — never to Erek's servers (see §5).
 
 The app's own systems do not collect location data or general usage analytics.
 The one exception is advertising (see §4): while an ad is being shown, Google
@@ -268,8 +327,10 @@ you choose:
 - **A shared habit:** its name, icon/color, frequency, target amount and
   completion history (streaks and calendar). Your friend can't change any of
   it; goal links and reminder times are not shared.
-- **A shared task:** its title, date/time, priority and completion state. Your
-  friend can only mark it as done; subtasks and reminders are not shared.
+- **A shared task:** its title, date/time, priority, completion state and
+  subtasks (their titles and completion state). Your friend can only mark the
+  task and its subtasks as done; the task completes when all subtasks are done
+  and reopens when one is unticked. Reminders are not shared.
 - **A shared goal:** its name, target/unit, deadline, milestones and progress
   history (including who added each entry). Your friend can add their own
   progress to a numeric goal; those entries are recorded in your goal's history
@@ -279,16 +340,42 @@ you choose:
 You can stop sharing or remove a connection at any time; removing a connection
 ends everything shared between you, and your friend's app removes the shared
 data from their device at its next sync. Deleting your account deletes all your
-connections, shares and invite codes. Progress entries you previously added to
+connections, shares, invite codes and friend-reminder records (see §3). Progress entries you previously added to
 a friend's shared goal stay in that goal's history, since they are part of it,
 but your name is no longer shown. To prevent code guessing, failed code attempts
 are recorded for one day.
 
 ### 3. Notifications
 
-Reminders you set are scheduled **locally on your device**; notification content
-is not sent to any server. You may decline the notification permission or
-disable it in system settings at any time.
+Reminders you set are scheduled **locally on your device**; their content is not
+sent to any server. You may decline the notification permission or disable it in
+system settings at any time.
+
+**Reminders from friends (optional, account only):** when a friend taps
+"Remind your friend" on a habit or goal you shared with them, your phone gets a
+notification. For this:
+- If you allowed notifications, your device's **push token** (an identifier for
+  your device issued by Expo and Google Firebase Cloud Messaging) and your app
+  language are stored on our server with your account. The token is only used by
+  the server-side sending function and is never shown to anyone, including your
+  friends.
+- The notification is delivered through Expo's push service and Google Firebase
+  Cloud Messaging. Its text contains the sender's name and the name of the habit
+  or goal being reminded about ("Bora sent you a reminder" / "Morning run");
+  that text passes only through those delivery services. The notification
+  channel is set to hide its content on the lock screen: while your phone is
+  locked the content is hidden, and it shows once you unlock (your phone's
+  lock-screen notification settings can change this).
+- To prevent abuse, a record of sent reminders (from whom, to whom, which item,
+  when) is kept for 30 days and used only for the limits (once per item every 12
+  hours; 20 per sender and 30 per recipient per day).
+- You can mute a friend's reminders on the Friends screen, or turn them all off
+  in the Notifications settings; the other person is not told. Removing a
+  connection stops reminders too.
+- When you sign out, the push token is removed from your account (on the next
+  connection if you're offline); if someone else signs in on the same phone, the
+  token moves to their account. Deleting your account also deletes your tokens,
+  reminder records and mute settings.
 
 ### 4. Advertising
 
@@ -313,12 +400,33 @@ version).
 More on how Google processes advertising data:
 https://policies.google.com/technologies/ads
 
-### 5. AI features
+### 5. Voice input and AI features
 
-The app has **no AI features**. The "AI quick add" feature tried in earlier
-versions has been **removed entirely**; no text you write is sent out for AI
-processing. If such a feature is added in the future, this policy will be
-updated and the feature will remain clearly optional.
+**Voice input:** when adding a task, you can tap the microphone button and say
+the task. The microphone only opens when you tap the button and listens for at
+most 30 seconds; listening stops immediately when the app goes to the
+background. This requires the microphone permission, which you may decline or
+turn off in system settings at any time.
+
+- Whenever possible, speech is transcribed **on your device** and never leaves
+  the phone (Android 13 and later, with that language's speech pack installed;
+  the pack is downloaded once).
+- If that isn't possible, or you choose online recognition instead of
+  downloading the pack, the audio is sent to your phone's speech recognition
+  service (Google on most Android phones) to be transcribed — **only after you
+  agree to it once**. This happens on that service's infrastructure; the audio
+  never reaches Erek's servers. You can withdraw your consent under Profile ›
+  Appearance › Voice input. How Google processes data:
+  https://policies.google.com/privacy
+- Erek **does not record audio.** The sentence you say is only used to fill in
+  the task form and is not stored anywhere unless you save the task. Dates,
+  times and priority are extracted from it on your device, using fixed rules.
+
+**AI:** apart from speech recognition, the app has **no AI features**. The "AI
+quick add" feature tried in earlier versions has been **removed entirely**; no
+text you write is sent out for AI processing. If such a feature is added in the
+future, this policy will be updated and the feature will remain clearly
+optional.
 
 ### 6. Crash reports
 

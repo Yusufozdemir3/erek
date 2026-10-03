@@ -26,7 +26,8 @@ import {
   fullDateLabel,
   type AccentKey,
 } from '@/ui/theme';
-import { WIDGET_NAME, writeSnapshot, type WidgetColors, type WidgetSnapshot } from './widgetSnapshot';
+import { writeSnapshot, type WidgetColors, type WidgetSnapshot } from './widgetSnapshot';
+import { applyAll, readPending, removePending, serialized } from './widgetQueue';
 
 // Same AsyncStorage keys as ThemeProvider — to read the theme preference
 // outside React (see src/ui/ThemeProvider.tsx).
@@ -84,6 +85,10 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     title: h.title,
     color: h.color ?? DEFAULT_HABIT_COLOR,
     completed: dayStates[h.id]?.completed ?? false,
+    kind: h.kind,
+    amount: dayStates[h.id]?.amount ?? 0,
+    target: h.target_amount,
+    unit: h.unit,
   }));
   const doneCount = habits.filter((h) => h.completed).length;
 
@@ -93,6 +98,10 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     title: translate(lang, 'widget.title'),
     summaryLabel: translate(lang, 'widget.summary', { done: doneCount, total: habits.length }),
     emptyLabel: translate(lang, 'widget.empty'),
+    summaryTemplate: translate(lang, 'widget.summary'),
+    staleLabel: translate(lang, 'widget.stale'),
+    counterTitle: translate(lang, 'widget.counterTitle'),
+    counterEmptyLabel: translate(lang, 'widget.counterEmpty'),
     doneCount,
     totalCount: habits.length,
     habits,
@@ -102,27 +111,56 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
 
 // Writes the snapshot and (on Android in a real build) re-renders the native
 // widget. An error must never break the app under any circumstance: every step is defensive.
+//
+// Widget taps not yet drained into SQLite are laid over the fresh snapshot, so
+// a refresh never briefly "un-checks" a habit the user just tapped.
 export async function refreshWidget(userId: string): Promise<void> {
   let snap: WidgetSnapshot;
   try {
-    snap = await buildTodaySnapshot(userId);
+    snap = await serialized(async () => {
+      const built = applyAll(await buildTodaySnapshot(userId), await readPending());
+      await writeSnapshot(built).catch(() => {});
+      return built;
+    });
   } catch {
     return; // couldn't read the data — leave the widget alone
   }
-  await writeSnapshot(snap).catch(() => {});
 
   if (Platform.OS !== 'android') return;
   try {
     // Lazy: only load the package when the native module exists (dev/prod build).
-    const { requestWidgetUpdate } = require('react-native-android-widget');
-    const React = require('react');
-    const { TodayWidget } = require('./TodayWidget');
-    await requestWidgetUpdate({
-      widgetName: WIDGET_NAME,
-      renderWidget: () => React.createElement(TodayWidget, { snapshot: snap }),
-      widgetNotFound: () => {},
-    });
+    const { updateWidgets } = require('./renderWidgets');
+    await updateWidgets(snap);
   } catch {
     // Expo Go, or no widget support — the snapshot was written, the native update was skipped.
   }
+}
+
+// Writes the widget taps queued by the headless handler into SQLite (see
+// widgetQueue.ts). Returns how many changed the data — the caller then bumps
+// dataVersion so the screens and the widget re-read. A tap for a habit that
+// was deleted meanwhile, or whose kind changed, is dropped.
+// Must NOT be awaited inside serialized() (it takes the same chain).
+export async function drainWidgetQueue(): Promise<number> {
+  return serialized(async () => {
+    const pending = await readPending();
+    let applied = 0;
+    for (const a of pending) {
+      try {
+        const habit = habitRepo.getById(a.habitId);
+        if (!habit || habit.deleted_at) continue;
+        if (a.kind === 'toggle' && habit.kind === 'binary') {
+          habitRepo.toggleLog(habit.id, a.date, a.completed);
+          applied++;
+        } else if (a.kind === 'inc' && habit.kind === 'numeric') {
+          habitRepo.incrementAmount(habit.id, a.date, a.delta, habit.target_amount);
+          applied++;
+        }
+      } catch {
+        // one bad entry must not block the rest; it's dropped with them
+      }
+    }
+    await removePending(pending.map((a) => a.id));
+    return applied;
+  });
 }

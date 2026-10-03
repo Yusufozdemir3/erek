@@ -30,6 +30,8 @@ export default function ProfileScreen() {
     ...(ACCOUNTS_ENABLED
       ? [{ icon: 'user', label: t('profile.accountSync'), href: '/account-sync' } as MenuRow]
       : []),
+    { icon: 'shield', label: t('profile.privacy'), href: '/privacy' },
+    { icon: 'compass', label: t('profile.setupWizard'), href: '/setup' },
   ];
 
   return (

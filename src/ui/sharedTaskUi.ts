@@ -9,13 +9,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { taskRepo } from '@/db';
-import type { Task } from '@/db';
+import { subtaskRepo, taskRepo } from '@/db';
+import type { Subtask, Task } from '@/db';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { nowIso } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { getCachedFriends, listConnections, type Friend } from '@/sync/friends';
-import { toggleSharedTask } from '@/sync/sharedTasks';
+import { toggleSharedSubtask, toggleSharedTask } from '@/sync/sharedTasks';
 import { sharingErrorKey, toSharingError } from '@/sync/sharingErrors';
 import { useOptionalAppData } from '@/ui/AppData';
 
@@ -111,6 +111,35 @@ export async function toggleSharedTaskOptimistic(
     taskRepo.applySharedCompletion(task.id, r.completedAt, r.updatedAt);
   } catch (e) {
     taskRepo.applySharedCompletion(task.id, task.completed_at, task.updated_at);
+    Alert.alert(t('friends.errorTitle'), t(sharingErrorKey(e)));
+    if (toSharingError(e).code === 'ERK_NOT_SHARED') onGone?.();
+  }
+  reload();
+}
+
+// A recipient ticking one subtask of a shared task. Same recipe as the task
+// itself: instant local feedback, the server's answer written back (including
+// the parent task, which completes/reopens with its subtasks), rollback on failure.
+export async function toggleSharedSubtaskOptimistic(
+  subtask: Subtask,
+  reload: () => void,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  onGone?: () => void
+): Promise<void> {
+  const completing = subtask.completed === 0;
+  const parent = taskRepo.getById(subtask.task_id);
+  // Optimistic: keep the old updated_at so the server's answer (newer) wins
+  // over this placeholder in any concurrent pull.
+  subtaskRepo.applySharedCompletion(subtask.id, completing, subtask.updated_at);
+  completing ? notifySuccess() : tapLight();
+  reload();
+  try {
+    const r = await toggleSharedSubtask(subtask.id, completing);
+    subtaskRepo.applySharedCompletion(subtask.id, r.completed, r.subtaskUpdatedAt);
+    taskRepo.applySharedCompletion(r.taskId, r.taskCompletedAt, r.taskUpdatedAt);
+  } catch (e) {
+    subtaskRepo.applySharedCompletion(subtask.id, !completing, subtask.updated_at);
+    if (parent) taskRepo.applySharedCompletion(parent.id, parent.completed_at, parent.updated_at);
     Alert.alert(t('friends.errorTitle'), t(sharingErrorKey(e)));
     if (toSharingError(e).code === 'ERK_NOT_SHARED') onGone?.();
   }

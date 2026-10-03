@@ -19,10 +19,28 @@ function rowToSubtask(row: any): Subtask {
   };
 }
 
+// A subtask of a task shared WITH me belongs to someone else: like the task
+// itself it must never be edited locally (it'd be queued for push and the
+// server would reject it). Mutations are dropped with a warning — not thrown:
+// an uncaught throw in a UI handler closes the app in a release build.
+function parentSharedWithMe(taskId: string): boolean {
+  const row = getDb().getFirstSync<{ shared_owner_uid: string | null }>(
+    `SELECT shared_owner_uid FROM tasks WHERE id = ?`,
+    [taskId]
+  );
+  if (row?.shared_owner_uid) {
+    console.warn('[subtaskRepo] Ignored a local edit to a subtask of a task shared with this user:', taskId);
+    return true;
+  }
+  return false;
+}
+
 export const subtaskRepo = {
   // New subtask; appended to the end of the list (position = current max + 1).
   create(taskId: string, title: string): Subtask {
     const db = getDb();
+    // Shared with me: nothing is written; the returned object just keeps callers working.
+    const dropped = parentSharedWithMe(taskId);
     const id = newId();
     const now = nowIso();
     const row = db.getFirstSync<{ maxPos: number | null }>(
@@ -30,11 +48,13 @@ export const subtaskRepo = {
       [taskId]
     );
     const position = (row?.maxPos ?? -1) + 1;
-    db.runSync(
-      `INSERT INTO subtasks (id, task_id, title, completed, position, updated_at, deleted_at, synced)
-       VALUES (?, ?, ?, 0, ?, ?, NULL, 0)`,
-      [id, taskId, title, position, now]
-    );
+    if (!dropped) {
+      db.runSync(
+        `INSERT INTO subtasks (id, task_id, title, completed, position, updated_at, deleted_at, synced)
+         VALUES (?, ?, ?, 0, ?, ?, NULL, 0)`,
+        [id, taskId, title, position, now]
+      );
+    }
     return {
       id,
       task_id: taskId,
@@ -91,9 +111,23 @@ export const subtaskRepo = {
 
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
+    // A subtask of a task shared with me is never touched here (its tick goes
+    // through applySharedCompletion below).
     db.runSync(
-      `UPDATE subtasks SET completed = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+      `UPDATE subtasks SET completed = ?, updated_at = ?, synced = 0
+       WHERE id = ? AND task_id NOT IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)`,
       [completed ? 1 : 0, nowIso(), id]
+    );
+  },
+
+  // Writes the server's answer to a tick of a subtask shared WITH me
+  // (toggle_shared_subtask RPC). synced stays 1: this mirrors the cloud row, it
+  // isn't a local edit to push. Only ever touches subtasks of shared-with-me tasks.
+  applySharedCompletion(id: string, completed: boolean, updatedAt: string): void {
+    getDb().runSync(
+      `UPDATE subtasks SET completed = ?, updated_at = ?, synced = 1
+       WHERE id = ? AND task_id IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)`,
+      [completed ? 1 : 0, updatedAt, id]
     );
   },
 
@@ -114,7 +148,8 @@ export const subtaskRepo = {
     const db = getDb();
     const now = nowIso();
     db.runSync(
-      `UPDATE subtasks SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+      `UPDATE subtasks SET deleted_at = ?, updated_at = ?, synced = 0
+       WHERE id = ? AND task_id NOT IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)`,
       [now, now, id]
     );
   },

@@ -53,6 +53,24 @@ jest.mock('expo-localization', () => ({
   getLocales: () => [{ languageCode: 'tr' }],
 }));
 
+// Speech recognizer (native-only module, throws on import under jest): a
+// device WITHOUT a recognizer, so the mic stays hidden. Voice-flow tests mock
+// '@/lib/voice' themselves (see TaskFormVoice.ui.test.tsx).
+jest.mock('expo-speech-recognition', () => ({
+  ExpoSpeechRecognitionModule: {
+    isRecognitionAvailable: () => false,
+    supportsOnDeviceRecognition: () => false,
+    getSupportedLocales: async () => ({ locales: [], installedLocales: [] }),
+    getMicrophonePermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+    requestMicrophonePermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
+    androidTriggerOfflineModelDownload: async () => ({ status: 'download_canceled', message: '' }),
+    start: () => {},
+    stop: () => {},
+    abort: () => {},
+  },
+  useSpeechRecognitionEvent: () => {},
+}));
+
 afterEach(() => {
   const g = globalThis as any;
   g.__pickers = {};

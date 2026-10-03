@@ -2,8 +2,12 @@
 // react-native-android-widget's own components (FlexWidget/TextWidget) — NOT
 // RN View/StyleSheet; these components get converted into Android
 // RemoteViews. Colors/data come from the snapshot (see widgetSnapshot.ts).
-// The whole card has an OPEN_APP click attached: tapping the widget opens the
-// app (the default route = the Today tab).
+//
+// TAPS: a binary habit's row checks it off / un-checks it, a numeric habit's
+// row adds +1 — both handled in the background without opening the app (see
+// widgetQueue.ts). A timer habit's row and everything outside the rows open
+// the app (the default route = the Today tab). A snapshot from an earlier day
+// takes no taps: it shows "open to refresh" and the whole card opens the app.
 //
 // IMPORTANT: this file imports react-native-android-widget; that package's
 // barrel must not load when there's no native module, i.e. in Expo Go. That's
@@ -12,33 +16,37 @@
 
 import * as React from 'react';
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
-import type { WidgetSnapshot } from './widgetSnapshot';
+import { FALLBACK_COLORS, type WidgetHabit, type WidgetSnapshot } from './widgetSnapshot';
+import { INC_ACTION, TOGGLE_ACTION, habitKind, isStale } from './widgetQueue';
 
 // The library wants colors as the `#rrggbb` template type; since the palette
 // keeps plain strings, we narrow it safely from a single spot.
-const hex = (s: string) => s as `#${string}`;
+export const hex = (s: string) => s as `#${string}`;
 
 // Max number of rows to show so it fits the widget; anything beyond is summarized as "+N".
 const MAX_ROWS = 7;
 
-// The light theme used if the widget is added before the app has ever been opened (no snapshot yet).
-const FALLBACK: WidgetSnapshot['colors'] = {
-  bg: '#f8fafc',
-  card: '#ffffff',
-  text: '#0f172a',
-  muted: '#64748b',
-  faint: '#94a3b8',
-  primary: '#2f5d45',
-  done: '#10b981',
-  border: '#e2e8f0',
-  onAccent: '#ffffff',
-};
+// "3/8" for a numeric habit (just "3" without a target).
+export function amountLabel(h: WidgetHabit): string {
+  const amount = h.amount ?? 0;
+  return h.target != null && h.target > 0 ? `${amount}/${h.target}` : String(amount);
+}
+
+// What tapping a row does: toggle / +1 in the background, or open the app.
+function rowClick(h: WidgetHabit): { clickAction: string; clickActionData?: Record<string, unknown> } {
+  const kind = habitKind(h);
+  if (kind === 'binary') return { clickAction: TOGGLE_ACTION, clickActionData: { habitId: h.id } };
+  if (kind === 'numeric') return { clickAction: INC_ACTION, clickActionData: { habitId: h.id } };
+  return { clickAction: 'OPEN_APP' };
+}
 
 export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
-  const c = snapshot?.colors ?? FALLBACK;
-  const habits = snapshot?.habits ?? [];
+  const c = snapshot?.colors ?? FALLBACK_COLORS;
+  const stale = isStale(snapshot);
+  const habits = stale ? [] : snapshot?.habits ?? [];
   const visible = habits.slice(0, MAX_ROWS);
   const overflow = habits.length - visible.length;
+  const emptyText = stale ? snapshot?.staleLabel ?? '' : snapshot?.emptyLabel ?? '';
 
   return (
     <FlexWidget
@@ -65,7 +73,7 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
           text={snapshot?.title ?? 'Erek'}
           style={{ fontSize: 16, fontWeight: '700', color: hex(c.text) }}
         />
-        {snapshot && snapshot.totalCount > 0 ? (
+        {snapshot && !stale && snapshot.totalCount > 0 ? (
           <TextWidget
             text={snapshot.summaryLabel}
             style={{ fontSize: 13, fontWeight: '600', color: hex(c.primary) }}
@@ -75,47 +83,49 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
         )}
       </FlexWidget>
 
-      {/* List or empty state */}
+      {/* List or empty/stale state */}
       {visible.length === 0 ? (
-        <TextWidget
-          text={snapshot?.emptyLabel ?? ''}
-          style={{ fontSize: 13, color: hex(c.muted), marginTop: 12 }}
-        />
+        <TextWidget text={emptyText} style={{ fontSize: 13, color: hex(c.muted), marginTop: 12 }} />
       ) : (
-        visible.map((h) => (
-          <FlexWidget
-            key={h.id}
-            style={{
-              width: 'match_parent',
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginTop: 10,
-            }}
-          >
-            {/* Color dot (the habit's color) */}
+        visible.map((h) => {
+          const numeric = habitKind(h) === 'numeric';
+          return (
             <FlexWidget
-              style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: hex(h.color) }}
-            />
-            {/* Title — fills the remaining space, truncated if it overflows */}
-            <FlexWidget style={{ flex: 1, marginLeft: 10, marginRight: 8 }}>
+              key={h.id}
+              {...rowClick(h)}
+              style={{
+                width: 'match_parent',
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginTop: 4,
+                paddingVertical: 5,
+              }}
+            >
+              {/* Color dot (the habit's color) */}
+              <FlexWidget
+                style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: hex(h.color) }}
+              />
+              {/* Title — fills the remaining space, truncated if it overflows */}
+              <FlexWidget style={{ flex: 1, marginLeft: 10, marginRight: 8 }}>
+                <TextWidget
+                  text={h.title}
+                  maxLines={1}
+                  truncate="END"
+                  style={{ fontSize: 14, color: h.completed ? hex(c.faint) : hex(c.text) }}
+                />
+              </FlexWidget>
+              {/* Status: amount for numeric habits, a check mark otherwise */}
               <TextWidget
-                text={h.title}
-                maxLines={1}
-                truncate="END"
-                style={{ fontSize: 14, color: h.completed ? hex(c.faint) : hex(c.text) }}
+                text={numeric && !h.completed ? `${amountLabel(h)} ＋` : h.completed ? '✓' : '○'}
+                style={{
+                  fontSize: numeric && !h.completed ? 13 : 15,
+                  fontWeight: '700',
+                  color: h.completed ? hex(c.done) : numeric ? hex(c.primary) : hex(c.faint),
+                }}
               />
             </FlexWidget>
-            {/* Status mark */}
-            <TextWidget
-              text={h.completed ? '✓' : '○'}
-              style={{
-                fontSize: 15,
-                fontWeight: '700',
-                color: h.completed ? hex(c.done) : hex(c.faint),
-              }}
-            />
-          </FlexWidget>
-        ))
+          );
+        })
       )}
 
       {overflow > 0 ? (

@@ -16,6 +16,7 @@ import {
 import { AppDataProvider } from '@/ui/AppData';
 import { LoginGate } from '@/ui/LoginScreen';
 import { OnboardingGate } from '@/ui/Onboarding';
+import { PushBridge } from '@/ui/PushBridge';
 import { TimerProvider } from '@/ui/TimerProvider';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
 import { I18nProvider, useI18n } from '@/i18n/I18nProvider';
@@ -24,9 +25,10 @@ import { loadHapticsPref } from '@/lib/haptics';
 import { Sentry } from '@/lib/sentry';
 
 // expo-notifications logs a warning in Expo Go that push (remote) notifications
-// aren't supported. Our usage is LOCAL notifications only; those work fine in
-// Expo Go. We suppress these expected warnings to keep the console clean.
-// (The real production solution is a development build.)
+// aren't supported. Reminders are LOCAL notifications and work fine in Expo Go;
+// push is only used for friend nudges, which need a real build anyway (and
+// fall back to the share sheet without one). We suppress these expected
+// warnings to keep the console clean.
 LogBox.ignoreLogs([
   'expo-notifications: Push notifications (remote notifications) functionality',
   '`expo-notifications` functionality is not fully supported in Expo Go',
@@ -83,6 +85,8 @@ function ThemedStack() {
         <Stack.Screen name="account-sync" options={{ headerShown: true, title: t('profile.accountSync'), presentation: 'modal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
         <Stack.Screen name="friends" options={{ headerShown: true, title: t('friends.title'), presentation: 'modal' }} />
+        <Stack.Screen name="privacy" options={{ headerShown: true, title: t('profile.privacy'), presentation: 'modal' }} />
+        <Stack.Screen name="setup" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen
           name="login"
           options={{ headerShown: true, title: t('login.title'), presentation: 'modal' }}
@@ -97,6 +101,8 @@ function ThemedStack() {
       {/* Login screen shown once after onboarding — skippable, manages its
           own flag, and never renders at all while ACCOUNTS_ENABLED is off. */}
       <LoginGate />
+      {/* Friend nudges: push registration + opening a tapped nudge. */}
+      <PushBridge />
     </NavThemeProvider>
   );
 }

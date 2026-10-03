@@ -6,8 +6,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Must be EXACTLY the same as the widget name defined in app.json's config plugin.
+// Must be EXACTLY the same as the widget names defined in app.json's config plugin.
 export const WIDGET_NAME = 'ErekToday';
+export const COUNTER_WIDGET_NAME = 'ErekCounter';
 export const SNAPSHOT_KEY = 'widget:today';
 
 export interface WidgetHabit {
@@ -15,6 +16,12 @@ export interface WidgetHabit {
   title: string;
   color: string; // the resolved color (the habit's color or the default)
   completed: boolean;
+  // Added with the tappable widgets; snapshots written by an older build lack
+  // them, so readers treat a missing kind as 'binary'.
+  kind?: 'binary' | 'numeric' | 'timer';
+  amount?: number; // numeric: today's amount
+  target?: number | null; // numeric: daily target
+  unit?: string | null;
 }
 
 // The colors the widget will render with — embedded in the snapshot so the
@@ -37,11 +44,31 @@ export interface WidgetSnapshot {
   title: string; // "Today" (localized)
   summaryLabel: string; // "3/5 completed" (localized)
   emptyLabel: string; // localized text shown when the list is empty
+  // "{done}/{total} completed" with the placeholders kept, so the widget can
+  // recount after an optimistic tap without the app. The four fields below are
+  // missing in snapshots written by an older build.
+  summaryTemplate?: string;
+  staleLabel?: string; // shown when the snapshot is from an earlier day
+  counterTitle?: string; // the counter widget's header
+  counterEmptyLabel?: string; // the counter widget's text when no numeric habit is due
   doneCount: number;
   totalCount: number;
   habits: WidgetHabit[];
   colors: WidgetColors;
 }
+
+// The light theme used if a widget is added before the app has ever been opened (no snapshot yet).
+export const FALLBACK_COLORS: WidgetColors = {
+  bg: '#f8fafc',
+  card: '#ffffff',
+  text: '#0f172a',
+  muted: '#64748b',
+  faint: '#94a3b8',
+  primary: '#2f5d45',
+  done: '#10b981',
+  border: '#e2e8f0',
+  onAccent: '#ffffff',
+};
 
 export async function writeSnapshot(s: WidgetSnapshot): Promise<void> {
   await AsyncStorage.setItem(SNAPSHOT_KEY, JSON.stringify(s));

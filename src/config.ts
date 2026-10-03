@@ -21,3 +21,7 @@
 // if Supabase (and EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID for Google sign-in) aren't
 // defined in .env, sync and the sign-in button stay disabled regardless.
 export const ACCOUNTS_ENABLED = true;
+
+// The published privacy policy (docs/privacy-policy.md, served from the separate
+// erek-privacy repo). The in-app Privacy page links here.
+export const PRIVACY_POLICY_URL = 'https://yusufozdemir3.github.io/erek-privacy/';

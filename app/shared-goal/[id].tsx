@@ -21,7 +21,8 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { deadlineLabel, percentLabel, shortDate } from '@/ui/theme';
 import { makeGoalStyles } from '@/ui/goal/goalStyles';
 import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';
-import { fmtAmount, fmtEntryWhen, fmtGoalValue } from '@/ui/goal/goalFormat';
+import { fmtAmount, fmtGoalValue } from '@/ui/goal/goalFormat';
+import { GoalEntryHistory } from '@/ui/goal/GoalEntryHistory';
 import { NUMBER_MAX_LEN } from '@/ui/formLimits';
 
 type Tab = 'overview' | 'stats';
@@ -97,6 +98,9 @@ export default function SharedGoalScreen() {
               {status === 'offline' ? ` · ${t('sharedHabit.offline')}` : ''}
             </Text>
             <NudgeButton
+              kind="goal"
+              itemId={id}
+              ownerName={ownerName}
               message={t('friends.nudgeGoalMessage', { name: ownerName, title: goal.title })}
             />
 
@@ -165,22 +169,13 @@ export default function SharedGoalScreen() {
                     </View>
                     <Text style={styles.milestoneHint}>{t('sharedGoal.contributeHint', { name: ownerName })}</Text>
 
-                    {stats.entries.length > 0 && (
-                      <View style={styles.entryHistory}>
-                        <Text style={styles.entryHistoryTitle}>{t('goal.entryHistory')}</Text>
-                        {stats.entries.map((e) => (
-                          <View key={e.id} style={styles.entryHistoryRow}>
-                            <Text style={[styles.entryHistoryAmount, e.amount < 0 && styles.entryHistoryAmountNeg]}>
-                              {e.amount >= 0 ? '+' : '-'}
-                              {fmtValue(Math.abs(e.amount))}
-                            </Text>
-                            <Text style={styles.entryHistoryDate}>
-                              {nameOf(e.added_by)} · {fmtEntryWhen(e.updated_at, lang)}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
+                    <GoalEntryHistory
+                      entries={stats.entries}
+                      unit={goal.unit}
+                      today={todayDate()}
+                      styles={styles}
+                      whoOf={nameOf}
+                    />
                   </>
                 ) : (
                   <Text style={styles.overviewLine}>

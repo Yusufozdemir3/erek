@@ -62,7 +62,18 @@
             {
               "name": "ErekToday",
               "label": "Erek — Bugün",
-              "description": "Bugüne planlı alışkanlıkların ve tamamlanma durumun",
+              "description": "Bugünün alışkanlıkları — dokunarak işaretle",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "ErekCounter",
+              "label": "Erek — Sayaç",
+              "description": "Su, sayfa gibi sayılı alışkanlıklara tek dokunuşla +1",
               "minWidth": "180dp",
               "minHeight": "110dp",
               "targetCellWidth": 3,
@@ -81,7 +92,9 @@
         }
       ],
       "./plugins/withAdsCompatibleGmsAds",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-speech-recognition",
+      "./plugins/withOptionalMicrophone"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1251,3 +1251,417 @@ end;
 $$;
 revoke all on function public.add_shared_goal_entry(uuid, double precision) from public, anon;
 grant execute on function public.add_shared_goal_entry(uuid, double precision) to authenticated;
+
+-- =============================================================================
+-- FRIENDS / SHARING — PHASE 5: nudges ("remind your friend" as a push)
+-- =============================================================================
+-- A friend who can see a shared habit/goal can nudge its OWNER. The app never
+-- sends a push itself: the send-nudge Edge Function (service role) calls
+-- prepare_nudge(), which checks everything in one place and returns the
+-- recipient's device tokens; the function hands them to Expo's push service.
+--
+-- Security model:
+--   - push_tokens has RLS on and NO policy: no client can read any token, not
+--     even its own. Written only through register/release below.
+--   - A token belongs to ONE account. Registering it under another account
+--     MOVES it (same phone, someone else signed in), so the previous account's
+--     nudges stop reaching that phone even if its sign-out cleanup never got to
+--     the server.
+--   - release_push_token() works WITHOUT a session, by the token itself: the
+--     device retries it after an offline sign-out. Tokens are never readable,
+--     so knowing one means being that device.
+--   - The push carries the item's title (shown after unlock). The Android
+--     channel hides it on a locked screen (lockscreenVisibility PRIVATE), so the
+--     lock screen shows only the system's "contents hidden" placeholder.
+--   - Limits: 1 nudge per item per sender per 12 h, 20 per sender and 30 per
+--     recipient per 24 h. Per-friend mute and a global opt-out are honoured
+--     WITHOUT telling the sender (so muting can't be probed). Unfriending
+--     revokes the shares, after which prepare_nudge refuses.
+--   - Every table references auth.users ON DELETE CASCADE: delete_account()
+--     also removes tokens, nudge history and mutes.
+
+create table if not exists public.push_tokens (
+  token text primary key check (char_length(token) between 10 and 200),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  locale text not null default 'en' check (locale in ('tr', 'en', 'de')),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_push_tokens_user on public.push_tokens(user_id);
+
+-- Kept only for the rate limits (pruned after 30 days in prepare_nudge).
+create table if not exists public.nudges (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid not null references auth.users(id) on delete cascade,
+  recipient_id uuid not null references auth.users(id) on delete cascade,
+  item_kind text not null check (item_kind in ('habit', 'goal')),
+  item_id uuid not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_nudges_sender on public.nudges(sender_id, created_at);
+create index if not exists idx_nudges_recipient on public.nudges(recipient_id, created_at);
+create index if not exists idx_nudges_created on public.nudges(created_at);
+
+create table if not exists public.nudge_mutes (
+  muter_id uuid not null references auth.users(id) on delete cascade,
+  muted_id uuid not null references auth.users(id) on delete cascade,
+  primary key (muter_id, muted_id)
+);
+
+-- Global "nudges from friends" switch. profiles stays self-read only (policy
+-- above), so friends never see it.
+alter table public.profiles add column if not exists nudges_enabled boolean not null default true;
+
+alter table public.push_tokens enable row level security;
+alter table public.nudges      enable row level security;
+alter table public.nudge_mutes enable row level security;
+-- No policies on any of the three: only the functions below touch them.
+
+-- Expo push tokens look like "ExponentPushToken[...]" (newer: "ExpoPushToken[...]").
+create or replace function public.register_push_token(p_token text, p_locale text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  if p_token is null or p_token !~ '^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,180}\]$' then
+    raise exception using message = 'ERK_INVALID_TOKEN';
+  end if;
+  insert into public.push_tokens (token, user_id, locale, updated_at)
+  values (p_token, v_uid, case when p_locale in ('tr', 'en', 'de') then p_locale else 'en' end, now())
+  on conflict (token) do update
+    set user_id = excluded.user_id, locale = excluded.locale, updated_at = now();
+  -- A handful of devices per account is plenty; the stalest ones drop out.
+  delete from public.push_tokens t
+  where t.user_id = v_uid
+    and t.token not in (
+      select t2.token from public.push_tokens t2
+      where t2.user_id = v_uid
+      order by t2.updated_at desc
+      limit 10
+    );
+end;
+$$;
+revoke all on function public.register_push_token(text, text) from public, anon;
+grant execute on function public.register_push_token(text, text) to authenticated;
+
+create or replace function public.release_push_token(p_token text)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  delete from public.push_tokens where token = p_token
+$$;
+revoke all on function public.release_push_token(text) from public;
+grant execute on function public.release_push_token(text) to anon, authenticated;
+
+create or replace function public.set_nudge_mute(p_friend uuid, p_muted boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  if p_muted then
+    insert into public.nudge_mutes (muter_id, muted_id)
+    select v_uid, p_friend
+    where public.are_connected(v_uid, p_friend)
+    on conflict do nothing;
+  else
+    delete from public.nudge_mutes m where m.muter_id = v_uid and m.muted_id = p_friend;
+  end if;
+end;
+$$;
+revoke all on function public.set_nudge_mute(uuid, boolean) from public, anon;
+grant execute on function public.set_nudge_mute(uuid, boolean) to authenticated;
+
+create or replace function public.set_nudges_enabled(p_enabled boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+  update public.profiles set nudges_enabled = coalesce(p_enabled, true) where id = v_uid;
+end;
+$$;
+revoke all on function public.set_nudges_enabled(boolean) from public, anon;
+grant execute on function public.set_nudges_enabled(boolean) to authenticated;
+
+-- The caller's own settings: the global switch and the friends they muted.
+create or replace function public.get_nudge_prefs()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'enabled', coalesce((select p.nudges_enabled from public.profiles p where p.id = (select auth.uid())), true),
+    'muted', coalesce((select jsonb_agg(m.muted_id) from public.nudge_mutes m
+                       where m.muter_id = (select auth.uid())), '[]'::jsonb)
+  )
+$$;
+revoke all on function public.get_nudge_prefs() from public, anon;
+grant execute on function public.get_nudge_prefs() to authenticated;
+
+-- Called ONLY by the send-nudge Edge Function (service role), with the
+-- sender's uid taken from their verified JWT. Clients can't call it: the
+-- answer contains the recipient's device tokens.
+create or replace function public.prepare_nudge(p_sender uuid, p_kind text, p_item_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_owner uuid;
+  v_title text;
+  v_tokens jsonb;
+begin
+  if p_sender is null or p_item_id is null or p_kind is null or p_kind not in ('habit', 'goal') then
+    return jsonb_build_object('status', 'forbidden');
+  end if;
+
+  -- The sender must currently receive this share, the owner must still own
+  -- the (not deleted) item, and the two must still be friends.
+  if p_kind = 'habit' then
+    select s.owner_id, h.title into v_owner, v_title
+    from public.habit_shares s
+    join public.habits h on h.id = s.habit_id and h.user_id = s.owner_id and h.deleted_at is null
+    where s.habit_id = p_item_id and s.shared_with_id = p_sender;
+  else
+    select s.owner_id, g.title into v_owner, v_title
+    from public.goal_shares s
+    join public.goals g on g.id = s.goal_id and g.user_id = s.owner_id and g.deleted_at is null
+    where s.goal_id = p_item_id and s.shared_with_id = p_sender;
+  end if;
+  if v_owner is null or not public.are_connected(v_owner, p_sender) then
+    return jsonb_build_object('status', 'forbidden');
+  end if;
+
+  delete from public.nudges n where n.created_at < now() - interval '30 days';
+
+  -- Limits are checked BEFORE recording: a refused attempt doesn't count.
+  if exists (
+    select 1 from public.nudges n
+    where n.sender_id = p_sender and n.item_kind = p_kind and n.item_id = p_item_id
+      and n.created_at > now() - interval '12 hours'
+  ) then
+    return jsonb_build_object('status', 'rate_limited_item');
+  end if;
+  if (select count(*) from public.nudges n
+      where n.sender_id = p_sender and n.created_at > now() - interval '24 hours') >= 20
+     or (select count(*) from public.nudges n
+         where n.recipient_id = v_owner and n.created_at > now() - interval '24 hours') >= 30 then
+    return jsonb_build_object('status', 'rate_limited');
+  end if;
+
+  insert into public.nudges (sender_id, recipient_id, item_kind, item_id)
+  values (p_sender, v_owner, p_kind, p_item_id);
+
+  -- Muted / switched off: recorded (it still counts toward the limits) but
+  -- not delivered, and answered like a delivered one by the Edge Function.
+  if exists (select 1 from public.nudge_mutes m where m.muter_id = v_owner and m.muted_id = p_sender)
+     or not coalesce((select p.nudges_enabled from public.profiles p where p.id = v_owner), true) then
+    return jsonb_build_object('status', 'muted');
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object('token', t.token, 'locale', t.locale)), '[]'::jsonb)
+  into v_tokens
+  from public.push_tokens t
+  where t.user_id = v_owner;
+  if jsonb_array_length(v_tokens) = 0 then
+    return jsonb_build_object('status', 'no_device');
+  end if;
+
+  return jsonb_build_object(
+    'status', 'ok',
+    'recipient', v_owner,
+    'sender_name', (select p.display_name from public.profiles p where p.id = p_sender),
+    'item_title', v_title,
+    'tokens', v_tokens
+  );
+end;
+$$;
+revoke all on function public.prepare_nudge(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.prepare_nudge(uuid, text, uuid) to service_role;
+
+-- =============================================================================
+-- FRIENDS / SHARING — PHASE 6: subtasks of a shared task
+-- =============================================================================
+-- A task shared with a friend now shows its subtasks too, and the friend can
+-- tick them off (still nothing else: titles, order and deletion stay with the
+-- owner). Same shape as the task itself (PHASE 3): the subtasks' SELECT policy
+-- widens to the share so the friend's own sync pull receives them, writes stay
+-- owner-only, and the friend's ONLY write path is toggle_shared_subtask().
+--
+-- Completion mirrors the owner's own rule (TaskEditModal): the parent task is
+-- done when every subtask is done, and reopens when one is unticked — decided
+-- here, in the same transaction, so both sides see one consistent result.
+
+drop policy if exists "own subtasks" on public.subtasks;
+drop policy if exists "subtasks select" on public.subtasks;
+drop policy if exists "subtasks insert" on public.subtasks;
+drop policy if exists "subtasks update" on public.subtasks;
+drop policy if exists "subtasks delete" on public.subtasks;
+create policy "subtasks select" on public.subtasks for select
+  using (exists (
+    select 1 from public.tasks t
+    where t.id = subtasks.task_id
+      and (
+        t.user_id = (select auth.uid())
+        or (t.shared_with_id = (select auth.uid()) and (select public.client_supports_sharing()))
+      )
+  ));
+create policy "subtasks insert" on public.subtasks for insert
+  with check (exists (
+    select 1 from public.tasks t where t.id = subtasks.task_id and t.user_id = (select auth.uid())
+  ));
+create policy "subtasks update" on public.subtasks for update
+  using (exists (
+    select 1 from public.tasks t where t.id = subtasks.task_id and t.user_id = (select auth.uid())
+  ))
+  with check (exists (
+    select 1 from public.tasks t where t.id = subtasks.task_id and t.user_id = (select auth.uid())
+  ));
+create policy "subtasks delete" on public.subtasks for delete
+  using (exists (
+    select 1 from public.tasks t where t.id = subtasks.task_id and t.user_id = (select auth.uid())
+  ));
+
+-- Lost-update guard, like tasks_sharing_guard(): an owner's OFFLINE edit made
+-- before the friend ticked a subtask must not undo that tick. Other columns
+-- (title, position) still go through; completion keeps the newer value.
+create or replace function public.subtasks_sharing_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'UPDATE' and new.updated_at < old.updated_at and exists (
+       select 1 from public.tasks t where t.id = old.task_id and t.shared_with_id is not null) then
+    new.completed := old.completed;
+    new.updated_at := old.updated_at;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.subtasks_sharing_guard() from public, anon, authenticated;
+
+drop trigger if exists trg_subtasks_sharing_guard on public.subtasks;
+create trigger trg_subtasks_sharing_guard
+  before update on public.subtasks
+  for each row execute function public.subtasks_sharing_guard();
+
+-- Sync pulls are incremental (server_updated_at). Subtasks that existed BEFORE
+-- the task was shared would never be pulled by the friend, so sharing touches
+-- them: updated_at stays as it is (last-writer-wins is unaffected), only the
+-- server timestamp moves.
+create or replace function public.tasks_share_touch_subtasks()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.shared_with_id is not null and new.shared_with_id is distinct from old.shared_with_id then
+    update public.subtasks s set updated_at = s.updated_at where s.task_id = new.id;
+  end if;
+  return null;
+end;
+$$;
+revoke all on function public.tasks_share_touch_subtasks() from public, anon, authenticated;
+
+drop trigger if exists trg_tasks_share_touch_subtasks on public.tasks;
+create trigger trg_tasks_share_touch_subtasks
+  after update of shared_with_id on public.tasks
+  for each row execute function public.tasks_share_touch_subtasks();
+
+-- The friend's ONLY way to tick a subtask. Returns the new state of the subtask
+-- AND of its parent task (which may have completed/reopened with it).
+create or replace function public.toggle_shared_subtask(p_subtask_id uuid, p_completed boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_task uuid;
+  v_completed integer := case when coalesce(p_completed, false) then 1 else 0 end;
+  v_sub_updated timestamptz;
+  v_open integer;
+  v_task_completed_at text;
+  v_task_updated timestamptz;
+begin
+  if v_uid is null then
+    raise exception using message = 'ERK_AUTH';
+  end if;
+
+  select s.task_id into v_task
+  from public.subtasks s
+  join public.tasks t on t.id = s.task_id
+  where s.id = p_subtask_id
+    and s.deleted_at is null
+    and t.shared_with_id = v_uid
+    and t.deleted_at is null
+    and t.recurrence is null
+    and public.are_connected(t.user_id, v_uid)
+  for update of s, t;
+  if v_task is null then
+    return jsonb_build_object('error', 'ERK_NOT_SHARED');
+  end if;
+
+  -- Strictly newer than the current row even if the owner's device clock runs
+  -- ahead of the server, so the lost-update guard never eats this tick.
+  update public.subtasks s
+  set completed = v_completed,
+      updated_at = greatest(now(), s.updated_at + interval '1 millisecond')
+  where s.id = p_subtask_id
+  returning s.updated_at into v_sub_updated;
+
+  select count(*) filter (where s.completed = 0) into v_open
+  from public.subtasks s
+  where s.task_id = v_task and s.deleted_at is null;
+
+  update public.tasks t
+  set completed_at = case
+        when v_open = 0 then to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+        else null
+      end,
+      updated_at = greatest(now(), t.updated_at + interval '1 millisecond')
+  where t.id = v_task
+    and ((v_open = 0 and t.completed_at is null) or (v_open > 0 and t.completed_at is not null));
+
+  select t.completed_at, t.updated_at into v_task_completed_at, v_task_updated
+  from public.tasks t where t.id = v_task;
+
+  return jsonb_build_object(
+    'completed', v_completed,
+    'subtask_updated_at', v_sub_updated,
+    'task_id', v_task,
+    'task_completed_at', v_task_completed_at,
+    'task_updated_at', v_task_updated
+  );
+end;
+$$;
+revoke all on function public.toggle_shared_subtask(uuid, boolean) from public, anon;
+grant execute on function public.toggle_shared_subtask(uuid, boolean) to authenticated;

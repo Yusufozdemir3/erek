@@ -34,6 +34,8 @@ import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
 import { getNotificationPrefs, soundContent, type NotificationPrefs } from '@/lib/notificationPrefs';
 import { ensureCustomSoundChannel } from '@/lib/customNotificationChannel';
+import { isNudgeData, NUDGE_CHANNEL_ID, parseNudgeData } from '@/lib/nudgePayload';
+import { nudgeRecipientUid } from '@/lib/nudgeRecipient';
 import type { Lang } from '@/i18n/translations';
 
 // Ensures the notification is shown even while the app is in the foreground.
@@ -43,7 +45,15 @@ import type { Lang } from '@/i18n/translations';
 // handler is only for a notification that's already scheduled/incoming).
 export function setNotificationHandler(): void {
   Notifications.setNotificationHandler({
-    handleNotification: async () => {
+    handleNotification: async (notification) => {
+      // A friend nudge addressed to another account (whoever was signed in on
+      // this phone before) is never shown. Background nudges are shown by the
+      // system without this handler — the server-side token handover on
+      // sign-in/sign-out is what keeps those right (sync/pushTokens.ts).
+      const data = notification.request.content.data;
+      if (isNudgeData(data) && !parseNudgeData(data, nudgeRecipientUid())) {
+        return { shouldShowAlert: false, shouldPlaySound: false, shouldSetBadge: false };
+      }
       const prefs = await getNotificationPrefs();
       return {
         shouldShowAlert: prefs.enabled,
@@ -128,7 +138,33 @@ export async function ensureAndroidChannel(): Promise<void> {
     sound: null,
     enableVibrate: false,
   });
+  // Friend nudges (push) get their own channel: they can be silenced in the
+  // system settings without touching reminders.
+  await Notifications.setNotificationChannelAsync(NUDGE_CHANNEL_ID, {
+    name: translate(lang, 'notif.channelFriends'),
+    importance: Notifications.AndroidImportance.HIGH,
+    // The push names the habit/goal: on a locked screen Android shows its
+    // "contents hidden" placeholder instead; the text appears after unlock.
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+    sound: 'default',
+    enableVibrate: true,
+    vibrationPattern: VIBRATION_PATTERN,
+  });
   await Notifications.deleteNotificationChannelAsync('habit-reminders').catch(() => {});
+  // First nudge channel (no lock-screen privacy): replaced by the -v2 one above.
+  await Notifications.deleteNotificationChannelAsync('friend-nudge').catch(() => {});
+}
+
+// Reads the OS notification permission WITHOUT asking (the setup wizard shows
+// the state before offering to ask). canAskAgain=false means only the phone's
+// settings can change it now.
+export async function notificationPermission(): Promise<{ granted: boolean; canAskAgain: boolean }> {
+  try {
+    const p = await Notifications.getPermissionsAsync();
+    return { granted: p.granted, canAskAgain: p.canAskAgain };
+  } catch {
+    return { granted: false, canAskAgain: true };
+  }
 }
 
 // Requests permission (won't ask again if already granted). Returns true if granted.

@@ -1071,6 +1071,117 @@ describe('paylaşılan görevler', () => {
   });
 });
 
+describe('paylaşılan görevin alt görevleri', () => {
+  const FRIEND = 'friend-uid';
+
+  const remoteTask = (): Row => ({
+    id: 't-shared',
+    user_id: FRIEND,
+    title: 'Market',
+    due_date: '2026-07-01',
+    end_time: null,
+    priority: 'medium',
+    recurrence: null,
+    remind_at: null,
+    completed_at: null,
+    updated_at: '2026-07-01T10:00:00.000Z',
+    deleted_at: null,
+    shared_with_id: UID,
+  });
+  const remoteSub = (id: string, extra: Row = {}): Row => ({
+    id,
+    task_id: 't-shared',
+    title: 'Süt',
+    completed: 0,
+    position: 0,
+    updated_at: '2026-07-01T10:00:00.000Z',
+    deleted_at: null,
+    ...extra,
+  });
+
+  it('arkadaşın görevinin alt görevleri pull ile gelir ve rozet sayısına yansır', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask()];
+    remoteData['subtasks'] = [remoteSub('s1'), remoteSub('s2', { title: 'Ekmek', position: 1, completed: 1 })];
+
+    await runSync(user.id);
+
+    expect(subtaskRepo.listByTask('t-shared').map((s) => s.title)).toEqual(['Süt', 'Ekmek']);
+    expect(subtaskRepo.countsForTasks(['t-shared'])).toEqual({ 't-shared': { done: 1, total: 2 } });
+  });
+
+  it('prepareFullResync her şeyi synced=0 yapsa bile başkasının alt görevi push edilmez', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const own = taskRepo.create({ user_id: user.id, title: 'Benim' });
+    const ownSub = subtaskRepo.create(own.id, 'Kendi alt görevim');
+    remoteData['tasks'] = [remoteTask()];
+    remoteData['subtasks'] = [remoteSub('s1')];
+    await runSync(user.id);
+    upserts = [];
+
+    await prepareFullResync();
+    const result = await runSync(user.id);
+
+    expect(result.status).toBe('ok');
+    const pushed = upserts.filter((u) => u.table === 'subtasks').flatMap((u) => u.payload.map((p) => p.id));
+    expect(pushed).toContain(ownSub.id);
+    expect(pushed).not.toContain('s1');
+  });
+
+  it('başkasının alt görevi bekleyen değişiklik sayılmaz (çıkış uyarısı yanlış çalmaz)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask()];
+    remoteData['subtasks'] = [remoteSub('s1')];
+    await runSync(user.id);
+    await prepareFullResync(); // her satır synced=0
+
+    expect(pendingChangeCount()).toBe(0);
+  });
+
+  it('paylaşım bitince görevle birlikte alt görevleri de silinir', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask()];
+    remoteData['subtasks'] = [remoteSub('s1')];
+    await runSync(user.id);
+
+    remoteData['tasks'] = [{ ...remoteTask(), shared_with_id: null }];
+    await runSync(user.id);
+
+    expect(subtaskRepo.listByTask('t-shared')).toEqual([]);
+    expect(getDb().getAllSync(`SELECT id FROM subtasks WHERE task_id = 't-shared'`)).toEqual([]);
+  });
+
+  it('arkadaşın yerelde işareti ve silmesi yok sayılır; RPC sonucu kuyruğa girmeden yazılır', async () => {
+    const user = userRepo.getOrCreateLocal();
+    remoteData['tasks'] = [remoteTask()];
+    remoteData['subtasks'] = [remoteSub('s1')];
+    await runSync(user.id);
+
+    subtaskRepo.setCompleted('s1', true);
+    subtaskRepo.softDelete('s1');
+    subtaskRepo.create('t-shared', 'Sızdırılmış');
+    expect(subtaskRepo.listByTask('t-shared')).toHaveLength(1);
+    expect(subtaskRepo.listByTask('t-shared')[0]).toMatchObject({ completed: 0, deleted_at: null, synced: 1 });
+
+    subtaskRepo.applySharedCompletion('s1', true, '2026-07-01T12:00:00.000Z');
+    expect(subtaskRepo.listByTask('t-shared')[0]).toMatchObject({
+      completed: 1,
+      updated_at: '2026-07-01T12:00:00.000Z',
+      synced: 1,
+    });
+  });
+
+  it('applySharedCompletion kendi alt görevime dokunmaz', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const own = taskRepo.create({ user_id: user.id, title: 'Benim' });
+    const sub = subtaskRepo.create(own.id, 'Kendi');
+
+    subtaskRepo.applySharedCompletion(sub.id, true, '2026-07-01T12:00:00.000Z');
+
+    expect(subtaskRepo.listByTask(own.id)[0]).toMatchObject({ completed: 0, synced: 0 });
+  });
+});
+
 // DATA BELONGS TO THE ACCOUNT (2026-10-01): sign-out forgets the account's data
 // on the device; the only thing that may stop it is a real data-loss warning
 // based on pendingChangeCount().

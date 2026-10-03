@@ -23,6 +23,27 @@ export const makeTaskFormStyles = (c: Colors) =>
       marginBottom: 12,
     },
     row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
+    // Title + mic. The input keeps its own bottom margin, so the counter
+    // below sits where it always did.
+    titleRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+    titleInput: { flex: 1 },
+    // Fields just filled by voice — same border weight, accent tint.
+    voiceFilled: { borderColor: c.primary, backgroundColor: c.primarySoft },
+    voiceLive: { fontSize: 13, fontStyle: 'italic', color: c.primary, marginTop: -4, marginBottom: 12 },
+    voiceError: { fontSize: 12, color: c.danger, marginTop: -4, marginBottom: 12 },
+    voiceNote: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginTop: -4,
+      marginBottom: 12,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: c.track,
+    },
+    voiceHeard: { fontSize: 12, color: c.muted },
+    voiceUndo: { fontSize: 13, fontWeight: '700', color: c.primary },
     chip: {
       flex: 1,
       alignItems: 'center',

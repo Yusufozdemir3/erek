@@ -58,3 +58,8 @@ yarn-error.*
 
 expo-env.d.ts
 # @end expo-cli
+
+# Firebase istemci yapılandırması (push bildirimleri). APK içine zaten girer, ama
+# herkese açık depoda durmasın: yerel derleme kökten, EAS GOOGLE_SERVICES_JSON
+# dosya değişkeninden okur (bkz. app.config.js, docs/push-setup.md).
+/google-services.json

@@ -1,10 +1,13 @@
 // "Appearance" sub-screen of Profile — theme, accent color, language, the
-// Today-screen preference and in-app haptics. Split out of the Profile page,
-// which grew too long as one flat list.
+// Today-screen preference, in-app haptics and the voice-input consent. Split
+// out of the Profile page, which grew too long as one flat list.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
+import { getVoiceSupport } from '@/lib/voice';
+import { speechLocale } from '@/lib/voiceLogic';
+import { getOnlineConsent, setOnlineConsent } from '@/lib/voicePrefs';
 import { makeProfileStyles } from '@/ui/profileStyles';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -31,6 +34,26 @@ export default function AppearanceScreen() {
     setHaptics(value);
     setHapticsEnabled(value).catch(() => {});
     if (value) tapLight(); // one sample buzz when turning it on so the user feels what they just enabled
+  };
+
+  // Voice input: where the consent to Google's online recognition can be
+  // taken back. The card only exists on phones that have a recognizer.
+  const [voiceShown, setVoiceShown] = useState(false);
+  const [voiceOnline, setVoiceOnline] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getVoiceSupport(speechLocale(lang)), getOnlineConsent()]).then(([support, consent]) => {
+      if (!alive) return;
+      setVoiceShown(support !== 'unavailable');
+      setVoiceOnline(consent);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [lang]);
+  const toggleVoiceOnline = (value: boolean) => {
+    setVoiceOnline(value);
+    setOnlineConsent(value).catch(() => {});
   };
 
   return (
@@ -145,6 +168,21 @@ export default function AppearanceScreen() {
         </View>
         <Text style={styles.hint}>{t('profile.hapticsHint')}</Text>
       </View>
+
+      {voiceShown && (
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <Text style={styles.cardTitle}>{t('profile.voice')}</Text>
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t('profile.voiceOnline')}</Text>
+            <Switch
+              value={voiceOnline}
+              onValueChange={toggleVoiceOnline}
+              {...switchColors(colors, voiceOnline)}
+            />
+          </View>
+          <Text style={styles.hint}>{t('profile.voiceOnlineHint')}</Text>
+        </View>
+      )}
     </ScrollView>
   );
 }

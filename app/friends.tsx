@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   Share,
@@ -23,18 +24,24 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import {
   getCachedFriends,
   getInvite,
+  getNudgePrefs,
   INVITE_CODE_LENGTH,
   listConnections,
   normalizeInviteCode,
   redeemInvite,
   removeConnection,
+  setNudgeMute,
   sharingErrorKey,
   type Friend,
   type Invite,
 } from '@/sync';
+import { ensurePermission } from '@/lib/notifications';
+import { syncPushRegistration } from '@/lib/pushRegistration';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -67,6 +74,10 @@ export default function FriendsScreen() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [code, setCode] = useState('');
   const [redeemBusy, setRedeemBusy] = useState(false);
+  // Friend nudges: whom the user muted, and whether this phone can show
+  // notifications at all (without it, friends' reminders can't reach them).
+  const [muted, setMuted] = useState<ReadonlySet<string>>(new Set());
+  const [notifOk, setNotifOk] = useState(true);
   // Ignores results that arrive after the screen lost focus / a newer load started.
   const loadSeq = useRef(0);
 
@@ -91,6 +102,16 @@ export default function FriendsScreen() {
       .finally(() => {
         if (seq === loadSeq.current) setListLoading(false);
       });
+    getNudgePrefs()
+      .then((prefs) => {
+        if (prefs && seq === loadSeq.current) setMuted(new Set(prefs.muted));
+      })
+      .catch(() => {});
+    Notifications.getPermissionsAsync()
+      .then((p) => {
+        if (seq === loadSeq.current) setNotifOk(p.granted);
+      })
+      .catch(() => {});
   }, [t]);
 
   useFocusEffect(
@@ -137,6 +158,35 @@ export default function FriendsScreen() {
     }
   };
 
+  // Optimistic; put back if the server didn't take it.
+  const toggleMute = async (friend: Friend) => {
+    const next = !muted.has(friend.id);
+    const apply = (on: boolean) =>
+      setMuted((prev) => {
+        const s = new Set(prev);
+        if (on) s.add(friend.id);
+        else s.delete(friend.id);
+        return s;
+      });
+    apply(next);
+    if (!(await setNudgeMute(friend.id, next).catch(() => false))) {
+      apply(!next);
+      Alert.alert(t('friends.errorTitle'), t('friends.err.ERK_NETWORK'));
+    }
+  };
+
+  const enableNotifications = async () => {
+    const p = await Notifications.getPermissionsAsync().catch(() => null);
+    if (p && !p.granted && !p.canAskAgain) {
+      Linking.openSettings().catch(() => {});
+      return;
+    }
+    if (await ensurePermission().catch(() => false)) {
+      setNotifOk(true);
+      syncPushRegistration(authUser?.id ?? null, lang);
+    }
+  };
+
   const confirmRemove = (friend: Friend) => {
     const name = friend.displayName ?? t('friends.unknownName');
     Alert.alert(t('friends.removeTitle'), t('friends.removeBody', { name }), [
@@ -171,6 +221,14 @@ export default function FriendsScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('friends.listTitle')}</Text>
         {listError && <Text style={styles.errText}>{listError}</Text>}
+        {friends.length > 0 && !notifOk && (
+          <View style={styles.nudgeHint}>
+            <Text style={styles.nudgeHintText}>{t('nudge.permissionHint')}</Text>
+            <Pressable onPress={enableNotifications} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.nudgeHintAction}>{t('nudge.enableNotifications')}</Text>
+            </Pressable>
+          </View>
+        )}
         {friends.length === 0 ? (
           listLoading ? (
             <ActivityIndicator color={colors.primary} />
@@ -186,6 +244,19 @@ export default function FriendsScreen() {
                 <Text style={styles.friendName} numberOfLines={1}>
                   {name}
                 </Text>
+                <Pressable
+                  onPress={() => toggleMute(f)}
+                  hitSlop={8}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: !muted.has(f.id) }}
+                  accessibilityLabel={t('nudge.fromA11y', { name })}
+                >
+                  <Feather
+                    name={muted.has(f.id) ? 'bell-off' : 'bell'}
+                    size={18}
+                    color={muted.has(f.id) ? colors.faint : colors.primary}
+                  />
+                </Pressable>
                 <Pressable
                   onPress={() => confirmRemove(f)}
                   hitSlop={8}
@@ -347,4 +418,7 @@ const makeStyles = (c: Colors) =>
     avatarInitial: { color: c.primary, fontWeight: '800', fontSize: 15 },
     friendName: { flex: 1, fontSize: 15, fontWeight: '600', color: c.text },
     removeText: { color: c.danger, fontSize: 13, fontWeight: '700' },
+    nudgeHint: { backgroundColor: c.primarySoft, borderRadius: 10, padding: 12, gap: 6, marginBottom: 8 },
+    nudgeHintText: { fontSize: 13, color: c.text },
+    nudgeHintAction: { fontSize: 13, fontWeight: '700', color: c.primary },
   });

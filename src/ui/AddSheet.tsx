@@ -184,6 +184,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   submitLabel={t('common.add')}
                   autoFocusTitle
                   enableSubtaskDraft
+                  enableVoice
                   shareFriends={friends}
                   onSubmit={addTask}
                 />

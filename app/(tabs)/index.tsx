@@ -10,7 +10,7 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { habitRepo, reminderRepo, taskRepo } from '@/db';
+import { habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
@@ -19,6 +19,7 @@ import { refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
+import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { WeekStrip } from '@/ui/WeekStrip';
@@ -68,6 +69,8 @@ export default function TodayScreen() {
 
   const [showPicker, setShowPicker] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // A task shared WITH me that has subtasks: opens a window to tick them.
+  const [viewingShared, setViewingShared] = useState<Task | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   // Finished items sit in a collapsed "Completed (N)" section (like the Tasks tab).
   const [completedOpen, setCompletedOpen] = useState(false);
@@ -147,6 +150,10 @@ export default function TodayScreen() {
 
   const openTask = (t: Task) => {
     if (t.shared_owner_uid) {
+      if (subtaskRepo.countForTask(t.id).total > 0) {
+        setViewingShared(t);
+        return;
+      }
       Alert.alert(t.title, tr('share.readOnlyTask', { name: friendNames.get(t.shared_owner_uid) ?? tr('friends.unknownName') }));
       return;
     }
@@ -448,6 +455,12 @@ export default function TodayScreen() {
       <Confetti burstId={burstId} />
 
       <TaskEditModal task={editingTask} onClose={() => setEditingTask(null)} onChanged={reload} />
+      <SharedTaskModal
+        task={viewingShared}
+        ownerName={(viewingShared?.shared_owner_uid && friendNames.get(viewingShared.shared_owner_uid)) || tr('friends.unknownName')}
+        onClose={() => setViewingShared(null)}
+        onChanged={reload}
+      />
     </SafeAreaView>
   );
 }

@@ -46,6 +46,9 @@ export default function SharedHabitScreen() {
           <>
             {shared && (
               <NudgeButton
+                kind="habit"
+                itemId={id}
+                ownerName={shared.owner.displayName ?? t('friends.unknownName')}
                 message={t('friends.nudgeHabitMessage', {
                   name: shared.owner.displayName ?? t('friends.unknownName'),
                   title: habit.title,

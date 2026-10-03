@@ -97,6 +97,11 @@ export const makeGoalStyles = (c: Colors) =>
     entryHistoryAmount: { fontSize: 14, fontWeight: '700', color: c.primary },
     entryHistoryAmountNeg: { color: c.danger },
     entryHistoryDate: { fontSize: 12, color: c.faint },
+    entryHistoryDayTitle: { fontSize: 12, fontWeight: '700', color: c.muted, marginTop: 12, marginBottom: 2 },
+    entryHistoryAmountWrap: { flexShrink: 1 },
+    entryHistoryWhen: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    entryHistoryShowOlder: { alignItems: 'center', paddingVertical: 12, marginTop: 4 },
+    entryHistoryShowOlderText: { fontSize: 13, fontWeight: '600', color: c.primary },
 
     completeToggleBtn: {
       paddingHorizontal: 14,

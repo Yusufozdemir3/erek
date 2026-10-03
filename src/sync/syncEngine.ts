@@ -142,6 +142,11 @@ export const TABLES: TableCfg[] = [
     cols: ['id', 'task_id', 'title', 'completed', 'position', 'updated_at', 'deleted_at'],
     hasUserId: false, // ownership flows through the parent task (RLS too)
     defaults: { completed: 0, position: 0 },
+    // Subtasks of a task shared WITH me arrive on pull (the friend's RLS reaches
+    // them) but are someone else's rows: never pushed back. Without this, a
+    // full resync (every row marked synced=0) would push them and RLS would
+    // reject the batch.
+    pushWhere: 'task_id NOT IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)',
   },
 ];
 

@@ -17,7 +17,8 @@ import { runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
-import { refreshWidget } from '@/widget/widgetData';
+import { drainWidgetQueue, refreshWidget } from '@/widget/widgetData';
+import { onWidgetAction } from '@/widget/widgetQueue';
 
 interface AppData {
   user: User;
@@ -220,6 +221,31 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (user) refreshWidget(user.id);
   }, [user, dataVersion]);
+
+  // Taps on the home-screen widgets (check-off / +1) are queued by the
+  // headless handler, which can't use SQLite (see widget/widgetQueue.ts).
+  // Written into SQLite once the user is ready, on every foreground, and right
+  // away when a tap arrives while the app's JS is alive. A drain that changed
+  // something bumps dataVersion → the screens reload and the widget refreshes.
+  useEffect(() => {
+    if (!user) return;
+    const drain = () => {
+      drainWidgetQueue()
+        .then((n) => {
+          if (n > 0) notifyDataChanged();
+        })
+        .catch(() => {});
+    };
+    drain();
+    const unsubscribe = onWidgetAction(drain);
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') drain();
+    });
+    return () => {
+      unsubscribe();
+      sub.remove();
+    };
+  }, [user, notifyDataChanged]);
 
   // Also refresh when the app comes to the foreground: time spent in the
   // background, a day rollover, and theme/language changes (made in Profile)

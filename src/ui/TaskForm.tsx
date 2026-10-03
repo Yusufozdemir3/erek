@@ -12,6 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import type { Priority, Recurrence } from '@/db';
 import type { Friend } from '@/sync/friends';
 import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
+import { parseTask } from '@/lib/quickAdd/parseTask';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { ReminderListEditor } from '@/ui/ReminderListEditor';
@@ -21,6 +22,9 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { makeTaskFormStyles } from '@/ui/taskFormStyles';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, shortDate } from '@/ui/theme';
+import { useVoiceInput } from '@/ui/useVoiceInput';
+import { VoiceButton } from '@/ui/VoiceButton';
+import { voicePatch } from '@/ui/voiceTaskPatch';
 
 // Day buttons in the recurrence picker (Monday through Sunday; wd = JS getDay).
 // Same pattern as HabitForm's frequency picker — consistent look.
@@ -81,9 +85,24 @@ interface Props {
   // Connected friends the task can be shared with; the section is hidden when
   // empty (signed out, or no friends yet). Passed in so this form stays pure.
   shareFriends?: Friend[];
+  // Creation only: a mic next to the title. The spoken sentence fills the
+  // fields it mentions (lib/quickAdd); the user still confirms with submit.
+  enableVoice?: boolean;
 }
 
-export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children, enableSubtaskDraft, shareFriends = [] }: Props) {
+// Form values before a voice fill, so one tap can undo it.
+interface VoiceSnapshot {
+  title: string;
+  priority: Priority;
+  dueDate: string;
+  dueTime: string | null;
+  endTime: string | null;
+  remindTimes: string[];
+}
+
+type VoiceField = 'title' | 'priority' | 'date' | 'time' | 'remind';
+
+export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children, enableSubtaskDraft, shareFriends = [], enableVoice = false }: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeTaskFormStyles(colors);
@@ -148,6 +167,54 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [sharedWith, setSharedWith] = useState<string | null>(initial?.shared_with_id ?? null);
   // Recurring tasks can't be shared (the server would drop the share anyway).
   const shareBlocked = repeatMode !== 'none';
+
+  // Voice fill: only the fields the sentence mentions change; what was heard
+  // and the previous values stay on screen until the title is edited by hand.
+  const [voiceNote, setVoiceNote] = useState<{
+    heard: string;
+    truncated: boolean;
+    filled: VoiceField[];
+    prev: VoiceSnapshot;
+  } | null>(null);
+  const voice = useVoiceInput((heard) => {
+    const patch = voicePatch(parseTask(heard, lang, new Date()), { dueDate, remindTimes }, todayDate());
+    const prev: VoiceSnapshot = { title, priority, dueDate, dueTime, endTime, remindTimes };
+    const filled: VoiceField[] = [];
+    if (patch.title !== undefined) {
+      setTitle(patch.title);
+      filled.push('title');
+    }
+    if (patch.priority) {
+      setPriority(patch.priority);
+      filled.push('priority');
+    }
+    if (patch.dueDate) {
+      setDueDate(patch.dueDate);
+      filled.push('date');
+    }
+    if (patch.dueTime) {
+      setDueTime(patch.dueTime);
+      if (endTime && endTime <= patch.dueTime) setEndTime(null);
+      filled.push('time');
+    }
+    if (patch.remindTimes) {
+      setRemindTimes(patch.remindTimes);
+      filled.push('remind');
+    }
+    setVoiceNote({ heard, truncated: patch.titleTruncated, filled, prev });
+  }, enableVoice);
+  const undoVoice = () => {
+    if (!voiceNote) return;
+    const p = voiceNote.prev;
+    setTitle(p.title);
+    setPriority(p.priority);
+    setDueDate(p.dueDate);
+    setDueTime(p.dueTime);
+    setEndTime(p.endTime);
+    setRemindTimes(p.remindTimes);
+    setVoiceNote(null);
+  };
+  const voiceMark = (f: VoiceField) => (voiceNote?.filled.includes(f) ? styles.voiceFilled : null);
   // Keep a current share visible even if that person is no longer in the list,
   // so it can still be removed.
   const shareOptions: { id: string; name: string }[] = shareFriends.map((f) => ({
@@ -225,20 +292,50 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
 
   return (
     <>
-      {/* Title */}
+      {/* Title (+ the mic when voice input is on) */}
       <Text style={styles.label}>{t('task.title')}</Text>
-      <TextInput
-        style={styles.input}
-        value={title}
-        onChangeText={setTitle}
-        placeholder={t('task.titlePlaceholder')}
-        placeholderTextColor={colors.faint}
-        autoFocus={autoFocusTitle}
-        maxLength={TITLE_MAX_LEN}
-      />
+      <View style={styles.titleRow}>
+        <TextInput
+          style={[styles.input, styles.titleInput, voiceMark('title')]}
+          value={title}
+          onChangeText={(v) => {
+            setTitle(v);
+            if (voiceNote) setVoiceNote(null); // edited by hand: no undo of the voice fill
+          }}
+          placeholder={t('task.titlePlaceholder')}
+          placeholderTextColor={colors.faint}
+          autoFocus={autoFocusTitle}
+          maxLength={TITLE_MAX_LEN}
+        />
+        {voice.supported && <VoiceButton listening={voice.listening} onPress={voice.toggle} />}
+      </View>
       <Text style={styles.counter}>
         {title.length}/{TITLE_MAX_LEN}
       </Text>
+      {voice.listening ? (
+        <Text style={styles.voiceLive} accessibilityLiveRegion="polite">
+          {voice.partial ? `“${voice.partial}”` : t('voice.listening')}
+        </Text>
+      ) : (
+        <>
+          {voice.error && <Text style={styles.voiceError}>{voice.error}</Text>}
+          {voiceNote && (
+            <View style={styles.voiceNote}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.voiceHeard} numberOfLines={3}>
+                  {t('voice.heard', { text: voiceNote.heard })}
+                </Text>
+                {voiceNote.truncated && (
+                  <Text style={styles.voiceHeard}>{t('voice.titleTruncated', { max: TITLE_MAX_LEN })}</Text>
+                )}
+              </View>
+              <Pressable onPress={undoVoice} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.voiceUndo}>{t('voice.undo')}</Text>
+              </Pressable>
+            </View>
+          )}
+        </>
+      )}
 
       {/* Priority */}
       <Text style={styles.label}>{t('task.priority')}</Text>
@@ -263,7 +360,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       {/* Due date — required, cannot be removed */}
       <Text style={styles.label}>{t('task.dueDate')}</Text>
       <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setShowPicker(true)}>
+        <Pressable style={[styles.dateBtn, voiceMark('date')]} onPress={() => setShowPicker(true)}>
           <Text style={styles.dateBtnText}>{longDateLabel(dueDate, lang, t('date.noDate'))}</Text>
         </Pressable>
       </View>
@@ -278,7 +375,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       {/* Time — optional */}
       <Text style={styles.label}>{t('task.timeOptional')}</Text>
       <View style={styles.row}>
-        <Pressable style={styles.dateBtn} onPress={() => setShowTimePicker(true)}>
+        <Pressable style={[styles.dateBtn, voiceMark('time')]} onPress={() => setShowTimePicker(true)}>
           <Text style={styles.dateBtnText}>{timeLabel(dueTime)}</Text>
         </Pressable>
         {dueTime && (

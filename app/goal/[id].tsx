@@ -32,7 +32,8 @@ import { deadlineLabel, percentLabel, shortDate } from '@/ui/theme';
 import { makeGoalStyles, type GoalStyles } from '@/ui/goal/goalStyles';
 import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';
 import { LinkedHabitRow } from '@/ui/goal/GoalStatCards';
-import { fmtAmount, fmtEntryWhen, fmtGoalValue } from '@/ui/goal/goalFormat';
+import { fmtAmount, fmtGoalValue } from '@/ui/goal/goalFormat';
+import { GoalEntryHistory } from '@/ui/goal/GoalEntryHistory';
 import { GoalShareSection } from '@/ui/goal/GoalShareSection';
 import { useFriendNames } from '@/ui/sharedTaskUi';
 
@@ -288,33 +289,14 @@ export default function GoalDetailScreen() {
                       </Pressable>
                     </View>
 
-                    {/* Entry history — so the user can see it with dates (see the file-header comment). */}
-                    {stats.entries.length > 0 && (
-                      <View style={styles.entryHistory}>
-                        <Text style={styles.entryHistoryTitle}>{t('goal.entryHistory')}</Text>
-                        {stats.entries.map((e) => (
-                          <View key={e.id} style={styles.entryHistoryRow}>
-                            <Text
-                              style={[
-                                styles.entryHistoryAmount,
-                                e.amount < 0 && styles.entryHistoryAmountNeg,
-                              ]}
-                            >
-                              {e.amount >= 0 ? '+' : '-'}
-                              {isTimeUnit(goal.unit)
-                                ? fmtClock(Math.abs(e.amount))
-                                : `${fmtAmount(Math.abs(e.amount))}${goal.unit ? ` ${goal.unit}` : ''}`}
-                            </Text>
-                            <Text style={styles.entryHistoryDate}>
-                              {e.added_by
-                                ? `👥 ${contributorNames.get(e.added_by) ?? t('friends.unknownName')} · `
-                                : ''}
-                              {fmtEntryWhen(e.updated_at, lang)}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
+                    {/* Entry history — merged per minute, grouped per day (see GoalEntryHistory). */}
+                    <GoalEntryHistory
+                      entries={stats.entries}
+                      unit={goal.unit}
+                      today={todayDate()}
+                      styles={styles}
+                      whoOf={(by) => (by ? contributorNames.get(by) ?? t('friends.unknownName') : null)}
+                    />
                   </>
                 ) : (
                   <View style={styles.entryRow}>

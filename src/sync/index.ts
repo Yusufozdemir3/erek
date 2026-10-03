@@ -31,6 +31,7 @@ export {
   type Invite,
 } from './friends';
 export { SharingError, sharingErrorKey, toSharingError, type SharingErrorCode } from './sharingErrors';
+export { sendNudge, getNudgePrefs, setNudgeMute, setNudgesEnabled, type NudgePrefs } from './nudges';
 export {
   shareHabit,
   unshareHabit,

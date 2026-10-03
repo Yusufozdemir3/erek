@@ -33,6 +33,7 @@ import { MetaLine } from '@/ui/MetaLine';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
+import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -62,6 +63,8 @@ export default function TasksScreen() {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // A task shared WITH me that has subtasks: opens a window to tick them.
+  const [viewingShared, setViewingShared] = useState<Task | null>(null);
   // Only one card's swipe actions may be open at a time.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
   // The "1/3 subtasks" badge on a task card; only tasks that have subtasks get an entry.
@@ -115,9 +118,14 @@ export default function TasksScreen() {
     return uid ? (friendNames.get(uid) ?? tr('friends.unknownName')) : null;
   };
 
-  // A task shared WITH me: read-only except the check-off (see sharedTaskUi).
+  // A task shared WITH me: read-only except the check-off and its subtasks'
+  // check-offs (see sharedTaskUi).
   const openTask = (t: Task) => {
     if (t.shared_owner_uid) {
+      if (subtaskRepo.countForTask(t.id).total > 0) {
+        setViewingShared(t);
+        return;
+      }
       Alert.alert(t.title, tr('share.readOnlyTask', { name: friendNames.get(t.shared_owner_uid) ?? tr('friends.unknownName') }));
       return;
     }
@@ -309,6 +317,12 @@ export default function TasksScreen() {
       />
 
       <TaskEditModal task={editingTask} onClose={() => setEditingTask(null)} onChanged={reload} />
+      <SharedTaskModal
+        task={viewingShared}
+        ownerName={(viewingShared?.shared_owner_uid && friendNames.get(viewingShared.shared_owner_uid)) || tr('friends.unknownName')}
+        onClose={() => setViewingShared(null)}
+        onChanged={reload}
+      />
     </SafeAreaView>
   );
 }

@@ -24,6 +24,7 @@ import {
 } from '@react-native-google-signin/google-signin';
 import { supabase } from './supabase';
 import { clearSharedData } from './friends';
+import { forgetPushToken, releasePushTokenForSignOut } from './pushTokens';
 
 // Summary of the session's user (for showing account state in the UI).
 export interface AuthUser {
@@ -213,6 +214,8 @@ export async function deleteAccountAndData(): Promise<void> {
   if (!supabase) throw new Error('Bulut senkron yapılandırılmadı');
   const { error } = await supabase.rpc('delete_account');
   if (error) throw error;
+  // The server dropped this device's push token with the account (cascade).
+  await forgetPushToken();
   // The cloud account is deleted: the device's data now belongs to NO
   // account. If the ownership marker stayed, the next sign-in would be
   // wrongly classified as an "account switch" and the user would needlessly get the merge/replace prompt.
@@ -233,6 +236,9 @@ export async function deleteAccountAndData(): Promise<void> {
 // (ensureSignedIn never opens a session — see the note at the top of the file).
 export async function signOutAccount(): Promise<void> {
   if (!supabase) return;
+  // Friend nudges for this account must stop reaching this phone — released
+  // while the session still exists; queued and retried if offline.
+  await releasePushTokenForSignOut();
   // The Google session is also released: otherwise, on the next sign-in, the
   // account picker wouldn't even open and it would silently return the same
   // account, leaving the user unable to switch accounts.
