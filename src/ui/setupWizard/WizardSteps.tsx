@@ -201,6 +201,9 @@ export function HabitStep({ userId, onCompleted, onCreated }: StepProps) {
       // The icon only belongs to the suggestion's own wording: a title edited by hand loses it.
       icon: s && t(s.labelKey) === name ? s.icon : null,
       schedule: scheduleFor(freq),
+      // Same as the habit form: a new habit starts today (otherwise the days before
+      // it existed would count as missed in the statistics and the weekly review).
+      start_date: todayDate(),
     });
     // Scheduling happens once, after the notification step (it may need the
     // permission asked for there): the shell calls rescheduleEverything.

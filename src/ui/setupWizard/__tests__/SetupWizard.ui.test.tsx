@@ -182,7 +182,7 @@ describe('SetupWizard — ilk alışkanlık', () => {
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
 
     const [h] = habitRepo.listByUser(mockUserId);
-    expect(h).toMatchObject({ title: 'Kitap oku', kind: 'binary', icon: 'book' });
+    expect(h).toMatchObject({ title: 'Kitap oku', kind: 'binary', icon: 'book', start_date: todayDate() });
     expect(h.schedule).toEqual({ freq: 'weekly', weekdays: [1, 2, 3, 4, 5] });
     expect(reminderRepo.listByEntity('habit', h.id).map((r) => r.time)).toEqual(['21:00']);
     expect(u.getByText('✓ “Kitap oku” eklendi')).toBeTruthy();
