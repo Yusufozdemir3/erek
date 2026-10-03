@@ -85,6 +85,11 @@ jest.mock('expo-screen-capture', () => ({
   allowScreenCaptureAsync: async () => {},
 }));
 
+// Document picker (native): cancels unless a test mocks it itself (see ProfileImport.ui.test.tsx).
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: async () => ({ canceled: true, assets: null }),
+}));
+
 afterEach(() => {
   const g = globalThis as any;
   g.__pickers = {};

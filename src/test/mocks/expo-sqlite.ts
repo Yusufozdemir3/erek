@@ -14,8 +14,10 @@ class FakeSQLiteDatabase {
     this.db.exec(sql);
   }
 
-  runSync(sql: string, params: BindParams = []): void {
-    this.db.prepare(sql).run(...params);
+  // Like the real API, reports how many rows the statement changed.
+  runSync(sql: string, params: BindParams = []): { changes: number; lastInsertRowId: number } {
+    const r = this.db.prepare(sql).run(...params);
+    return { changes: Number(r.changes), lastInsertRowId: Number(r.lastInsertRowid) };
   }
 
   getFirstSync<T>(sql: string, params: BindParams = []): T | null {

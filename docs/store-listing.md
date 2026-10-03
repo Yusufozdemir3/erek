@@ -108,11 +108,11 @@ Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi
 
 ▸ VERİLERİN SENDE
 
-Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin. Verilerini dışa aktarabilir, uygulamayı ekran kilidinle koruyabilirsin.
+Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin. Verilerini dışa ve içe aktarabilir, uygulamayı ekran kilidinle koruyabilirsin.
 
 Profil › Gizlilik ve çevrimdışı, neyin nerede durduğunu telefonunun gerçek durumuna göre gösterir. Uygulama içi analitik yok, verilerin satılmaz.
 ```
-(3962)
+(3969)
 
 ---
 
@@ -195,11 +195,11 @@ Light, dark and system themes. Two different dark tones, plus an accent colour o
 
 ▸ YOUR DATA IS YOURS
 
-Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app. Export your data, or lock the app with your screen lock.
+Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app. Export and import your data, or lock the app with your screen lock.
 
 Profile › Privacy and offline shows what is kept where, based on your phone’s actual state. No in-app analytics; your data is never sold.
 ```
-(3941)
+(3952)
 
 ---
 
@@ -282,11 +282,11 @@ Helles, dunkles und Systemdesign, zwei dunkle Töne, frei wählbare Akzentfarbe.
 
 ▸ DEINE DATEN GEHÖREN DIR
 
-Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App. Export und App-Sperre.
+Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App. Export, Import und App-Sperre.
 
 Profil › Datenschutz und Offline zeigt, was wo liegt. Keine In-App-Analyse; deine Daten werden nie verkauft.
 ```
-(3981)
+(3989)
 
 ---
 
