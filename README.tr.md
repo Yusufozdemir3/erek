@@ -21,7 +21,12 @@ Erek; Expo ve React Native ile geliştirilmiş, offline-first çalışan bir al�
 - **Görevler** — öncelik, son tarih ve saat, alt görevler; tekrarlayan görevler tamamlandığında otomatik olarak bir sonraki tarihe taşınır.
 - **Hedefler** — sayısal hedefler (örn. 200 sayfa oku) ya da adım listesi, hız/tahmini bitiş tarihi projeksiyonlarıyla birlikte. Bir alışkanlık bir hedefe bağlanabilir; alışkanlık her tamamlandığında hedef kendiliğinden ilerler.
 - **Hatırlatmalar** — alışkanlık, görev ve hedefler için yerel bildirimler; ses ve titreşim ayarlanabilir.
-- **Ana ekran widget'ı** — bugünkü görev ve alışkanlıkları gösteren Android widget'ı.
+- **Ses** — görevi sesle ekle ("yarın akşam 7'de annemi ara"; telefonda varsa cihazda tanıma, çevrim içi ancak bir kez onay verirsen) ve Bugün ekranında alışkanlığı sesle işaretle ("su içtim"), geri alınabilir. Cümleler telefonda sabit kurallarla çözülür; ses kaydedilmez.
+- **Ana ekran widget'ları** — üç Android widget'ı: Bugün (alışkanlığa dokun, işaretle), Sayaç (sayılı alışkanlıklara +1) ve Görevler (dokun, tamamla). Uygulama kapalıyken de çalışır: widget dokunuşu sıraya koyar, uygulama SQLite'a yazar.
+- **Haftalık özet** — son 7 günün tamamlama oranı, önceki haftayla karşılaştırma, günlük çubuklar, en istikrarlı ve ilgi bekleyen alışkanlık; Pazar/Pazartesi Bugün ekranında kart.
+- **Arkadaşlar ve paylaşım** — hesapla bir alışkanlığı, görevi (alt görevleriyle) ya da hedefi arkadaşınla paylaş; arkadaş hatırlatmaları push bildirimi olarak gelir.
+- **Gizlilik araçları** — telefonun gerçek durumunu söyleyen "Gizlilik ve çevrimdışı" sayfası, telefonun ekran kilidini kullanan uygulama kilidi, JSON dosyası olarak veriyi dışa/içe aktarma.
+- **Kurulum sihirbazı** — atlanabilir ilk açılış rehberi (görünüm, ilk alışkanlık/görev/hedef, bildirim ve widget, hesap); Profil'den yeniden çalıştırılır.
 - **Reklamlar** — uygulama ön plana her getirildiğinde en fazla 30 dakikada bir gösterilen tam ekran (interstitial) AdMob reklamı; kurulumdan/onboarding'den hemen sonra ya da bir alışkanlık/görev tamamlandığında asla gösterilmez.
 - **Görünüm** — açık, koyu (iki farklı ton) ve sistem teması, seçilebilir vurgu rengi.
 - **Diller** — Türkçe, İngilizce ve Almanca.

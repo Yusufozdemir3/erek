@@ -21,7 +21,12 @@ Erek is an offline-first habit, task and goal tracker built with Expo and React 
 - **Tasks** — priority, due date and time, subtasks, and recurring tasks that automatically roll to their next due date on completion.
 - **Goals** — numeric goals (e.g. read 200 pages) or milestone lists, with pace/ETA projections. A habit can be linked to a goal so completing it advances the goal automatically.
 - **Reminders** — local notifications for habits, tasks and goals, with configurable sound and vibration.
-- **Home screen widget** — Android widget showing today's tasks and habits.
+- **Voice** — add a task by voice ("tomorrow at 7 pm call mom"; on-device recognition when the phone has it, online only after a one-time consent), and check habits off by voice on Today ("I drank water") with Undo. Sentences are parsed on the phone by fixed rules; no audio is stored.
+- **Home screen widgets** — three Android widgets: Today (tap a habit to check it off), Counter (+1 for numeric habits) and Tasks (tap to complete). Taps work with the app closed: the widget queues them and the app writes them to SQLite.
+- **Weekly review** — completion rate for the last 7 days against the week before, a bar per day, best and neglected habit; a card on Sunday/Monday.
+- **Friends & sharing** — with an account, share a habit, a task (with its subtasks) or a goal with a friend; friend nudges arrive as push notifications.
+- **Privacy tools** — a "Privacy and offline" page that reports the phone's actual state, an app lock using the phone's screen lock, and data export/import as a JSON file.
+- **Setup wizard** — a skippable first-run guide (look, first habit/task/goal, notifications and widget, account), re-runnable from Profile.
 - **Ads** — a full-screen (interstitial) AdMob ad, shown at most once every 30 minutes when the app returns to the foreground, and never right after onboarding/first install or right after completing a habit/task.
 - **Appearance** — light, dark (two tones) and system theme, with a selectable accent colour.
 - **Languages** — Turkish, English and German.
@@ -58,11 +63,11 @@ src/
   sync/                         Optional Supabase cloud sync engine
   i18n/                         Turkish / English / German translations
   ui/                           Screens' building blocks (forms, charts, modals…)
-  widget/                       Android home screen widget
+  widget/                       Android home screen widgets (Today, Counter, Tasks) + their pending-tap queue
   web/                          Web-only stubs for native-only modules
 modules/                       Custom native Expo module (notification channels)
 plugins/                       Expo config plugins
-supabase/schema.sql            Cloud database schema
+supabase/schema.sql            Cloud database schema (+ supabase/tests, supabase/functions/send-nudge)
 docs/                          Store listing, privacy policy, setup guides
 ```
 
@@ -102,6 +107,7 @@ console.log(habitRepo.currentStreak(habit.id)); // 1
 - `docs/privacy-policy.md` — privacy policy
 - `docs/google-signin-setup.md` — Google sign-in setup
 - `docs/sharing-design.md` — sharing feature design notes
+- `docs/push-setup.md` — friend-nudge push setup (Firebase, Expo, Edge Function)
 
 ## License
 
