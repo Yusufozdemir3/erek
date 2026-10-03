@@ -13,9 +13,11 @@ import type { Colors } from '@/ui/theme';
 interface Props {
   listening: boolean;
   onPress: () => void;
+  // Overrides the idle accessibility label (default: "fill in by voice").
+  label?: string;
 }
 
-export function VoiceButton({ listening, onPress }: Props) {
+export function VoiceButton({ listening, onPress, label }: Props) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
@@ -54,7 +56,7 @@ export function VoiceButton({ listening, onPress }: Props) {
       onPress={onPress}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel={listening ? t('voice.stopA11y') : t('voice.startA11y')}
+      accessibilityLabel={listening ? t('voice.stopA11y') : (label ?? t('voice.startA11y'))}
       accessibilityState={{ busy: listening }}
     >
       <Animated.View style={[styles.btn, listening && styles.btnOn, { opacity: pulse }]}>

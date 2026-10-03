@@ -19,6 +19,8 @@ import { refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
+import { VoiceCommandBar, type CommandNotice } from '@/ui/VoiceCommandBar';
+import { parseVoiceCommand, type Target } from '@/lib/voiceCommand';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
@@ -212,6 +214,90 @@ export default function TodayScreen() {
 
   const onPickDate = (picked: Date) => setSelectedDate(toYmd(picked));
 
+  // — Voice commands ("su içtim") — only offered on today's screen.
+  // Runs a command the parser matched to one of today's items and describes
+  // what happened; the Undo reverses exactly that write.
+  const applyVoiceTarget = (target: Target): CommandNotice => {
+    if (target.kind === 'task') {
+      const t = tasks.find((x) => x.id === target.task.id);
+      if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };
+      armCelebration();
+      taskRepo.setCompleted(t.id, true);
+      notifySuccess();
+      refreshTaskReminders(t.id);
+      reload();
+      // A recurring task jumps to its next date instead of staying completed;
+      // reopening it would not move the date back, so no Undo is offered.
+      const undo = t.recurrence
+        ? undefined
+        : () => {
+            taskRepo.setCompleted(t.id, false);
+            refreshTaskReminders(t.id);
+            reload();
+          };
+      return { text: tr('voiceCmd.taskDone', { title: t.title }), undo };
+    }
+    const h = habits.find((x) => x.id === target.habit.id);
+    if (!h) return { text: tr('voiceCmd.notUnderstood') };
+    if (h.target != null && h.kind !== 'timer') {
+      armCelebration(h);
+      const goalDone = habitRepo.incrementAmount(h.id, today, target.amount, h.target);
+      notifySuccess();
+      reload();
+      refreshWidget(user.id);
+      promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
+      return {
+        text: tr('voiceCmd.habitAmount', { title: h.title, n: target.amount }),
+        undo: () => {
+          habitRepo.incrementAmount(h.id, today, -target.amount, h.target);
+          reload();
+          refreshWidget(user.id);
+        },
+      };
+    }
+    if (h.completed) return { text: tr('voiceCmd.alreadyDone', { title: h.title }) };
+    armCelebration(h);
+    const goalDone = habitRepo.toggleLog(h.id, today, true);
+    notifySuccess();
+    reload();
+    refreshWidget(user.id);
+    promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
+    return {
+      text: tr('voiceCmd.habitDone', { title: h.title }),
+      undo: () => {
+        habitRepo.toggleLog(h.id, today, false);
+        reload();
+        refreshWidget(user.id);
+      },
+    };
+  };
+
+  const handleVoiceCommand = (text: string, show: (n: CommandNotice) => void) => {
+    const cmd = parseVoiceCommand(text, lang, {
+      habits: habits.map((h) => ({ id: h.id, title: h.title, kind: h.kind })),
+      // Someone else's shared task is checked off through the server, never by voice.
+      tasks: tasks.filter((t) => t.completed_at === null && !t.shared_owner_uid).map((t) => ({ id: t.id, title: t.title })),
+    });
+    if (cmd.kind === 'none') {
+      show({ text: tr('voiceCmd.notUnderstood') });
+      return;
+    }
+    if (cmd.kind === 'one') {
+      show(applyVoiceTarget(cmd.target));
+      return;
+    }
+    // Android shows at most three buttons: tapping outside cancels.
+    Alert.alert(
+      tr('voiceCmd.chooseTitle'),
+      undefined,
+      cmd.options.map((o) => ({
+        text: o.kind === 'habit' ? o.habit.title : o.task.title,
+        onPress: () => show(applyVoiceTarget(o)),
+      })),
+      { cancelable: true }
+    );
+  };
+
   const renderTask = (t: Task) => {
     const done = t.completed_at !== null;
     const time = extractTime(t.due_date);
@@ -386,6 +472,9 @@ export default function TodayScreen() {
             tasksTotal={tasks.length}
           />
         )}
+
+        {/* Check off by voice — hidden when the device has no speech recognition. */}
+        {isToday && !dayIsEmpty && <VoiceCommandBar onHeard={handleVoiceCommand} />}
 
         {/* Type filter — only narrows the list view. "Hide completed" is now
             set as a persistent preference on Profile. */}
