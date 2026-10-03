@@ -11,7 +11,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Priority, Recurrence } from '@/db';
 import type { Friend } from '@/sync/friends';
-import { extractTime, hmToDate, toHm, todayDate, toYmd } from '@/lib/helpers';
+import { extractTime, hmToDate, shiftYmd, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { parseTask } from '@/lib/quickAdd/parseTask';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
@@ -101,6 +101,13 @@ interface VoiceSnapshot {
 }
 
 type VoiceField = 'title' | 'priority' | 'date' | 'time' | 'remind';
+
+// The date shortcuts under the date button.
+const QUICK_DATES = [
+  { days: 0, labelKey: 'date.quickToday' },
+  { days: 1, labelKey: 'date.quickTomorrow' },
+  { days: 7, labelKey: 'date.quickNextWeek' },
+] as const;
 
 export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children, enableSubtaskDraft, shareFriends = [], enableVoice = false }: Props) {
   const { colors } = useTheme();
@@ -363,6 +370,25 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         <Pressable style={[styles.dateBtn, voiceMark('date')]} onPress={() => setShowPicker(true)}>
           <Text style={styles.dateBtnText}>{longDateLabel(dueDate, lang, t('date.noDate'))}</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.quickRow}>
+        {QUICK_DATES.map(({ days, labelKey }) => {
+          const target = shiftYmd(todayDate(), days);
+          const selected = dueDate === target;
+          return (
+            <Pressable
+              key={labelKey}
+              style={[styles.quickChip, selected && styles.dayChipSel]}
+              onPress={() => setDueDate(target)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={t(labelKey)}
+            >
+              <Text style={[styles.dayChipText, selected && styles.dayChipTextSel]}>{t(labelKey)}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <DatePickerModal

@@ -28,6 +28,13 @@ export function todayDate(): string {
   return toYmd(new Date());
 }
 
+// "YYYY-MM-DD" moved by n calendar days (local time, DST-safe).
+export function shiftYmd(ymd: string, days: number): string {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return toYmd(d);
+}
+
 // Date -> "08:30" (hour:minute). The shared output format for time pickers.
 export function toHm(d: Date): string {
   const h = String(d.getHours()).padStart(2, '0');

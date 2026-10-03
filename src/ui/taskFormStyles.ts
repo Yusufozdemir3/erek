@@ -130,6 +130,17 @@ export const makeTaskFormStyles = (c: Colors) =>
       backgroundColor: c.inputBg,
     },
     dayChipSel: { borderColor: c.primary, backgroundColor: c.primary },
+    // Quick date shortcuts under the date button (Today / Tomorrow / Next week).
+    quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+    quickChip: {
+      minHeight: 40,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
     dayChipText: { fontSize: 13, fontWeight: '700', color: c.muted },
     dayChipTextSel: { color: c.onAccent },
     actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
