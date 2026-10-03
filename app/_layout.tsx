@@ -87,6 +87,7 @@ function ThemedStack() {
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
         <Stack.Screen name="friends" options={{ headerShown: true, title: t('friends.title'), presentation: 'modal' }} />
         <Stack.Screen name="privacy" options={{ headerShown: true, title: t('profile.privacy'), presentation: 'modal' }} />
+        <Stack.Screen name="about" options={{ headerShown: true, title: t('profile.about'), presentation: 'modal' }} />
         <Stack.Screen name="setup" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen
           name="login"

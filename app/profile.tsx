@@ -50,6 +50,7 @@ export default function ProfileScreen() {
     { icon: 'shield', label: t('profile.privacy'), href: '/privacy' },
     { icon: 'download', label: t('profile.export'), onPress: exportData },
     { icon: 'compass', label: t('profile.setupWizard'), href: '/setup' },
+    { icon: 'info', label: t('profile.about'), href: '/about' },
   ];
 
   return (
