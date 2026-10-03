@@ -48,6 +48,7 @@ export default function ProfileScreen() {
       ? [{ icon: 'user', label: t('profile.accountSync'), href: '/account-sync' } as MenuRow]
       : []),
     { icon: 'shield', label: t('profile.privacy'), href: '/privacy' },
+    { icon: 'bar-chart-2', label: t('profile.review'), href: '/review' },
     { icon: 'download', label: t('profile.export'), onPress: exportData },
     { icon: 'compass', label: t('profile.setupWizard'), href: '/setup' },
     { icon: 'info', label: t('profile.about'), href: '/about' },

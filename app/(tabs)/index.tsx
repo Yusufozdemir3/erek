@@ -5,7 +5,7 @@
 // Tapping the date opens the calendar; you can jump to another day and check it off.
 // Architecture rule: no SQL; only taskRepo / habitRepo are called.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +20,10 @@ import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { VoiceCommandBar, type CommandNotice } from '@/ui/VoiceCommandBar';
+import { ReviewCard } from '@/ui/ReviewCard';
+import { loadReview } from '@/ui/reviewData';
 import { parseVoiceCommand, type Target } from '@/lib/voiceCommand';
+import { isReviewDay } from '@/lib/weeklyReview';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
@@ -213,6 +216,15 @@ export default function TodayScreen() {
   };
 
   const onPickDate = (picked: Date) => setSelectedDate(toYmd(picked));
+
+  // The review card only needs to know whether there is a rate to show; it's
+  // computed on review days only (a handful of queries once per data change).
+  const reviewHasData = useMemo(
+    () => isToday && isReviewDay(today) && loadReview(user.id, today).rate !== null,
+    // habits/tasks change whenever the underlying data does (reload sets them)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isToday, today, user.id, habits, tasks]
+  );
 
   // — Voice commands ("su içtim") — only offered on today's screen.
   // Runs a command the parser matched to one of today's items and describes
@@ -472,6 +484,9 @@ export default function TodayScreen() {
             tasksTotal={tasks.length}
           />
         )}
+
+        {/* Sunday/Monday: the weekly review is ready (hidden once opened or dismissed). */}
+        {isToday && <ReviewCard today={today} hasData={reviewHasData} />}
 
         {/* Check off by voice — hidden when the device has no speech recognition. */}
         {isToday && !dayIsEmpty && <VoiceCommandBar onHeard={handleVoiceCommand} />}

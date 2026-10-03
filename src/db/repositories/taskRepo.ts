@@ -141,6 +141,22 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
+  // The local days (YYYY-MM-DD) the user's OWN tasks were finished on, within
+  // [startYmd, endYmd] — one entry per task (the weekly review counts them).
+  // Tasks shared with me belong to someone else and are left out.
+  completedDatesBetween(userId: string, startYmd: string, endYmd: string): string[] {
+    const db = getDb();
+    return db
+      .getAllSync<{ d: string }>(
+        `SELECT date(completed_at, 'localtime') AS d FROM tasks
+         WHERE user_id = ? AND deleted_at IS NULL AND shared_owner_uid IS NULL
+           AND completed_at IS NOT NULL
+           AND date(completed_at, 'localtime') BETWEEN ? AND ?`,
+        [userId, startYmd, endYmd]
+      )
+      .map((r) => r.d);
+  },
+
   // Count of tasks OUTSIDE the limit (completed at an older date) — the
   // screen's "show all" button only appears when something is genuinely hidden.
   countCompletedBefore(userId: string, since: string): number {
