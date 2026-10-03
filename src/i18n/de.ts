@@ -761,6 +761,10 @@ export const de: Dict = {
   'wizard.done.rerun': 'Du kannst diesen Assistenten jederzeit über Profil › Einrichtungsassistent erneut öffnen.',
   // Privacy and offline page (app/privacy.tsx, lib/privacySummary.ts).
   'profile.privacy': 'Datenschutz und Offline',
+  'profile.export': 'Meine Daten exportieren',
+  'profile.exportTitle': 'Meine Erek-Daten',
+  'profile.exportUnavailable': 'Teilen ist auf diesem Gerät nicht verfügbar.',
+  'profile.exportFailed': 'Die Daten konnten nicht exportiert werden. Versuche es gleich noch einmal.',
   'privacy.intro': 'Erek arbeitet zuerst auf deinem Handy. Unten siehst du, was gerade wo liegt; die Seite richtet sich nach dem echten Zustand deines Handys.',
   'privacy.where.device': 'Auf diesem Handy',
   'privacy.where.account': 'In deinem Konto',

@@ -3,7 +3,8 @@
 // It used to be one long flat list of cards. The header title comes from the
 // root layout's native header.
 
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { makeProfileStyles } from '@/ui/profileStyles';
@@ -11,16 +12,32 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useAppData } from '@/ui/AppData';
+import { shareDataExport } from '@/lib/shareExport';
 
-type MenuRow = { icon: keyof typeof Feather.glyphMap; label: string; href: string };
+// A row either opens a screen (href) or runs an action (onPress).
+type MenuRow = { icon: keyof typeof Feather.glyphMap; label: string; href?: string; onPress?: () => void };
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeProfileStyles(colors);
-  const { authUser } = useAppData();
+  const { authUser, user } = useAppData();
+  const [exporting, setExporting] = useState(false);
   // Friends/sharing needs a real (non-anonymous) account.
   const signedIn = ACCOUNTS_ENABLED && authUser != null && !authUser.isAnonymous;
+
+  const exportData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const r = await shareDataExport(user.id, t('profile.exportTitle'));
+      if (r === 'unavailable') Alert.alert(t('profile.export'), t('profile.exportUnavailable'));
+    } catch {
+      Alert.alert(t('profile.export'), t('profile.exportFailed'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const rows: MenuRow[] = [
     { icon: 'sliders', label: t('profile.appearance'), href: '/appearance' },
@@ -31,6 +48,7 @@ export default function ProfileScreen() {
       ? [{ icon: 'user', label: t('profile.accountSync'), href: '/account-sync' } as MenuRow]
       : []),
     { icon: 'shield', label: t('profile.privacy'), href: '/privacy' },
+    { icon: 'download', label: t('profile.export'), onPress: exportData },
     { icon: 'compass', label: t('profile.setupWizard'), href: '/setup' },
   ];
 
@@ -40,7 +58,7 @@ export default function ProfileScreen() {
         <Pressable
           key={r.label}
           style={[styles.card, styles.navRow, i > 0 && { marginTop: 12 }]}
-          onPress={() => router.push(r.href as Href)}
+          onPress={r.onPress ?? (() => router.push(r.href as Href))}
           accessibilityRole="button"
           accessibilityLabel={r.label}
         >

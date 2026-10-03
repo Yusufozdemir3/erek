@@ -757,6 +757,10 @@ export const en: Dict = {
   'wizard.done.rerun': 'You can reopen this wizard any time from Profile › Setup wizard.',
   // Privacy and offline page (app/privacy.tsx, lib/privacySummary.ts).
   'profile.privacy': 'Privacy and offline',
+  'profile.export': 'Export my data',
+  'profile.exportTitle': 'My Erek data',
+  'profile.exportUnavailable': 'Sharing isn’t available on this device.',
+  'profile.exportFailed': 'Couldn’t export your data. Try again in a moment.',
   'privacy.intro': 'Erek works on your phone first. Below you can see what is kept where right now; the page updates itself from your phone’s real state.',
   'privacy.where.device': 'On this phone',
   'privacy.where.account': 'In your account',

@@ -787,6 +787,10 @@ export const tr: Dict = {
   'wizard.done.rerun': 'Bu sihirbazı istediğin zaman Profil › Kurulum sihirbazı’ndan yeniden açabilirsin.',
   // Privacy and offline page (app/privacy.tsx, lib/privacySummary.ts).
   'profile.privacy': 'Gizlilik ve çevrimdışı',
+  'profile.export': 'Verilerimi dışa aktar',
+  'profile.exportTitle': 'Erek verilerim',
+  'profile.exportUnavailable': 'Bu cihazda paylaşma menüsü kullanılamıyor.',
+  'profile.exportFailed': 'Veriler dışa aktarılamadı. Birazdan tekrar dene.',
   'privacy.intro': 'Erek önce telefonunda çalışır. Aşağıda şu an neyin nerede durduğunu görüyorsun; sayfa telefonunun gerçek durumuna göre kendini günceller.',
   'privacy.where.device': 'Bu telefonda',
   'privacy.where.account': 'Hesabında',
