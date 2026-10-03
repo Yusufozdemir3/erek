@@ -71,6 +71,17 @@
               "updatePeriodMillis": 1800000
             },
             {
+              "name": "ErekTasks",
+              "label": "Erek — Görevler",
+              "description": "Bugünün görevleri — dokunarak tamamla",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
               "name": "ErekCounter",
               "label": "Erek — Sayaç",
               "description": "Su, sayfa gibi sayılı alışkanlıklara tek dokunuşla +1",

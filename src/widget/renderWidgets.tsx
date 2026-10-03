@@ -6,21 +6,23 @@ import * as React from 'react';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { TodayWidget } from './TodayWidget';
 import { CounterWidget } from './CounterWidget';
-import { COUNTER_WIDGET_NAME, WIDGET_NAME, type WidgetSnapshot } from './widgetSnapshot';
+import { TasksWidget } from './TasksWidget';
+import { COUNTER_WIDGET_NAME, TASKS_WIDGET_NAME, WIDGET_NAME, type WidgetSnapshot } from './widgetSnapshot';
+
+// Every widget the app ships (keep in step with app.json's config plugin).
+export const ALL_WIDGETS = [WIDGET_NAME, COUNTER_WIDGET_NAME, TASKS_WIDGET_NAME];
 
 export function widgetFor(name: string, snapshot: WidgetSnapshot | null): React.JSX.Element {
-  return name === COUNTER_WIDGET_NAME ? (
-    <CounterWidget snapshot={snapshot} />
-  ) : (
-    <TodayWidget snapshot={snapshot} />
-  );
+  if (name === COUNTER_WIDGET_NAME) return <CounterWidget snapshot={snapshot} />;
+  if (name === TASKS_WIDGET_NAME) return <TasksWidget snapshot={snapshot} />;
+  return <TodayWidget snapshot={snapshot} />;
 }
 
 // Redraws the placed instances of the given widgets (all by default); a widget
 // that isn't on the home screen is skipped silently.
 export async function updateWidgets(
   snapshot: WidgetSnapshot | null,
-  names: string[] = [WIDGET_NAME, COUNTER_WIDGET_NAME]
+  names: string[] = ALL_WIDGETS
 ): Promise<void> {
   for (const widgetName of names) {
     try {

@@ -4,6 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   INC_ACTION,
+  TASK_ACTION,
   PENDING_KEY,
   TOGGLE_ACTION,
   actionFromClick,
@@ -34,6 +35,11 @@ function snap(over: Partial<WidgetSnapshot> = {}): WidgetSnapshot {
     doneCount: 1,
     totalCount: 3,
     colors: FALLBACK_COLORS,
+    tasks: [
+      { id: 'market', title: 'Market', color: '#f59e0b', completed: false },
+      { id: 'fatura', title: 'Fatura', color: '#ef4444', completed: false },
+      { id: 'mail', title: 'Mail', color: '#10b981', completed: true },
+    ],
     habits: [
       { id: 'kitap', title: 'Kitap oku', color: '#111111', completed: false, kind: 'binary' },
       { id: 'su', title: 'Su iç', color: '#222222', completed: false, kind: 'numeric', amount: 6, target: 8, unit: 'bardak' },
@@ -82,8 +88,46 @@ describe('actionFromClick', () => {
   });
 });
 
+describe('görev dokunuşları', () => {
+  it('görev satırı HEDEF durumu taşır (açıksa tamamla, tamamsa yeniden aç)', () => {
+    expect(actionFromClick(snap(), TASK_ACTION, { taskId: 'market' }, 'a', TODAY)).toEqual({
+      id: 'a', kind: 'task', taskId: 'market', date: TODAY, completed: true,
+    });
+    expect(actionFromClick(snap(), TASK_ACTION, { taskId: 'mail' }, 'a', TODAY)).toMatchObject({ completed: false });
+  });
+
+  it('bilinmeyen görev, görev listesi olmayan eski görüntü, dünkü görüntü: işlem yok', () => {
+    expect(actionFromClick(snap(), TASK_ACTION, { taskId: 'yok' }, 'a', TODAY)).toBeNull();
+    expect(actionFromClick(snap({ tasks: undefined }), TASK_ACTION, { taskId: 'market' }, 'a', TODAY)).toBeNull();
+    expect(actionFromClick(snap({ date: '2000-01-01' }), TASK_ACTION, { taskId: 'market' }, 'a', TODAY)).toBeNull();
+  });
+
+  it('anlık görünüm: tamamlanan görev alta iner, yeniden açılan üste çıkar; alışkanlık sayaçları değişmez', () => {
+    const done = applyToSnapshot(snap(), { id: 't', kind: 'task', taskId: 'market', date: TODAY, completed: true });
+    expect(done.tasks!.map((t) => [t.id, t.completed])).toEqual([['fatura', false], ['market', true], ['mail', true]]);
+    expect(done.doneCount).toBe(1);
+    const reopened = applyToSnapshot(done, { id: 't2', kind: 'task', taskId: 'mail', date: TODAY, completed: false });
+    expect(reopened.tasks!.map((t) => t.id)).toEqual(['fatura', 'mail', 'market']);
+  });
+
+  it('başka günün ya da listede olmayan görevin işlemi görüntüyü değiştirmez', () => {
+    const s = snap();
+    expect(applyToSnapshot(s, { id: 't', kind: 'task', taskId: 'market', date: '2026-10-02', completed: true })).toBe(s);
+    expect(applyToSnapshot(s, { id: 't', kind: 'task', taskId: 'yok', date: TODAY, completed: true })).toBe(s);
+  });
+
+  it('kuyruğa yazılan görev işlemi okunur; eksik alanlı olanı atılır', async () => {
+    await appendPending({ id: 'x', kind: 'task', taskId: 'market', date: TODAY, completed: true });
+    await AsyncStorage.setItem(
+      PENDING_KEY,
+      JSON.stringify([...(await readPending()), { id: 'bad', kind: 'task', date: TODAY, completed: true }])
+    );
+    expect((await readPending()).map((a) => a.id)).toEqual(['x']);
+  });
+});
+
 describe('applyToSnapshot', () => {
-  const toggle = (completed: boolean): WidgetAction => ({ id: 't', kind: 'toggle', habitId: 'kitap', date: TODAY, completed });
+  const toggle = (completed: boolean) => ({ id: 't', kind: 'toggle' as const, habitId: 'kitap', date: TODAY, completed });
   const inc: WidgetAction = { id: 'i', kind: 'inc', habitId: 'su', date: TODAY, delta: 1 };
 
   it('işaretleme sayacı ve özeti günceller', () => {

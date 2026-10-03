@@ -96,7 +96,7 @@ Son 7 günün tamamlama oranı, önceki haftayla karşılaştırma, günlük çu
 
 ▸ ANA EKRAN WIDGET'LARI
 
-Bugünün alışkanlıklarını ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar.
+Bugünün alışkanlıklarını ve görevlerini ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar.
 
 ▸ REKLAMLAR
 
@@ -112,7 +112,7 @@ Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedefler
 
 Profil › Gizlilik ve çevrimdışı, neyin nerede durduğunu telefonunun gerçek durumuna göre gösterir. Uygulama içi analitik yok, verilerin satılmaz.
 ```
-(3947)
+(3962)
 
 ---
 
@@ -183,7 +183,7 @@ Your completion rate for the last 7 days, compared with the week before, plus a 
 
 ▸ HOME SCREEN WIDGETS
 
-Check off today's habits right from your home screen; the Counter widget adds +1 to glasses, pages and the like with one tap.
+Check off today's habits and tasks right from your home screen; the Counter widget adds +1 to glasses, pages and the like with one tap.
 
 ▸ ADS
 
@@ -199,7 +199,7 @@ Erek works fully without an account or internet: your habits, tasks, goals, remi
 
 Profile › Privacy and offline shows what is kept where, based on your phone’s actual state. No in-app analytics; your data is never sold.
 ```
-(3931)
+(3941)
 
 ---
 
@@ -270,7 +270,7 @@ Quote der letzten 7 Tage, Vergleich zur Vorwoche. Unter Heute hakst du per Sprac
 
 ▸ HOMESCREEN-WIDGETS
 
-Hake Gewohnheiten direkt auf dem Startbildschirm ab; das Zähler-Widget zählt Gläser oder Seiten mit einem Tipp.
+Hake Gewohnheiten und Aufgaben direkt auf dem Startbildschirm ab; das Zähler-Widget zählt Gläser oder Seiten mit einem Tipp.
 
 ▸ WERBUNG
 
@@ -286,7 +286,7 @@ Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinne
 
 Profil › Datenschutz und Offline zeigt, was wo liegt. Keine In-App-Analyse; deine Daten werden nie verkauft.
 ```
-(3968)
+(3981)
 
 ---
 

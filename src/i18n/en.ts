@@ -205,6 +205,8 @@ export const en: Dict = {
   'widget.empty': 'No habits planned for today',
   'widget.stale': 'New day — tap to refresh',
   'widget.counterTitle': 'Counters',
+  'widget.tasksTitle': 'Tasks',
+  'widget.tasksEmpty': 'No tasks due today',
   'widget.counterEmpty': 'Nothing to count today. Add a habit with a daily amount in Erek.',
 
   'empty.todayTitle': 'All done for today',
@@ -739,7 +741,7 @@ export const en: Dict = {
   'wizard.notif.vibration': 'Vibration',
   'wizard.notif.hint': 'More options: Profile › Notifications.',
   'wizard.widget.title': 'Home-screen widget',
-  'wizard.widget.body': 'Check off today’s habits with one tap from your home screen. “Erek — Sayaç” (the counter) adds +1 to water, pages and the like.',
+  'wizard.widget.body': 'Check off today’s habits and tasks with one tap from your home screen. “Erek — Sayaç” (the counter) adds +1 to water, pages and the like.',
   'wizard.widget.s1': 'Long-press an empty spot on your home screen.',
   'wizard.widget.s2': 'Open “Widgets”.',
   'wizard.widget.s3': 'Find “Erek — Today” and drag it onto the home screen.',

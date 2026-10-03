@@ -8,7 +8,7 @@
 // Registered in index.js ONLY in a real build (when the native module exists).
 
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
-import { readSnapshot, writeSnapshot, COUNTER_WIDGET_NAME, WIDGET_NAME } from './widgetSnapshot';
+import { readSnapshot, writeSnapshot } from './widgetSnapshot';
 import {
   actionFromClick,
   appendPending,
@@ -16,7 +16,7 @@ import {
   emitWidgetAction,
   serialized,
 } from './widgetQueue';
-import { updateWidgets, widgetFor } from './renderWidgets';
+import { ALL_WIDGETS, updateWidgets, widgetFor } from './renderWidgets';
 
 const newActionId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -42,8 +42,11 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
         const next = applyToSnapshot(snapshot, action);
         await writeSnapshot(next);
         props.renderWidget(widgetFor(name, next));
-        // The other widget shows the same habit — keep the two in step.
-        await updateWidgets(next, [name === COUNTER_WIDGET_NAME ? WIDGET_NAME : COUNTER_WIDGET_NAME]);
+        // The other widgets show the same items — keep them in step.
+        await updateWidgets(
+          next,
+          ALL_WIDGETS.filter((n) => n !== name)
+        );
       });
       // If the app is alive in this runtime, it writes the tap to SQLite now.
       emitWidgetAction();

@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Must be EXACTLY the same as the widget names defined in app.json's config plugin.
 export const WIDGET_NAME = 'ErekToday';
 export const COUNTER_WIDGET_NAME = 'ErekCounter';
+export const TASKS_WIDGET_NAME = 'ErekTasks';
 export const SNAPSHOT_KEY = 'widget:today';
 
 export interface WidgetHabit {
@@ -22,6 +23,15 @@ export interface WidgetHabit {
   amount?: number; // numeric: today's amount
   target?: number | null; // numeric: daily target
   unit?: string | null;
+}
+
+// A task shown on the Tasks widget: today's tasks (and those carried over),
+// open ones first, the ones finished today struck through at the bottom.
+export interface WidgetTask {
+  id: string;
+  title: string;
+  color: string; // the priority color
+  completed: boolean;
 }
 
 // The colors the widget will render with — embedded in the snapshot so the
@@ -51,6 +61,9 @@ export interface WidgetSnapshot {
   staleLabel?: string; // shown when the snapshot is from an earlier day
   counterTitle?: string; // the counter widget's header
   counterEmptyLabel?: string; // the counter widget's text when no numeric habit is due
+  tasks?: WidgetTask[]; // missing in snapshots written by an older build
+  tasksTitle?: string; // the tasks widget's header
+  tasksEmptyLabel?: string; // the tasks widget's text when nothing is due
   doneCount: number;
   totalCount: number;
   habits: WidgetHabit[];

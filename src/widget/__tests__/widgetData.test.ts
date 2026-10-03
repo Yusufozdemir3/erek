@@ -4,6 +4,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userRepo } from '../../db/repositories/userRepo';
 import { habitRepo } from '../../db/repositories/habitRepo';
+import { taskRepo } from '../../db/repositories/taskRepo';
+import { getDb } from '../../db/database';
 import { resetTestDb } from '../../test/dbTestUtils';
 import { todayDate } from '../../lib/helpers';
 import { appendPending, readPending, type WidgetAction } from '../widgetQueue';
@@ -14,6 +16,8 @@ jest.mock('react-native', () => ({
   Appearance: { getColorScheme: () => 'light' },
   StyleSheet: { create: (s: unknown) => s, hairlineWidth: 1 },
 }));
+const mockRemind = jest.fn(async (_id: string) => {});
+jest.mock('@/lib/notifications', () => ({ refreshTaskReminders: (id: string) => mockRemind(id) }));
 jest.mock('@/i18n/I18nProvider', () => ({ getStoredLang: async () => 'tr' }));
 
 import { buildTodaySnapshot, drainWidgetQueue, refreshWidget } from '../widgetData';
@@ -73,6 +77,57 @@ describe('drainWidgetQueue', () => {
 
   it('boş kuyruk: 0, veritabanına dokunulmaz', async () => {
     expect(await drainWidgetQueue()).toBe(0);
+  });
+});
+
+describe('görevler', () => {
+  const task = (title: string, extra: Record<string, unknown> = {}) =>
+    taskRepo.create({ user_id: uid, title, due_date: today(), ...extra });
+
+  it('drain: görev tamamlanır ve yeniden açılır, hatırlatmalar yenilenir', async () => {
+    const t = task('Market');
+    await appendPending({ id: 'a', kind: 'task', taskId: t.id, date: today(), completed: true });
+    expect(await drainWidgetQueue()).toBe(1);
+    expect(taskRepo.getById(t.id)?.completed_at).not.toBeNull();
+    expect(mockRemind).toHaveBeenCalledWith(t.id);
+
+    await appendPending({ id: 'b', kind: 'task', taskId: t.id, date: today(), completed: false });
+    await drainWidgetQueue();
+    expect(taskRepo.getById(t.id)?.completed_at).toBeNull();
+  });
+
+  it('drain: silinmiş görev ve başkasının paylaştığı görev düşer', async () => {
+    const gone = task('Silinen');
+    taskRepo.softDelete(gone.id);
+    const shared = task('Arkadaşın');
+    getDb().runSync("UPDATE tasks SET shared_owner_uid = 'friend' WHERE id = ?", [shared.id]);
+    await appendPending({ id: 'a', kind: 'task', taskId: gone.id, date: today(), completed: true });
+    await appendPending({ id: 'b', kind: 'task', taskId: shared.id, date: today(), completed: true });
+    expect(await drainWidgetQueue()).toBe(0);
+    expect(taskRepo.getById(shared.id)?.completed_at).toBeNull();
+    expect(await readPending()).toEqual([]);
+  });
+
+  it('anlık görüntü: bugünün görevleri açık olanlar önde; paylaşılan hariç; etiketler dolu', async () => {
+    const done = task('Bitti');
+    taskRepo.setCompleted(done.id, true);
+    task('Açık', { priority: 'high' });
+    const shared = task('Arkadaşın');
+    getDb().runSync("UPDATE tasks SET shared_owner_uid = 'friend' WHERE id = ?", [shared.id]);
+    task('Yarın', { due_date: '2999-01-01' });
+
+    const s = await buildTodaySnapshot(uid);
+    expect(s.tasks!.map((t) => [t.title, t.completed])).toEqual([['Açık', false], ['Bitti', true]]);
+    expect(s.tasks![0].color).toBe('#ef4444');
+    expect(s.tasksTitle).toBeTruthy();
+    expect(s.tasksEmptyLabel).toBeTruthy();
+  });
+
+  it('yenilemede bekleyen görev dokunuşu görüntüde korunur', async () => {
+    const t = task('Market');
+    await appendPending({ id: 'a', kind: 'task', taskId: t.id, date: today(), completed: true });
+    await refreshWidget(uid);
+    expect((await readSnapshot())?.tasks?.[0]).toMatchObject({ title: 'Market', completed: true });
   });
 });
 

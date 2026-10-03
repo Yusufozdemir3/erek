@@ -17,17 +17,19 @@
 // Like widgetSnapshot.ts this file imports no repo — the handler loads it.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { WidgetHabit, WidgetSnapshot } from './widgetSnapshot';
+import type { WidgetHabit, WidgetSnapshot, WidgetTask } from './widgetSnapshot';
 
 export const PENDING_KEY = 'widget:pending';
 
 // clickAction names used by the widgets' rows/buttons.
 export const TOGGLE_ACTION = 'TOGGLE_HABIT';
 export const INC_ACTION = 'INC_HABIT';
+export const TASK_ACTION = 'TOGGLE_TASK';
 
 export type WidgetAction =
   | { id: string; kind: 'toggle'; habitId: string; date: string; completed: boolean }
-  | { id: string; kind: 'inc'; habitId: string; date: string; delta: number };
+  | { id: string; kind: 'inc'; habitId: string; date: string; delta: number }
+  | { id: string; kind: 'task'; taskId: string; date: string; completed: boolean };
 
 // Local calendar day, same format as helpers.todayDate (not imported: that
 // module pulls in expo-crypto, which this headless-side file doesn't need).
@@ -61,6 +63,11 @@ export function actionFromClick(
   today: string = localYmd()
 ): WidgetAction | null {
   if (!snapshot || isStale(snapshot, today)) return null;
+  if (clickAction === TASK_ACTION) {
+    const taskId = typeof data?.taskId === 'string' ? data.taskId : null;
+    const task = taskId ? snapshot.tasks?.find((t) => t.id === taskId) : undefined;
+    return task ? { id, kind: 'task', taskId: task.id, date: snapshot.date, completed: !task.completed } : null;
+  }
   const habitId = typeof data?.habitId === 'string' ? data.habitId : null;
   const habit = habitId ? snapshot.habits.find((h) => h.id === habitId) : undefined;
   if (!habit) return null;
@@ -77,6 +84,7 @@ export function actionFromClick(
 // same object when the action doesn't concern this snapshot.
 export function applyToSnapshot(snapshot: WidgetSnapshot, action: WidgetAction): WidgetSnapshot {
   if (action.date !== snapshot.date) return snapshot;
+  if (action.kind === 'task') return applyTask(snapshot, action);
   let changed = false;
   const habits = snapshot.habits.map((h) => {
     if (h.id !== action.habitId) return h;
@@ -96,6 +104,14 @@ export function applyToSnapshot(snapshot: WidgetSnapshot, action: WidgetAction):
       ? fillSummary(snapshot.summaryTemplate, doneCount, habits.length)
       : snapshot.summaryLabel,
   };
+}
+
+// Open tasks first, finished ones below — the same order the app uses (stable).
+function applyTask(snapshot: WidgetSnapshot, action: Extract<WidgetAction, { kind: 'task' }>): WidgetSnapshot {
+  const tasks = snapshot.tasks;
+  if (!tasks?.some((t) => t.id === action.taskId)) return snapshot;
+  const next: WidgetTask[] = tasks.map((t) => (t.id === action.taskId ? { ...t, completed: action.completed } : t));
+  return { ...snapshot, tasks: [...next.filter((t) => !t.completed), ...next.filter((t) => t.completed)] };
 }
 
 export function applyAll(snapshot: WidgetSnapshot, actions: WidgetAction[]): WidgetSnapshot {
@@ -118,10 +134,10 @@ function isAction(a: unknown): a is WidgetAction {
   return (
     !!x &&
     typeof x.id === 'string' &&
-    typeof x.habitId === 'string' &&
     typeof x.date === 'string' &&
-    ((x.kind === 'toggle' && typeof x.completed === 'boolean') ||
-      (x.kind === 'inc' && typeof x.delta === 'number'))
+    ((x.kind === 'toggle' && typeof x.habitId === 'string' && typeof x.completed === 'boolean') ||
+      (x.kind === 'inc' && typeof x.habitId === 'string' && typeof x.delta === 'number') ||
+      (x.kind === 'task' && typeof x.taskId === 'string' && typeof x.completed === 'boolean'))
   );
 }
 

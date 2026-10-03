@@ -12,7 +12,8 @@
 
 import { Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { habitRepo } from '@/db';
+import { habitRepo, taskRepo } from '@/db';
+import { refreshTaskReminders } from '@/lib/notifications';
 import { isScheduledOn, isWithinHabitDates, todayDate } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
@@ -20,6 +21,7 @@ import {
   ACCENT_THEMES,
   DEFAULT_ACCENT,
   DEFAULT_HABIT_COLOR,
+  PRIORITY_COLOR,
   blackColors,
   darkColors,
   lightColors,
@@ -28,6 +30,9 @@ import {
 } from '@/ui/theme';
 import { writeSnapshot, type WidgetColors, type WidgetSnapshot } from './widgetSnapshot';
 import { applyAll, readPending, removePending, serialized } from './widgetQueue';
+
+// More than this wouldn't fit any widget size; the snapshot stays small.
+const MAX_WIDGET_TASKS = 30;
 
 // Same AsyncStorage keys as ThemeProvider — to read the theme preference
 // outside React (see src/ui/ThemeProvider.tsx).
@@ -92,6 +97,19 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
   }));
   const doneCount = habits.filter((h) => h.completed).length;
 
+  // Today's tasks, plus ones carried over. Someone else's shared task is checked
+  // off through the server, so it isn't offered here.
+  const tasks = taskRepo
+    .listForToday(userId, today)
+    .filter((t) => !t.shared_owner_uid)
+    .slice(0, MAX_WIDGET_TASKS)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      color: PRIORITY_COLOR[t.priority],
+      completed: t.completed_at !== null,
+    }));
+
   return {
     date: today,
     dateLabel: fullDateLabel(today, lang),
@@ -102,6 +120,9 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     staleLabel: translate(lang, 'widget.stale'),
     counterTitle: translate(lang, 'widget.counterTitle'),
     counterEmptyLabel: translate(lang, 'widget.counterEmpty'),
+    tasks,
+    tasksTitle: translate(lang, 'widget.tasksTitle'),
+    tasksEmptyLabel: translate(lang, 'widget.tasksEmpty'),
     doneCount,
     totalCount: habits.length,
     habits,
@@ -147,6 +168,16 @@ export async function drainWidgetQueue(): Promise<number> {
     let applied = 0;
     for (const a of pending) {
       try {
+        if (a.kind === 'task') {
+          const task = taskRepo.getById(a.taskId);
+          // Someone else's shared task is checked off through the server, never here.
+          if (!task || task.shared_owner_uid) continue;
+          taskRepo.setCompleted(task.id, a.completed);
+          // A recurring task jumps to its next date instead of staying completed.
+          await refreshTaskReminders(task.id).catch(() => {});
+          applied++;
+          continue;
+        }
         const habit = habitRepo.getById(a.habitId);
         if (!habit || habit.deleted_at) continue;
         if (a.kind === 'toggle' && habit.kind === 'binary') {

@@ -205,6 +205,8 @@ export const de: Dict = {
   'widget.empty': 'Keine Gewohnheiten für heute geplant',
   'widget.stale': 'Neuer Tag – zum Aktualisieren tippen',
   'widget.counterTitle': 'Zähler',
+  'widget.tasksTitle': 'Aufgaben',
+  'widget.tasksEmpty': 'Heute keine Aufgaben fällig',
   'widget.counterEmpty': 'Heute nichts zu zählen. Lege in Erek eine Gewohnheit mit Tagesmenge an.',
 
   'empty.todayTitle': 'Für heute alles erledigt',
@@ -743,7 +745,7 @@ export const de: Dict = {
   'wizard.notif.vibration': 'Vibration',
   'wizard.notif.hint': 'Mehr Optionen: Profil › Benachrichtigungen.',
   'wizard.widget.title': 'Startbildschirm-Widget',
-  'wizard.widget.body': 'Hake die heutigen Gewohnheiten mit einem Tipp auf dem Startbildschirm ab. „Erek — Sayaç“ (der Zähler) zählt Wasser, Seiten usw. mit +1.',
+  'wizard.widget.body': 'Hake die heutigen Gewohnheiten und Aufgaben mit einem Tipp auf dem Startbildschirm ab. „Erek — Sayaç“ (der Zähler) zählt Wasser, Seiten usw. mit +1.',
   'wizard.widget.s1': 'Halte eine freie Stelle auf dem Startbildschirm gedrückt.',
   'wizard.widget.s2': 'Öffne „Widgets“.',
   'wizard.widget.s3': 'Suche „Erek — Heute“ und zieh es auf den Startbildschirm.',

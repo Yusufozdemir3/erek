@@ -218,6 +218,8 @@ export const tr: Dict = {
   'widget.empty': 'Bugüne planlı alışkanlık yok',
   'widget.stale': 'Yeni gün — güncellemek için dokun',
   'widget.counterTitle': 'Sayaçlar',
+  'widget.tasksTitle': 'Görevler',
+  'widget.tasksEmpty': 'Bugün bekleyen görev yok',
   'widget.counterEmpty': 'Bugün sayılacak alışkanlık yok. Erek’te günlük miktarı olan bir alışkanlık ekle.',
 
   // Empty states
@@ -769,7 +771,7 @@ export const tr: Dict = {
   'wizard.notif.vibration': 'Titreşim',
   'wizard.notif.hint': 'Daha fazla ayar: Profil › Bildirimler.',
   'wizard.widget.title': 'Ana ekran widget’ı',
-  'wizard.widget.body': 'Bugünün alışkanlıklarını ana ekrandan tek dokunuşla işaretle. “Erek — Sayaç” ise su, sayfa gibi miktarlara +1 ekler.',
+  'wizard.widget.body': 'Bugünün alışkanlıklarını ve görevlerini ana ekrandan tek dokunuşla işaretle. “Erek — Sayaç” ise su, sayfa gibi miktarlara +1 ekler.',
   'wizard.widget.s1': 'Ana ekranda boş bir yere uzun bas.',
   'wizard.widget.s2': '“Widget’lar” seçeneğini aç.',
   'wizard.widget.s3': '“Erek — Bugün”ü bulup ana ekrana sürükle.',
