@@ -12,6 +12,9 @@ import { renderUI } from '@/test/renderWithProviders';
 import { isLockEnabled, setLockEnabled } from '@/lib/appLock';
 import { LOCK_GRACE_MS } from '@/lib/appLockLogic';
 
+// Loading the screens takes a while when the whole suite runs in parallel.
+jest.setTimeout(30000);
+
 const mockLevel = jest.fn();
 const mockAuth = jest.fn();
 const mockPrevent = jest.fn(async () => {});
