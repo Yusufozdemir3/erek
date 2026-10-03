@@ -24,6 +24,7 @@
 //   (4) do a verification build and confirm the trace shows up readable in the dashboard.
 
 import * as Sentry from '@sentry/react-native';
+import { scrubBreadcrumb, scrubEvent } from './sentryScrub';
 
 const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
@@ -53,6 +54,11 @@ if (isSentryConfigured) {
     // send identifying information" promise made in §5 of the privacy policy.
     // Relying on the default would mean an SDK upgrade could silently break that promise.
     sendDefaultPii: false,
+    // Breadcrumbs (console output, tapped-element labels) and the user/request
+    // blocks can carry the content of habits and tasks; the policy promises a
+    // report without it — see sentryScrub.ts for what survives.
+    beforeBreadcrumb: (b) => scrubBreadcrumb(b),
+    beforeSend: (event) => scrubEvent(event),
   });
 }
 
