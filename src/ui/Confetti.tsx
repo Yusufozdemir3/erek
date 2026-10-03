@@ -1,6 +1,8 @@
 // A short confetti burst for celebrations (a day fully completed, a streak
 // medal earned). Purely decorative: it never intercepts touches and unmounts
 // itself a few seconds after each burst. Bump `burstId` to play it again.
+// With the phone's "remove animations" setting on, nothing is drawn (the haptic
+// tick on completion is the acknowledgement).
 
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -11,6 +13,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { useReduceMotion } from '@/ui/useReduceMotion';
 
 const COLORS = ['#f97316', '#10b981', '#3b82f6', '#eab308', '#ec4899', '#8b5cf6'];
 const PIECES = 30;
@@ -70,6 +73,7 @@ function Piece({ index, width, height }: { index: number; width: number; height:
 export function Confetti({ burstId }: { burstId: number }) {
   const { width, height } = useWindowDimensions();
   const [visibleBurst, setVisibleBurst] = useState(0);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     if (burstId === 0) return;
@@ -78,7 +82,7 @@ export function Confetti({ burstId }: { burstId: number }) {
     return () => clearTimeout(id);
   }, [burstId]);
 
-  if (visibleBurst === 0) return null;
+  if (visibleBurst === 0 || reduceMotion) return null;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {Array.from({ length: PIECES }, (_, i) => (

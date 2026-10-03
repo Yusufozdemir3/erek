@@ -85,5 +85,5 @@ const makeStyles = (c: Colors) =>
     text: { flex: 1, fontSize: 13, color: c.muted },
     notice: { color: c.text, fontWeight: '600' },
     error: { color: c.danger },
-    undo: { fontSize: 14, fontWeight: '800', color: c.primary },
+    undo: { fontSize: 14, fontWeight: '800', color: c.primary, paddingVertical: 12, paddingHorizontal: 4 },
   });

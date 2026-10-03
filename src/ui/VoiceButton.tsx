@@ -3,10 +3,11 @@
 // motion" is on) — the user always sees when the mic is open, on top of
 // Android's own green privacy dot.
 
-import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, StyleSheet } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/i18n/I18nProvider';
+import { useReduceMotion } from '@/ui/useReduceMotion';
 import { useTheme } from '@/ui/ThemeProvider';
 import type { Colors } from '@/ui/theme';
 
@@ -22,19 +23,7 @@ export function VoiceButton({ listening, onPress, label }: Props) {
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const pulse = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((v) => alive && setReduceMotion(v))
-      .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => {
-      alive = false;
-      sub.remove();
-    };
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     if (!listening || reduceMotion) {

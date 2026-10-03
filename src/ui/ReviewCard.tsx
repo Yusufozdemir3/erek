@@ -62,7 +62,7 @@ export function ReviewCard({ today, hasData }: Props) {
         </View>
         <Feather name="chevron-right" size={18} color={colors.faint} />
       </Pressable>
-      <Pressable onPress={remember} hitSlop={10} accessibilityRole="button" accessibilityLabel={t('review.cardDismiss')}>
+      <Pressable onPress={remember} hitSlop={16} accessibilityRole="button" accessibilityLabel={t('review.cardDismiss')}>
         <Feather name="x" size={18} color={colors.faint} />
       </Pressable>
     </View>
