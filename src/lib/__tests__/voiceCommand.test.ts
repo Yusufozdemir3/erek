@@ -72,6 +72,18 @@ describe('Türkçe', () => {
     }
   });
 
+  it('tek sözcüklü başlıkta fiil eşleşmese de olur ("su içtim" → "Su"), uzun başlıkta farklı fiil olmaz', () => {
+    const bare = items({ habits: [{ id: 'su', title: 'Su', kind: 'numeric' }, { id: 'kitap', title: 'Kitap oku', kind: 'binary' }], tasks: [] });
+    expect(id(one('su içtim', 'tr', bare))).toBe('su');
+    expect(id(one('iki bardak su içtim', 'tr', bare))).toBe('su');
+    expect(parseVoiceCommand('kitap sattım', 'tr', bare)).toEqual(NONE);
+  });
+
+  it('bugün 3 sayfa okudum: sayıdan sonraki birim cezalandırmaz', () => {
+    const set = items({ habits: [{ id: 'kitap', title: 'Kitap oku', kind: 'numeric' }], tasks: [] });
+    expect(one('bugün 3 sayfa okudum', 'tr', set)).toMatchObject({ habit: { id: 'kitap' }, amount: 3 });
+  });
+
   it('zamanlayıcı alışkanlığına komut verilmez', () => {
     expect(parseVoiceCommand('meditasyon yaptım', 'tr', items())).toEqual(NONE);
   });

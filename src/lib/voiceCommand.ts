@@ -258,7 +258,11 @@ function coverage(heard: Heard, title: string, lang: Lang): number {
     const hit = titleWords.some((tw) => kit.same(w, tw));
     if (hit) matched++;
     // A unit word that isn't in the title ("2 bardak su") doesn't count against.
-    if (hit || !heard.units.has(i)) counted++;
+    // Neither does the done-verb when the title is one bare noun ("Su", "Yoga"):
+    // "su içtim" has to work for a habit called just "Su". A longer title carries
+    // its own verb ("Kitap oku"), so a different verb ("kitap sattım") must not match.
+    const forgiven = heard.units.has(i) || (titleWords.length === 1 && kit.isDoneWord(w));
+    if (hit || !forgiven) counted++;
   }
   return matched === 0 || counted === 0 ? 0 : matched / counted;
 }
