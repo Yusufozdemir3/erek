@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { LogBox } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,7 @@ import { I18nProvider, useI18n } from '@/i18n/I18nProvider';
 import { ensureAndroidChannel, setNotificationHandler } from '@/lib/notifications';
 import { loadHapticsPref } from '@/lib/haptics';
 import { Sentry } from '@/lib/sentry';
+import { CrashScreen } from '@/ui/CrashScreen';
 
 // expo-notifications logs a warning in Expo Go that push (remote) notifications
 // aren't supported. Reminders are LOCAL notifications and work fine in Expo Go;
@@ -136,6 +137,12 @@ function RootLayout() {
       </ThemeProvider>
     </I18nProvider>
   );
+}
+
+// A screen that crashes while rendering shows this instead of closing the app.
+// expo-router mounts it outside our providers, so CrashScreen needs none.
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <CrashScreen error={error} retry={retry} report={(e) => Sentry.captureException(e)} />;
 }
 
 // If Sentry isn't configured (no DSN), this wrapper stays a harmless pass-through
