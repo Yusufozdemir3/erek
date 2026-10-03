@@ -27,6 +27,10 @@ export interface AppLock {
   unlock: () => Promise<void>;
 }
 
+// If the stored flag can't be read within this time the lock stays off: a cover
+// that waits forever on broken storage would lock people out of their own app.
+export const READ_TIMEOUT_MS = 3000;
+
 export function useAppLock(): AppLock {
   const { t } = useI18n();
   const [ready, setReady] = useState(false);
@@ -39,7 +43,8 @@ export function useAppLock(): AppLock {
 
   useEffect(() => {
     mounted.current = true;
-    isLockEnabled().then((on) => {
+    const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), READ_TIMEOUT_MS));
+    Promise.race([isLockEnabled(), timeout]).then((on) => {
       if (!mounted.current) return;
       enabled.current = on;
       applyScreenSecurity(on);
