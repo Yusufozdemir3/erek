@@ -14,7 +14,8 @@
 // No regex runs over the whole sentence: only per-word checks.
 
 import type { Lang } from '@/i18n/translations';
-import { lower, tokenize } from '@/lib/quickAdd/core';
+import { tokenize } from '@/lib/quickAdd/core';
+import { fold } from '@/lib/textFold';
 
 export interface CommandHabit {
   id: string;
@@ -45,16 +46,6 @@ export const MIN_COVERAGE = 0.6; // share of the spoken content words that must 
 const MAX_OPTIONS = 3;
 const TIE_MARGIN = 0.15;
 const MAX_AMOUNT = 999;
-
-// — Folding —
-const FOLD: Record<string, string> = { ı: 'i', ğ: 'g', ş: 's', ç: 'c', ö: 'o', ü: 'u', ä: 'a', ß: 'ss', â: 'a', î: 'i', û: 'u' };
-
-export function fold(s: string, lang: Lang): string {
-  const l = lower(s, lang).replace(/['’`]/g, '');
-  let out = '';
-  for (const ch of l) out += FOLD[ch] ?? ch;
-  return out.normalize('NFD').replace(/[̀-ͯ]/g, '');
-}
 
 // — Numbers (words and digits) —
 const NUM_WORDS: Record<Lang, Record<string, number>> = {

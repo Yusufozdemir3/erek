@@ -15,7 +15,7 @@
 // revealed with a single tap if wanted.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ import { reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, todayDate, toYmd } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
+import { MAX_QUERY_LEN, matchesWords, queryWords } from '@/lib/search';
 import { cancelTaskReminders, refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
@@ -39,6 +40,9 @@ import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { PRIORITY_COLOR, shortDate, type Colors } from '@/ui/theme';
+
+// The search field only appears once the list is long enough to need it.
+const SEARCH_MIN_TASKS = 8;
 
 // Default visibility window for completed tasks. Long enough to answer "what
 // did I do yesterday", short enough not to turn the list into an archive.
@@ -78,6 +82,9 @@ export default function TasksScreen() {
   // The completed section starts collapsed so finished work doesn't push
   // pending tasks off screen; the header row shows how many are hidden.
   const [completedOpen, setCompletedOpen] = useState(false);
+  // Search narrows the list by title; while searching, finished tasks that
+  // match are listed too (searching for something you did is normal).
+  const [query, setQuery] = useState('');
 
   const reload = useCallback(() => {
     // Ordering (completed ones to the bottom) now happens in SQL — no need to sort again in JS.
@@ -97,17 +104,27 @@ export default function TasksScreen() {
 
   const remaining = useMemo(() => tasks.filter((t) => t.completed_at === null).length, [tasks]);
 
+  const words = useMemo(() => queryWords(query, lang), [query, lang]);
+  const searching = words.length > 0;
+  // A search that's been typed stays visible even if the list later shrinks below the threshold.
+  const showSearch = tasks.length >= SEARCH_MIN_TASKS || query.length > 0;
+
   const rows = useMemo<Row[]>(() => {
-    const pending = tasks.filter((t) => t.completed_at === null);
-    const completed = tasks.filter((t) => t.completed_at !== null);
+    const visible = searching ? tasks.filter((t) => matchesWords(t.title, words, lang)) : tasks;
+    const pending = visible.filter((t) => t.completed_at === null);
+    const completed = visible.filter((t) => t.completed_at !== null);
     const out: Row[] = pending.map((task) => ({ kind: 'task', task }));
+    if (searching) {
+      completed.forEach((task) => out.push({ kind: 'task', task }));
+      return out;
+    }
     const completedCount = completed.length + olderCompletedCount;
     if (completedCount > 0) {
       out.push({ kind: 'divider', count: completedCount });
       if (completedOpen) completed.forEach((task) => out.push({ kind: 'task', task }));
     }
     return out;
-  }, [tasks, olderCompletedCount, completedOpen]);
+  }, [tasks, olderCompletedCount, completedOpen, searching, words, lang]);
 
   // Label set for the recurring-task badge ("🔁 Every day / Mon·Wed·Fri /
   // Every year: ...") — see helpers.buildScheduleLabels.
@@ -273,7 +290,7 @@ export default function TasksScreen() {
         keyExtractor={(r) => (r.kind === 'divider' ? 'completed-divider' : r.task.id)}
         // Row appearance also depends on state outside the list (an open swipe,
         // subtask badges) — FlatList doesn't know about these, so we declare them explicitly.
-        extraData={`${openRowId}|${tasks.length}|${completedOpen}`}
+        extraData={`${openRowId}|${tasks.length}|${completedOpen}|${query}`}
         contentContainerStyle={shared.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -292,16 +309,46 @@ export default function TasksScreen() {
               <HeaderActions />
             </View>
             <Text style={shared.subtitle}>{tr('screen.tasksSubtitle', { n: remaining })}</Text>
+            {showSearch && (
+              <View style={styles.searchBox}>
+                <Feather name="search" size={16} color={colors.faint} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={tr('tasks.searchPlaceholder')}
+                  placeholderTextColor={colors.faint}
+                  maxLength={MAX_QUERY_LEN}
+                  returnKeyType="search"
+                  autoCorrect={false}
+                  accessibilityLabel={tr('tasks.searchPlaceholder')}
+                />
+                {query.length > 0 && (
+                  <Pressable
+                    onPress={() => setQuery('')}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={tr('tasks.searchClear')}
+                  >
+                    <Feather name="x" size={16} color={colors.faint} />
+                  </Pressable>
+                )}
+              </View>
+            )}
           </>
         }
         ListEmptyComponent={
-          <EmptyState emoji="📝" title={tr('empty.tasksTitle')} subtitle={tr('empty.tasksBody')} />
+          searching ? (
+            <EmptyState emoji="🔍" title={tr('tasks.searchEmpty')} />
+          ) : (
+            <EmptyState emoji="📝" title={tr('empty.tasksTitle')} subtitle={tr('empty.tasksBody')} />
+          )
         }
         ListFooterComponent={
           // If older completed tasks are hidden, they can be revealed with one
           // tap. The button only shows up when something is genuinely hidden —
           // it never promises an empty result.
-          completedOpen && olderCompletedCount > 0 ? (
+          !searching && completedOpen && olderCompletedCount > 0 ? (
             <Pressable
               style={styles.showOlderBtn}
               onPress={() => setShowAllCompleted(true)}
@@ -338,6 +385,19 @@ const makeStyles = (c: Colors) =>
       marginBottom: 4,
     },
     sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.muted },
+    searchBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 16,
+      paddingHorizontal: 12,
+      minHeight: 44,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    searchInput: { flex: 1, fontSize: 15, color: c.text, paddingVertical: 8 },
     rowSpacing: { marginBottom: 8 },
     noMargin: { marginBottom: 0 },
     showOlderBtn: { alignItems: 'center', paddingVertical: 16, marginTop: 4 },
