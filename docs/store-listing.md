@@ -90,6 +90,10 @@ Google hesabınla giriş yaptıysan bir davet koduyla arkadaşlarına bağlanabi
 
 Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma saati ekleyebilirsin. Bildirimler cihazında yerel olarak planlanır. Bildirim sesini ve titreşimi ayarlayabilir, kendi ses dosyanı seçebilirsin.
 
+▸ HAFTALIK ÖZET
+
+Son 7 günün tamamlama oranı, önceki haftayla karşılaştırma, günlük çubuklar. Bugün ekranında "su içtim" diyerek alışkanlığı sesle işaretleyebilirsin.
+
 ▸ ANA EKRAN WIDGET'LARI
 
 Bugünün alışkanlıklarını ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar.
@@ -104,11 +108,11 @@ Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi
 
 ▸ VERİLERİN SENDE
 
-Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin.
+Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin. Verilerini dışa aktarabilir, uygulamayı ekran kilidinle koruyabilirsin.
 
 Profil › Gizlilik ve çevrimdışı, neyin nerede durduğunu telefonunun gerçek durumuna göre gösterir. Uygulama içi analitik yok, verilerin satılmaz.
 ```
-(3707)
+(3947)
 
 ---
 
@@ -173,6 +177,10 @@ If you sign in with Google, you can connect with friends using an invite code. S
 
 Add as many reminder times as you like to habits, tasks and goals. Notifications are scheduled locally on your device. You can configure sound and vibration, including your own sound file.
 
+▸ WEEKLY REVIEW
+
+Your completion rate for the last 7 days, compared with the week before, plus a bar per day. On Today you can check a habit off by voice: say "I drank water".
+
 ▸ HOME SCREEN WIDGETS
 
 Check off today's habits right from your home screen; the Counter widget adds +1 to glasses, pages and the like with one tap.
@@ -187,11 +195,11 @@ Light, dark and system themes. Two different dark tones, plus an accent colour o
 
 ▸ YOUR DATA IS YOURS
 
-Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app.
+Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app. Export your data, or lock the app with your screen lock.
 
 Profile › Privacy and offline shows what is kept where, based on your phone’s actual state. No in-app analytics; your data is never sold.
 ```
-(3697)
+(3931)
 
 ---
 
@@ -215,7 +223,7 @@ Erek hilft dir, Gewohnheiten, Aufgaben und Ziele an einem Ort zu verfolgen. Die 
 • Numerisch: ein tägliches Mengenziel (8 Gläser Wasser, 30 Seiten)
 • Timer: ein Zeitziel mit Countdown (20 Minuten Meditation)
 
-Du bestimmst die Häufigkeit: täglich, an bestimmten Wochentagen, alle X Tage oder X-mal pro Woche. Start- und Enddatum sind möglich. Gib jeder Gewohnheit ein Symbol und eine Farbe, damit deine Liste auf einen Blick lesbar ist.
+Du bestimmst die Häufigkeit: täglich, an bestimmten Wochentagen, alle X Tage oder X-mal pro Woche. Start- und Enddatum sind möglich. Symbol und Farbe pro Gewohnheit machen die Liste übersichtlich.
 
 ▸ SERIEN UND ABZEICHEN
 
@@ -250,11 +258,15 @@ Du kannst eine Gewohnheit mit einem Ziel verknüpfen: Jedes Mal, wenn du die Gew
 
 ▸ MIT FREUNDEN
 
-Wenn du dich mit Google anmeldest, kannst du dich per Einladungscode mit Freunden verbinden. Teile eine Gewohnheit, damit sie deine Serien und deinen Kalender sehen. Teile eine Aufgabe, damit sie samt Teilaufgaben in ihrer Liste erscheint und abgehakt werden kann. Teile ein Ziel und tragt gemeinsam Fortschritt ein. Du entscheidest, was du mit wem teilst; deine E-Mail-Adresse wird nie angezeigt.
+Wenn du dich mit Google anmeldest, kannst du dich per Einladungscode mit Freunden verbinden. Teile eine Gewohnheit, damit sie deine Serien und deinen Kalender sehen. Teile eine Aufgabe samt Teilaufgaben; Freunde können sie abhaken. Teile ein Ziel und tragt gemeinsam Fortschritt ein. Du entscheidest, was du mit wem teilst; deine E-Mail-Adresse wird nie angezeigt.
 
 ▸ ERINNERUNGEN
 
 Füge Gewohnheiten, Aufgaben und Zielen beliebig viele Erinnerungszeiten hinzu. Benachrichtigungen werden lokal auf deinem Gerät geplant. Ton und Vibration sind einstellbar, auch mit eigener Audiodatei.
+
+▸ WOCHENRÜCKBLICK
+
+Quote der letzten 7 Tage, Vergleich zur Vorwoche. Unter Heute hakst du per Sprache ab: „Wasser getrunken“.
 
 ▸ HOMESCREEN-WIDGETS
 
@@ -262,19 +274,19 @@ Hake Gewohnheiten direkt auf dem Startbildschirm ab; das Zähler-Widget zählt G
 
 ▸ WERBUNG
 
-Wenn du die App in den Vordergrund holst, siehst du gelegentlich (höchstens alle 30 Minuten) eine Vollbildanzeige. Beim ersten Start und direkt nach dem Erledigen einer Gewohnheit oder Aufgabe wird nie Werbung gezeigt.
+Wenn du die App in den Vordergrund holst, siehst du gelegentlich (höchstens alle 30 Minuten) eine Vollbildanzeige. Nie beim ersten Start und nie direkt nach dem Erledigen.
 
 ▸ DARSTELLUNG
 
-Helles, dunkles und Systemdesign. Zwei dunkle Töne sowie eine frei wählbare Akzentfarbe. Verfügbar auf Türkisch, Englisch und Deutsch.
+Helles, dunkles und Systemdesign, zwei dunkle Töne, frei wählbare Akzentfarbe. Verfügbar auf Türkisch, Englisch und Deutsch.
 
 ▸ DEINE DATEN GEHÖREN DIR
 
-Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App.
+Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App. Export und App-Sperre.
 
 Profil › Datenschutz und Offline zeigt, was wo liegt. Keine In-App-Analyse; deine Daten werden nie verkauft.
 ```
-(3938)
+(3968)
 
 ---
 
