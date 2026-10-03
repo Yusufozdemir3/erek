@@ -15,6 +15,7 @@ import { buildSummary, NEEDS_INTERNET, WORKS_OFFLINE, type MicPermission, type W
 import { getMicPermission } from '@/lib/voice';
 import { getOnlineConsent } from '@/lib/voicePrefs';
 import { useAppData } from '@/ui/AppData';
+import { AppLockCard } from '@/ui/AppLockCard';
 import { makeProfileStyles } from '@/ui/profileStyles';
 import { useTheme } from '@/ui/ThemeProvider';
 import type { Colors } from '@/ui/theme';
@@ -77,6 +78,8 @@ export default function PrivacyScreen() {
           <Text style={local.rowBody}>{t(`privacy.row.${r.id}.${r.state}`, r.vars)}</Text>
         </View>
       ))}
+
+      <AppLockCard />
 
       <View style={[styles.card, { marginTop: 20 }]}>
         <Text style={styles.cardTitle}>{t('privacy.offline.title')}</Text>

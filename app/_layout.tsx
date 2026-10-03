@@ -16,6 +16,7 @@ import {
 import { AppDataProvider } from '@/ui/AppData';
 import { LoginGate } from '@/ui/LoginScreen';
 import { OnboardingGate } from '@/ui/Onboarding';
+import { AppLockGate } from '@/ui/AppLockGate';
 import { PushBridge } from '@/ui/PushBridge';
 import { TimerProvider } from '@/ui/TimerProvider';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
@@ -106,6 +107,8 @@ function ThemedStack() {
       <LoginGate />
       {/* Friend nudges: push registration + opening a tapped nudge. */}
       <PushBridge />
+      {/* App lock: covers everything (even open sheets) while locked; off by default. */}
+      <AppLockGate />
     </NavThemeProvider>
   );
 }

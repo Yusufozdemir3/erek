@@ -71,6 +71,20 @@ jest.mock('expo-speech-recognition', () => ({
   useSpeechRecognitionEvent: () => {},
 }));
 
+// App lock (native-only modules): a phone with NO screen lock, so the lock stays
+// off unless a test mocks these itself (see AppLock.ui.test.tsx).
+jest.mock('expo-local-authentication', () => ({
+  SecurityLevel: { NONE: 0, SECRET: 1, BIOMETRIC_WEAK: 2, BIOMETRIC_STRONG: 3 },
+  getEnrolledLevelAsync: async () => 0,
+  hasHardwareAsync: async () => false,
+  isEnrolledAsync: async () => false,
+  authenticateAsync: async () => ({ success: false, error: 'not_enrolled' }),
+}));
+jest.mock('expo-screen-capture', () => ({
+  preventScreenCaptureAsync: async () => {},
+  allowScreenCaptureAsync: async () => {},
+}));
+
 afterEach(() => {
   const g = globalThis as any;
   g.__pickers = {};
