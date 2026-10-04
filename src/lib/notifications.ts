@@ -618,6 +618,46 @@ export async function sweepOrphanReminders(userId: string): Promise<number> {
   return orphans.length;
 }
 
+// WEEKLY REVIEW NUDGE: one weekly notification, Sunday 19:00, opt-in (off by
+// default). Its text is fixed (it says nothing about the user's data — the
+// review itself is computed when the app opens), so it never goes stale. The id
+// matches none of the habit:/task:/goal: prefixes, so the reminder sweeps and
+// cancelByPrefix leave it alone; rescheduleEverything and the settings toggle
+// are what (re)create or remove it. Returns false only when it should be
+// scheduled but the permission is missing.
+export const WEEKLY_REVIEW_ID = 'weekly-review';
+const WEEKLY_REVIEW_WEEKDAY = 1; // expo: 1 = Sunday
+const WEEKLY_REVIEW_HOUR = 19;
+
+export async function scheduleWeeklyReview(): Promise<boolean> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(WEEKLY_REVIEW_ID).catch(() => {});
+    const prefs = await getNotificationPrefs();
+    if (!prefs.enabled || !prefs.weeklyReview) return true;
+    if (!(await ensurePermission())) return false;
+    const lang = await getStoredLang();
+    await Notifications.scheduleNotificationAsync({
+      identifier: WEEKLY_REVIEW_ID,
+      content: {
+        title: translate(lang, 'notif.weeklyReviewTitle'),
+        body: translate(lang, 'notif.weeklyReviewBody'),
+        ...soundContent(prefs),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+        weekday: WEEKLY_REVIEW_WEEKDAY,
+        hour: WEEKLY_REVIEW_HOUR,
+        minute: 0,
+        channelId: channelIdFor(prefs, lang),
+      },
+    });
+    return true;
+  } catch (e) {
+    console.warn('[Bildirim] Haftalık özet bildirimi kurulamadı:', e);
+    return false;
+  }
+}
+
 // REBUILDS THE REMINDERS OF ALL THREE ENTITY TYPES FROM THE CURRENT DB STATE.
 //
 // Why a single function: this same triple call was being repeated on startup
@@ -647,6 +687,7 @@ export async function rescheduleEverything(userId: string): Promise<void> {
   await rescheduleAllGoalReminders(goalRepo.listByUser(userId)).catch((e) =>
     console.warn('[Bildirim] Hedef hatırlatmaları kurulamadı:', e)
   );
+  await scheduleWeeklyReview();
 }
 
 // Called after account merge/switch (see LoginScreen.onGoogle):

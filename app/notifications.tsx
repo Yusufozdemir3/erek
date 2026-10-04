@@ -16,6 +16,7 @@ import {
   rescheduleAllGoalReminders,
   rescheduleAllReminders,
   rescheduleAllTaskReminders,
+  scheduleWeeklyReview,
 } from '@/lib/notifications';
 import {
   DEFAULT_NOTIFICATION_PREFS,
@@ -40,6 +41,7 @@ const TYPE_ROWS: { key: BoolPrefKey; labelKey: string }[] = [
   { key: 'taskReminders', labelKey: 'profile.notifTaskReminders' },
   { key: 'goalReminders', labelKey: 'profile.notifGoalReminders' },
   { key: 'timerDone', labelKey: 'profile.notifTimerDone' },
+  { key: 'weeklyReview', labelKey: 'profile.notifWeeklyReview' },
 ];
 
 export default function NotificationsScreen() {
@@ -91,6 +93,9 @@ export default function NotificationsScreen() {
     // The master switch also decides whether this phone receives friend
     // nudges (see lib/pushRegistration.ts) — apply it now, not next foreground.
     if (key === 'enabled') saved.then(() => syncPushRegistration(uid, lang));
+    // The weekly nudge isn't part of rescheduleAll (it has no entity): apply it
+    // once the new value is stored.
+    if (key === 'enabled' || key === 'weeklyReview') saved.then(() => scheduleWeeklyReview());
   };
 
   // Opens the device's ringtone picker; if a choice is made (including Silent)

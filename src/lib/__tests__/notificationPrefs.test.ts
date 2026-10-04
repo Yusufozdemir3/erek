@@ -12,7 +12,7 @@ beforeEach(async () => {
 });
 
 describe('getNotificationPrefs', () => {
-  it('hiçbir tercih yazılmamışsa hepsi varsayılan (açık)', async () => {
+  it('hiçbir tercih yazılmamışsa varsayılanlar (haftalık özet hariç hepsi açık)', async () => {
     const p = await getNotificationPrefs();
     expect(p).toEqual({
       enabled: true,
@@ -20,6 +20,7 @@ describe('getNotificationPrefs', () => {
       taskReminders: true,
       goalReminders: true,
       timerDone: true,
+      weeklyReview: false, // isteğe bağlı: kullanıcı açar
       sound: true,
       vibration: true,
       customSoundUri: null,

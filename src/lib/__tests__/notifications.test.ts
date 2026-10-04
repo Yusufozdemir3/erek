@@ -22,7 +22,9 @@ import {
   scheduleGoalReminders,
   scheduleHabitReminders,
   scheduleTaskReminders,
+  scheduleWeeklyReview,
   sweepOrphanReminders,
+  WEEKLY_REVIEW_ID,
 } from '@/lib/notifications';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
@@ -421,5 +423,43 @@ describe('sweepOrphanReminders', () => {
     await sweepOrphanReminders(userId);
 
     expect(mockCancel).toHaveBeenCalledWith('goal:yok:r1');
+  });
+});
+
+describe('scheduleWeeklyReview', () => {
+  it('varsayılan kapalı: kurmaz ama eskisini temizler', async () => {
+    expect(await scheduleWeeklyReview()).toBe(true);
+    expect(mockCancel).toHaveBeenCalledWith(WEEKLY_REVIEW_ID);
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  it('açıkken Pazar 19:00 haftalık tetikleyici kurar; metin veriden bağımsız', async () => {
+    await setNotificationPref('weeklyReview', true);
+    expect(await scheduleWeeklyReview()).toBe(true);
+    expect(mockSchedule).toHaveBeenCalledTimes(1);
+    const arg = mockSchedule.mock.calls[0][0];
+    expect(arg.identifier).toBe(WEEKLY_REVIEW_ID);
+    expect(arg.trigger).toMatchObject({ type: 'WEEKLY', weekday: 1, hour: 19, minute: 0 });
+    expect(arg.content.title).toBe('Haftanın özeti hazır');
+  });
+
+  it('ana anahtar kapalıysa kurulmaz', async () => {
+    await setNotificationPref('weeklyReview', true);
+    await setNotificationPref('enabled', false);
+    await scheduleWeeklyReview();
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  it('izin yoksa false döner, kurmaz', async () => {
+    await setNotificationPref('weeklyReview', true);
+    mockGetPerms.mockResolvedValueOnce({ granted: false, canAskAgain: false });
+    expect(await scheduleWeeklyReview()).toBe(false);
+    expect(mockSchedule).not.toHaveBeenCalled();
+  });
+
+  it('yetim temizleyici haftalık özet bildirimine dokunmaz', async () => {
+    mockGetAll.mockResolvedValueOnce([{ identifier: WEEKLY_REVIEW_ID }]);
+    await sweepOrphanReminders('u1');
+    expect(mockCancel).not.toHaveBeenCalledWith(WEEKLY_REVIEW_ID);
   });
 });

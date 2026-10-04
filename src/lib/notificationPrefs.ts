@@ -12,6 +12,7 @@ export interface NotificationPrefs {
   taskReminders: boolean;    // task reminders
   goalReminders: boolean;    // goal "don't forget to log" reminders
   timerDone: boolean;        // timer "time's up" notification
+  weeklyReview: boolean;     // Sunday-evening "your week is ready" nudge (OFF by default: opt-in)
   sound: boolean;            // notification SOUND (routes to the sound channel on Android)
   vibration: boolean;        // notification VIBRATION (SEPARATE from sound; see notifications channel architecture)
   customSoundUri: string | null;  // content:// URI from the device's ringtone picker; null = system default
@@ -28,6 +29,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   taskReminders: true,
   goalReminders: true,
   timerDone: true,
+  weeklyReview: false,
   sound: true,
   vibration: true,
   customSoundUri: null,
@@ -40,6 +42,7 @@ const KEYS: Record<BoolPrefKey, string> = {
   taskReminders: 'notif:taskReminders',
   goalReminders: 'notif:goalReminders',
   timerDone: 'notif:timerDone',
+  weeklyReview: 'notif:weeklyReview',
   sound: 'notif:sound',
   vibration: 'notif:vibration',
 };
