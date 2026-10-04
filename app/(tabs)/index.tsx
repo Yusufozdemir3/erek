@@ -342,6 +342,10 @@ export default function TodayScreen() {
         items={[
           sharedLabel(t) ? { text: sharedLabel(t)!, icon: 'users' } : null,
           t.recurrence ? { text: scheduleLabel(t.recurrence, schedLabels), icon: 'repeat' } : null,
+          // Carried over from an earlier day and still open: say since when, in the danger color.
+          !done && t.due_date && t.due_date.slice(0, 10) < today
+            ? { text: shortDate(t.due_date, lang), icon: 'calendar', danger: true }
+            : null,
           subtaskCounts[t.id]
             ? {
                 text: `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`,
