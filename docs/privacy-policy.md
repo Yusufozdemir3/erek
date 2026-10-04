@@ -1,7 +1,7 @@
 # Gizlilik Politikası / Privacy Policy
 
 **Erek** ("Uygulama")
-Yürürlük tarihi / Effective date: **1 Ekim 2026 / October 1, 2026**
+Yürürlük tarihi / Effective date: **4 Ekim 2026 / October 4, 2026**
 
 ---
 
@@ -45,6 +45,10 @@ cihazınızın reklam kimliğini kendi AdMob sistemine göre işler — bu, hesa
 kullanımda da geçerlidir ve alışkanlık/görev/hedef verilerinizden tamamen
 bağımsız çalışır.
 
+**Ana ekran widget'ları:** Widget eklerseniz bugünkü alışkanlık, görev ve hedef başlıklarınız telefonunuzun ana ekranında görünür. Bu bilgi yalnızca cihazınızdaki yerel kopyadan okunur; widget üzerindeki dokunuşlar (işaretleme, +1) cihazdaki veritabanına yazılır ve hesapla girişliyseniz diğer verilerinizle birlikte eşitlenir. Başlıklar ana ekranda göründüğü için telefonunuzu başkaları görebiliyorsa onlar da görebilir; widget'ı dilediğiniz zaman kaldırabilirsiniz.
+
+**Uygulama kilidi:** Profil › Gizlilik ve çevrimdışı bölümünden uygulama kilidini açarsanız, uygulama açılırken telefonunuzun parmak izi/yüz tanıma ya da ekran kilidi doğrulaması istenir. Doğrulamayı Android yapar; biyometrik verileriniz Erek'e ya da herhangi bir sunucuya hiç ulaşmaz. Kilit açıkken ekran görüntüsü alma ve son uygulamalar önizlemesi engellenir.
+
 ### 2. Hesapla kullanım (isteğe bağlı bulut yedekleme)
 
 Uygulama ilk açılışta giriş öneren bir ekran gösterir; bu ekranı "Şimdilik geç"
@@ -68,8 +72,9 @@ Google hesabınızdaki **görünen adınız ve profil fotoğrafınızın bağlan
 saklanır; bunlar yalnızca arkadaş olarak bağlandığınız kişilere gösterilir
 (aşağıya bakın). Şifreniz bize hiçbir zaman ulaşmaz; doğrulamayı Google yapar.
 
-**Nerede saklanır:** Veriler, altyapı sağlayıcımız **Supabase** üzerinde
-barındırılan bir veritabanında tutulur. Her kullanıcı yalnızca kendi
+**Nerede saklanır:** Veriler, altyapı sağlayıcımız **Supabase** üzerinde,
+**Avrupa Birliği'nde (İrlanda, AB Batı 1 bölgesi)** barındırılan bir
+veritabanında tutulur. Her kullanıcı yalnızca kendi
 kayıtlarına ve kendisiyle açıkça paylaşılanlara erişebilir; bu kısıt
 veritabanı düzeyinde uygulanır.
 
@@ -288,6 +293,10 @@ processes your device's advertising identifier through its AdMob system — this
 applies even without an account and operates entirely independently of your
 habit/task/goal data.
 
+**Home-screen widgets:** if you add a widget, your habit, task and goal titles for today are shown on your phone's home screen. This is read only from the local copy on your device; taps on the widget (checking off, +1) are written to the database on your device and, if you are signed in, synced with your other data. Because the titles appear on the home screen, anyone who can see your phone can see them; you can remove the widget at any time.
+
+**App lock:** if you turn on the app lock under Profile › Privacy and offline, your phone's fingerprint/face recognition or screen-lock check is requested when the app opens. Android performs the check; your biometric data never reaches Erek or any server. While the lock is on, screenshots and the recent-apps preview are blocked.
+
 ### 2. Using Erek with an account (optional cloud backup)
 
 On first launch the app shows a screen offering sign-in; you can skip it with
@@ -311,7 +320,8 @@ shown only to people you connect with as friends (see below). Your password
 never reaches us; Google performs the authentication.
 
 **Where it is stored:** the data is held in a database hosted on our
-infrastructure provider, **Supabase.** Each user can access only their own
+infrastructure provider, **Supabase**, in the **European Union (Ireland, EU West 1
+region).** Each user can access only their own
 records and items explicitly shared with them; this restriction is enforced
 at the database level.
 

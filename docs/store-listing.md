@@ -457,9 +457,12 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
       §2/§7'deki yeni oturum modeli (çıkışta veriler cihazdan kaldırılır, girişte
       cihazdaki veri hesaba eklenir) canlıdaki metinde henüz yok — canlı metin
       Play'deki mevcut sürümün davranışını anlatıyor
-- [ ] Aynı yayında §1 ve §5'teki **sesli giriş** ve §2/§3'teki **arkadaş
-      hatırlatmaları** metni de canlıya alınmalı (md güncel; `docs/index.html`
-      yeniden üretilecek), yürürlük tarihi yayın günü yapılmalı
+- [x] 2026-10-04: md güncellendi (Supabase bölgesi **İrlanda / AB Batı 1**,
+      ana ekran widget'ları, uygulama kilidi, yürürlük 4 Ekim 2026) ve
+      `docs/index.html` md'den yeniden üretildi (`node scripts/build-privacy-html.js`;
+      sesli giriş, arkadaş hatırlatmaları, hesap silme çapaları dahil)
+- [ ] `docs/index.html` erek-privacy deposuna (GitHub Pages) yüklenecek — yeni
+      sürümle aynı gün; yürürlük tarihi yayın gününe çekilmeli
 
 **Play Console**
 - [ ] Veri güvenliği formu yukarıdaki tabloya göre güncellendi (ad, profil
