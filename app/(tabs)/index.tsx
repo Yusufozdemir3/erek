@@ -235,6 +235,42 @@ export default function TodayScreen() {
   // Runs a command the parser matched to one of today's items and describes
   // what happened; the Undo reverses exactly that write.
   const applyVoiceTarget = (target: Target): CommandNotice => {
+    if (target.kind === 'reopen') {
+      const t = tasks.find((x) => x.id === target.task.id);
+      if (!t || t.completed_at === null) return { text: tr('voiceCmd.notDoneYet', { title: target.task.title }) };
+      taskRepo.setCompleted(t.id, false);
+      tapLight();
+      refreshTaskReminders(t.id);
+      reload();
+      return {
+        text: tr('voiceCmd.taskReopened', { title: t.title }),
+        undo: () => {
+          taskRepo.setCompleted(t.id, true);
+          refreshTaskReminders(t.id);
+          reload();
+        },
+      };
+    }
+    if (target.kind === 'reschedule') {
+      const t = tasks.find((x) => x.id === target.task.id);
+      if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };
+      if (t.recurrence) return { text: tr('voiceCmd.postponeRecurring', { title: t.title }) };
+      // A spoken time wins; otherwise keep the task's own time of day.
+      const time = target.time ?? extractTime(t.due_date);
+      const before = t.due_date;
+      taskRepo.update(t.id, { due_date: time ? `${target.date}T${time}:00` : target.date });
+      notifySuccess();
+      refreshTaskReminders(t.id);
+      reload();
+      return {
+        text: tr('voiceCmd.taskRescheduled', { title: t.title, date: shortDate(target.date, lang) }),
+        undo: () => {
+          taskRepo.update(t.id, { due_date: before });
+          refreshTaskReminders(t.id);
+          reload();
+        },
+      };
+    }
     if (target.kind === 'timer') {
       const h = habits.find((x) => x.id === target.habit.id);
       if (!h || h.kind !== 'timer' || !h.target) return { text: tr('voiceCmd.notUnderstood') };
@@ -380,11 +416,23 @@ export default function TodayScreen() {
     return { text: tr('voiceCmd.timerStopped', { title }) };
   };
 
+  // "What's left today?": counts plus the first few names. Reads only.
+  const todaySummary = (): CommandNotice => {
+    const openTasks = tasks.filter((t) => t.completed_at === null);
+    const openHabits = habits.filter((h) => !h.completed);
+    if (openTasks.length === 0 && openHabits.length === 0) return { text: tr('voiceCmd.queryNothing') };
+    const names = [...openTasks.map((t) => t.title), ...openHabits.map((h) => h.title)].slice(0, 3).join(', ');
+    return { text: tr('voiceCmd.querySummary', { tasks: openTasks.length, habits: openHabits.length, names }) };
+  };
+
   const handleVoiceCommand = (text: string, show: (n: CommandNotice) => void) => {
     const cmd = parseVoiceCommand(text, lang, {
       habits: habits.map((h) => ({ id: h.id, title: h.title, kind: h.kind })),
       // Someone else's shared task is checked off through the server, never by voice.
       tasks: tasks.filter((t) => t.completed_at === null && !t.shared_owner_uid).map((t) => ({ id: t.id, title: t.title })),
+      doneTasks: tasks
+        .filter((t) => t.completed_at !== null && !t.shared_owner_uid && !t.recurrence)
+        .map((t) => ({ id: t.id, title: t.title })),
       goals: goalRepo
         .listByUser(user.id)
         .filter((g) => g.goal_type === 'numeric')
@@ -401,6 +449,10 @@ export default function TodayScreen() {
         ],
         { cancelable: true }
       );
+      return;
+    }
+    if (cmd.kind === 'query') {
+      show(todaySummary());
       return;
     }
     if (cmd.kind === 'stopTimer') {

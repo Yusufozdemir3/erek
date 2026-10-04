@@ -317,3 +317,30 @@ describe('sesle zamanlayıcı', () => {
     expect(parseVoiceCommand('stop smoking done', 'en', quit)).toMatchObject({ kind: 'one', target: { kind: 'habit', habit: { id: 'q' } } });
   });
 });
+
+describe('görevi geri açma, tarihe taşıma, "bugün ne var"', () => {
+  const NOW = new Date('2026-10-05T10:00:00'); // Pazartesi
+  const set = items({ doneTasks: [{ id: 'rapor', title: 'Rapor yaz' }] });
+
+  it('geri açar', () => {
+    expect(parseVoiceCommand('rapor yaz görevini geri aç', 'tr', set)).toMatchObject({ kind: 'one', target: { kind: 'reopen', task: { id: 'rapor' } } });
+    expect(parseVoiceCommand('reopen Rapor yaz', 'en', set)).toMatchObject({ kind: 'one', target: { kind: 'reopen' } });
+    expect(parseVoiceCommand('öffne Rapor yaz wieder', 'de', set)).toMatchObject({ kind: 'one', target: { kind: 'reopen' } });
+    expect(parseVoiceCommand('başka bir görevi geri aç', 'tr', set)).toEqual(NONE);
+  });
+
+  it('belirli bir güne taşır; saat söylenirse onu kullanır', () => {
+    const r = parseVoiceCommand('annemi ara görevini cumaya taşı', 'tr', items(), NOW);
+    expect(r).toMatchObject({ kind: 'one', target: { kind: 'reschedule', task: { id: 'anne' }, date: '2026-10-09', time: null } });
+    const t = parseVoiceCommand('move Annemi ara to friday', 'en', items(), NOW);
+    expect(t).toMatchObject({ kind: 'one', target: { kind: 'reschedule', date: '2026-10-09' } });
+    expect(parseVoiceCommand('annemi ara görevini cumaya taşı', 'tr', items({ tasks: [] }), NOW)).toEqual(NONE);
+  });
+
+  it('"bugün ne var" soru olarak anlaşılır, bitti cümleleri soru değildir', () => {
+    expect(parseVoiceCommand('bugün ne var', 'tr', items())).toEqual({ kind: 'query' });
+    expect(parseVoiceCommand("what's left today", 'en', items())).toEqual({ kind: 'query' });
+    expect(parseVoiceCommand('was steht heute an', 'de', items())).toEqual({ kind: 'query' });
+    expect(parseVoiceCommand('kitap okudum', 'tr', items())).toMatchObject({ kind: 'one' });
+  });
+});

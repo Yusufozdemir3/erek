@@ -264,3 +264,44 @@ describe('Bugün: sesle yönetim (erteleme, hedef, zamanlayıcı)', () => {
     expect(await u.findByText('Çalışan zamanlayıcı yok')).toBeTruthy();
   });
 });
+
+describe('Bugün: sesle geri açma, tarihe taşıma, soru', () => {
+  it('tamamlanmış görevi geri açar; Geri al yeniden tamamlar', async () => {
+    habitRepo.create({ user_id: mockUserId, title: 'Başka' });
+    const t = taskRepo.create({ user_id: mockUserId, title: 'Rapor yaz', due_date: todayDate() });
+    taskRepo.setCompleted(t.id, true);
+    const u = await renderUI(<TodayScreen />);
+
+    await say(u, 'rapor yaz görevini geri aç');
+
+    await waitFor(() => expect(taskRepo.getById(t.id)?.completed_at).toBeNull());
+    expect(await u.findByText('“Rapor yaz” görevi yeniden açıldı')).toBeTruthy();
+    fireEvent.press(u.getByText('Geri al'));
+    expect(taskRepo.getById(t.id)?.completed_at).not.toBeNull();
+  });
+
+  it('görevi söylenen güne taşır; Geri al eski tarihi getirir', async () => {
+    habitRepo.create({ user_id: mockUserId, title: 'Başka' });
+    const t = taskRepo.create({ user_id: mockUserId, title: 'Annemi ara', due_date: todayDate() });
+    const u = await renderUI(<TodayScreen />);
+
+    await say(u, 'annemi ara görevini haftaya taşı');
+
+    await waitFor(() => expect(taskRepo.getById(t.id)?.due_date?.slice(0, 10)).not.toBe(todayDate()));
+    expect((taskRepo.getById(t.id)?.due_date ?? '').slice(0, 10) > todayDate()).toBe(true);
+    fireEvent.press(u.getByText('Geri al'));
+    expect(taskRepo.getById(t.id)?.due_date).toBe(todayDate());
+  });
+
+  it('"bugün ne var" kalanları sayar, hiçbir şeyi değiştirmez', async () => {
+    habitRepo.create({ user_id: mockUserId, title: 'Kitap oku' });
+    const t = taskRepo.create({ user_id: mockUserId, title: 'Alışveriş yap', due_date: todayDate() });
+    const u = await renderUI(<TodayScreen />);
+
+    await say(u, 'bugün ne var');
+
+    expect(await u.findByText('Kalan: 1 görev, 1 alışkanlık — Alışveriş yap, Kitap oku')).toBeTruthy();
+    expect(taskRepo.getById(t.id)?.completed_at).toBeNull();
+    expect(u.queryByText('Geri al')).toBeNull();
+  });
+});

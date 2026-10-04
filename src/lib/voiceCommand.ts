@@ -15,6 +15,7 @@
 
 import type { Lang } from '@/i18n/translations';
 import { tokenize } from '@/lib/quickAdd/core';
+import { parseTask } from '@/lib/quickAdd/parseTask';
 import { fold } from '@/lib/textFold';
 
 export interface CommandHabit {
@@ -37,6 +38,7 @@ export interface CommandItems {
   habits: CommandHabit[]; // today's habits that can still take a command
   tasks: CommandTask[]; // open tasks
   goals?: CommandGoal[]; // the user's own counting (numeric) goals
+  doneTasks?: CommandTask[]; // tasks completed recently (can be reopened)
 }
 
 export type Target =
@@ -44,13 +46,16 @@ export type Target =
   | { kind: 'task'; task: CommandTask }
   | { kind: 'postpone'; task: CommandTask } // "move X to tomorrow"
   | { kind: 'goal'; goal: CommandGoal; amount: number } // "add 5 km to my running goal"
-  | { kind: 'timer'; habit: CommandHabit }; // "start meditation"
+  | { kind: 'timer'; habit: CommandHabit } // "start meditation"
+  | { kind: 'reopen'; task: CommandTask } // "reopen the shopping task"
+  | { kind: 'reschedule'; task: CommandTask; date: string; time: string | null }; // "move X to friday"
 
 export type VoiceCommand =
   | { kind: 'none' }
   | { kind: 'one'; target: Target }
   | { kind: 'choose'; options: Target[] } // several fit equally well (2-3)
-  | { kind: 'stopTimer'; habitId?: string }; // "stop the timer" (habitId when a habit was named)
+  | { kind: 'stopTimer'; habitId?: string } // "stop the timer" (habitId when a habit was named)
+  | { kind: 'query' }; // "what's left today?"
 
 export const MIN_COVERAGE = 0.6; // share of the spoken content words that must match
 const MAX_OPTIONS = 3;
@@ -142,6 +147,9 @@ interface LangKit {
   startPrefixes: string[];
   stopPrefixes: string[];
   timerPrefixes: string[];
+  // "reopen" ("geri aç", "wieder öffnen") and "what's left today?".
+  isReopen(words: string[]): boolean;
+  isQuery(words: string[]): boolean;
   // Do a spoken word and a title word mean the same thing?
   same(spoken: string, title: string): boolean;
 }
@@ -187,13 +195,15 @@ const TR: LangKit = {
   ]),
   stop: new Set(['ben', 'bugun', 'az', 'once', 'simdi', 've', 'da', 'de', 'bir', 'artik', 'zaten', 'hemen']),
   nounPrefixes: ['gorev', 'aliskanlik'],
-  postponePrefixes: ['ertel', 'kaydir'],
+  postponePrefixes: ['ertel', 'kaydir', 'tasi'],
   tomorrowPrefixes: ['yarin'],
   addPrefixes: ['ekle'],
   goalPrefixes: ['hedef'],
   startPrefixes: ['baslat', 'basla'],
   stopPrefixes: ['durdur', 'duraklat'],
   timerPrefixes: ['zamanlayic', 'sayac', 'kronometre'],
+  isReopen: (ws) => ws.some((w) => w === 'geri' || w.startsWith('yeniden')) && ws.some((w) => ['ac', 'acin', 'acti', 'actim'].includes(w)),
+  isQuery: (ws) => ws.some((w, i) => (w === 'ne' && ws[i + 1] === 'var') || w === 'neler' || (w === 'kaldi' && ws.includes('ne'))),
   isDoneWord: (w) => TR.generic.has(w) || (w.length >= 5 && /[dt][iu][mk]$/.test(w)),
   same: trSame,
 };
@@ -238,6 +248,9 @@ const EN: LangKit = {
   startPrefixes: ['start', 'begin'],
   stopPrefixes: ['stop', 'pause'],
   timerPrefixes: ['timer', 'stopwatch'],
+  isReopen: (ws) => ws.some((w) => w.startsWith('reopen') || w === 'uncheck' || w === 'untick'),
+  isQuery: (ws) =>
+    ws.some((w) => w === 'what' || w === 'whats' || w.startsWith("what'")) && ws.some((w) => ['today', 'left', 'remaining', 'have', 'whats', 'todo', 'plan'].includes(w)) && !ws.some((w) => ['did', 'done', 'finished', 'completed'].includes(w)),
   isDoneWord: (w) =>
     EN.generic.has(w) || (w.length >= 4 && w.endsWith('ed')) || Object.prototype.hasOwnProperty.call(EN_IRREGULAR, w),
   same: (a, b) => a === b || enStem(a) === enStem(b),
@@ -275,6 +288,8 @@ const DE: LangKit = {
   startPrefixes: ['start', 'beginn'],
   stopPrefixes: ['stopp', 'pausier', 'anhalt'],
   timerPrefixes: ['timer', 'stoppuhr'],
+  isReopen: (ws) => ws.some((w) => w.startsWith('wieder')) && ws.some((w) => w.startsWith('offn') || w.startsWith('offne')),
+  isQuery: (ws) => ws.includes('was') && ws.some((w) => w.startsWith('steht') || w.startsWith('ansteht') || w === 'habe' || w === 'offen'),
   isDoneWord: (w) => DE.generic.has(w) || /^ge.{3,}(?:t|en)$/.test(w) || Object.prototype.hasOwnProperty.call(DE_IRREGULAR, w),
   same: (a, b) => a === b || deStem(a) === deStem(b),
 };
@@ -294,6 +309,9 @@ interface Heard {
   stop: boolean; // a "stop/pause" word was said
   timerNoun: boolean; // "timer" itself was said
   cmdWords: Set<number>; // start/stop/timer words: not part of an item's name
+  postWords: Set<number>; // postpone/move words
+  reopen: boolean;
+  query: boolean;
 }
 
 function listen(text: string, lang: Lang): Heard {
@@ -323,6 +341,10 @@ function listen(text: string, lang: Lang): Heard {
   const isStart = (w: string) => kit.startPrefixes.some((p) => w.startsWith(p));
   const isStop = (w: string) => kit.stopPrefixes.some((p) => w.startsWith(p));
   const isTimerNoun = (w: string) => kit.timerPrefixes.some((p) => w.startsWith(p));
+  const postWords = new Set<number>();
+  words.forEach((w, i) => {
+    if (isPost(w)) postWords.add(i);
+  });
   const cmdWords = new Set<number>();
   words.forEach((w, i) => {
     if (isStart(w) || isStop(w) || isTimerNoun(w)) cmdWords.add(i);
@@ -337,7 +359,9 @@ function listen(text: string, lang: Lang): Heard {
     content.push(i);
   });
   return {
-    words, amount, content, units, done, postpone, add, cmdWords,
+    words, amount, content, units, done, postpone, add, cmdWords, postWords,
+    reopen: kit.isReopen(words),
+    query: kit.isQuery(words),
     start: words.some(isStart),
     stop: words.some(isStop),
     timerNoun: words.some(isTimerNoun),
@@ -367,8 +391,10 @@ function coverage(heard: Heard, title: string, lang: Lang): number {
   return matched === 0 || counted === 0 ? 0 : matched / counted;
 }
 
-export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems): VoiceCommand {
+export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems, now: Date = new Date()): VoiceCommand {
   const heard = listen(text, lang);
+  // "What's left today?" — a question, never a write.
+  if (heard.query && !heard.done) return { kind: 'query' };
   // Timers are run, not ticked: "meditasyonu başlat", "zamanlayıcıyı durdur".
   if (heard.start || heard.stop) {
     const rest: Heard = { ...heard, content: heard.content.filter((i) => !heard.cmdWords.has(i)) };
@@ -383,6 +409,29 @@ export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems)
     }
   }
   if (heard.content.length === 0) return { kind: 'none' };
+  // "alışveriş görevini geri aç": a task completed earlier is opened again.
+  if (heard.reopen && items.doneTasks?.length) {
+    const rest: Heard = { ...heard, content: heard.content.filter((i) => !heard.cmdWords.has(i) && !isReopenWord(heard.words[i], lang)) };
+    if (rest.content.length > 0) {
+      const cmd = pick(items.doneTasks.map((task) => ({ score: coverage(rest, task.title, lang), target: { kind: 'reopen', task } })));
+      if (cmd.kind !== 'none') return cmd;
+    }
+  }
+  // "annemi ara görevini cumaya taşı": a move word plus a date the task parser finds.
+  if (!heard.postpone && heard.postWords.size > 0) {
+    const parsed = parseTask(text, lang, now);
+    if (parsed.date && parsed.title) {
+      const h = listen(parsed.title, lang);
+      const rest: Heard = { ...h, content: h.content.filter((i) => !h.postWords.has(i)) };
+      if (rest.content.length > 0) {
+        const cmd = pick(items.tasks.map((task) => ({
+          score: coverage(rest, task.title, lang),
+          target: { kind: 'reschedule', task, date: parsed.date as string, time: parsed.time },
+        })));
+        if (cmd.kind !== 'none') return cmd;
+      }
+    }
+  }
   // "X'i yarına ertele" concerns a task only; a habit can't be moved to another day.
   if (heard.postpone) {
     return pick(items.tasks.map((task) => ({ score: coverage(heard, task.title, lang), target: { kind: 'postpone', task } })));
@@ -413,6 +462,15 @@ export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems)
 }
 
 // The best-matching targets as a command: none, one, or a short list to choose from.
+const REOPEN_WORDS: Record<Lang, string[]> = {
+  tr: ['geri', 'yeniden', 'ac', 'acin', 'acti', 'actim'],
+  en: [],
+  de: ['wieder'],
+};
+function isReopenWord(w: string, lang: Lang): boolean {
+  return REOPEN_WORDS[lang].includes(w) || (lang === 'en' && (w.startsWith('reopen') || w === 'uncheck' || w === 'untick')) || (lang === 'de' && w.startsWith('offn'));
+}
+
 function pick(all: { score: number; target: Target }[]): VoiceCommand {
   const scored = all.filter((s) => s.score >= MIN_COVERAGE);
   if (scored.length === 0) return { kind: 'none' };
