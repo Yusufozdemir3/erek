@@ -10,18 +10,33 @@ import { Feather } from '@expo/vector-icons';
 import { useI18n } from '@/i18n/I18nProvider';
 import { isReviewDay, reviewWeekKey } from '@/lib/weeklyReview';
 import { useTheme } from '@/ui/ThemeProvider';
-import type { Colors } from '@/ui/theme';
+import { percentLabel, type Colors } from '@/ui/theme';
 
 export const REVIEW_DISMISSED_KEY = 'review:dismissedWeek';
 
 interface Props {
   today: string;
-  hasData: boolean; // the review has a rate to show
+  // The week's rate and its change (points) from the week before; null = the
+  // review has nothing to show yet.
+  preview: { rate: number; delta: number | null } | null;
 }
 
-export function ReviewCard({ today, hasData }: Props) {
+// "78% · 12 points up from the week before" — the card says how the week went
+// before it is even opened.
+export function previewText(
+  preview: { rate: number; delta: number | null },
+  t: (key: string, params?: Record<string, string | number>) => string,
+  percent: (n: number) => string
+): string {
+  const { rate, delta } = preview;
+  if (delta === null) return percent(rate);
+  const change = delta === 0 ? t('review.deltaSame') : t(delta > 0 ? 'review.deltaUp' : 'review.deltaDown', { n: Math.abs(delta) });
+  return `${percent(rate)} · ${change}`;
+}
+
+export function ReviewCard({ today, preview }: Props) {
   const { colors } = useTheme();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   const week = reviewWeekKey(today);
   // null = not read yet: nothing shows before we know, so the card never flashes.
@@ -37,7 +52,7 @@ export function ReviewCard({ today, hasData }: Props) {
     };
   }, []);
 
-  if (!hasData || !isReviewDay(today) || dismissedWeek === undefined || dismissedWeek === week) return null;
+  if (!preview || !isReviewDay(today) || dismissedWeek === undefined || dismissedWeek === week) return null;
 
   const remember = () => {
     setDismissedWeek(week);
@@ -53,12 +68,12 @@ export function ReviewCard({ today, hasData }: Props) {
           router.push('/review' as Href);
         }}
         accessibilityRole="button"
-        accessibilityLabel={`${t('review.cardTitle')}. ${t('review.cardBody')}`}
+        accessibilityLabel={`${t('review.cardTitle')}. ${previewText(preview, t, (n) => percentLabel(n, lang))}`}
       >
         <Feather name="bar-chart-2" size={20} color={colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{t('review.cardTitle')}</Text>
-          <Text style={styles.text}>{t('review.cardBody')}</Text>
+          <Text style={styles.text}>{previewText(preview, t, (n) => percentLabel(n, lang))}</Text>
         </View>
         <Feather name="chevron-right" size={18} color={colors.faint} />
       </Pressable>

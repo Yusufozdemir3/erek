@@ -222,10 +222,15 @@ export default function TodayScreen() {
 
   const onPickDate = (picked: Date) => setSelectedDate(toYmd(picked));
 
-  // The review card only needs to know whether there is a rate to show; it's
-  // computed on review days only (a handful of queries once per data change).
-  const reviewHasData = useMemo(
-    () => isToday && isReviewDay(today) && loadReview(user.id, today).rate !== null,
+  // The review card needs the rate (and the change from the week before) to
+  // preview; it's computed on review days only (a handful of queries once per
+  // data change). null = nothing to show.
+  const reviewPreview = useMemo(
+    () => {
+      if (!isToday || !isReviewDay(today)) return null;
+      const r = loadReview(user.id, today);
+      return r.rate === null ? null : { rate: r.rate, delta: r.delta };
+    },
     // habits/tasks change whenever the underlying data does (reload sets them)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isToday, today, user.id, habits, tasks]
@@ -655,7 +660,7 @@ export default function TodayScreen() {
         )}
 
         {/* Sunday/Monday: the weekly review is ready (hidden once opened or dismissed). */}
-        {isToday && <ReviewCard today={today} hasData={reviewHasData} />}
+        {isToday && <ReviewCard today={today} preview={reviewPreview} />}
 
         {/* Check off by voice — hidden when the device has no speech recognition. */}
         {isToday && !dayIsEmpty && <VoiceCommandBar onHeard={handleVoiceCommand} />}

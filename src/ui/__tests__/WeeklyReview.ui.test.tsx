@@ -81,30 +81,39 @@ describe('ReviewScreen', () => {
 });
 
 describe('ReviewCard', () => {
+  const P = { rate: 78, delta: 12 };
   const MONDAY = '2026-10-05';
   const TUESDAY = '2026-10-06';
 
   it('Pazartesi veri varsa görünür; açınca özet sayfasına gider ve o hafta bir daha çıkmaz', async () => {
-    const u = await renderUI(<ReviewCard today={MONDAY} hasData />);
+    const u = await renderUI(<ReviewCard today={MONDAY} preview={P} />);
     fireEvent.press(await u.findByLabelText(/Haftanın özeti hazır/));
     expect(mockPush).toHaveBeenCalledWith('/review');
     await waitFor(() => expect(u.queryByText('Haftanın özeti hazır')).toBeNull());
     expect(await AsyncStorage.getItem(REVIEW_DISMISSED_KEY)).toBe(MONDAY);
   });
 
+  it('kartta oran ve önceki haftaya göre değişim yazar', async () => {
+    const a = await renderUI(<ReviewCard today={MONDAY} preview={{ rate: 78, delta: 12 }} />);
+    expect(await a.findByText('%78 · Önceki haftadan 12 puan yukarıda')).toBeTruthy();
+    a.unmount();
+    const b = await renderUI(<ReviewCard today={MONDAY} preview={{ rate: 50, delta: null }} />);
+    expect(await b.findByText('%50')).toBeTruthy();
+  });
+
   it('Kapat da o haftayı hatırlar; sonraki hafta yeniden görünür', async () => {
-    const u = await renderUI(<ReviewCard today="2026-10-04" hasData />); // Pazar, haftanın sonu
+    const u = await renderUI(<ReviewCard today="2026-10-04" preview={P} />); // Pazar, haftanın sonu
     fireEvent.press(await u.findByLabelText('Kapat'));
     await waitFor(() => expect(u.queryByText('Haftanın özeti hazır')).toBeNull());
     u.unmount();
-    const later = await renderUI(<ReviewCard today="2026-10-12" hasData />); // sonraki Pazartesi
+    const later = await renderUI(<ReviewCard today="2026-10-12" preview={P} />); // sonraki Pazartesi
     expect(await later.findByText('Haftanın özeti hazır')).toBeTruthy();
   });
 
   it('hafta ortasında ya da veri yokken görünmez', async () => {
-    const a = await renderUI(<ReviewCard today={TUESDAY} hasData />);
+    const a = await renderUI(<ReviewCard today={TUESDAY} preview={P} />);
     expect(a.queryByText('Haftanın özeti hazır')).toBeNull();
-    const b = await renderUI(<ReviewCard today={MONDAY} hasData={false} />);
+    const b = await renderUI(<ReviewCard today={MONDAY} preview={null} />);
     expect(b.queryByText('Haftanın özeti hazır')).toBeNull();
   });
 });
