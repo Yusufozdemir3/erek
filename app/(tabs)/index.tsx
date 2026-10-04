@@ -10,12 +10,12 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { habitRepo, subtaskRepo, taskRepo } from '@/db';
+import { habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
-import { refreshTaskReminders } from '@/lib/notifications';
+import { cancelTaskReminders, refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
@@ -24,6 +24,8 @@ import { ReviewCard } from '@/ui/ReviewCard';
 import { loadReview } from '@/ui/reviewData';
 import { parseVoiceCommand, type Target } from '@/lib/voiceCommand';
 import { isReviewDay } from '@/lib/weeklyReview';
+import { parseTask } from '@/lib/quickAdd/parseTask';
+import { voicePatch } from '@/ui/voiceTaskPatch';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
@@ -284,6 +286,32 @@ export default function TodayScreen() {
     };
   };
 
+  // A spoken sentence that wasn't a command becomes a task, parsed with the same
+  // rules as the task form's mic (date, time, priority, "remind me").
+  const addSpokenTask = (text: string): CommandNotice => {
+    const patch = voicePatch(parseTask(text, lang, new Date()), { dueDate: today, remindTimes: [] }, today);
+    const title = (patch.title ?? text).trim() || text.trim();
+    const date = patch.dueDate ?? today;
+    const created = taskRepo.create({
+      user_id: user.id,
+      title,
+      priority: patch.priority ?? 'medium',
+      due_date: patch.dueTime ? `${date}T${patch.dueTime}:00` : date,
+    });
+    if (patch.remindTimes?.length) reminderRepo.replaceAll('task', created.id, patch.remindTimes);
+    refreshTaskReminders(created.id);
+    notifySuccess();
+    reload();
+    return {
+      text: tr('voiceCmd.taskAdded', { title }),
+      undo: () => {
+        taskRepo.softDelete(created.id);
+        cancelTaskReminders(created.id).catch(() => {});
+        reload();
+      },
+    };
+  };
+
   const handleVoiceCommand = (text: string, show: (n: CommandNotice) => void) => {
     const cmd = parseVoiceCommand(text, lang, {
       habits: habits.map((h) => ({ id: h.id, title: h.title, kind: h.kind })),
@@ -291,7 +319,16 @@ export default function TodayScreen() {
       tasks: tasks.filter((t) => t.completed_at === null && !t.shared_owner_uid).map((t) => ({ id: t.id, title: t.title })),
     });
     if (cmd.kind === 'none') {
-      show({ text: tr('voiceCmd.notUnderstood') });
+      // Not a command: it's probably a new to-do. Ask before creating anything.
+      Alert.alert(
+        tr('voiceCmd.addAsTaskTitle'),
+        `“${text}”`,
+        [
+          { text: tr('common.cancel'), style: 'cancel' },
+          { text: tr('voiceCmd.addAsTask'), onPress: () => show(addSpokenTask(text)) },
+        ],
+        { cancelable: true }
+      );
       return;
     }
     if (cmd.kind === 'one') {

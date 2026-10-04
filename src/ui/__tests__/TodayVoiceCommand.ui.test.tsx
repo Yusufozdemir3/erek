@@ -9,7 +9,7 @@ import TodayScreen from '../../../app/(tabs)/index';
 import { renderUI } from '@/test/renderWithProviders';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { habitRepo, taskRepo, userRepo } from '@/db';
-import { todayDate } from '@/lib/helpers';
+import { shiftYmd, todayDate } from '@/lib/helpers';
 
 const mockListeners: Record<string, Set<(e: unknown) => void>> = {};
 let mockUserId = '';
@@ -54,7 +54,7 @@ jest.mock('@/ui/AppData', () => ({
 jest.mock('@/widget/widgetData', () => ({ refreshWidget: jest.fn() }));
 jest.mock('@/lib/notifications', () => ({
   refreshTaskReminders: jest.fn(),
-  cancelTaskReminders: jest.fn(),
+  cancelTaskReminders: jest.fn(async () => {}),
   scheduleTaskReminders: jest.fn(),
 }));
 jest.mock('@/ui/ProfileButton', () => ({ ProfileButton: () => null }));
@@ -147,14 +147,36 @@ describe('Bugün: sesle işaretle', () => {
     expect(u.queryByText('Geri al')).toBeNull();
   });
 
-  it('komut olmayan cümle hiçbir şeyi değiştirmez ve görev de açmaz', async () => {
+  it('komut olmayan cümle: önce sorar; vazgeçilirse hiçbir şey değişmez', async () => {
     const h = habitRepo.create({ user_id: mockUserId, title: 'Kitap oku' });
     const u = await renderUI(<TodayScreen />);
 
     await say(u, 'yarın annemi ara');
 
-    expect(await u.findByText(/komut olarak anlayamadım/)).toBeTruthy();
+    const calls = (Alert.alert as jest.Mock).mock.calls;
+    const [title, body, buttons] = calls[calls.length - 1] as [string, string, { text: string; onPress?: () => void }[]];
+    expect(title).toContain('Görev olarak ekleyeyim mi');
+    expect(body).toBe('“yarın annemi ara”');
+    await act(async () => buttons.find((b) => b.text === 'İptal')?.onPress?.());
     expect(habitRepo.isCompletedOn(h.id, todayDate())).toBe(false);
+    expect(taskRepo.listByUser(mockUserId)).toHaveLength(0);
+  });
+
+  it('komut olmayan cümle onaylanırsa tarihli görev olur, Geri al siler', async () => {
+    habitRepo.create({ user_id: mockUserId, title: 'Kitap oku' });
+    const u = await renderUI(<TodayScreen />);
+
+    await say(u, 'yarın annemi ara');
+    const calls = (Alert.alert as jest.Mock).mock.calls;
+    const buttons = calls[calls.length - 1][2] as { text: string; onPress?: () => void }[];
+    await act(async () => buttons.find((b) => b.text === 'Görev olarak ekle')?.onPress?.());
+
+    const [t] = taskRepo.listByUser(mockUserId);
+    expect(t.title).toBe('Annemi ara');
+    expect(t.due_date?.slice(0, 10)).toBe(shiftYmd(todayDate(), 1));
+    expect(await u.findByText('“Annemi ara” göreve eklendi')).toBeTruthy();
+
+    fireEvent.press(u.getByText('Geri al'));
     expect(taskRepo.listByUser(mockUserId)).toHaveLength(0);
   });
 
