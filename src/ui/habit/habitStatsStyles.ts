@@ -57,7 +57,7 @@ export const makeHabitStatsStyles = (c: Colors) =>
       paddingVertical: 14,
       alignItems: 'center',
     },
-    statValue: { fontSize: 18, fontWeight: '800', color: c.text },
+    statValue: { fontSize: 22, fontWeight: '800', color: c.text },
     statLabel: { fontSize: 12, color: c.muted, marginTop: 4, textAlign: 'center' },
 
     card: {

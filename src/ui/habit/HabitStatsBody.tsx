@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Feather } from '@expo/vector-icons';
 import { isQuotaSchedule } from '@/lib/helpers';
 import { STREAK_MILESTONES } from '@/lib/milestones';
@@ -55,8 +56,9 @@ export function HabitStatsBody({ stats, calendar, subtitle }: Props) {
       <View style={styles.statsRow}>
         <StatCard
           label={t(isQuota ? 'stats.currentStreakWeeks' : 'stats.currentStreak')}
-          value={`🔥 ${stats.currentStreak}`}
+          value={String(stats.currentStreak)}
           styles={styles}
+          icon={<Ionicons name="flame" size={20} color={colors.streak} />}
         />
         <StatCard
           label={t(isQuota ? 'stats.longestStreakWeeks' : 'stats.longestStreak')}

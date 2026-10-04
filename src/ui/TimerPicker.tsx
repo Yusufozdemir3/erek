@@ -117,9 +117,7 @@ export function TimerPicker({ visible, onClose }: Props) {
                 </Text>
               </View>
               <View style={[styles.playBtn, running && styles.playBtnOn]}>
-                <Text style={[styles.playBtnText, running && styles.playBtnTextOn]}>
-                  {running ? '❚❚' : '▶'}
-                </Text>
+                <Feather name={running ? 'pause' : 'play'} size={15} color={running ? colors.onAccent : colors.primary} />
               </View>
             </Pressable>
           );

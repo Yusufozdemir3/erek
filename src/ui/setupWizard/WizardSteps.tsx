@@ -14,6 +14,7 @@ import { getNotificationPrefs, setNotificationPref } from '@/lib/notificationPre
 import { parseTask } from '@/lib/quickAdd/parseTask';
 import { useAppData } from '@/ui/AppData';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
+import { LineIcon, type LineIconId } from '@/ui/LineIcon';
 import { ACCENT_ORDER, ACCENT_THEMES, longDateLabel, switchColors } from '@/ui/theme';
 import { useGoogleSignIn } from '@/ui/useGoogleSignIn';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
@@ -47,12 +48,12 @@ function useWizardStyles() {
   return { colors, styles: makeWizardStyles(colors) };
 }
 
-function Header({ emoji, title, body }: { emoji: string; title: string; body?: string }) {
-  const { styles } = useWizardStyles();
+function Header({ icon, title, body }: { icon: LineIconId; title: string; body?: string }) {
+  const { colors, styles } = useWizardStyles();
   return (
     <>
       <View style={styles.badge}>
-        <Text style={styles.emoji}>{emoji}</Text>
+        <LineIcon id={icon} size={44} color={colors.primary} />
       </View>
       <Text style={styles.title} accessibilityRole="header">
         {title}
@@ -84,7 +85,7 @@ export function WelcomeStep() {
   const { styles } = useWizardStyles();
   return (
     <>
-      <Header emoji="👋" title={t('wizard.welcome.title')} body={t('wizard.welcome.body')} />
+      <Header icon="welcome" title={t('wizard.welcome.title')} body={t('wizard.welcome.body')} />
       <Text style={styles.note}>{t('wizard.welcome.note')}</Text>
     </>
   );
@@ -103,7 +104,7 @@ export function LookStep({ onCompleted }: StepProps) {
   ];
   return (
     <>
-      <Header emoji="🎨" title={t('wizard.look.title')} body={t('wizard.look.body')} />
+      <Header icon="appearance" title={t('wizard.look.title')} body={t('wizard.look.body')} />
 
       <Text style={styles.label}>{t('profile.language')}</Text>
       <View style={styles.seg}>
@@ -223,7 +224,7 @@ export function HabitStep({ userId, onCompleted, onCreated }: StepProps) {
 
   return (
     <>
-      <Header emoji="🔥" title={t('wizard.habit.title')} body={t('wizard.habit.body')} />
+      <Header icon="habit" title={t('wizard.habit.title')} body={t('wizard.habit.body')} />
       {added ? (
         <>
           <View style={styles.success}>
@@ -320,7 +321,7 @@ export function TaskStep({ userId, onCompleted, onCreated }: StepProps) {
 
   return (
     <>
-      <Header emoji="✅" title={t('wizard.task.title')} body={t('wizard.task.body')} />
+      <Header icon="task" title={t('wizard.task.title')} body={t('wizard.task.body')} />
       {added ? (
         <>
           <View style={styles.success}>
@@ -427,7 +428,7 @@ export function GoalStep({ userId, onCompleted, onCreated }: StepProps) {
 
   return (
     <>
-      <Header emoji="🎯" title={t('wizard.goal.title')} body={t('wizard.goal.body')} />
+      <Header icon="goal" title={t('wizard.goal.title')} body={t('wizard.goal.body')} />
       {added ? (
         <>
           <View style={styles.success}>
@@ -545,7 +546,7 @@ export function NotificationsStep({ onCompleted }: StepProps) {
 
   return (
     <>
-      <Header emoji="🔔" title={t('wizard.notif.title')} body={t('wizard.notif.body')} />
+      <Header icon="bell" title={t('wizard.notif.title')} body={t('wizard.notif.body')} />
       {perm === null ? (
         <ActivityIndicator color={colors.primary} />
       ) : perm.granted ? (
@@ -607,7 +608,7 @@ export function WidgetStep({ onCompleted }: StepProps) {
   }, [onCompleted]);
   return (
     <>
-      <Header emoji="🏠" title={t('wizard.widget.title')} body={t('wizard.widget.body')} />
+      <Header icon="widget" title={t('wizard.widget.title')} body={t('wizard.widget.body')} />
       {(['s1', 's2', 's3'] as const).map((k, i) => (
         <View key={k} style={styles.stepRow}>
           <View style={styles.stepNum}>
@@ -631,7 +632,7 @@ export function AccountStep({ onCompleted }: StepProps) {
   const connected = !!authUser && !authUser.isAnonymous;
   return (
     <>
-      <Header emoji="☁️" title={t('wizard.account.title')} body={t('wizard.account.body')} />
+      <Header icon="cloud" title={t('wizard.account.title')} body={t('wizard.account.body')} />
       {connected ? (
         <>
           <Text style={styles.okText}>{t('wizard.account.connected')}</Text>
@@ -683,7 +684,7 @@ export function DoneStep({
   const lines = summaryLines(created, outcomes, notificationsOn, signedIn);
   return (
     <>
-      <Header emoji="🎉" title={t('wizard.done.title')} />
+      <Header icon="done" title={t('wizard.done.title')} />
       {lines.length === 0 ? (
         <Text style={styles.body}>{t('wizard.done.empty')}</Text>
       ) : (

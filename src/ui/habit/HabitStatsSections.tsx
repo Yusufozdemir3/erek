@@ -7,7 +7,7 @@
 // style factory (habitStatsStyles.ts) so theme/sizing stays managed from a
 // single place.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Habit } from '@/db';
@@ -36,10 +36,27 @@ import {
 
 type Styles = HabitStatsStyles;
 
-export function StatCard({ label, value, styles }: { label: string; value: string; styles: Styles }) {
+export function StatCard({
+  label,
+  value,
+  styles,
+  icon,
+}: {
+  label: string;
+  value: string;
+  styles: Styles;
+  icon?: ReactNode;
+}) {
   return (
     <View style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
+      {icon ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          {icon}
+          <Text style={styles.statValue}>{value}</Text>
+        </View>
+      ) : (
+        <Text style={styles.statValue}>{value}</Text>
+      )}
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
@@ -241,7 +258,7 @@ export function HabitDarkStatsCard({
                     </Text>
                   </View>
                   <View style={styles.statsGoalTrack}>
-                    <View style={[styles.statsGoalFill, { width: `${pct}%` }]} />
+                    <View style={[styles.statsGoalFill, { width: `${pct}%`, backgroundColor: color }]} />
                   </View>
                 </View>
               );

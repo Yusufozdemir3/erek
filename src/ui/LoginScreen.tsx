@@ -17,6 +17,7 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { ACCOUNTS_ENABLED } from '@/config';
+import { LineIcon } from '@/ui/LineIcon';
 import { announceGatesClosed } from '@/lib/guides';
 import { LOGIN_SEEN_KEY, onOnboardingDone, ONBOARDING_SEEN_KEY } from '@/ui/Onboarding';
 import { useGoogleSignIn } from '@/ui/useGoogleSignIn';
@@ -54,7 +55,9 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
       )}
 
       <View style={styles.body}>
-        <Text style={styles.emoji}>☁️</Text>
+        <View style={styles.badge}>
+          <LineIcon id="cloud" size={52} color={colors.primary} />
+        </View>
         <Text style={styles.title}>{t('login.title')}</Text>
         <Text style={styles.subtitle}>{t('login.subtitle')}</Text>
       </View>
@@ -159,7 +162,15 @@ const makeStyles = (c: Colors) =>
     skip: { position: 'absolute', top: 56, right: 24, zIndex: 1 },
     skipText: { fontSize: 15, fontWeight: '600', color: c.muted },
     body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
-    emoji: { fontSize: 64, marginBottom: 24 },
+    badge: {
+      width: 116,
+      height: 116,
+      borderRadius: 58,
+      backgroundColor: c.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 24,
+    },
     title: { fontSize: 26, fontWeight: '800', color: c.text, textAlign: 'center' },
     subtitle: { fontSize: 15, color: c.muted, lineHeight: 23, textAlign: 'center', marginTop: 14 },
     footer: { paddingHorizontal: 24, paddingBottom: 48, gap: 16 },

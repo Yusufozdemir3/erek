@@ -18,6 +18,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import type { GoalType } from '@/db';
 import { isTimeUnit, TIME_UNIT, todayDate, toYmd } from '@/lib/helpers';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
@@ -507,9 +508,10 @@ export function GoalForm({
                 accessibilityLabel={t('goal.milestoneDueA11y')}
               >
                 <Text style={[styles.subChipText, newMilestoneDate != null && styles.subChipTextSet]}>
+                  <Feather name="calendar" size={12} color={newMilestoneDate != null ? colors.primary : colors.muted} />
                   {newMilestoneDate
-                    ? `📅 ${shortDate(newMilestoneDate, lang)} ×`
-                    : `📅 ${t('goal.milestoneDateChip')}`}
+                    ? ` ${shortDate(newMilestoneDate, lang)} ×`
+                    : ` ${t('goal.milestoneDateChip')}`}
                 </Text>
               </Pressable>
             </View>

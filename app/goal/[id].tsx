@@ -504,9 +504,14 @@ export default function GoalDetailScreen() {
                       <Text
                         style={[styles.milestoneChipText, newMilestoneDate != null && styles.milestoneChipTextSet]}
                       >
+                        <Feather
+                          name="calendar"
+                          size={12}
+                          color={newMilestoneDate != null ? colors.primary : colors.muted}
+                        />
                         {newMilestoneDate
-                          ? `📅 ${shortDate(newMilestoneDate, lang)} ×`
-                          : `📅 ${t('goal.milestoneDateChip')}`}
+                          ? ` ${shortDate(newMilestoneDate, lang)} ×`
+                          : ` ${t('goal.milestoneDateChip')}`}
                       </Text>
                     </Pressable>
                   </View>

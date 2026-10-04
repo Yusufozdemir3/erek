@@ -614,7 +614,7 @@ export function HabitForm({
                   onPress={() => setGoalId(sel ? null : g.id)}
                 >
                   <Text style={[styles.goalChipText, sel && styles.goalChipTextSel]}>
-                    🎯 {g.title}
+                    <Feather name="target" size={13} color={sel ? colors.onAccent : colors.muted} /> {g.title}
                   </Text>
                 </Pressable>
               );

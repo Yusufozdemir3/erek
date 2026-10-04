@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { requestAdd } from '@/lib/addRequest';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -722,12 +723,12 @@ export default function TodayScreen() {
         <View style={styles.list}>
           {dayIsEmpty ? (
             <EmptyState
-              emoji={isToday ? '🎉' : '🌙'}
+              icon={isToday ? 'celebrate' : 'moon'}
               title={isToday ? tr('empty.todayTitle') : tr('empty.otherDayTitle')}
               subtitle={isToday ? tr('empty.todayBody') : undefined}
             />
           ) : filterHidesEverything ? (
-            <EmptyState emoji="🔍" title={tr('today.filterEmpty')} />
+            <EmptyState icon="search" title={tr('today.filterEmpty')} />
           ) : (
             <>
               {openTasks.map(renderTask)}
@@ -753,6 +754,19 @@ export default function TodayScreen() {
               {completedOpen && doneTasks.map(renderTask)}
               {completedOpen && doneHabits.map(renderHabit)}
               {skippedHabits.map(renderSkipped)}
+              {/* The list rarely fills the screen; this closes it with the obvious next step
+                  and opens the same add menu as the ＋ button. */}
+              {isToday && (
+                <Pressable
+                  style={styles.addRow}
+                  onPress={() => requestAdd('menu')}
+                  accessibilityRole="button"
+                  accessibilityLabel={tr('today.addRow')}
+                >
+                  <Feather name="plus" size={18} color={colors.primary} />
+                  <Text style={styles.addRowText}>{tr('today.addRow')}</Text>
+                </Pressable>
+              )}
             </>
           )}
         </View>
@@ -778,6 +792,19 @@ const makeStyles = (c: Colors) =>
     headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     backToday: { fontSize: 14, fontWeight: '700', color: c.primary },
     futureCard: { opacity: 0.5 },
+    addRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 12,
+      paddingVertical: 16,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: c.border,
+    },
+    addRowText: { fontSize: 14, fontWeight: '600', color: c.primary },
     skipNote: { fontSize: 12, color: c.muted, marginTop: 2 },
     skipUndo: { fontSize: 13, fontWeight: '700', color: c.primary, paddingVertical: 8 },
     // A finished habit recedes so what's still to do stands out.

@@ -392,9 +392,9 @@ export default function TasksScreen() {
         }
         ListEmptyComponent={
           searching ? (
-            <EmptyState emoji="🔍" title={tr('tasks.searchEmpty')} />
+            <EmptyState icon="search" title={tr('tasks.searchEmpty')} />
           ) : (
-            <EmptyState emoji="📝" title={tr('empty.tasksTitle')} subtitle={tr('empty.tasksBody')} />
+            <EmptyState icon="edit" title={tr('empty.tasksTitle')} subtitle={tr('empty.tasksBody')} />
           )
         }
         ListFooterComponent={

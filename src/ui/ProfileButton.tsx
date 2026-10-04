@@ -6,7 +6,8 @@
 // session is anonymous, or the image fails to load.
 
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text } from 'react-native';
+import { Image, Pressable, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -39,7 +40,7 @@ export function ProfileButton() {
           onError={() => setFailedUrl(avatarUrl)}
         />
       ) : (
-        <Text style={styles.icon}>👤</Text>
+        <Feather name="user" size={19} color={colors.primary} />
       )}
     </Pressable>
   );
@@ -56,6 +57,5 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'center',
       overflow: 'hidden',
     },
-    icon: { fontSize: 18 },
     avatar: { width: '100%', height: '100%' },
   });

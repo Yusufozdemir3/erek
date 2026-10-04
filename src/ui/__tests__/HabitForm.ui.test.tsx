@@ -175,7 +175,7 @@ describe('HabitForm — hedefe bağlama', () => {
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'Sayfa oku');
     fireEvent.changeText(getByPlaceholderText('örn. 8'), '5');
     fireEvent.changeText(getByPlaceholderText('birim (bardak)'), 'sayfa');
-    fireEvent.press(await findByText(`🎯 ${goal.title}`));
+    fireEvent.press(await findByText(goal.title));
     fireEvent.press(getByText('Kaydet'));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ goal_id: goal.id, goal_contribution: 'per_completion' })
@@ -189,7 +189,7 @@ describe('HabitForm — hedefe bağlama', () => {
     );
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'X');
     await act(async () => {});
-    expect(queryByText('🎯 Ev taşı')).toBeNull();
+    expect(queryByText('Ev taşı')).toBeNull();
   });
 
   it('"Yaptığım miktar" katkı biçimi seçilince oran girilir ve goal_factor tersine çevrilir', async () => {
@@ -200,7 +200,7 @@ describe('HabitForm — hedefe bağlama', () => {
     );
     fireEvent.changeText(getByPlaceholderText('Alışkanlık başlığı'), 'Bardak su');
     fireEvent.changeText(getByPlaceholderText('örn. 8'), '2');
-    fireEvent.press(await findByText(`🎯 ${goal.title}`));
+    fireEvent.press(await findByText(goal.title));
     fireEvent.press(getByText('Yaptığım miktar'));
     fireEvent.changeText(getByPlaceholderText('birim (bardak)'), 'bardak');
     // "How many cups make a liter?" — 4 cups = 1 liter → goal_factor = 1/4 = 0.25 (the mathematical inverse).

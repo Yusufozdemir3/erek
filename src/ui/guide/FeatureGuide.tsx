@@ -8,6 +8,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { GuideId } from '@/lib/guides';
+import { LineIcon } from '@/ui/LineIcon';
 import { useTheme } from '@/ui/ThemeProvider';
 import type { Colors } from '@/ui/theme';
 import { GUIDES } from './guideContent';
@@ -44,7 +45,9 @@ export function FeatureGuide({ guide, visible, onClose, canShare = true }: Props
     <Modal visible transparent animationType="fade" onRequestClose={close}>
       <View style={styles.overlay}>
         <View style={styles.card} accessibilityViewIsModal>
-          <Text style={styles.emoji}>{page.emoji}</Text>
+          <View style={styles.icon}>
+            <LineIcon id={page.icon} size={40} color={colors.primary} />
+          </View>
           <Text style={styles.title} accessibilityRole="header">
             {text('title')}
           </Text>
@@ -111,7 +114,7 @@ const makeStyles = (c: Colors) =>
       padding: 22,
       gap: 10,
     },
-    emoji: { fontSize: 40, textAlign: 'center' },
+    icon: { alignItems: 'center' },
     title: { fontSize: 19, fontWeight: '800', color: c.text, textAlign: 'center' },
     body: { fontSize: 15, lineHeight: 22, color: c.muted, textAlign: 'center' },
     cta: {

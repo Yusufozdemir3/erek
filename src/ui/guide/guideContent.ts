@@ -4,9 +4,10 @@
 // guide and opens `route` (when set).
 
 import type { GuideId } from '@/lib/guides';
+import type { LineIconId } from '@/ui/LineIcon';
 
 export interface GuidePage {
-  emoji: string;
+  icon: LineIconId;
   cta?: { route?: string };
   // Pages that only make sense when signed in with Google (sharing).
   needsAccount?: boolean;
@@ -14,59 +15,59 @@ export interface GuidePage {
 
 export const GUIDES: Record<GuideId, GuidePage[]> = {
   goals: [
-    { emoji: '🎯' },
-    { emoji: '🔢' },
-    { emoji: '➕' },
-    { emoji: '🔗', cta: { route: '/(tabs)/habits' } },
-    { emoji: '📈' },
-    { emoji: '👥', needsAccount: true },
+    { icon: 'goal' },
+    { icon: 'number' },
+    { icon: 'add' },
+    { icon: 'link', cta: { route: '/(tabs)/habits' } },
+    { icon: 'trend' },
+    { icon: 'people', needsAccount: true },
   ],
   habits: [
-    { emoji: '🌱' },
-    { emoji: '✅' },
-    { emoji: '📅' },
-    { emoji: '🔥' },
-    { emoji: '😴' },
-    { emoji: '🔔' },
-    { emoji: '🔗', cta: { route: '/(tabs)/goals' } },
+    { icon: 'sprout' },
+    { icon: 'done' },
+    { icon: 'calendar' },
+    { icon: 'habit' },
+    { icon: 'moon' },
+    { icon: 'bell' },
+    { icon: 'link', cta: { route: '/(tabs)/goals' } },
   ],
   friends: [
-    { emoji: '👥' },
-    { emoji: '🔑' },
-    { emoji: '📤' },
-    { emoji: '📥' },
-    { emoji: '👋' },
-    { emoji: '🔒' },
+    { icon: 'people' },
+    { icon: 'key' },
+    { icon: 'upload' },
+    { icon: 'download' },
+    { icon: 'welcome' },
+    { icon: 'lock' },
   ],
   tasks: [
-    { emoji: '📝' },
-    { emoji: '📅' },
-    { emoji: '☑️' },
-    { emoji: '🔁' },
-    { emoji: '👆' },
-    { emoji: '🔔' },
-    { emoji: '👥', needsAccount: true },
+    { icon: 'edit' },
+    { icon: 'calendar' },
+    { icon: 'task' },
+    { icon: 'repeat' },
+    { icon: 'tap' },
+    { icon: 'bell' },
+    { icon: 'people', needsAccount: true },
   ],
   today: [
-    { emoji: '🏠' },
-    { emoji: '✅' },
-    { emoji: '📆' },
-    { emoji: '🔍' },
-    { emoji: '🎙️' },
-    { emoji: '📊' },
-    { emoji: '😴' },
+    { icon: 'home' },
+    { icon: 'done' },
+    { icon: 'calendar' },
+    { icon: 'search' },
+    { icon: 'mic' },
+    { icon: 'chart' },
+    { icon: 'moon' },
   ],
   widgets: [
-    { emoji: '🧩' },
-    { emoji: '✅' },
-    { emoji: '📝' },
-    { emoji: '🎯' },
-    { emoji: '🔄' },
+    { icon: 'puzzle' },
+    { icon: 'done' },
+    { icon: 'edit' },
+    { icon: 'goal' },
+    { icon: 'refresh' },
   ],
   notifications: [
-    { emoji: '🔔' },
-    { emoji: '🔊' },
-    { emoji: '⏱️' },
-    { emoji: '👋', needsAccount: true },
+    { icon: 'bell' },
+    { icon: 'sound' },
+    { icon: 'clock' },
+    { icon: 'people', needsAccount: true },
   ],
 };

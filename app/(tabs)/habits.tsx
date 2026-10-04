@@ -133,9 +133,9 @@ export default function HabitsScreen() {
 
         {habits.length === 0 ? (
           searching ? (
-            <EmptyState emoji="🔍" title={t('habits.searchEmpty')} />
+            <EmptyState icon="search" title={t('habits.searchEmpty')} />
           ) : (
-            <EmptyState emoji="🌱" title={t('empty.habitsTitle')} subtitle={t('empty.habitsBody')} />
+            <EmptyState icon="sprout" title={t('empty.habitsTitle')} subtitle={t('empty.habitsBody')} />
           )
         ) : (
           habits.map((h, i) => (

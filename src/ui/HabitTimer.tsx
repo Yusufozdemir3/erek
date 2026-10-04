@@ -10,6 +10,7 @@
 
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { fmtClock } from '@/lib/helpers';
 import { tapLight, tapMedium } from '@/lib/haptics';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -101,9 +102,7 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
           accessibilityRole="button"
           accessibilityLabel={running ? t('habit.timerPauseA11y') : t('habit.timerStartA11y')}
         >
-          <Text style={[styles.btnText, running && styles.btnTextOn]}>
-            {running ? '❚❚' : '▶'}
-          </Text>
+          <Feather name={running ? 'pause' : 'play'} size={14} color={running ? colors.onAccent : colors.primary} />
         </Pressable>
       )}
 

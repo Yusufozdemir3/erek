@@ -119,7 +119,7 @@ export default function GoalsScreen() {
         {/* LIST */}
         {goals.length === 0 ? (
           <EmptyState
-            emoji="🎯"
+            icon="goal"
             title={t('empty.goalsTitle')}
             subtitle={t('empty.goalsBody')}
           />

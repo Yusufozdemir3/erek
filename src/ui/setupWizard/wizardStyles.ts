@@ -36,7 +36,6 @@ export const makeWizardStyles = (c: Colors) =>
       marginBottom: 20,
       alignSelf: 'center',
     },
-    emoji: { fontSize: 44 },
     title: { fontSize: 26, fontWeight: '800', color: c.text, textAlign: 'center' },
     body: { fontSize: 15, lineHeight: 22, color: c.muted, textAlign: 'center', marginTop: 10, marginBottom: 20 },
     note: { fontSize: 12, lineHeight: 18, color: c.faint, textAlign: 'center', marginTop: 12 },
