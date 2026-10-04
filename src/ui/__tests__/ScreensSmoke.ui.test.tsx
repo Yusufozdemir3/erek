@@ -3,8 +3,10 @@
 
 import { waitFor } from '@testing-library/react-native';
 import { renderUI } from '@/test/renderWithProviders';
+import { TimerProvider } from '@/ui/TimerProvider';
 import { resetTestDb } from '@/test/dbTestUtils';
-import { userRepo } from '@/db';
+import { goalEntryRepo, goalMilestoneRepo, goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo, userRepo } from '@/db';
+import { shiftYmd, todayDate } from '@/lib/helpers';
 
 import TodayScreen from '../../../app/(tabs)/index';
 import TasksScreen from '../../../app/(tabs)/tasks';
@@ -98,7 +100,41 @@ const SCREENS: [string, () => JSX.Element][] = [
 
 describe('taze kurulumda ekranlar açılır', () => {
   it.each(SCREENS)('%s', async (_name, make) => {
-    const u = await renderUI(make());
+    const u = await renderUI(<TimerProvider>{make()}</TimerProvider>);
+    await waitFor(() => expect(u.toJSON()).not.toBeNull());
+  });
+});
+
+// A phone that's been used: every kind of habit/task/goal, history, reminders.
+function seedEverything() {
+  const uid = mockUserId;
+  const goal = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 100, unit: 'km', deadline: shiftYmd(todayDate(), 40) });
+  goalMilestoneRepo.create(goal.id, '50 km', { amount: 50 });
+  goalEntryRepo.create(goal.id, 12);
+  goalRepo.addProgress(goal.id, 12);
+  goalRepo.create({ user_id: uid, title: 'Kitaplar', goal_type: 'milestone' });
+  const bin = habitRepo.create({ user_id: uid, title: 'Kitap oku', icon: 'book', goal_id: goal.id, start_date: shiftYmd(todayDate(), -30) });
+  const num = habitRepo.create({ user_id: uid, title: 'Su iç', kind: 'numeric', target_amount: 8, unit: 'bardak', start_date: shiftYmd(todayDate(), -30) });
+  const timer = habitRepo.create({ user_id: uid, title: 'Meditasyon', kind: 'timer', target_amount: 600 });
+  habitRepo.create({ user_id: uid, title: 'Spor', schedule: { freq: 'weekly', weekdays: [], timesPerWeek: 3 } as never });
+  for (let d = 0; d < 20; d++) {
+    habitRepo.toggleLog(bin.id, shiftYmd(todayDate(), -d), d % 4 !== 3);
+    habitRepo.incrementAmount(num.id, shiftYmd(todayDate(), -d), (d % 9), 8);
+  }
+  habitRepo.incrementAmount(timer.id, todayDate(), 120, 600);
+  reminderRepo.replaceAll('habit', bin.id, ['08:00', '21:00']);
+  const t = taskRepo.create({ user_id: uid, title: 'Alışveriş', due_date: todayDate(), priority: 'high' });
+  subtaskRepo.create(t.id, 'Süt');
+  taskRepo.create({ user_id: uid, title: 'Eski iş', due_date: shiftYmd(todayDate(), -4) });
+  const done = taskRepo.create({ user_id: uid, title: 'Bitti', due_date: todayDate() });
+  taskRepo.setCompleted(done.id, true);
+  taskRepo.create({ user_id: uid, title: 'Tekrarlı', due_date: todayDate(), recurrence: { freq: 'daily' } as never });
+}
+
+describe('kullanılmış telefonda ekranlar açılır', () => {
+  it.each(SCREENS)('%s', async (_name, make) => {
+    seedEverything();
+    const u = await renderUI(<TimerProvider>{make()}</TimerProvider>);
     await waitFor(() => expect(u.toJSON()).not.toBeNull());
   });
 });
