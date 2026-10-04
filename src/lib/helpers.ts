@@ -133,13 +133,17 @@ export const WEEKDAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 // "not scheduled": invisible, neither feeding nor breaking the streak. No
 // need to convert to Date since "YYYY-MM-DD" string comparison is identical
 // to chronological ordering.
+// `skips` = the habit's rest days ("mola"): they count as outside the range too,
+// so a skipped day freezes the streak, leaves the rate alone and sends no reminder.
 export function isWithinHabitDates(
   start: string | null,
   end: string | null,
-  dateYmd: string
+  dateYmd: string,
+  skips?: readonly string[] | null
 ): boolean {
   if (start && dateYmd < start) return false;
   if (end && dateYmd > end) return false;
+  if (skips && skips.includes(dateYmd)) return false;
   return true;
 }
 

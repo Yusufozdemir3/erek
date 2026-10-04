@@ -296,7 +296,7 @@ export async function scheduleHabitReminders(
       let scheduledCount = 0;
       for (let i = 0; scheduledCount < 8 && i < 1462; i++) {
         const ymd = toYmd(cursor);
-        if (isScheduledOn(sched, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
+        if (isScheduledOn(sched, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd, habit.skip_dates)) {
           const when = new Date(`${ymd}T00:00:00`);
           when.setHours(time.hour, time.minute, 0, 0);
           if (when.getTime() > Date.now()) {

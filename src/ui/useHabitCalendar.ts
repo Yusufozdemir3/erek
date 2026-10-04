@@ -71,7 +71,7 @@ export function buildMonthWeeks(
     const completed = completedDates.has(date);
     const scheduled = quota
       ? completed
-      : isScheduledOn(h.schedule, date) && isWithinHabitDates(h.start_date, h.end_date, date);
+      : isScheduledOn(h.schedule, date) && isWithinHabitDates(h.start_date, h.end_date, date, h.skip_dates);
     cells.push({ date, scheduled, completed, future: date > today });
   }
 
@@ -102,7 +102,8 @@ function useMonthCursor() {
   };
 }
 
-export function useHabitCalendar(habitId: string): HabitCalendar {
+// refreshKey: bump it to reload right away (e.g. after a rest day was set).
+export function useHabitCalendar(habitId: string, refreshKey = 0): HabitCalendar {
   const cursor = useMonthCursor();
   const { year, month, today } = cursor;
   const [habit, setHabit] = useState<Habit | null>(null);
@@ -119,7 +120,7 @@ export function useHabitCalendar(habitId: string): HabitCalendar {
     const logs = habitRepo.logsBetween(habitId, ymd(year, month, 1), ymd(year, month, daysInMonth));
     const completedDates = new Set(logs.filter((l) => l.completed === 1).map((l) => l.log_date));
     setWeeks(buildMonthWeeks(h, completedDates, year, month, today));
-  }, [habitId, year, month, today]);
+  }, [habitId, year, month, today, refreshKey]);
 
   useFocusEffect(reload);
 

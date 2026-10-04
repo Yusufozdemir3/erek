@@ -22,7 +22,7 @@ export function computeWeekProgress(userId: string, selectedDate: string, today:
   for (let i = -WINDOW_RADIUS; i <= WINDOW_RADIUS; i++) {
     const ymd = addDays(selectedDate, i);
     const scheduled = allHabits.filter(
-      (h) => isScheduledOn(h.schedule, ymd) && isWithinHabitDates(h.start_date, h.end_date, ymd)
+      (h) => isScheduledOn(h.schedule, ymd) && isWithinHabitDates(h.start_date, h.end_date, ymd, h.skip_dates)
     );
     const states = habitRepo.getDayStates(
       scheduled.map((h) => h.id),

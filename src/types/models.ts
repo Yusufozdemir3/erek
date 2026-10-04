@@ -137,6 +137,7 @@ export interface Habit extends SyncFields {
   unit: string | null;           // "glasses", "pages"; meaningful for numeric (timer/binary: null)
   start_date: string | null;     // "YYYY-MM-DD"; null = since the beginning
   end_date: string | null;       // "YYYY-MM-DD"; null = indefinite
+  skip_dates?: string[] | null;  // rest days ("mola"): "YYYY-MM-DD" list, treated as not scheduled
   goal_contribution: GoalContribution | null; // see GoalContribution; NULL = per_completion
   goal_factor: number;           // multiplier, only used in 'amount' mode; default 1
 }

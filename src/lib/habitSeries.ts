@@ -96,7 +96,7 @@ function rangeRatio(
   while (cursor <= end) {
     const ymd = toYmd(cursor);
     if (ymd > today) break;
-    if (isScheduledOn(habit.schedule, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
+    if (isScheduledOn(habit.schedule, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd, habit.skip_dates)) {
       if (quota) quotaDays++;
       else scheduled++;
       if (completedSet.has(ymd)) done++;
@@ -145,7 +145,7 @@ export function buildSeries(habit: Habit, allLogs: HabitLog[]): HabitChartSeries
   const dayRaw: ChartBucket[] = dayDates.map((date) => {
     const ratio = quota
       ? rangeRatio(habit, completedSet, weekStartOf(date), date, today)
-      : isScheduledOn(habit.schedule, date) && isWithinHabitDates(habit.start_date, habit.end_date, date)
+      : isScheduledOn(habit.schedule, date) && isWithinHabitDates(habit.start_date, habit.end_date, date, habit.skip_dates)
         ? dayRatio(logByDate.get(date))
         : null;
     return { date, ratio, score: 0, partial: date === today };

@@ -26,6 +26,7 @@ export interface ReviewHabit {
   schedule: Recurrence | null;
   start_date: string | null;
   end_date: string | null;
+  skip_dates?: string[] | null;
 }
 
 export interface ReviewInput {
@@ -88,7 +89,7 @@ function measure(input: ReviewInput, end: string): WindowResult {
   for (const h of input.habits) {
     const marks = input.completed[h.id] ?? new Set<string>();
     // Days of the window inside the habit's life range.
-    const live = dates.filter((d) => isWithinHabitDates(h.start_date, h.end_date, d));
+    const live = dates.filter((d) => isWithinHabitDates(h.start_date, h.end_date, d, h.skip_dates));
     if (live.length === 0) continue;
 
     let hExpected: number;

@@ -305,3 +305,19 @@ describe('Bugün: sesle geri açma, tarihe taşıma, soru', () => {
     expect(u.queryByText('Geri al')).toBeNull();
   });
 });
+
+describe('Bugün: mola günü', () => {
+  it('mola yapılan alışkanlık listede soluk görünür, sayılmaz; Geri al kaldırır', async () => {
+    const h = habitRepo.create({ user_id: mockUserId, title: 'Kitap oku' });
+    habitRepo.create({ user_id: mockUserId, title: 'Başka' });
+    habitRepo.setSkipped(h.id, todayDate(), true);
+    const u = await renderUI(<TodayScreen />);
+
+    expect(await u.findByText('Mola günü — seri bozulmaz')).toBeTruthy();
+    expect(u.queryByLabelText('Kitap oku alışkanlığı')).toBeNull();
+
+    fireEvent.press(u.getByLabelText('Kitap oku için mola gününü kaldır'));
+    expect(habitRepo.getById(h.id)?.skip_dates).toEqual([]);
+    await waitFor(() => expect(u.queryByText('Mola günü — seri bozulmaz')).toBeNull());
+  });
+});

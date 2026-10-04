@@ -26,6 +26,15 @@ export interface HabitView {
   weekQuota: { done: number; target: number } | null;
 }
 
+// A habit the user rested on that day ("mola"): not counted anywhere, listed
+// at the bottom so the mark can be taken back.
+export interface SkippedHabitView {
+  id: string;
+  title: string;
+  icon: string | null;
+  color: string | null;
+}
+
 export function useTodayData(userId: string, selectedDate: string, today: string) {
   // dataVersion: increments when something is added via the central ＋ menu. It
   // goes into reload's dependencies; since useFocusEffect re-runs the effect
@@ -34,6 +43,7 @@ export function useTodayData(userId: string, selectedDate: string, today: string
   const { dataVersion } = useAppData();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<HabitView[]>([]);
+  const [skippedHabits, setSkippedHabits] = useState<SkippedHabitView[]>([]);
   // Per-day completion for the week strip's dots.
   const [weekProgress, setWeekProgress] = useState<WeekProgress>({});
   // The "1/3 subtasks" badge on the task card; only tasks with subtasks are included.
@@ -54,13 +64,19 @@ export function useTodayData(userId: string, selectedDate: string, today: string
     setSubtaskCounts(subtaskRepo.countsForTasks(taskList.map((t) => t.id)));
     // Only show habits that are scheduled on the selected day and within their
     // lifespan (start/end date).
-    const scheduled = habitRepo
+    const dueToday = habitRepo
       .listByUser(userId)
       .filter(
         (h) =>
           isScheduledOn(h.schedule, selectedDate) &&
           isWithinHabitDates(h.start_date, h.end_date, selectedDate)
       );
+    const scheduled = dueToday.filter((h) => !h.skip_dates?.includes(selectedDate));
+    setSkippedHabits(
+      dueToday
+        .filter((h) => h.skip_dates?.includes(selectedDate))
+        .map((h) => ({ id: h.id, title: h.title, icon: h.icon, color: h.color }))
+    );
     // That day's amount+completion status in a single query (instead of two
     // separate queries per habit). A habit with no log: amount 0, not completed.
     const dayStates = habitRepo.getDayStates(
@@ -96,5 +112,5 @@ export function useTodayData(userId: string, selectedDate: string, today: string
 
   useFocusEffect(reload);
 
-  return { tasks, habits, subtaskCounts, weekProgress, reload };
+  return { tasks, habits, skippedHabits, subtaskCounts, weekProgress, reload };
 }

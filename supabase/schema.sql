@@ -48,6 +48,8 @@ create table if not exists public.habits (
   unit          text,
   start_date    text,
   end_date      text,
+  -- Mola günleri: "YYYY-MM-DD" JSON dizisi (yerel migration022'nin karşılığı).
+  skip_dates    text,
   -- Bağlı hedefe katkı biçimi + birim çarpanı (yerel migration010'un karşılığı).
   -- NULL = 'per_completion' (tamamlanan gün başına +1); 'amount' = o gün yapılan
   -- miktar × goal_factor hedefe eklenir.
@@ -66,6 +68,7 @@ alter table public.habits add column if not exists target_amount double precisio
 alter table public.habits add column if not exists unit          text;
 alter table public.habits add column if not exists start_date    text;
 alter table public.habits add column if not exists end_date      text;
+alter table public.habits add column if not exists skip_dates    text;
 alter table public.habits add column if not exists kind          text not null default 'binary';
 update public.habits set kind = 'numeric' where kind = 'binary' and target_amount is not null and target_amount > 0;
 -- Bağlı hedefe katkı biçimi + çarpan — yerel migration010'un karşılığı. Bu iki

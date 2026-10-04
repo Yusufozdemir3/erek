@@ -81,7 +81,7 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     .listByUser(userId)
     .filter(
       (h) =>
-        isScheduledOn(h.schedule, today) && isWithinHabitDates(h.start_date, h.end_date, today)
+        isScheduledOn(h.schedule, today) && isWithinHabitDates(h.start_date, h.end_date, today, h.skip_dates)
     );
   const dayStates = habitRepo.getDayStates(
     scheduled.map((h) => h.id),

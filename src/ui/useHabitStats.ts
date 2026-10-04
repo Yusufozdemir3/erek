@@ -203,7 +203,7 @@ function buildGoalPeriods(habit: Habit, allLogs: HabitLog[], today: string): Goa
           const ymd = toYmd(cursor);
           if (quota) {
             if (cursor <= doneEndD) done += amountOf(ymd);
-          } else if (isScheduledOn(habit.schedule, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd)) {
+          } else if (isScheduledOn(habit.schedule, ymd) && isWithinHabitDates(habit.start_date, habit.end_date, ymd, habit.skip_dates)) {
             goal += perDayTarget;
             if (cursor <= doneEndD) done += amountOf(ymd);
           }
@@ -246,13 +246,14 @@ export function computeHabitStats(habit: Habit, allLogs: HabitLog[], today: stri
   };
 }
 
-export function useHabitStats(habitId: string): HabitStats {
+// refreshKey: bump it to reload right away (e.g. after a rest day was set).
+export function useHabitStats(habitId: string, refreshKey = 0): HabitStats {
   const [stats, setStats] = useState<HabitStats>(EMPTY_HABIT_STATS);
 
   const reload = useCallback(() => {
     const habit = habitRepo.getById(habitId);
     setStats(habit ? computeHabitStats(habit, habitRepo.allLogs(habitId), todayDate()) : EMPTY_HABIT_STATS);
-  }, [habitId]);
+  }, [habitId, refreshKey]);
 
   useFocusEffect(reload);
 

@@ -9,6 +9,7 @@
 // HabitStatsSections.tsx, formatters in habitStatsFormat.ts, styles in
 // habitStatsStyles.ts (audit finding H1).
 
+import { useState } from 'react';
 import { Pressable, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -16,6 +17,9 @@ import { useHabitStats } from '@/ui/useHabitStats';
 import { useHabitCalendar } from '@/ui/useHabitCalendar';
 import { HabitStatsBody } from '@/ui/habit/HabitStatsBody';
 import { HabitShareSection } from '@/ui/habit/HabitShareSection';
+import { RestDayButton } from '@/ui/habit/RestDayButton';
+import { refreshWidget } from '@/widget/widgetData';
+import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { makeHabitStatsStyles } from '@/ui/habit/habitStatsStyles';
@@ -25,8 +29,10 @@ export default function HabitStatsScreen() {
   const { t } = useI18n();
   const styles = makeHabitStatsStyles(colors);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const stats = useHabitStats(id);
-  const calendar = useHabitCalendar(id);
+  const { user, notifyDataChanged } = useAppData();
+  const [version, setVersion] = useState(0);
+  const stats = useHabitStats(id, version);
+  const calendar = useHabitCalendar(id, version);
   const habit = stats.habit;
 
   return (
@@ -40,6 +46,14 @@ export default function HabitStatsScreen() {
           <Text style={shared.empty}>{t('stats.notFound')}</Text>
         ) : (
           <>
+            <RestDayButton
+              habit={habit}
+              onChanged={() => {
+                setVersion((v) => v + 1);
+                notifyDataChanged();
+                refreshWidget(user.id);
+              }}
+            />
             <HabitStatsBody stats={{ ...stats, habit }} calendar={calendar} />
             <HabitShareSection habit={habit} />
           </>

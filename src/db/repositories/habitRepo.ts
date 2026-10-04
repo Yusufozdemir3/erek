@@ -12,6 +12,7 @@ import {
   newId,
   nowIso,
   parseJson,
+  shiftYmd,
   todayDate,
   toJson,
   toYmd,
@@ -64,6 +65,7 @@ function rowToHabit(row: any): Habit {
     unit: row.unit,
     start_date: row.start_date,
     end_date: row.end_date,
+    skip_dates: parseJson<string[]>(row.skip_dates) ?? [],
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -308,6 +310,25 @@ export const habitRepo = {
     return out;
   },
 
+  // REST DAY ("mola"): marks a day as skipped on purpose (sick, travelling) or
+  // takes the mark back. A skipped day counts as not scheduled everywhere
+  // (isWithinHabitDates): the streak freezes instead of breaking, the rate
+  // ignores it, no reminder. Only today and the past: a future day isn't
+  // "lived" yet. Entries older than a year are dropped so the list stays small.
+  setSkipped(habitId: string, ymd: string, skipped: boolean): void {
+    const habit = this.getById(habitId);
+    if (!habit) return;
+    const set = new Set(habit.skip_dates ?? []);
+    if (skipped) set.add(ymd);
+    else set.delete(ymd);
+    const horizon = shiftYmd(todayDate(), -400);
+    const next = [...set].filter((d) => d >= horizon).sort();
+    getDb().runSync(
+      `UPDATE habits SET skip_dates = ?, updated_at = ?, synced = 0 WHERE id = ?`,
+      [next.length ? JSON.stringify(next) : null, nowIso(), habitId]
+    );
+  },
+
   // Numeric habit: changes that day's amount by a delta (never goes below 0).
   // completed becomes 1 once the target is reached (amount >= target). If
   // target is null/0, completed always stays 0. A single record is kept via UNIQUE(habit_id, log_date).
@@ -468,7 +489,7 @@ export const habitRepo = {
     const habit = this.getById(habitId);
     const isDue = (d: string) =>
       isScheduledOn(habit?.schedule ?? null, d) &&
-      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);
+      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d, habit?.skip_dates);
     const rows = db.getAllSync<any>(
       `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1 ORDER BY log_date ASC`,
       [habitId]

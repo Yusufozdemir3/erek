@@ -19,7 +19,7 @@ import { cancelTaskReminders, refreshTaskReminders, scheduleGoalReminders } from
 import { useAppData } from '@/ui/AppData';
 import { useTimer } from '@/ui/TimerProvider';
 import { refreshWidget } from '@/widget/widgetData';
-import { useTodayData, type HabitView } from '@/ui/useTodayData';
+import { useTodayData, type HabitView, type SkippedHabitView } from '@/ui/useTodayData';
 import { VoiceCommandBar, type CommandNotice } from '@/ui/VoiceCommandBar';
 import { ReviewCard } from '@/ui/ReviewCard';
 import { loadReview } from '@/ui/reviewData';
@@ -87,7 +87,7 @@ export default function TodayScreen() {
   // Confetti: bumping the id plays one burst.
   const [burstId, setBurstId] = useState(0);
 
-  const { tasks, habits, subtaskCounts, weekProgress, reload } = useTodayData(user.id, selectedDate, today);
+  const { tasks, habits, skippedHabits, subtaskCounts, weekProgress, reload } = useTodayData(user.id, selectedDate, today);
   const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
   useSharedTasksFreshness(reload);
   const { refreshing, onRefresh } = usePullRefresh(reload);
@@ -106,7 +106,7 @@ export default function TodayScreen() {
   const openHabits = filteredHabits.filter((h) => !isFoldable(h));
   const doneHabits = filteredHabits.filter(isFoldable);
   const doneCount = doneTasks.length + doneHabits.length;
-  const dayIsEmpty = tasks.length === 0 && habits.length === 0;
+  const dayIsEmpty = tasks.length === 0 && habits.length === 0 && skippedHabits.length === 0;
   const filterHidesEverything =
     !dayIsEmpty && filteredTasks.length === 0 && filteredHabits.length === 0;
 
@@ -530,6 +530,30 @@ export default function TodayScreen() {
     );
   };
 
+  // A rested habit: dimmed, with a way to take the rest day back.
+  const renderSkipped = (h: SkippedHabitView) => (
+    <Animated.View key={`skip-${h.id}`} layout={LIST_LAYOUT} style={[shared.card, styles.doneCard]}>
+      <HabitToggle icon={h.icon} color={h.color} completed={false} />
+      <View style={{ flex: 1 }}>
+        <Text style={shared.cardTitle}>{h.title}</Text>
+        <Text style={styles.skipNote}>{tr('habit.restDay')}</Text>
+      </View>
+      <Pressable
+        onPress={() => {
+          habitRepo.setSkipped(h.id, selectedDate, false);
+          tapLight();
+          reload();
+          refreshWidget(user.id);
+        }}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={tr('habit.restDayUndoA11y', { title: h.title })}
+      >
+        <Text style={styles.skipUndo}>{tr('habit.restDayUndo')}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+
   const renderHabit = (h: HabitView) =>
     h.kind === 'timer' ? (
       // Timer habit: read-only progress (control is in Phase B).
@@ -725,6 +749,7 @@ export default function TodayScreen() {
               )}
               {completedOpen && doneTasks.map(renderTask)}
               {completedOpen && doneHabits.map(renderHabit)}
+              {skippedHabits.map(renderSkipped)}
             </>
           )}
         </View>
@@ -749,6 +774,8 @@ const makeStyles = (c: Colors) =>
     headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     backToday: { fontSize: 14, fontWeight: '700', color: c.primary },
     futureCard: { opacity: 0.5 },
+    skipNote: { fontSize: 12, color: c.muted, marginTop: 2 },
+    skipUndo: { fontSize: 13, fontWeight: '700', color: c.primary, paddingVertical: 8 },
     // A finished habit recedes so what's still to do stands out.
     doneCard: { opacity: 0.6 },
     dateLink: { color: c.primary, fontWeight: '600' },

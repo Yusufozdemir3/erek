@@ -102,7 +102,7 @@ export const TABLES: TableCfg[] = [
     // goal was only correct on the device that created it; a second device
     // saw the NULL/1 default and wrote the wrong progress to the goal
     // (see migration018 + the syncColumnParity test).
-    cols: ['id', 'user_id', 'goal_id', 'title', 'kind', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'start_date', 'end_date', 'goal_contribution', 'goal_factor', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'goal_id', 'title', 'kind', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'start_date', 'end_date', 'skip_dates', 'goal_contribution', 'goal_factor', 'updated_at', 'deleted_at'],
     hasUserId: true,
     // Columns that are NOT NULL locally — if empty from remote, fall back to
     // the schema's own default instead of dropping the row (and with it, all of sync).

@@ -801,3 +801,36 @@ describe('hedefe bağlı ilerleme — "amount" katkı modu', () => {
     expect(habitRepo.incrementAmount(habit.id, TODAY, 1, 5)).toBeNull(); // already past target
   });
 });
+
+describe('mola günü (setSkipped)', () => {
+  it('kaçırılan gün seriyi keser; mola yapılan gün kesmez ve saymaz', () => {
+    const habit = createHabit();
+    habitRepo.toggleLog(habit.id, '2026-06-28', true);
+    habitRepo.toggleLog(habit.id, '2026-06-29', true);
+    // 30 Haziran işaretsiz → seri kopar
+    habitRepo.toggleLog(habit.id, TODAY, true);
+    expect(habitRepo.currentStreak(habit.id)).toBe(1);
+
+    habitRepo.setSkipped(habit.id, '2026-06-30', true);
+    expect(habitRepo.currentStreak(habit.id)).toBe(3); // 28, 29, (mola), 1 Tem
+    expect(habitRepo.longestStreak(habit.id)).toBe(3);
+  });
+
+  it('geri alınır; yinelenmez; kalıcıdır', () => {
+    const habit = createHabit();
+    habitRepo.setSkipped(habit.id, TODAY, true);
+    habitRepo.setSkipped(habit.id, TODAY, true);
+    expect(habitRepo.getById(habit.id)?.skip_dates).toEqual([TODAY]);
+    habitRepo.setSkipped(habit.id, TODAY, false);
+    expect(habitRepo.getById(habit.id)?.skip_dates).toEqual([]);
+  });
+
+  it('bir yıldan eski molalar silinir, senkron için synced=0 olur', () => {
+    const habit = createHabit();
+    getDb().runSync('UPDATE habits SET synced = 1 WHERE id = ?', [habit.id]);
+    habitRepo.setSkipped(habit.id, '2024-01-01', true);
+    habitRepo.setSkipped(habit.id, TODAY, true);
+    expect(habitRepo.getById(habit.id)?.skip_dates).toEqual([TODAY]);
+    expect(getDb().getFirstSync<any>('SELECT synced FROM habits WHERE id = ?', [habit.id]).synced).toBe(0);
+  });
+});

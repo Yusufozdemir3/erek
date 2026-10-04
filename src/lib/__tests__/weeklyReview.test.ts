@@ -137,3 +137,13 @@ describe('Pazar/Pazartesi hatırlatması', () => {
     expect(reviewWeekKey('2026-10-12')).toBe('2026-10-12');
   });
 });
+
+describe('mola günü', () => {
+  it('mola yapılan gün beklenen sayılmaz: oran düşmez', () => {
+    // 7 günde 4 yapıldı, 3 gün mola → 4/4
+    const r = run([daily('a', 'a', { skip_dates: [day(-4), day(-5), day(-6)] })], { a: marks(0, -1, -2, -3) });
+    expect(r.rate).toBe(100);
+    expect(r.days[0].scheduled).toBe(0);
+    expect(r.perfectDays).toBe(4);
+  });
+});

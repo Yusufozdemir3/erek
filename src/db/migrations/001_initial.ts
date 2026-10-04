@@ -399,6 +399,13 @@ export const migration021 = `
 ALTER TABLE goal_entries ADD COLUMN added_by TEXT;
 `;
 
+// Migration 022: rest days. habits.skip_dates = JSON array of "YYYY-MM-DD" days
+// the user skipped on purpose (sick, travelling): such a day counts as not
+// scheduled — it neither breaks the streak nor lowers the rate. NULL = none.
+export const migration022 = `
+ALTER TABLE habits ADD COLUMN skip_dates TEXT;
+`;
+
 // Migration list - runs in order. A new schema change = a new element.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -422,4 +429,5 @@ export const migrations = [
   { version: 19, sql: migration019 },
   { version: 20, sql: migration020 },
   { version: 21, sql: migration021 },
+  { version: 22, sql: migration022 },
 ];

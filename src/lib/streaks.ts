@@ -10,7 +10,7 @@
 import type { Habit } from '../types/models';
 import { isQuotaSchedule, isScheduledOn, isWithinHabitDates, toYmd, weekStartOf } from './helpers';
 
-export type StreakHabit = Pick<Habit, 'schedule' | 'start_date' | 'end_date'> | null;
+export type StreakHabit = Pick<Habit, 'schedule' | 'start_date' | 'end_date' | 'skip_dates'> | null;
 
 export function weekCompletionCounts(dates: Iterable<string>): Map<string, number> {
   const counts = new Map<string, number>();
@@ -30,7 +30,7 @@ export function shiftWeek(weekStart: string, weeks: number): string {
 function isDueFn(habit: StreakHabit) {
   return (d: string) =>
     isScheduledOn(habit?.schedule ?? null, d) &&
-    isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d);
+    isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d, habit?.skip_dates);
 }
 
 export function currentStreakFrom(habit: StreakHabit, completedDates: Iterable<string>, today: string): number {
