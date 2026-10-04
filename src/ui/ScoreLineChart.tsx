@@ -141,7 +141,7 @@ export function ScoreLineChart({ points, color, gridColor, labelColor, lang }: S
   if (n === 0) return <View onLayout={onLayout} />;
 
   // Layout math lives in a pure module (testable): scoreChartLayout.ts
-  const { spacing, labelW, plotW, xAt } = chartLayout(n, containerWidth);
+  const { labelW, plotW, xAt } = chartLayout(n, containerWidth);
   const yAt = (v: number) => Y_BASE - Math.max(0, Math.min(1, v)) * (Y_BASE - Y_TOP);
   const coords = points.map((p, i) => ({ x: xAt(i), y: yAt(p.value) }));
 

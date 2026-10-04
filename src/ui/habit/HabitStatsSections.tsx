@@ -10,17 +10,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { fmtClock, isQuotaSchedule } from '@/lib/helpers';
 import type { Habit } from '@/db';
-import type { BucketTotal, GoalPeriodStat, HabitChartSeries, HabitStats } from '@/ui/useHabitStats';
+import type { BucketTotal, GoalPeriodStat, HabitStats } from '@/ui/useHabitStats';
 import type { CalendarDay } from '@/ui/useHabitCalendar';
 import { ScoreLineChart } from '@/ui/ScoreLineChart';
-import { DATE_LOCALE, type Colors } from '@/ui/theme';
+import type { Colors } from '@/ui/theme';
 import type { Lang } from '@/i18n/translations';
 import {
-  HISTORY_LABEL_GAP,
-  HISTORY_LABEL_H,
-  HISTORY_ROW_H,
   HISTORY_TRACK_H,
   HISTORY_VALUE_INSET,
   HISTORY_VALUE_LINE,
@@ -29,8 +25,6 @@ import {
   type HabitStatsStyles,
 } from '@/ui/habit/habitStatsStyles';
 import {
-  fmtAmount,
-  fmtCompact,
   fmtGoalValue,
   fmtHistoryValue,
   historyBarLabel,

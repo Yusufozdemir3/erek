@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { goalRepo, habitRepo, reminderRepo } from '@/db';
 import type { HabitKind } from '@/db';
-import { buildScheduleLabels, isQuotaSchedule, lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
+import { buildScheduleLabels, lastDays, scheduleLabel, todayDate } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Lang } from '@/i18n/translations';

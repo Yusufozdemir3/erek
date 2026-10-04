@@ -29,7 +29,7 @@ import { useGoalStats } from '@/ui/useGoalStats';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { deadlineLabel, percentLabel, shortDate } from '@/ui/theme';
-import { makeGoalStyles, type GoalStyles } from '@/ui/goal/goalStyles';
+import { makeGoalStyles } from '@/ui/goal/goalStyles';
 import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';
 import { LinkedHabitRow } from '@/ui/goal/GoalStatCards';
 import { fmtAmount, fmtGoalValue } from '@/ui/goal/goalFormat';
@@ -37,7 +37,6 @@ import { GoalEntryHistory } from '@/ui/goal/GoalEntryHistory';
 import { GoalShareSection } from '@/ui/goal/GoalShareSection';
 import { useFriendNames } from '@/ui/sharedTaskUi';
 
-type Styles = GoalStyles;
 type GoalTab = 'overview' | 'stats' | 'milestones' | 'edit';
 
 export default function GoalDetailScreen() {
