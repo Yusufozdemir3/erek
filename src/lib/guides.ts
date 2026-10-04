@@ -11,7 +11,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ACCOUNTS_ENABLED } from '@/config';
 
-export const GUIDE_IDS = ['goals', 'habits', 'friends', 'tasks', 'today'] as const;
+export const GUIDE_IDS = ['goals', 'habits', 'friends', 'tasks', 'today', 'widgets', 'notifications'] as const;
 export type GuideId = (typeof GUIDE_IDS)[number];
 
 export const NEW_INSTALL_KEY = 'guide:newInstall';

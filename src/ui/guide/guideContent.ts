@@ -56,4 +56,17 @@ export const GUIDES: Record<GuideId, GuidePage[]> = {
     { emoji: '📊' },
     { emoji: '😴' },
   ],
+  widgets: [
+    { emoji: '🧩' },
+    { emoji: '✅' },
+    { emoji: '📝' },
+    { emoji: '🎯' },
+    { emoji: '🔄' },
+  ],
+  notifications: [
+    { emoji: '🔔' },
+    { emoji: '🔊' },
+    { emoji: '⏱️' },
+    { emoji: '👋', needsAccount: true },
+  ],
 };

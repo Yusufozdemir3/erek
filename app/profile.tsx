@@ -41,6 +41,7 @@ export default function ProfileScreen() {
     { icon: 'shield', label: t('profile.privacy'), href: '/privacy' },
     { icon: 'bar-chart-2', label: t('profile.review'), href: '/review' },
     { icon: 'database', label: t('profile.data'), href: '/data' },
+    { icon: 'book-open', label: t('profile.guides'), href: '/guides' },
     { icon: 'compass', label: t('profile.setupWizard'), href: '/setup' },
     { icon: 'info', label: t('profile.about'), href: '/about' },
   ];

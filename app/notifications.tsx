@@ -31,6 +31,8 @@ import { pickNotificationSound } from '@/lib/ringtonePicker';
 import { syncPushRegistration } from '@/lib/pushRegistration';
 import { getNudgePrefs, setNudgesEnabled } from '@/sync';
 import { useAppData } from '@/ui/AppData';
+import { FeatureGuide } from '@/ui/guide/FeatureGuide';
+import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { switchColors, type Colors } from '@/ui/theme';
@@ -50,6 +52,7 @@ export default function NotificationsScreen() {
   const styles = makeStyles(colors);
   const { user, authUser } = useAppData();
   const uid = authUser && !authUser.isAnonymous ? authUser.id : null;
+  const guide = useFeatureGuide('notifications');
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
   // Friend nudges: an ACCOUNT preference kept on the server (it decides
   // whether a friend's nudge is delivered), unlike the device prefs above.
@@ -119,6 +122,10 @@ export default function NotificationsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <Pressable onPress={guide.open} hitSlop={8} style={styles.guideLink} accessibilityRole="button">
+        <Text style={styles.guideLinkText}>{t('notifications.guideLink')}</Text>
+      </Pressable>
+      <FeatureGuide guide="notifications" visible={guide.visible} onClose={guide.close} canShare={uid != null} />
       {/* Master switch + reminder types */}
       <View style={styles.card}>
         <View style={styles.switchRow}>
@@ -233,6 +240,8 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: c.bg },
     content: { padding: 20, paddingBottom: 48 },
+    guideLink: { alignSelf: 'flex-start', marginBottom: 12 },
+    guideLinkText: { fontSize: 14, fontWeight: '700', color: c.primary },
     card: {
       backgroundColor: c.card,
       borderRadius: 14,
