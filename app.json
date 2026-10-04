@@ -60,6 +60,7 @@
           "widgets": [
             {
               "name": "ErekToday",
+              "previewImage": "./assets/widget-previews/today.png",
               "label": "Erek — Bugün",
               "description": "Bugünün alışkanlıkları — dokunarak işaretle",
               "minWidth": "180dp",
@@ -71,6 +72,7 @@
             },
             {
               "name": "ErekTasks",
+              "previewImage": "./assets/widget-previews/tasks.png",
               "label": "Erek — Görevler",
               "description": "Bugünün görevleri — dokunarak tamamla",
               "minWidth": "180dp",
@@ -82,6 +84,7 @@
             },
             {
               "name": "ErekGoals",
+              "previewImage": "./assets/widget-previews/goals.png",
               "label": "Erek — Hedefler",
               "description": "Açık hedeflerin ve ilerlemen",
               "minWidth": "180dp",
@@ -92,7 +95,20 @@
               "updatePeriodMillis": 1800000
             },
             {
+              "name": "ErekQuickAdd",
+              "previewImage": "./assets/widget-previews/quickadd.png",
+              "label": "Erek — Hızlı görev",
+              "description": "Tek dokunuşla yeni görev ekle",
+              "minWidth": "180dp",
+              "minHeight": "40dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 1,
+              "resizeMode": "horizontal",
+              "updatePeriodMillis": 1800000
+            },
+            {
               "name": "ErekCounter",
+              "previewImage": "./assets/widget-previews/counter.png",
               "label": "Erek — Sayaç",
               "description": "Su, sayfa gibi sayılı alışkanlıklara tek dokunuşla +1",
               "minWidth": "180dp",

@@ -7,6 +7,7 @@ import { TodayWidget } from '../TodayWidget';
 import { CounterWidget } from '../CounterWidget';
 import { TasksWidget } from '../TasksWidget';
 import { GoalsWidget } from '../GoalsWidget';
+import { QUICK_ADD_URI, QuickAddWidget } from '../QuickAddWidget';
 import { widgetTaskHandler } from '../widgetTaskHandler';
 import { FALLBACK_COLORS, readSnapshot, writeSnapshot, type WidgetSnapshot } from '../widgetSnapshot';
 import { INC_ACTION, TASK_ACTION, TOGGLE_ACTION, localYmd, onWidgetAction, readPending } from '../widgetQueue';
@@ -14,6 +15,7 @@ import { INC_ACTION, TASK_ACTION, TOGGLE_ACTION, localYmd, onWidgetAction, readP
 const mockRequestUpdate = jest.fn(async (_: unknown) => {});
 jest.mock('react-native-android-widget', () => ({
   FlexWidget: 'FlexWidget',
+  ListWidget: 'ListWidget',
   TextWidget: 'TextWidget',
   requestWidgetUpdate: (o: unknown) => mockRequestUpdate(o),
 }));
@@ -70,15 +72,63 @@ const clicks = (root: El) =>
     .map((e) => [e.props.clickAction, e.props.clickActionData?.habitId ?? null]);
 
 describe('TodayWidget', () => {
-  it('ikili satır işaretler, sayılı satır +1 ekler, zamanlayıcı ve kartın kendisi uygulamayı açar', () => {
+  it('ikili satır işaretler, sayılı satır +1 ekler, zamanlayıcı ve kartın kendisi uygulamayı açar; görev satırları görevi işaretler', () => {
     const root = TodayWidget({ snapshot: snap() }) as El;
     expect(clicks(root)).toEqual([
       ['OPEN_APP', null],
       [TOGGLE_ACTION, 'kitap'],
       [INC_ACTION, 'su'],
       ['OPEN_APP', null],
+      [TASK_ACTION, null],
+      [TASK_ACTION, null],
     ]);
+    expect(
+      walk(root)
+        .filter((e) => e.props.clickAction === TASK_ACTION)
+        .map((e) => e.props.clickActionData.taskId)
+    ).toEqual(['market', 'mail']);
     expect(texts(root)).toContain('6/8 ＋');
+  });
+
+  it('alışkanlıklar önce, görevler altında; başlıktaki sayaç ikisini birlikte sayar', () => {
+    const root = TodayWidget({
+      snapshot: snap({
+        habits: [{ id: 'kitap', title: 'Kitap oku', color: '#111111', completed: true, kind: 'binary' }],
+      }),
+    }) as El;
+    const titles = texts(root).filter((t) => ['Kitap oku', 'Market', 'Mail'].includes(t));
+    expect(titles).toEqual(['Kitap oku', 'Market', 'Mail']);
+    // 1 alışkanlık (bitti) + 2 görev (biri bitti) = 2/3
+    expect(texts(root)).toContain('2/3 tamamlandı');
+  });
+
+  it('yalnız görev varsa da satırlar ve sayaç görünür; ikisi de yoksa bugün için boş mesajı', () => {
+    const onlyTasks = TodayWidget({ snapshot: snap({ habits: [] }) }) as El;
+    expect(texts(onlyTasks)).toEqual(expect.arrayContaining(['Market', 'Mail', '1/2 tamamlandı']));
+
+    const nothing = TodayWidget({
+      snapshot: snap({ habits: [], tasks: [], todayEmptyLabel: 'Bugün için bir şey yok' }),
+    }) as El;
+    expect(texts(nothing)).toContain('Bugün için bir şey yok');
+    // Eski bir görüntüde bu metin yoksa eski alışkanlık mesajına düşer.
+    const old = TodayWidget({ snapshot: snap({ habits: [], tasks: [] }) }) as El;
+    expect(texts(old)).toContain('Bugüne planlı alışkanlık yok');
+  });
+
+  it('hiçbir satır kesilmez: hepsi kaydırılabilir listenin öğesidir, "+N" özeti yok', () => {
+    const habits = Array.from({ length: 6 }, (_, i) => ({
+      id: `h${i}`,
+      title: `Alışkanlık ${i}`,
+      color: '#111111',
+      completed: false,
+      kind: 'binary' as const,
+    }));
+    const root = TodayWidget({ snapshot: snap({ habits }) }) as El;
+    expect(texts(root)).toEqual(expect.arrayContaining(['Alışkanlık 5', 'Market', 'Mail']));
+    expect(texts(root).some((t) => /^\+\d+$/.test(t))).toBe(false);
+    // Satırlar tek bir ListWidget'ın çocukları (8 satır = 8 öğe).
+    const list = walk(root).find((e) => e.type === 'ListWidget')!;
+    expect(React.Children.count(list.props.children)).toBe(8);
   });
 
   it('dünkü görüntü: satır yok, "güncellemek için dokun" yazar, yalnız kart dokunulur', () => {
@@ -132,6 +182,19 @@ describe('TasksWidget', () => {
     const stale = TasksWidget({ snapshot: snap({ date: '2000-01-01' }) }) as El;
     expect(clicks(stale)).toEqual([['OPEN_APP', null]]);
     expect(texts(stale)).toContain('Yeni gün — güncellemek için dokun');
+  });
+});
+
+describe('QuickAddWidget', () => {
+  it('tamamı yeni görev formuna götüren bağlantıya dokunur; görüntü yokken de çizilir', () => {
+    const root = QuickAddWidget({ snapshot: snap({ quickAddLabel: 'Yeni görev ekle' }) }) as El;
+    expect(root.props.clickAction).toBe('OPEN_URI');
+    expect(root.props.clickActionData).toEqual({ uri: QUICK_ADD_URI });
+    expect(QUICK_ADD_URI).toBe('habitapp://add?step=task');
+    expect(texts(root)).toEqual(expect.arrayContaining(['+', 'Yeni görev ekle']));
+
+    const empty = QuickAddWidget({ snapshot: null }) as El;
+    expect(texts(empty)).toContain('Yeni görev ekle');
   });
 });
 
@@ -232,7 +295,7 @@ describe('widgetTaskHandler', () => {
     expect(render).toHaveBeenCalledTimes(1);
   });
 
-  it('görev dokunuşu: kuyruğa girer, görüntü güncellenir, diğer ÜÇ widget da tazelenir', async () => {
+  it('görev dokunuşu: kuyruğa girer, görüntü güncellenir, diğer DÖRT widget da tazelenir', async () => {
     await writeSnapshot(snap());
     const render = jest.fn();
     await widgetTaskHandler({
@@ -246,7 +309,7 @@ describe('widgetTaskHandler', () => {
     expect((await readSnapshot())?.tasks?.map((t) => [t.id, t.completed])).toEqual([['market', true], ['mail', true]]);
     expect((render.mock.calls[0][0] as El).type).toBe(TasksWidget);
     const refreshed = mockRequestUpdate.mock.calls.map((c) => (c[0] as { widgetName: string }).widgetName).sort();
-    expect(refreshed).toEqual(['ErekCounter', 'ErekGoals', 'ErekToday']);
+    expect(refreshed).toEqual(['ErekCounter', 'ErekGoals', 'ErekQuickAdd', 'ErekToday']);
   });
 
   it('ekleme/güncelleme olayında doğru widget çizilir', async () => {

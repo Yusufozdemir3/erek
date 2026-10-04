@@ -11,6 +11,7 @@ export const WIDGET_NAME = 'ErekToday';
 export const COUNTER_WIDGET_NAME = 'ErekCounter';
 export const TASKS_WIDGET_NAME = 'ErekTasks';
 export const GOALS_WIDGET_NAME = 'ErekGoals';
+export const QUICKADD_WIDGET_NAME = 'ErekQuickAdd';
 export const SNAPSHOT_KEY = 'widget:today';
 
 export interface WidgetHabit {
@@ -70,6 +71,8 @@ export interface WidgetSnapshot {
   staleLabel?: string; // shown when the snapshot is from an earlier day
   counterTitle?: string; // the counter widget's header
   counterEmptyLabel?: string; // the counter widget's text when no numeric habit is due
+  todayEmptyLabel?: string; // the Today widget's text when it has neither habits nor tasks
+  quickAddLabel?: string; // the quick-add widget's text
   tasks?: WidgetTask[]; // missing in snapshots written by an older build
   tasksTitle?: string; // the tasks widget's header
   tasksEmptyLabel?: string; // the tasks widget's text when nothing is due

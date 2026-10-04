@@ -7,19 +7,15 @@
 // app's screen tree.
 
 import * as React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
 import { FALLBACK_COLORS, type WidgetSnapshot } from './widgetSnapshot';
 import { INC_ACTION, habitKind, isStale } from './widgetQueue';
 import { amountLabel, hex } from './TodayWidget';
-
-const MAX_ROWS = 4;
 
 export function CounterWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
   const c = snapshot?.colors ?? FALLBACK_COLORS;
   const stale = isStale(snapshot);
   const counters = stale ? [] : (snapshot?.habits ?? []).filter((h) => habitKind(h) === 'numeric');
-  const visible = counters.slice(0, MAX_ROWS);
-  const overflow = counters.length - visible.length;
   const emptyText = stale ? snapshot?.staleLabel ?? '' : snapshot?.counterEmptyLabel ?? '';
 
   return (
@@ -39,10 +35,12 @@ export function CounterWidget({ snapshot }: { snapshot: WidgetSnapshot | null })
         style={{ fontSize: 16, fontWeight: '700', color: hex(c.text) }}
       />
 
-      {visible.length === 0 ? (
+      {counters.length === 0 ? (
         <TextWidget text={emptyText} style={{ fontSize: 13, color: hex(c.muted), marginTop: 12 }} />
       ) : (
-        visible.map((h) => (
+        // Scrollable: every counter is a list item, nothing is cut off.
+        <ListWidget style={{ width: 'match_parent', height: 'match_parent' }}>
+          {counters.map((h) => (
           <FlexWidget
             key={h.id}
             style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center', marginTop: 8 }}
@@ -79,13 +77,8 @@ export function CounterWidget({ snapshot }: { snapshot: WidgetSnapshot | null })
               <TextWidget text="+1" style={{ fontSize: 15, fontWeight: '700', color: hex(c.onAccent) }} />
             </FlexWidget>
           </FlexWidget>
-        ))
-      )}
-
-      {overflow > 0 ? (
-        <TextWidget text={`+${overflow}`} style={{ fontSize: 12, color: hex(c.muted), marginTop: 8 }} />
-      ) : (
-        <FlexWidget style={{ width: 0, height: 0 }} />
+          ))}
+        </ListWidget>
       )}
     </FlexWidget>
   );

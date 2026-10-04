@@ -3,6 +3,9 @@
 // RN View/StyleSheet; these components get converted into Android
 // RemoteViews. Colors/data come from the snapshot (see widgetSnapshot.ts).
 //
+// ROWS: today's habits first, then today's tasks (same mix as the app's Today
+// screen); a task row checks the task off / re-opens it.
+//
 // TAPS: a binary habit's row checks it off / un-checks it, a numeric habit's
 // row adds +1 — both handled in the background without opening the app (see
 // widgetQueue.ts). A timer habit's row and everything outside the rows open
@@ -15,16 +18,13 @@
 // require + the headless task handler); it is NEVER imported from the app's normal screen tree.
 
 import * as React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
-import { FALLBACK_COLORS, type WidgetHabit, type WidgetSnapshot } from './widgetSnapshot';
-import { INC_ACTION, TOGGLE_ACTION, habitKind, isStale } from './widgetQueue';
+import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
+import { FALLBACK_COLORS, type WidgetHabit, type WidgetSnapshot, type WidgetTask } from './widgetSnapshot';
+import { INC_ACTION, TASK_ACTION, TOGGLE_ACTION, habitKind, isStale } from './widgetQueue';
 
 // The library wants colors as the `#rrggbb` template type; since the palette
 // keeps plain strings, we narrow it safely from a single spot.
 export const hex = (s: string) => s as `#${string}`;
-
-// Max number of rows to show so it fits the widget; anything beyond is summarized as "+N".
-const MAX_ROWS = 7;
 
 // "3/8" for a numeric habit (just "3" without a target).
 export function amountLabel(h: WidgetHabit): string {
@@ -40,13 +40,29 @@ function rowClick(h: WidgetHabit): { clickAction: string; clickActionData?: Reco
   return { clickAction: 'OPEN_APP' };
 }
 
+type TodayRow = { kind: 'habit'; habit: WidgetHabit } | { kind: 'task'; task: WidgetTask };
+
+// The "x/y" in the header counts habits and tasks together; the snapshot's own
+// label only knows habits. Older snapshots without a template keep that label.
+export function todaySummary(snapshot: WidgetSnapshot, rows: TodayRow[]): string {
+  if (!snapshot.summaryTemplate) return snapshot.summaryLabel;
+  const done = rows.filter((r) => (r.kind === 'habit' ? r.habit.completed : r.task.completed)).length;
+  return snapshot.summaryTemplate.replace('{done}', String(done)).replace('{total}', String(rows.length));
+}
+
 export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
   const c = snapshot?.colors ?? FALLBACK_COLORS;
   const stale = isStale(snapshot);
-  const habits = stale ? [] : snapshot?.habits ?? [];
-  const visible = habits.slice(0, MAX_ROWS);
-  const overflow = habits.length - visible.length;
-  const emptyText = stale ? snapshot?.staleLabel ?? '' : snapshot?.emptyLabel ?? '';
+  // Habits first, then today's tasks — the same mix as the app's Today screen.
+  const rows: TodayRow[] = stale
+    ? []
+    : [
+        ...(snapshot?.habits ?? []).map((habit): TodayRow => ({ kind: 'habit', habit })),
+        ...(snapshot?.tasks ?? []).map((task): TodayRow => ({ kind: 'task', task })),
+      ];
+  const emptyText = stale
+    ? snapshot?.staleLabel ?? ''
+    : snapshot?.todayEmptyLabel ?? snapshot?.emptyLabel ?? '';
 
   return (
     <FlexWidget
@@ -73,9 +89,9 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
           text={snapshot?.title ?? 'Erek'}
           style={{ fontSize: 16, fontWeight: '700', color: hex(c.text) }}
         />
-        {snapshot && !stale && snapshot.totalCount > 0 ? (
+        {snapshot && !stale && rows.length > 0 ? (
           <TextWidget
-            text={snapshot.summaryLabel}
+            text={todaySummary(snapshot, rows)}
             style={{ fontSize: 13, fontWeight: '600', color: hex(c.primary) }}
           />
         ) : (
@@ -84,10 +100,46 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
       </FlexWidget>
 
       {/* List or empty/stale state */}
-      {visible.length === 0 ? (
+      {rows.length === 0 ? (
         <TextWidget text={emptyText} style={{ fontSize: 13, color: hex(c.muted), marginTop: 12 }} />
       ) : (
-        visible.map((h) => {
+        // A scrollable list: every row is one item, so nothing is cut off — the
+        // widget scrolls instead of summarizing the rest as "+N".
+        <ListWidget style={{ width: 'match_parent', height: 'match_parent' }}>
+          {rows.map((row) => {
+          if (row.kind === 'task') {
+            const t = row.task;
+            return (
+              <FlexWidget
+                key={`task-${t.id}`}
+                clickAction={TASK_ACTION}
+                clickActionData={{ taskId: t.id }}
+                style={{
+                  width: 'match_parent',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginTop: 4,
+                  paddingVertical: 5,
+                }}
+              >
+                {/* Priority color dot */}
+                <FlexWidget style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: hex(t.color) }} />
+                <FlexWidget style={{ flex: 1, marginLeft: 10, marginRight: 8 }}>
+                  <TextWidget
+                    text={t.title}
+                    maxLines={1}
+                    truncate="END"
+                    style={{ fontSize: 14, color: t.completed ? hex(c.faint) : hex(c.text) }}
+                  />
+                </FlexWidget>
+                <TextWidget
+                  text={t.completed ? '✓' : '○'}
+                  style={{ fontSize: 15, fontWeight: '700', color: t.completed ? hex(c.done) : hex(c.faint) }}
+                />
+              </FlexWidget>
+            );
+          }
+          const h = row.habit;
           const numeric = habitKind(h) === 'numeric';
           return (
             <FlexWidget
@@ -125,13 +177,8 @@ export function TodayWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
               />
             </FlexWidget>
           );
-        })
-      )}
-
-      {overflow > 0 ? (
-        <TextWidget text={`+${overflow}`} style={{ fontSize: 12, color: hex(c.muted), marginTop: 8 }} />
-      ) : (
-        <FlexWidget style={{ width: 0, height: 0 }} />
+          })}
+        </ListWidget>
       )}
     </FlexWidget>
   );

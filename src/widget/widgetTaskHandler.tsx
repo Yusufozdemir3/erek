@@ -22,11 +22,12 @@ const newActionId = () => `${Date.now().toString(36)}-${Math.random().toString(3
 
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<void> {
   const name = props.widgetInfo.widgetName;
+  console.log(`[widget] ${props.widgetAction} ${name} click=${props.clickAction ?? '-'}`);
   switch (props.widgetAction) {
     case 'WIDGET_ADDED':
     case 'WIDGET_UPDATE':
     case 'WIDGET_RESIZED': {
-      props.renderWidget(widgetFor(name, await readSnapshot()));
+      props.renderWidget(widgetFor(name, await readSnapshot(), props.widgetInfo));
       break;
     }
     // A row/button tap (OPEN_APP taps open the app natively and never get here).
@@ -35,13 +36,13 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
         const snapshot = await readSnapshot();
         const action = actionFromClick(snapshot, props.clickAction, props.clickActionData, newActionId());
         if (!snapshot || !action) {
-          props.renderWidget(widgetFor(name, snapshot));
+          props.renderWidget(widgetFor(name, snapshot, props.widgetInfo));
           return;
         }
         await appendPending(action);
         const next = applyToSnapshot(snapshot, action);
         await writeSnapshot(next);
-        props.renderWidget(widgetFor(name, next));
+        props.renderWidget(widgetFor(name, next, props.widgetInfo));
         // The other widgets show the same items — keep them in step.
         await updateWidgets(
           next,

@@ -7,19 +7,15 @@
 // app's screen tree.
 
 import * as React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
 import { FALLBACK_COLORS, type WidgetSnapshot } from './widgetSnapshot';
 import { TASK_ACTION, isStale } from './widgetQueue';
 import { hex } from './TodayWidget';
-
-const MAX_ROWS = 6;
 
 export function TasksWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
   const c = snapshot?.colors ?? FALLBACK_COLORS;
   const stale = isStale(snapshot);
   const tasks = stale ? [] : snapshot?.tasks ?? [];
-  const visible = tasks.slice(0, MAX_ROWS);
-  const overflow = tasks.length - visible.length;
   const open = tasks.filter((t) => !t.completed).length;
   const emptyText = stale ? snapshot?.staleLabel ?? '' : snapshot?.tasksEmptyLabel ?? '';
 
@@ -52,10 +48,12 @@ export function TasksWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
         )}
       </FlexWidget>
 
-      {visible.length === 0 ? (
+      {tasks.length === 0 ? (
         <TextWidget text={emptyText} style={{ fontSize: 13, color: hex(c.muted), marginTop: 12 }} />
       ) : (
-        visible.map((t) => (
+        // Scrollable: every task is a list item, nothing is cut off.
+        <ListWidget style={{ width: 'match_parent', height: 'match_parent' }}>
+          {tasks.map((t) => (
           <FlexWidget
             key={t.id}
             clickAction={TASK_ACTION}
@@ -77,13 +75,8 @@ export function TasksWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
               style={{ fontSize: 15, fontWeight: '700', color: t.completed ? hex(c.done) : hex(c.faint) }}
             />
           </FlexWidget>
-        ))
-      )}
-
-      {overflow > 0 ? (
-        <TextWidget text={`+${overflow}`} style={{ fontSize: 12, color: hex(c.muted), marginTop: 8 }} />
-      ) : (
-        <FlexWidget style={{ width: 0, height: 0 }} />
+          ))}
+        </ListWidget>
       )}
     </FlexWidget>
   );

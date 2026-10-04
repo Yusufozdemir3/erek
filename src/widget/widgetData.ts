@@ -131,6 +131,8 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     title: translate(lang, 'widget.title'),
     summaryLabel: translate(lang, 'widget.summary', { done: doneCount, total: habits.length }),
     emptyLabel: translate(lang, 'widget.empty'),
+    todayEmptyLabel: translate(lang, 'widget.todayEmpty'),
+    quickAddLabel: translate(lang, 'widget.quickAdd'),
     summaryTemplate: translate(lang, 'widget.summary'),
     staleLabel: translate(lang, 'widget.stale'),
     counterTitle: translate(lang, 'widget.counterTitle'),

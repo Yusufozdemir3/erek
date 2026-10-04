@@ -1,0 +1,41 @@
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+index acc7924..3385f6c 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+@@ -129,7 +129,7 @@ public class RNWidget {
+             R.id.rn_widget_clickable_positioner,
+             offsetViewBounds.left,
+             offsetViewBounds.top,
+-            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
++            RNWidgetUtil.dpToPx(appContext, visibleDp(RNWidgetUtil.getWidgetWidth(appContext, widgetId))) - offsetViewBounds.right,
+             0
+         );
+ 
+@@ -140,6 +140,16 @@ public class RNWidget {
+         widgetView.addView(R.id.rn_widget_clickable_container, clickableRemoteView);
+     }
+ 
++    // MIUI/HyperOS reports a widget size larger than its visible frame. The app
++    // leaves the same strip empty (src/widget/widgetInset.ts), so tap areas are
++    // measured from the visible right edge, not the reported one.
++    private static int visibleDp(int reportedDp) {
++        String maker = (Build.MANUFACTURER + " " + Build.BRAND).toLowerCase();
++        boolean miui = maker.contains("xiaomi") || maker.contains("redmi") || maker.contains("poco");
++        if (!miui) return reportedDp;
++        return reportedDp - Math.max(16, Math.round(reportedDp * 0.08f));
++    }
++
+     private void registerClickTask(int id, ClickableView clickableView, RemoteViews widgetView, Integer button) {
+         Intent intent = new Intent(appContext.getPackageName() + ".WIDGET_CLICK");
+         intent.setComponent(new ComponentName(appContext, RNWidgetUtil.getWidgetProviderClassName(appContext, widgetName)));
+@@ -181,8 +191,8 @@ public class RNWidget {
+             R.id.rn_widget_list_positioner,
+             offsetViewBounds.left,
+             offsetViewBounds.top,
+-            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetWidth(appContext, widgetId)) - offsetViewBounds.right,
+-            RNWidgetUtil.dpToPx(appContext, RNWidgetUtil.getWidgetHeight(appContext, widgetId)) - offsetViewBounds.bottom
++            RNWidgetUtil.dpToPx(appContext, visibleDp(RNWidgetUtil.getWidgetWidth(appContext, widgetId))) - offsetViewBounds.right,
++            RNWidgetUtil.dpToPx(appContext, visibleDp(RNWidgetUtil.getWidgetHeight(appContext, widgetId))) - offsetViewBounds.bottom
+         );
+ 
+         for (int i = 0; i < listWrappers.length; i++) {

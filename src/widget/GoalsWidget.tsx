@@ -9,18 +9,15 @@
 // app's screen tree.
 
 import * as React from 'react';
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
 import { FALLBACK_COLORS, type WidgetSnapshot } from './widgetSnapshot';
 import { isStale } from './widgetQueue';
 import { hex } from './TodayWidget';
-
-const MAX_ROWS = 4;
 
 export function GoalsWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
   const c = snapshot?.colors ?? FALLBACK_COLORS;
   const stale = isStale(snapshot);
   const goals = stale ? [] : snapshot?.goals ?? [];
-  const visible = goals.slice(0, MAX_ROWS);
   const emptyText = stale ? snapshot?.staleLabel ?? '' : snapshot?.goalsEmptyLabel ?? '';
 
   return (
@@ -40,10 +37,12 @@ export function GoalsWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
         style={{ fontSize: 16, fontWeight: '700', color: hex(c.text) }}
       />
 
-      {visible.length === 0 ? (
+      {goals.length === 0 ? (
         <TextWidget text={emptyText} style={{ fontSize: 13, color: hex(c.muted), marginTop: 12 }} />
       ) : (
-        visible.map((g) => (
+        // Scrollable: every goal is a list item, nothing is cut off.
+        <ListWidget style={{ width: 'match_parent', height: 'match_parent' }}>
+          {goals.map((g) => (
           <FlexWidget
             key={g.id}
             clickAction="OPEN_URI"
@@ -83,7 +82,8 @@ export function GoalsWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
               {g.percent < 100 ? <FlexWidget style={{ flex: 100 - g.percent, height: 6 }} /> : <FlexWidget style={{ width: 0, height: 6 }} />}
             </FlexWidget>
           </FlexWidget>
-        ))
+          ))}
+        </ListWidget>
       )}
     </FlexWidget>
   );

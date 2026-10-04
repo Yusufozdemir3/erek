@@ -9,8 +9,9 @@
 // + Ionicons (flame). @expo/vector-icons ships with Expo, so no extra
 // dependency. The focused tab is primary-colored, the rest are faint.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
+import { onAddRequest } from '@/lib/addRequest';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { AddFab, AddFabButton } from '@/ui/AddFab';
 import { AddSheet, type Step } from '@/ui/AddSheet';
@@ -28,6 +29,9 @@ export default function TabsLayout() {
   // A separate timer picker (see TimerPicker) opens on a LONG PRESS of the same
   // button — kept as its own state so a short tap's Task·Habit·Goal menu doesn't collide with it.
   const [timerPickerOpen, setTimerPickerOpen] = useState(false);
+
+  // The quick-add widget's deep link (habitapp://add?step=task) opens the add form from outside.
+  useEffect(() => onAddRequest((step) => setSheetStep(step)), []);
 
   return (
     <>
