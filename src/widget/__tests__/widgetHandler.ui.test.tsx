@@ -136,9 +136,10 @@ describe('TasksWidget', () => {
 });
 
 describe('GoalsWidget', () => {
-  it('hedef, yüzde ve çubuk görünür; dokunulabilir tek şey kartın kendisi', () => {
+  it('hedef, yüzde ve çubuk görünür; satır o hedefin ekranını, kart uygulamayı açar', () => {
     const root = GoalsWidget({ snapshot: snap() }) as El;
-    expect(clicks(root)).toEqual([['OPEN_APP', null]]);
+    expect(clicks(root)).toEqual([['OPEN_APP', null], ['OPEN_URI', null]]);
+    expect(walk(root).find((e) => e.props.clickAction === 'OPEN_URI')?.props.clickActionData).toEqual({ uri: 'habitapp://goal/g1' });
     expect(texts(root)).toEqual(expect.arrayContaining(['Hedefler', 'Koş', '%40']));
     const flex = walk(root).map((e) => e.props.style?.flex).filter((f) => typeof f === 'number');
     expect(flex).toEqual(expect.arrayContaining([40, 60]));

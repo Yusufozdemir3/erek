@@ -1,5 +1,6 @@
-// The goals widget: open goals with a progress bar each. Display only — the
-// whole card opens the app (progress is entered there, in one place).
+// The goals widget: open goals with a progress bar each. Tapping a goal opens
+// that goal's screen (deep link); anywhere else opens the app. Progress is
+// entered in the app, in one place.
 //
 // The bar is two weighted halves (filled / empty) because widget sizes are in
 // dp and the width isn't known; weights split whatever room there is.
@@ -43,7 +44,12 @@ export function GoalsWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
         <TextWidget text={emptyText} style={{ fontSize: 13, color: hex(c.muted), marginTop: 12 }} />
       ) : (
         visible.map((g) => (
-          <FlexWidget key={g.id} style={{ width: 'match_parent', flexDirection: 'column', marginTop: 10 }}>
+          <FlexWidget
+            key={g.id}
+            clickAction="OPEN_URI"
+            clickActionData={{ uri: `habitapp://goal/${encodeURIComponent(g.id)}` }}
+            style={{ width: 'match_parent', flexDirection: 'column', marginTop: 10 }}
+          >
             <FlexWidget
               style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
             >
