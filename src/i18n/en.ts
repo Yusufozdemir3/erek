@@ -192,6 +192,8 @@ export const en: Dict = {
   'screen.tasksSubtitle_one': '{n} task waiting',
   'tasks.showOlderCompleted': 'Show {n} older completed tasks',
   'tasks.showOlderCompleted_one': 'Show {n} older completed task',
+  'habits.searchPlaceholder': 'Search habits',
+  'habits.searchEmpty': 'No matching habits',
   'tasks.searchPlaceholder': 'Search tasks',
   'tasks.searchClear': 'Clear search',
   'tasks.searchEmpty': 'No matching tasks',

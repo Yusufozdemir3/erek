@@ -15,7 +15,7 @@
 // revealed with a single tap if wanted.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -24,10 +24,11 @@ import { reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, todayDate, toYmd } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { MAX_QUERY_LEN, matchesWords, queryWords } from '@/lib/search';
+import { matchesWords, queryWords } from '@/lib/search';
 import { cancelTaskReminders, refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
+import { SearchBox } from '@/ui/SearchBox';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { HeaderActions } from '@/ui/HeaderActions';
 import { MetaLine } from '@/ui/MetaLine';
@@ -310,30 +311,12 @@ export default function TasksScreen() {
             </View>
             <Text style={shared.subtitle}>{tr('screen.tasksSubtitle', { n: remaining })}</Text>
             {showSearch && (
-              <View style={styles.searchBox}>
-                <Feather name="search" size={16} color={colors.faint} />
-                <TextInput
-                  style={styles.searchInput}
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder={tr('tasks.searchPlaceholder')}
-                  placeholderTextColor={colors.faint}
-                  maxLength={MAX_QUERY_LEN}
-                  returnKeyType="search"
-                  autoCorrect={false}
-                  accessibilityLabel={tr('tasks.searchPlaceholder')}
-                />
-                {query.length > 0 && (
-                  <Pressable
-                    onPress={() => setQuery('')}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel={tr('tasks.searchClear')}
-                  >
-                    <Feather name="x" size={16} color={colors.faint} />
-                  </Pressable>
-                )}
-              </View>
+              <SearchBox
+                value={query}
+                onChange={setQuery}
+                placeholder={tr('tasks.searchPlaceholder')}
+                clearLabel={tr('tasks.searchClear')}
+              />
             )}
           </>
         }
@@ -385,19 +368,6 @@ const makeStyles = (c: Colors) =>
       marginBottom: 4,
     },
     sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.muted },
-    searchBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginTop: 16,
-      paddingHorizontal: 12,
-      minHeight: 44,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    searchInput: { flex: 1, fontSize: 15, color: c.text, paddingVertical: 8 },
     rowSpacing: { marginBottom: 8 },
     noMargin: { marginBottom: 0 },
     showOlderBtn: { alignItems: 'center', paddingVertical: 16, marginTop: 4 },

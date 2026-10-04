@@ -205,6 +205,8 @@ export const tr: Dict = {
   // unbounded over the years); this button reveals them all.
   'tasks.showOlderCompleted': 'Daha eski {n} tamamlanan görevi göster',
   'tasks.showOlderCompleted_one': 'Daha eski {n} tamamlanan görevi göster',
+  'habits.searchPlaceholder': 'Alışkanlıklarda ara',
+  'habits.searchEmpty': 'Eşleşen alışkanlık yok',
   'tasks.searchPlaceholder': 'Görevlerde ara',
   'tasks.searchClear': 'Aramayı temizle',
   'tasks.searchEmpty': 'Eşleşen görev yok',

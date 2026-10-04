@@ -3,12 +3,13 @@
 // No adding here: that happens from the ＋ menu in the tab bar.
 // Architecture rule: no SQL; only habitRepo is called.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { habitRepo } from '@/db';
 import { fmtClock, lastDays } from '@/lib/helpers';
+import { matchesWords, queryWords } from '@/lib/search';
 import type { Habit } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { cancelHabitReminders } from '@/lib/notifications';
@@ -16,6 +17,7 @@ import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
 import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
 import { EmptyState } from '@/ui/EmptyState';
+import { SearchBox } from '@/ui/SearchBox';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HeaderActions } from '@/ui/HeaderActions';
@@ -28,6 +30,9 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { DATE_LOCALE, type Colors } from '@/ui/theme';
 
+// The search field only appears once the list is long enough to need it.
+const SEARCH_MIN_HABITS = 8;
+
 export default function HabitsScreen() {
   const { colors, shared } = useTheme();
   const { t, lang } = useI18n();
@@ -37,7 +42,16 @@ export default function HabitsScreen() {
   // Only one card's swipe actions may be open at a time.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
-  const { today, habits, reload } = useHabitsData(user.id);
+  const { today, habits: allHabits, reload } = useHabitsData(user.id);
+  const [query, setQuery] = useState('');
+  const words = useMemo(() => queryWords(query, lang), [query, lang]);
+  const searching = words.length > 0;
+  // A typed search stays visible even if the list later shrinks below the threshold.
+  const showSearch = allHabits.length >= SEARCH_MIN_HABITS || query.length > 0;
+  const habits = useMemo(
+    () => (searching ? allHabits.filter((h) => matchesWords(h.title, words, lang)) : allHabits),
+    [allHabits, searching, words, lang]
+  );
   const shared_ = useSharedLists();
   const { refreshing, onRefresh } = usePullRefresh(() => {
     reload();
@@ -94,13 +108,21 @@ export default function HabitsScreen() {
           <HeaderActions />
         </View>
         <Text style={shared.subtitle}>{t('screen.habitsSubtitle')}</Text>
+        {showSearch && (
+          <SearchBox
+            value={query}
+            onChange={setQuery}
+            placeholder={t('habits.searchPlaceholder')}
+            clearLabel={t('tasks.searchClear')}
+          />
+        )}
 
         {habits.length === 0 ? (
-          <EmptyState
-            emoji="🌱"
-            title={t('empty.habitsTitle')}
-            subtitle={t('empty.habitsBody')}
-          />
+          searching ? (
+            <EmptyState emoji="🔍" title={t('habits.searchEmpty')} />
+          ) : (
+            <EmptyState emoji="🌱" title={t('empty.habitsTitle')} subtitle={t('empty.habitsBody')} />
+          )
         ) : (
           habits.map((h, i) => (
             <View key={h.id} style={[styles.rowSpacing, i === 0 && { marginTop: 20 }]}>

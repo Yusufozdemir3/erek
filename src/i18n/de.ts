@@ -192,6 +192,8 @@ export const de: Dict = {
   'screen.tasksSubtitle_one': '{n} Aufgabe wartet',
   'tasks.showOlderCompleted': '{n} ältere erledigte Aufgaben anzeigen',
   'tasks.showOlderCompleted_one': '{n} ältere erledigte Aufgabe anzeigen',
+  'habits.searchPlaceholder': 'Gewohnheiten suchen',
+  'habits.searchEmpty': 'Keine passenden Gewohnheiten',
   'tasks.searchPlaceholder': 'Aufgaben suchen',
   'tasks.searchClear': 'Suche löschen',
   'tasks.searchEmpty': 'Keine passenden Aufgaben',
