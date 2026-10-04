@@ -12,11 +12,12 @@ import { fmtClock, lastDays } from '@/lib/helpers';
 import { matchesWords, queryWords } from '@/lib/search';
 import type { Habit } from '@/db';
 import { notifySuccess, tapLight } from '@/lib/haptics';
-import { cancelHabitReminders } from '@/lib/notifications';
+import { cancelHabitReminders, rescheduleEverything } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { useHabitsData, type HabitListItem } from '@/ui/useHabitsData';
 import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
 import { EmptyState } from '@/ui/EmptyState';
+import { UndoSnackbar, useUndoNotice } from '@/ui/UndoSnackbar';
 import { SearchBox } from '@/ui/SearchBox';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
@@ -76,6 +77,8 @@ export default function HabitsScreen() {
     setEditing(habitRepo.getById(h.id));
   };
 
+  const undo = useUndoNotice();
+
   const removeHabit = (h: HabitListItem) => {
     // habitRepo.softDelete cleans up the reminder ROWS; what's cancelled here
     // is the trigger sitting in the OS's notification queue. cancelByPrefix
@@ -85,6 +88,14 @@ export default function HabitsScreen() {
     cancelHabitReminders(h.id).catch((e) =>
       console.warn('[Notification] Failed to cancel reminders for deleted habit:', e)
     );
+    undo.show({
+      text: t('undo.deleted', { title: h.title }),
+      onUndo: () => {
+        habitRepo.restore(h.id);
+        rescheduleEverything(user.id).catch(() => {});
+        reload();
+      },
+    });
     reload();
   };
 
@@ -216,6 +227,7 @@ export default function HabitsScreen() {
         onClose={() => setEditing(null)}
         onChanged={reload}
       />
+      <UndoSnackbar notice={undo.notice} onDone={undo.dismiss} />
     </SafeAreaView>
   );
 }

@@ -72,6 +72,19 @@ export const reminderRepo = {
     );
   },
 
+  // Brings back the reminders a deletion of the ENTITY took with it: only those
+  // deleted at or after `since` (the entity's own deleted_at) — a reminder the
+  // user had removed earlier stays removed. Used by the undo of a deletion.
+  restoreForEntity(entityType: ReminderEntityType, entityId: string, since: string): void {
+    const db = getDb();
+    const now = nowIso();
+    db.runSync(
+      `UPDATE reminders SET deleted_at = NULL, updated_at = ?, synced = 0
+       WHERE entity_type = ? AND entity_id = ? AND deleted_at IS NOT NULL AND deleted_at >= ?`,
+      [now, entityType, entityId, since]
+    );
+  },
+
   // Makes the entity's active reminders match the time list coming from the
   // form. DIFF-BASED: a time that stays keeps its row (and id) untouched; only
   // removed times are deleted and only new times are created.

@@ -207,6 +207,7 @@ export const tr: Dict = {
   'tasks.showOlderCompleted_one': 'Daha eski {n} tamamlanan görevi göster',
   'habits.searchPlaceholder': 'Alışkanlıklarda ara',
   'habits.searchEmpty': 'Eşleşen alışkanlık yok',
+  'undo.deleted': '“{title}” silindi',
   'tasks.searchPlaceholder': 'Görevlerde ara',
   'tasks.searchClear': 'Aramayı temizle',
   'tasks.searchEmpty': 'Eşleşen görev yok',

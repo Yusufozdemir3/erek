@@ -177,6 +177,18 @@ export const habitRepo = {
     reminderRepo.deleteAllForEntity('habit', id);
   },
 
+  // UNDO of softDelete: the row and the reminders its deletion took with it come
+  // back, and the change is queued for sync (a later updated_at wins over the
+  // deletion already sent). Returns false if the row isn't deleted.
+  restore(id: string): boolean {
+    const db = getDb();
+    const row = db.getFirstSync<{ deleted_at: string | null }>(`SELECT deleted_at FROM habits WHERE id = ?`, [id]);
+    if (!row?.deleted_at) return false;
+    db.runSync(`UPDATE habits SET deleted_at = NULL, updated_at = ?, synced = 0 WHERE id = ?`, [nowIso(), id]);
+    reminderRepo.restoreForEntity('habit', id, row.deleted_at);
+    return true;
+  },
+
   // Marks a habit completed/not-completed for a given day.
   // Thanks to UNIQUE(habit_id, log_date), the same day never gets two records - if one exists, it's updated.
   toggleLog(habitId: string, date: string, completed: boolean): GoalJustCompleted | null {

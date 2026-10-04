@@ -194,6 +194,7 @@ export const en: Dict = {
   'tasks.showOlderCompleted_one': 'Show {n} older completed task',
   'habits.searchPlaceholder': 'Search habits',
   'habits.searchEmpty': 'No matching habits',
+  'undo.deleted': '“{title}” deleted',
   'tasks.searchPlaceholder': 'Search tasks',
   'tasks.searchClear': 'Clear search',
   'tasks.searchEmpty': 'No matching tasks',

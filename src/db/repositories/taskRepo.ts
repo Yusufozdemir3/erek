@@ -290,6 +290,19 @@ export const taskRepo = {
     reminderRepo.deleteAllForEntity('task', id);
   },
 
+  // UNDO of softDelete: the row and the reminders its deletion took with it come
+  // back, and the change is queued for sync (a later updated_at wins over the
+  // deletion already sent). Returns false if the row isn't deleted (or isn't the user's own).
+  restore(id: string): boolean {
+    const db = getDb();
+    const row = db.getFirstSync<{ deleted_at: string | null }>(`SELECT deleted_at FROM tasks WHERE id = ?`, [id]);
+    if (!row?.deleted_at) return false;
+    if (isSharedWithMe(id)) return false;
+    db.runSync(`UPDATE tasks SET deleted_at = NULL, updated_at = ?, synced = 0 WHERE id = ?`, [nowIso(), id]);
+    reminderRepo.restoreForEntity('task', id, row.deleted_at);
+    return true;
+  },
+
   // Writes the server's answer to a check-off of a task shared WITH me
   // (toggle_shared_task RPC). synced stays 1: this mirrors the cloud row, it
   // isn't a local edit to push. Only ever touches shared-with-me rows.

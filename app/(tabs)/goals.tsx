@@ -20,9 +20,10 @@ import { router, useFocusEffect } from 'expo-router';
 import { goalMilestoneRepo, goalRepo, milestoneViews } from '@/db';
 import type { Goal } from '@/db';
 import { fmtClock, isTimeUnit } from '@/lib/helpers';
-import { cancelGoalReminders } from '@/lib/notifications';
+import { cancelGoalReminders, rescheduleEverything } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
+import { UndoSnackbar, useUndoNotice } from '@/ui/UndoSnackbar';
 import { HeaderActions } from '@/ui/HeaderActions';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SharedGoalsSection, useSharedLists } from '@/ui/SharedLists';
@@ -75,9 +76,19 @@ export default function GoalsScreen() {
 
   // Delete confirmation now lives in SwipeableRow's own two-tap action button
   // (the panel that opens to the right) — deletion here is immediate.
+  const undo = useUndoNotice();
   const remove = (id: string) => {
+    const title = goals.find((g) => g.id === id)?.title ?? '';
     goalRepo.softDelete(id);
     cancelGoalReminders(id).catch(() => {});
+    undo.show({
+      text: t('undo.deleted', { title }),
+      onUndo: () => {
+        goalRepo.restore(id);
+        rescheduleEverything(user.id).catch(() => {});
+        reload();
+      },
+    });
     reload();
   };
 
@@ -203,6 +214,7 @@ export default function GoalsScreen() {
 
         <SharedGoalsSection items={shared_.sharedGoals} onHide={shared_.hideGoal} />
       </ScrollView>
+      <UndoSnackbar notice={undo.notice} onDone={undo.dismiss} />
     </SafeAreaView>
   );
 }

@@ -297,4 +297,16 @@ export const goalRepo = {
     db.runSync(`UPDATE goals SET deleted_at = ?, updated_at = ?, synced = 0 WHERE id = ?`, [now, now, id]);
     reminderRepo.deleteAllForEntity('goal', id);
   },
+
+  // UNDO of softDelete: the row and the reminders its deletion took with it come
+  // back, and the change is queued for sync (a later updated_at wins over the
+  // deletion already sent). Returns false if the row isn't deleted.
+  restore(id: string): boolean {
+    const db = getDb();
+    const row = db.getFirstSync<{ deleted_at: string | null }>(`SELECT deleted_at FROM goals WHERE id = ?`, [id]);
+    if (!row?.deleted_at) return false;
+    db.runSync(`UPDATE goals SET deleted_at = NULL, updated_at = ?, synced = 0 WHERE id = ?`, [nowIso(), id]);
+    reminderRepo.restoreForEntity('goal', id, row.deleted_at);
+    return true;
+  },
 };

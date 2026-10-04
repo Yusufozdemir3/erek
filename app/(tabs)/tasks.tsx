@@ -25,9 +25,10 @@ import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, todayDate, toYmd } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { matchesWords, queryWords } from '@/lib/search';
-import { cancelTaskReminders, refreshTaskReminders } from '@/lib/notifications';
+import { cancelTaskReminders, refreshTaskReminders, rescheduleEverything } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
+import { UndoSnackbar, useUndoNotice } from '@/ui/UndoSnackbar';
 import { SearchBox } from '@/ui/SearchBox';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { HeaderActions } from '@/ui/HeaderActions';
@@ -167,8 +168,18 @@ export default function TasksScreen() {
     reload();
   };
 
+  const undo = useUndoNotice();
+
   const removeTask = (t: Task) => {
     taskRepo.softDelete(t.id);
+    undo.show({
+      text: tr('undo.deleted', { title: t.title }),
+      onUndo: () => {
+        taskRepo.restore(t.id);
+        rescheduleEverything(user.id).catch(() => {});
+        reload();
+      },
+    });
     cancelTaskReminders(t.id).catch((e) =>
       console.warn('[Notification] Failed to cancel reminders for deleted task:', e)
     );
@@ -353,6 +364,7 @@ export default function TasksScreen() {
         onClose={() => setViewingShared(null)}
         onChanged={reload}
       />
+      <UndoSnackbar notice={undo.notice} onDone={undo.dismiss} />
     </SafeAreaView>
   );
 }
