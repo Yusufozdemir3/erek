@@ -43,6 +43,8 @@ import {
 import { ensurePermission } from '@/lib/notifications';
 import { syncPushRegistration } from '@/lib/pushRegistration';
 import { useAppData } from '@/ui/AppData';
+import { FeatureGuide } from '@/ui/guide/FeatureGuide';
+import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { dateTimeLabel, type Colors } from '@/ui/theme';
@@ -66,6 +68,8 @@ export default function FriendsScreen() {
   const styles = makeStyles(colors);
   const { authUser } = useAppData();
   const signedIn = authUser != null && !authUser.isAnonymous;
+  // The guide only makes sense (and only opens by itself) while signed in.
+  const guide = useFeatureGuide('friends', signedIn);
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [listLoading, setListLoading] = useState(true);
@@ -218,6 +222,11 @@ export default function FriendsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Pressable onPress={guide.open} hitSlop={8} style={styles.guideLink} accessibilityRole="button">
+        <Feather name="help-circle" size={16} color={colors.primary} />
+        <Text style={styles.guideLinkText}>{t('friends.guideLink')}</Text>
+      </Pressable>
+      <FeatureGuide guide="friends" visible={guide.visible} onClose={guide.close} />
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('friends.listTitle')}</Text>
         {listError && <Text style={styles.errText}>{listError}</Text>}
@@ -352,6 +361,8 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: c.bg },
     content: { padding: 20, paddingBottom: 48 },
+    guideLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginBottom: 12 },
+    guideLinkText: { fontSize: 14, fontWeight: '700', color: c.primary },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: c.bg },
     card: {
       backgroundColor: c.card,

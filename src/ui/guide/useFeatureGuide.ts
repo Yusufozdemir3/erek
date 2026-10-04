@@ -4,10 +4,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { markGuideSeen, shouldAutoShowGuide, type GuideId } from '@/lib/guides';
 
-export function useFeatureGuide(guide: GuideId) {
+// enabled=false: the screen can't show the guide right now (e.g. signed out), so
+// it must not open by itself nor be marked seen.
+export function useFeatureGuide(guide: GuideId, enabled = true) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return;
     let alive = true;
     shouldAutoShowGuide(guide).then((show) => {
       if (alive && show) {
@@ -19,7 +22,7 @@ export function useFeatureGuide(guide: GuideId) {
     return () => {
       alive = false;
     };
-  }, [guide]);
+  }, [guide, enabled]);
 
   const open = useCallback(() => setVisible(true), []);
   const close = useCallback(() => {

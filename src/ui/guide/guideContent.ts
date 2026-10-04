@@ -30,4 +30,12 @@ export const GUIDES: Record<GuideId, GuidePage[]> = {
     { emoji: '🔔' },
     { emoji: '🔗', cta: { route: '/(tabs)/goals' } },
   ],
+  friends: [
+    { emoji: '👥' },
+    { emoji: '🔑' },
+    { emoji: '📤' },
+    { emoji: '📥' },
+    { emoji: '👋' },
+    { emoji: '🔒' },
+  ],
 };
