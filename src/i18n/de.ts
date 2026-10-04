@@ -796,6 +796,7 @@ export const de: Dict = {
   'review.tasksLabel_one': 'Aufgabe erledigt',
   'review.best': 'Am beständigsten',
   'review.attention': 'Braucht etwas Aufmerksamkeit',
+  'review.allHabits': 'Alle Gewohnheiten',
   'review.fraction': '{done}/{expected} Tage',
   'review.msgGreat': 'Was für eine Woche.',
   'review.msgGood': 'Läuft gut — weiter so.',

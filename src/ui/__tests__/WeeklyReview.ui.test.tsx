@@ -59,6 +59,17 @@ describe('ReviewScreen', () => {
     expect(u.getByText('İyi gidiyorsun, devam.')).toBeTruthy();
   });
 
+  it('birden çok alışkanlıkta hepsi oranlarıyla listelenir', async () => {
+    const a = habitRepo.create({ user_id: mockUserId, title: 'Kitap oku', start_date: ago(6) });
+    const b = habitRepo.create({ user_id: mockUserId, title: 'Yoga', start_date: ago(6) });
+    for (const n of [0, 1, 2]) habitRepo.toggleLog(a.id, ago(n), true);
+    habitRepo.toggleLog(b.id, ago(0), true);
+    const u = await renderUI(<ReviewScreen />);
+    expect(await u.findByText('Tüm alışkanlıklar')).toBeTruthy();
+    expect(u.getByText('3/7')).toBeTruthy();
+    expect(u.getAllByText('1/7').length).toBe(2); // Yoga + tam gün çipi
+  });
+
   it('önceki haftadan iyi gidiyorsa artışı söyler', async () => {
     const h = habitRepo.create({ user_id: mockUserId, title: 'Su', start_date: ago(13) });
     for (const n of [0, 1, 2, 3, 4, 5, 6]) habitRepo.toggleLog(h.id, ago(n), true);

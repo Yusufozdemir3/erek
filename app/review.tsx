@@ -129,6 +129,22 @@ export default function ReviewScreen() {
           </Text>
         </View>
       )}
+      {review.habits.length > 1 && (
+        <View style={[styles.card, { marginTop: 12 }]}>
+          <Text style={local.caption}>{t('review.allHabits')}</Text>
+          {review.habits.map((h) => (
+            <View key={h.id} style={local.habitRow}>
+              <Text style={local.habitRowName} numberOfLines={1}>
+                {h.title}
+              </Text>
+              <View style={local.miniTrack}>
+                <View style={[local.miniFill, { width: `${h.rate}%` }, h.rate === 100 && { backgroundColor: colors.done }]} />
+              </View>
+              <Text style={local.habitRowRate}>{h.done}/{h.expected}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -153,4 +169,9 @@ const makeStyles = (c: Colors) =>
     chipLabel: { fontSize: 12, color: c.muted, marginTop: 2, textAlign: 'center' },
     habitName: { fontSize: 17, fontWeight: '700', color: c.text, marginTop: 6 },
     habitMeta: { fontSize: 13, color: c.muted, marginTop: 2 },
+    habitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+    habitRowName: { flex: 1.4, fontSize: 14, color: c.text },
+    miniTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: c.track, overflow: 'hidden' },
+    miniFill: { height: 6, borderRadius: 3, backgroundColor: c.primary },
+    habitRowRate: { width: 36, textAlign: 'right', fontSize: 12, fontWeight: '700', color: c.muted },
   });

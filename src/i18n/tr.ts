@@ -822,6 +822,7 @@ export const tr: Dict = {
   'review.tasksLabel_one': 'görev tamamlandı',
   'review.best': 'En istikrarlı',
   'review.attention': 'Biraz ilgi bekliyor',
+  'review.allHabits': 'Tüm alışkanlıklar',
   'review.fraction': '{done}/{expected} gün',
   'review.msgGreat': 'Harika bir hafta geçirdin.',
   'review.msgGood': 'İyi gidiyorsun, devam.',
