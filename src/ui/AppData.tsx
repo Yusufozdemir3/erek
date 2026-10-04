@@ -218,9 +218,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // menu, a timer commit, a goal update…) → this effect covers all of them.
   // Habit check-offs on the Today screen use a local reload, so there's a
   // separate call there too. refreshWidget is a silent no-op outside Android and in Expo Go.
+  // The theme is a trigger too: the snapshot carries the colours, so switching
+  // light/dark or the accent in Appearance must repaint the widgets right away,
+  // not at the next time the app comes to the foreground.
   useEffect(() => {
     if (user) refreshWidget(user.id);
-  }, [user, dataVersion]);
+  }, [user, dataVersion, colors.bg, colors.primary]);
 
   // Taps on the home-screen widgets (check-off / +1) are queued by the
   // headless handler, which can't use SQLite (see widget/widgetQueue.ts).
