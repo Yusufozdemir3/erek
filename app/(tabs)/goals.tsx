@@ -25,6 +25,8 @@ import { useAppData } from '@/ui/AppData';
 import { EmptyState } from '@/ui/EmptyState';
 import { UndoSnackbar, useUndoNotice } from '@/ui/UndoSnackbar';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { FeatureGuide } from '@/ui/guide/FeatureGuide';
+import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SharedGoalsSection, useSharedLists } from '@/ui/SharedLists';
 import { SwipeableRow } from '@/ui/SwipeableRow';
@@ -36,7 +38,8 @@ export default function GoalsScreen() {
   const { colors, shared } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeStyles(colors);
-  const { user, dataVersion } = useAppData();
+  const { user, dataVersion, authUser } = useAppData();
+  const guide = useFeatureGuide('goals');
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [milestoneCounts, setMilestoneCounts] = useState<Record<string, { done: number; total: number }>>({});
@@ -109,7 +112,7 @@ export default function GoalsScreen() {
       >
         <View style={shared.headerRow}>
           <Text style={shared.greeting}>{t('tabs.goals')}</Text>
-          <HeaderActions />
+          <HeaderActions onHelp={guide.open} />
         </View>
         <Text style={shared.subtitle}>{t('screen.goalsSubtitle')}</Text>
 
@@ -215,6 +218,12 @@ export default function GoalsScreen() {
         <SharedGoalsSection items={shared_.sharedGoals} onHide={shared_.hideGoal} />
       </ScrollView>
       <UndoSnackbar notice={undo.notice} onDone={undo.dismiss} />
+      <FeatureGuide
+        guide="goals"
+        visible={guide.visible}
+        onClose={guide.close}
+        canShare={!!authUser && !authUser.isAnonymous}
+      />
     </SafeAreaView>
   );
 }

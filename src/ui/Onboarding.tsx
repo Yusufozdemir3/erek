@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { markNewInstall } from '@/lib/guides';
 import { SetupWizard, type WizardResult } from '@/ui/setupWizard/SetupWizard';
 
 const SEEN_KEY = 'onboarding:done';
@@ -43,7 +44,12 @@ export function OnboardingGate() {
   const [seen, setSeen] = useState<boolean | null>(null); // null = not known yet
 
   useEffect(() => {
-    AsyncStorage.getItem(SEEN_KEY).then((v) => setSeen(v === '1'));
+    AsyncStorage.getItem(SEEN_KEY).then((v) => {
+      // The wizard opens for the first time: this is a new install, so the
+      // feature guides may open by themselves later (lib/guides.ts).
+      if (v !== '1') markNewInstall();
+      setSeen(v === '1');
+    });
   }, []);
 
   if (seen !== false) return null;

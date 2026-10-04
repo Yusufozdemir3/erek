@@ -54,6 +54,18 @@ describe('OnboardingGate + LoginGate', () => {
     expect(u.queryByText(loginTitle())).toBeNull();
   });
 
+  it('ilk açılış YENİ KURULUM sayılır (özellik rehberleri kendiliğinden açılabilsin)', async () => {
+    await renderUI(<Gates />);
+    await waitFor(async () => expect(await AsyncStorage.getItem('guide:newInstall')).toBe('1'));
+  });
+
+  it('sihirbazı daha önce görmüş kullanıcı yeni kurulum sayılmaz', async () => {
+    await AsyncStorage.setItem(ONBOARDING_SEEN_KEY, '1');
+    await renderUI(<Gates />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await AsyncStorage.getItem('guide:newInstall')).toBeNull();
+  });
+
   it('daha önce görüldüyse hiçbiri açılmaz', async () => {
     await AsyncStorage.multiSet([[ONBOARDING_SEEN_KEY, '1'], [LOGIN_SEEN_KEY, '1']]);
     const u = await renderUI(<Gates />);
