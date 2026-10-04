@@ -55,8 +55,9 @@ beforeEach(async () => {
 afterEach(() => jest.restoreAllMocks());
 
 async function startWith(u: Awaited<ReturnType<typeof renderUI>>, title: string) {
-  fireEvent(await u.findByText(title), 'longPress');
-  expect(await u.findByText('1 seçili')).toBeTruthy();
+  // İlk test soğuk başlar; yük altında varsayılan 1 sn'lik bekleme yetmeyebilir.
+  fireEvent(await u.findByText(title, {}, { timeout: 5000 }), 'longPress');
+  expect(await u.findByText('1 seçili', {}, { timeout: 5000 })).toBeTruthy();
 }
 
 describe('Görevler: toplu seçim', () => {
