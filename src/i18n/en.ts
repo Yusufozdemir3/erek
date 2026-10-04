@@ -642,7 +642,7 @@ export const en: Dict = {
   'voice.err.busy': 'Speech recognition is busy — try again in a moment.',
   'voice.err.generic': 'Voice input didn’t work — try again?',
   'voice.err.download': 'The pack couldn’t be downloaded.',
-  'voiceCmd.hint': 'Use your voice: “I drank water”, “call mom tomorrow”, “move shopping to tomorrow”, “add 5 km to my running goal”',
+  'voiceCmd.hint': 'Use your voice: “I drank water”, “call mom tomorrow”, “start Meditation”, “add 5 km to my goal”',
   'voiceCmd.startA11y': 'Check off by voice',
   'voiceCmd.habitDone': '“{title}” checked off',
   'voiceCmd.habitAmount': '“{title}”: +{n} added',
