@@ -5,13 +5,14 @@ import { fireEvent, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GoalsScreen from '../../../app/(tabs)/goals';
 import HabitsScreen from '../../../app/(tabs)/habits';
+import TasksScreen from '../../../app/(tabs)/tasks';
 import { FeatureGuide } from '../guide/FeatureGuide';
 import { renderUI } from '@/test/renderWithProviders';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { userRepo } from '@/db';
 
 let mockUserId = '';
-let mockAuth: { isAnonymous: boolean } | null = null;
+let mockAuth: { id?: string; isAnonymous: boolean } | null = null;
 const mockPush = jest.fn();
 
 jest.mock('expo-router', () => {
@@ -23,10 +24,13 @@ jest.mock('expo-router', () => {
 });
 jest.mock('@/ui/AppData', () => ({
   useAppData: () => ({ user: { id: mockUserId }, authUser: mockAuth, dataVersion: 0, notifyDataChanged: jest.fn() }),
+  useOptionalAppData: () => null,
 }));
 jest.mock('@/lib/notifications', () => ({
   cancelGoalReminders: jest.fn(async () => {}),
   cancelHabitReminders: jest.fn(async () => {}),
+  cancelTaskReminders: jest.fn(async () => {}),
+  refreshTaskReminders: jest.fn(),
   rescheduleEverything: jest.fn(async () => {}),
 }));
 jest.mock('@/ui/ProfileButton', () => ({ ProfileButton: () => null }));
@@ -142,5 +146,26 @@ describe('Alışkanlıklar ekranında rehber', () => {
     await AsyncStorage.setItem('guide:seen:goals', '1');
     const u = await renderUI(<HabitsScreen />);
     expect(await u.findByText('Alışkanlık nedir?')).toBeTruthy();
+  });
+});
+
+describe('Görevler ekranında rehber', () => {
+  it('yeni kurulumda ilk girişte açılır; hesapsızken paylaşım sayfası yok (6 sayfa)', async () => {
+    await AsyncStorage.setItem('guide:newInstall', '1');
+    await AsyncStorage.setItem('onboarding:done', '1');
+    const u = await renderUI(<TasksScreen />);
+    expect(await u.findByText('Görev nedir?')).toBeTruthy();
+    for (let i = 0; i < 5; i++) fireEvent.press(await u.findByText('İleri'));
+    expect(await u.findByText('Hatırlatma ve sesle ekleme')).toBeTruthy();
+    expect(u.getByText('Tamam')).toBeTruthy();
+  });
+
+  it('girişliyken yedinci sayfa paylaşımı anlatır; ? ile yeniden açılır', async () => {
+    mockAuth = { id: 'a', isAnonymous: false };
+    await AsyncStorage.setItem('onboarding:done', '1');
+    const u = await renderUI(<TasksScreen />);
+    fireEvent.press(await u.findByLabelText('Bu ekranın rehberini aç'));
+    for (let i = 0; i < 6; i++) fireEvent.press(await u.findByText('İleri'));
+    expect(await u.findByText('Arkadaşınla paylaş')).toBeTruthy();
   });
 });

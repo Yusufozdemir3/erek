@@ -12,7 +12,8 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useAppData } from '@/ui/AppData';
 
-type MenuRow = { icon: keyof typeof Feather.glyphMap; label: string; href: string };
+// hint: a small line under the label (used by the locked Friends row).
+type MenuRow = { icon: keyof typeof Feather.glyphMap; label: string; href: string; hint?: string };
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
@@ -25,7 +26,14 @@ export default function ProfileScreen() {
   const rows: MenuRow[] = [
     { icon: 'sliders', label: t('profile.appearance'), href: '/appearance' },
     { icon: 'bell', label: t('profile.notifications'), href: '/notifications' },
-    ...(signedIn ? [{ icon: 'users', label: t('friends.title'), href: '/friends' } as MenuRow] : []),
+    // Signed in: the Friends screen. Signed out (but accounts exist in this
+    // build): a locked row, so people learn the feature is there; it leads to
+    // the Google sign-in instead.
+    ...(signedIn
+      ? [{ icon: 'users', label: t('friends.title'), href: '/friends' } as MenuRow]
+      : ACCOUNTS_ENABLED
+        ? [{ icon: 'lock', label: t('friends.title'), href: '/account-sync', hint: t('friends.lockedHint') } as MenuRow]
+        : []),
     // Hidden in builds where accounts are switched off (see src/config.ts).
     ...(ACCOUNTS_ENABLED
       ? [{ icon: 'user', label: t('profile.accountSync'), href: '/account-sync' } as MenuRow]
@@ -45,11 +53,14 @@ export default function ProfileScreen() {
           style={[styles.card, styles.navRow, i > 0 && { marginTop: 12 }]}
           onPress={() => router.push(r.href as Href)}
           accessibilityRole="button"
-          accessibilityLabel={r.label}
+          accessibilityLabel={r.hint ? `${r.label}. ${r.hint}` : r.label}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Feather name={r.icon} size={20} color={colors.primary} />
-            <Text style={[styles.cardTitle, { marginBottom: 0 }]}>{r.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <Feather name={r.icon} size={20} color={r.hint ? colors.faint : colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { marginBottom: 0 }]}>{r.label}</Text>
+              {r.hint && <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>{r.hint}</Text>}
+            </View>
           </View>
           <Feather name="chevron-right" size={20} color={colors.faint} />
         </Pressable>

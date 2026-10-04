@@ -32,6 +32,8 @@ import { UndoSnackbar, useUndoNotice } from '@/ui/UndoSnackbar';
 import { SearchBox } from '@/ui/SearchBox';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { FeatureGuide } from '@/ui/guide/FeatureGuide';
+import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { MetaLine } from '@/ui/MetaLine';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SwipeableRow } from '@/ui/SwipeableRow';
@@ -66,7 +68,8 @@ export default function TasksScreen() {
   // Note: i18n's `t` is aliased to `tr` so it doesn't clash with the `t` (task) map variable below.
   const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
-  const { user, dataVersion } = useAppData();
+  const { user, dataVersion, authUser } = useAppData();
+  const guide = useFeatureGuide('tasks');
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -374,7 +377,7 @@ export default function TasksScreen() {
           <>
             <View style={shared.headerRow}>
               <Text style={shared.greeting}>{tr('tabs.tasks')}</Text>
-              <HeaderActions />
+              <HeaderActions onHelp={guide.open} />
             </View>
             <Text style={shared.subtitle}>{tr('screen.tasksSubtitle', { n: remaining })}</Text>
             {showSearch && (
@@ -443,6 +446,12 @@ export default function TasksScreen() {
         </View>
       )}
       <UndoSnackbar notice={undo.notice} onDone={undo.dismiss} />
+      <FeatureGuide
+        guide="tasks"
+        visible={guide.visible}
+        onClose={guide.close}
+        canShare={!!authUser && !authUser.isAnonymous}
+      />
     </SafeAreaView>
   );
 }
