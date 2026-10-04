@@ -653,6 +653,7 @@ export const de: Dict = {
   'voiceCmd.alreadyDone': '„{title}“ ist schon erledigt',
   'voiceCmd.taskDone': 'Aufgabe „{title}“ erledigt',
   'voiceCmd.taskPostponed': 'Aufgabe „{title}“ auf morgen verschoben',
+  'voiceCmd.goalAdded': '{n} zum Ziel „{title}“ hinzugefügt',
   'voiceCmd.postponeRecurring': '„{title}“ wiederholt sich – bitte in der Aufgabe selbst ändern',
   'voiceCmd.undone': 'Rückgängig gemacht',
   'voiceCmd.addAsTaskTitle': 'Kein Befehl erkannt. Als Aufgabe hinzufügen?',

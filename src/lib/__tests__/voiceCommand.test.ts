@@ -225,3 +225,32 @@ describe('görevi yarına erteleme', () => {
     expect(one('dişçiyi yarına ertele', 'tr')).toEqual(NONE);
   });
 });
+
+describe('hedefe ilerleme ekleme', () => {
+  const goals = [
+    { id: 'kos', title: 'Koşu mesafesi' },
+    { id: 'kitap', title: 'Kitap sayfası' },
+  ];
+  const set = items({ goals });
+  const goal = (text: string, lang: 'tr' | 'en' | 'de') => {
+    const r = parseVoiceCommand(text, lang, set);
+    return r.kind === 'one' && r.target.kind === 'goal' ? [r.target.goal.id, r.target.amount] : r;
+  };
+
+  it('üç dilde sayıyı hedefe ekler', () => {
+    expect(goal('koşu mesafesi hedefime 5 km ekle', 'tr')).toEqual(['kos', 5]);
+    expect(goal('kitap sayfası hedefine yirmi sayfa ekledim', 'tr')).toEqual(['kitap', 20]);
+    expect(goal('add 5 km to my Koşu mesafesi goal', 'en')).toEqual(['kos', 5]);
+    expect(goal('ich habe 30 Seiten zum Ziel Kitap sayfası hinzugefügt', 'de')).toEqual(['kitap', 30]);
+  });
+
+  it('sayı yoksa, hedef eşleşmiyorsa komut değildir', () => {
+    expect(parseVoiceCommand('koşu mesafesi hedefime ekle', 'tr', set)).toEqual(NONE);
+    expect(parseVoiceCommand('diş hedefime 5 ekle', 'tr', set)).toEqual(NONE);
+  });
+
+  it('hedef eşleşmezse "ekledim" alışkanlık olarak sürer', () => {
+    const r = parseVoiceCommand('iki bardak su ekledim', 'tr', set);
+    expect(r).toMatchObject({ kind: 'one', target: { kind: 'habit', amount: 2 } });
+  });
+});

@@ -28,15 +28,22 @@ export interface CommandTask {
   title: string;
 }
 
+export interface CommandGoal {
+  id: string;
+  title: string;
+}
+
 export interface CommandItems {
   habits: CommandHabit[]; // today's habits that can still take a command
   tasks: CommandTask[]; // open tasks
+  goals?: CommandGoal[]; // the user's own counting (numeric) goals
 }
 
 export type Target =
   | { kind: 'habit'; habit: CommandHabit; amount: number } // amount: what to add (numeric) — 1 for binary
   | { kind: 'task'; task: CommandTask }
-  | { kind: 'postpone'; task: CommandTask }; // "move X to tomorrow"
+  | { kind: 'postpone'; task: CommandTask } // "move X to tomorrow"
+  | { kind: 'goal'; goal: CommandGoal; amount: number }; // "add 5 km to my running goal"
 
 export type VoiceCommand =
   | { kind: 'none' }
@@ -94,6 +101,9 @@ interface LangKit {
   // Stem prefixes (folded) of "postpone/move" and "tomorrow".
   postponePrefixes: string[];
   tomorrowPrefixes: string[];
+  // Stem prefixes of "add" and of "goal" ("add 5 km to my reading goal").
+  addPrefixes: string[];
+  goalPrefixes: string[];
   // Do a spoken word and a title word mean the same thing?
   same(spoken: string, title: string): boolean;
 }
@@ -141,6 +151,8 @@ const TR: LangKit = {
   nounPrefixes: ['gorev', 'aliskanlik'],
   postponePrefixes: ['ertel', 'kaydir'],
   tomorrowPrefixes: ['yarin'],
+  addPrefixes: ['ekle'],
+  goalPrefixes: ['hedef'],
   isDoneWord: (w) => TR.generic.has(w) || (w.length >= 5 && /[dt][iu][mk]$/.test(w)),
   same: trSame,
 };
@@ -180,6 +192,8 @@ const EN: LangKit = {
   nounPrefixes: ['task', 'todo', 'habit'],
   postponePrefixes: ['postpone', 'reschedul', 'delay', 'push', 'move', 'defer'],
   tomorrowPrefixes: ['tomorrow'],
+  addPrefixes: ['add'],
+  goalPrefixes: ['goal'],
   isDoneWord: (w) =>
     EN.generic.has(w) || (w.length >= 4 && w.endsWith('ed')) || Object.prototype.hasOwnProperty.call(EN_IRREGULAR, w),
   same: (a, b) => a === b || enStem(a) === enStem(b),
@@ -212,6 +226,8 @@ const DE: LangKit = {
   nounPrefixes: ['aufgabe', 'gewohnheit'],
   postponePrefixes: ['verschieb', 'aufschieb', 'verleg'],
   tomorrowPrefixes: ['morgen'],
+  addPrefixes: ['hinzu', 'addier'],
+  goalPrefixes: ['ziel'],
   isDoneWord: (w) => DE.generic.has(w) || /^ge.{3,}(?:t|en)$/.test(w) || Object.prototype.hasOwnProperty.call(DE_IRREGULAR, w),
   same: (a, b) => a === b || deStem(a) === deStem(b),
 };
@@ -226,6 +242,7 @@ interface Heard {
   units: Set<number>; // words right after a number ("2 bardak"): counted only when they match
   done: boolean;
   postpone: boolean; // a postpone word AND "tomorrow" were both said
+  add: boolean; // an "add" word AND a number were both said
 }
 
 function listen(text: string, lang: Lang): Heard {
@@ -249,15 +266,19 @@ function listen(text: string, lang: Lang): Heard {
   const isPost = (w: string) => kit.postponePrefixes.some((p) => w.startsWith(p));
   const isTomorrow = (w: string) => kit.tomorrowPrefixes.some((p) => w.startsWith(p));
   const postpone = words.some(isPost) && words.some(isTomorrow);
+  const isAdd = (w: string) => kit.addPrefixes.some((p) => w.startsWith(p));
+  const isGoalWord = (w: string) => kit.goalPrefixes.some((p) => w.startsWith(p));
+  const add = amount !== null && words.some(isAdd);
   words.forEach((w, i) => {
     if (kit.isDoneWord(w)) done = true;
     if (used.has(i) || kit.stop.has(w) || kit.generic.has(w)) return;
     if (kit.nounPrefixes.some((p) => w.startsWith(p))) return;
     // These words only stop being content when they form a postpone command.
     if (postpone && (isPost(w) || isTomorrow(w))) return;
+    if (add && (isAdd(w) || isGoalWord(w))) return;
     content.push(i);
   });
-  return { words, amount, content, units, done, postpone };
+  return { words, amount, content, units, done, postpone, add };
 }
 
 // Share of the spoken content words that some word of the title matches.
@@ -289,6 +310,13 @@ export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems)
   // "X'i yarına ertele" concerns a task only; a habit can't be moved to another day.
   if (heard.postpone) {
     return pick(items.tasks.map((task) => ({ score: coverage(heard, task.title, lang), target: { kind: 'postpone', task } })));
+  }
+  // "hedefime 5 km ekle": a number to add to one of the goals; when no goal fits
+  // the sentence may still be a habit ("2 bardak su ekledim"), so fall through.
+  if (heard.add && items.goals?.length && heard.amount) {
+    const amount = heard.amount;
+    const cmd = pick(items.goals.map((goal) => ({ score: coverage(heard, goal.title, lang), target: { kind: 'goal', goal, amount } })));
+    if (cmd.kind !== 'none') return cmd;
   }
   if (!heard.done) return { kind: 'none' };
 

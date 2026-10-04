@@ -10,12 +10,12 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } 
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
+import { goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { buildScheduleLabels, extractTime, scheduleLabel, shiftYmd, toYmd, todayDate } from '@/lib/helpers';
+import { buildScheduleLabels, extractTime, isTimeUnit, scheduleLabel, shiftYmd, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
-import { cancelTaskReminders, refreshTaskReminders } from '@/lib/notifications';
+import { cancelTaskReminders, refreshTaskReminders, scheduleGoalReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
@@ -31,6 +31,7 @@ import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { WeekStrip } from '@/ui/WeekStrip';
 import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
+import { fmtGoalValue } from '@/ui/goal/goalFormat';
 import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { DailySummary } from '@/ui/DailySummary';
 import { EmptyState } from '@/ui/EmptyState';
@@ -232,6 +233,30 @@ export default function TodayScreen() {
   // Runs a command the parser matched to one of today's items and describes
   // what happened; the Undo reverses exactly that write.
   const applyVoiceTarget = (target: Target): CommandNotice => {
+    if (target.kind === 'goal') {
+      const g = goalRepo.getById(target.goal.id);
+      if (!g || g.goal_type !== 'numeric') return { text: tr('voiceCmd.notUnderstood') };
+      // A time goal stores seconds; people say minutes.
+      const delta = isTimeUnit(g.unit) ? target.amount * 60 : target.amount;
+      const applied = goalRepo.addProgress(g.id, delta);
+      if (applied === 0) return { text: tr('voiceCmd.notUnderstood') };
+      const after = goalRepo.getById(g.id);
+      after && goalRepo.progressRatio(after) >= 1 ? notifySuccess() : tapLight();
+      const refreshReminder = () => {
+        const cur = goalRepo.getById(g.id);
+        if (cur) scheduleGoalReminders(cur, reminderRepo.listByEntity('goal', g.id)).catch(() => {});
+      };
+      refreshReminder();
+      reload();
+      return {
+        text: tr('voiceCmd.goalAdded', { title: g.title, n: fmtGoalValue(applied, g.unit) }),
+        undo: () => {
+          goalRepo.addProgress(g.id, -applied);
+          refreshReminder();
+          reload();
+        },
+      };
+    }
     if (target.kind === 'postpone') {
       const t = tasks.find((x) => x.id === target.task.id);
       if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };
@@ -338,6 +363,10 @@ export default function TodayScreen() {
       habits: habits.map((h) => ({ id: h.id, title: h.title, kind: h.kind })),
       // Someone else's shared task is checked off through the server, never by voice.
       tasks: tasks.filter((t) => t.completed_at === null && !t.shared_owner_uid).map((t) => ({ id: t.id, title: t.title })),
+      goals: goalRepo
+        .listByUser(user.id)
+        .filter((g) => g.goal_type === 'numeric')
+        .map((g) => ({ id: g.id, title: g.title })),
     });
     if (cmd.kind === 'none') {
       // Not a command: it's probably a new to-do. Ask before creating anything.
@@ -361,7 +390,7 @@ export default function TodayScreen() {
       tr('voiceCmd.chooseTitle'),
       undefined,
       cmd.options.map((o) => ({
-        text: o.kind === 'habit' ? o.habit.title : o.task.title,
+        text: o.kind === 'habit' ? o.habit.title : o.kind === 'goal' ? o.goal.title : o.task.title,
         onPress: () => show(applyVoiceTarget(o)),
       })),
       { cancelable: true }
