@@ -17,6 +17,7 @@ import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect } from 'react';
 import { ACCOUNTS_ENABLED } from '@/config';
+import { announceGatesClosed } from '@/lib/guides';
 import { LOGIN_SEEN_KEY, onOnboardingDone, ONBOARDING_SEEN_KEY } from '@/ui/Onboarding';
 import { useGoogleSignIn } from '@/ui/useGoogleSignIn';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -140,7 +141,10 @@ export function LoginGate() {
   if (!ACCOUNTS_ENABLED || seen !== false || onboardingDone !== true) return null;
   const done = () => {
     setSeen(true);
-    AsyncStorage.setItem(SEEN_KEY, '1').catch(() => {});
+    // The feature guides wait for this screen to be gone (lib/guides.ts).
+    AsyncStorage.setItem(SEEN_KEY, '1')
+      .catch(() => {})
+      .then(announceGatesClosed);
   };
   return (
     <Modal visible animationType="fade" onRequestClose={done}>

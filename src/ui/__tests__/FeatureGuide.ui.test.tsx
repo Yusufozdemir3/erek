@@ -43,6 +43,7 @@ jest.mock('@/ui/SharedLists', () => ({
 beforeEach(async () => {
   await resetTestDb();
   await AsyncStorage.clear();
+  await AsyncStorage.setItem('login:seen', '1'); // giriş ekranı çoktan geçilmiş
   mockUserId = userRepo.getOrCreateLocal().id;
   mockAuth = null;
   mockPush.mockClear();
@@ -167,5 +168,21 @@ describe('Görevler ekranında rehber', () => {
     fireEvent.press(await u.findByLabelText('Bu ekranın rehberini aç'));
     for (let i = 0; i < 6; i++) fireEvent.press(await u.findByText('İleri'));
     expect(await u.findByText('Arkadaşınla paylaş')).toBeTruthy();
+  });
+});
+
+describe('Bugün rehberi: sihirbaz ve giriş ekranı kapanana kadar bekler', () => {
+  it('ekran zaten açıkken kapılar kapanınca açılır (Bugün sekmesi sihirbazın arkasında kurulur)', async () => {
+    const { announceGatesClosed } = require('@/lib/guides');
+    await AsyncStorage.setItem('guide:newInstall', '1'); // sihirbaz hâlâ açık: onboarding:done yok
+    await AsyncStorage.removeItem('login:seen');
+    const u = await renderUI(<GoalsScreen />);
+    await u.findByLabelText('Bu ekranın rehberini aç');
+    expect(u.queryByText('Hedef nedir?')).toBeNull();
+
+    await AsyncStorage.setItem('onboarding:done', '1');
+    await AsyncStorage.setItem('login:seen', '1');
+    announceGatesClosed();
+    expect(await u.findByText('Hedef nedir?')).toBeTruthy();
   });
 });

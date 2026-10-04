@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { markNewInstall } from '@/lib/guides';
+import { announceGatesClosed, markNewInstall } from '@/lib/guides';
 import { SetupWizard, type WizardResult } from '@/ui/setupWizard/SetupWizard';
 
 const SEEN_KEY = 'onboarding:done';
@@ -59,6 +59,7 @@ export function OnboardingGate() {
     await AsyncStorage.setItem(SEEN_KEY, '1').catch(() => {});
     if (r.accountSeen) await AsyncStorage.setItem(LOGIN_SEEN_KEY, '1').catch(() => {});
     for (const fn of doneListeners) fn();
+    announceGatesClosed();
   };
 
   return (

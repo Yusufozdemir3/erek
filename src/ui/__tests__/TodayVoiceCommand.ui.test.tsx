@@ -321,3 +321,23 @@ describe('Bugün: mola günü', () => {
     await waitFor(() => expect(u.queryByText('Mola günü — seri bozulmaz')).toBeNull());
   });
 });
+
+describe('Bugün: rehber', () => {
+  it('yeni kurulumda açılır, 7 sayfa, sesli komut örnekleri ikinci sayfadan sonra; ? ile yeniden açılır', async () => {
+    await AsyncStorage.setItem('guide:newInstall', '1');
+    await AsyncStorage.setItem('onboarding:done', '1');
+    await AsyncStorage.setItem('login:seen', '1');
+    habitRepo.create({ user_id: mockUserId, title: 'Kitap oku' });
+    const u = await renderUI(<TodayScreen />);
+    expect(await u.findByText('Bugün ekranı')).toBeTruthy();
+    for (let i = 0; i < 4; i++) fireEvent.press(await u.findByText('İleri'));
+    expect(await u.findByText('Sesle yönet')).toBeTruthy();
+    for (let i = 0; i < 2; i++) fireEvent.press(await u.findByText('İleri'));
+    expect(await u.findByText('Zor bir gün mü?')).toBeTruthy();
+    fireEvent.press(u.getByText('Tamam'));
+    await waitFor(() => expect(u.queryByText('Zor bir gün mü?')).toBeNull());
+
+    fireEvent.press(await u.findByLabelText('Bu ekranın rehberini aç'));
+    expect(await u.findByText('Bugün ekranı')).toBeTruthy();
+  });
+});

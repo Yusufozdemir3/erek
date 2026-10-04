@@ -9,14 +9,17 @@
 // at most once, and only after the setup wizard is finished.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ACCOUNTS_ENABLED } from '@/config';
 
-export const GUIDE_IDS = ['goals', 'habits', 'friends', 'tasks'] as const;
+export const GUIDE_IDS = ['goals', 'habits', 'friends', 'tasks', 'today'] as const;
 export type GuideId = (typeof GUIDE_IDS)[number];
 
 export const NEW_INSTALL_KEY = 'guide:newInstall';
 export const guideSeenKey = (id: GuideId) => `guide:seen:${id}`;
-// The setup wizard's own "finished" flag (same key as ui/Onboarding).
+// The setup wizard's own "finished" flag and the login screen's "seen" flag
+// (same keys as ui/Onboarding and ui/LoginScreen).
 const ONBOARDING_DONE_KEY = 'onboarding:done';
+const LOGIN_SEEN_KEY = 'login:seen';
 
 async function read(key: string): Promise<string | null> {
   try {
@@ -41,13 +44,30 @@ export async function hasSeenGuide(id: GuideId): Promise<boolean> {
   return (await read(guideSeenKey(id))) === '1';
 }
 
-// Should this guide open on its own right now? New install, wizard finished,
-// guide not seen yet.
+// Should this guide open on its own right now? New install, the setup wizard
+// AND the login screen that follows it are out of the way (two full-screen
+// layers must never stack), guide not seen yet.
 export async function shouldAutoShowGuide(id: GuideId): Promise<boolean> {
-  const [fresh, wizardDone, seen] = await Promise.all([
+  const [fresh, wizardDone, loginSeen, seen] = await Promise.all([
     read(NEW_INSTALL_KEY),
     read(ONBOARDING_DONE_KEY),
+    read(LOGIN_SEEN_KEY),
     read(guideSeenKey(id)),
   ]);
-  return fresh === '1' && wizardDone === '1' && seen !== '1';
+  const loginOut = !ACCOUNTS_ENABLED || loginSeen === '1';
+  return fresh === '1' && wizardDone === '1' && loginOut && seen !== '1';
+}
+
+// A screen that is already on display while the wizard / login screen runs
+// (the Today tab) has to hear when they close. The wizard gate and the login
+// gate call announceGatesClosed(); screens re-check in useFeatureGuide.
+const listeners = new Set<() => void>();
+
+export function onGatesClosed(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+export function announceGatesClosed(): void {
+  for (const fn of listeners) fn();
 }

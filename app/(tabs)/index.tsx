@@ -41,6 +41,8 @@ import { HabitTimer } from '@/ui/HabitTimer';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { FeatureGuide } from '@/ui/guide/FeatureGuide';
+import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { Confetti } from '@/ui/Confetti';
 import { MetaLine } from '@/ui/MetaLine';
 import { StreakBadge } from '@/ui/StreakBadge';
@@ -75,6 +77,7 @@ export default function TodayScreen() {
   // add a new task with the viewed day as its default date.
   const { user, selectedDate, setSelectedDate } = useAppData();
   const timer = useTimer();
+  const guide = useFeatureGuide('today');
   const today = todayDate();
 
   const [showPicker, setShowPicker] = useState(false);
@@ -646,7 +649,7 @@ export default function TodayScreen() {
                 <Text style={styles.backToday}>{tr('today.backToday')}</Text>
               </Pressable>
             )}
-            <HeaderActions />
+            <HeaderActions onHelp={guide.open} />
           </View>
         </View>
 
@@ -756,6 +759,7 @@ export default function TodayScreen() {
       </ScrollView>
 
       <Confetti burstId={burstId} />
+      <FeatureGuide guide="today" visible={guide.visible} onClose={guide.close} />
 
       <TaskEditModal task={editingTask} onClose={() => setEditingTask(null)} onChanged={reload} />
       <SharedTaskModal
