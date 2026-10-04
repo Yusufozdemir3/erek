@@ -35,6 +35,7 @@ import { HeaderActions } from '@/ui/HeaderActions';
 import { MetaLine } from '@/ui/MetaLine';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SwipeableRow } from '@/ui/SwipeableRow';
+import { bulkComplete, bulkDelete, bulkPostpone, type BulkResult } from '@/ui/taskBulk';
 import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
@@ -87,6 +88,9 @@ export default function TasksScreen() {
   // Search narrows the list by title; while searching, finished tasks that
   // match are listed too (searching for something you did is normal).
   const [query, setQuery] = useState('');
+  // SELECTION MODE: long-press a task to start; null = off. Tapping rows then
+  // toggles them and a bar at the bottom acts on all of them at once.
+  const [selected, setSelected] = useState<Set<string> | null>(null);
 
   const reload = useCallback(() => {
     // Ordering (completed ones to the bottom) now happens in SQL — no need to sort again in JS.
@@ -139,7 +143,21 @@ export default function TasksScreen() {
 
   // A task shared WITH me: read-only except the check-off and its subtasks'
   // check-offs (see sharedTaskUi).
+  const selecting = selected !== null;
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next.size === 0 ? null : next;
+    });
+  const selectedTasks = () => tasks.filter((t) => selected?.has(t.id));
+
   const openTask = (t: Task) => {
+    if (selecting) {
+      if (!t.shared_owner_uid) toggleSelected(t.id);
+      return;
+    }
     if (t.shared_owner_uid) {
       if (subtaskRepo.countForTask(t.id).total > 0) {
         setViewingShared(t);
@@ -152,6 +170,10 @@ export default function TasksScreen() {
   };
 
   const toggleTask = (t: Task) => {
+    if (selecting) {
+      if (!t.shared_owner_uid) toggleSelected(t.id);
+      return;
+    }
     if (t.shared_owner_uid) {
       toggleSharedTaskOptimistic(t, reload, tr);
       return;
@@ -186,10 +208,38 @@ export default function TasksScreen() {
     reload();
   };
 
+  // Runs one bulk action, leaves selection mode and offers one Undo for the lot.
+  const finishBulk = (result: BulkResult, key: 'undo.bulkCompleted' | 'undo.bulkMoved' | 'undo.bulkDeleted') => {
+    setSelected(null);
+    if (result.count > 0) {
+      undo.show({
+        text: tr(key, { n: result.count }),
+        onUndo: () => {
+          result.undo();
+          reload();
+        },
+      });
+    }
+    reload();
+  };
+  const bulkDone = () => {
+    const r = bulkComplete(selectedTasks());
+    if (r.count > 0) notifySuccess();
+    finishBulk(r, 'undo.bulkCompleted');
+  };
+  const bulkTomorrow = () => finishBulk(bulkPostpone(selectedTasks(), todayDate()), 'undo.bulkMoved');
+  const bulkRemove = () => {
+    const list = selectedTasks().filter((t) => !t.shared_owner_uid);
+    Alert.alert(tr('tasks.bulkDeleteConfirm', { n: list.length }), undefined, [
+      { text: tr('common.cancel'), style: 'cancel' },
+      { text: tr('common.delete'), style: 'destructive', onPress: () => finishBulk(bulkDelete(list, user.id), 'undo.bulkDeleted') },
+    ]);
+  };
+
   // Swipe edit/delete only on my own tasks; a task shared WITH me can't be
   // edited or deleted here (only the owner can).
   const wrapRow = (t: Task, card: JSX.Element) =>
-    t.shared_owner_uid ? (
+    t.shared_owner_uid || selecting ? (
       card
     ) : (
       <SwipeableRow
@@ -241,7 +291,7 @@ export default function TasksScreen() {
               own unpainted margin would let the action panel's color bleed
               through as a thin strip right under the card. */}
           {wrapRow(t, (
-            <View style={[shared.card, styles.noMargin]}>
+            <View style={[shared.card, styles.noMargin, selected?.has(t.id) && styles.selectedCard]}>
               <Pressable
                 onPress={() => toggleTask(t)}
                 hitSlop={8}
@@ -261,8 +311,14 @@ export default function TasksScreen() {
               <Pressable
                 style={shared.cardBody}
                 onPress={() => openTask(t)}
+                onLongPress={() => {
+                  if (selecting || t.shared_owner_uid) return;
+                  tapLight();
+                  setSelected(new Set([t.id]));
+                }}
                 accessibilityRole="button"
-                accessibilityLabel={tr('common.editA11y', { title: t.title })}
+                accessibilityState={selecting ? { selected: !!selected?.has(t.id) } : undefined}
+                accessibilityLabel={selecting ? tr('tasks.bulkSelectA11y', { title: t.title }) : tr('common.editA11y', { title: t.title })}
               >
                 <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
                 <MetaLine
@@ -291,7 +347,7 @@ export default function TasksScreen() {
     },
     // Rows must re-render when openRowId/subtaskCounts change, so they stay in
     // the dependency list (together with FlatList's extraData).
-    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors]
+    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors, selected, tasks]
   );
 
   return (
@@ -302,7 +358,7 @@ export default function TasksScreen() {
         keyExtractor={(r) => (r.kind === 'divider' ? 'completed-divider' : r.task.id)}
         // Row appearance also depends on state outside the list (an open swipe,
         // subtask badges) — FlatList doesn't know about these, so we declare them explicitly.
-        extraData={`${openRowId}|${tasks.length}|${completedOpen}|${query}`}
+        extraData={`${openRowId}|${tasks.length}|${completedOpen}|${query}|${selected ? [...selected].join(',') : ''}`}
         contentContainerStyle={shared.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -364,6 +420,28 @@ export default function TasksScreen() {
         onClose={() => setViewingShared(null)}
         onChanged={reload}
       />
+      {selected && (
+        <View style={styles.bulkBar}>
+          <Pressable
+            onPress={() => setSelected(null)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={tr('tasks.bulkCancelA11y')}
+          >
+            <Feather name="x" size={20} color={colors.muted} />
+          </Pressable>
+          <Text style={styles.bulkCount}>{tr('tasks.selectedCount', { n: selected.size })}</Text>
+          <Pressable onPress={bulkDone} style={styles.bulkBtn} accessibilityRole="button">
+            <Text style={styles.bulkBtnText}>{tr('tasks.bulkComplete')}</Text>
+          </Pressable>
+          <Pressable onPress={bulkTomorrow} style={styles.bulkBtn} accessibilityRole="button">
+            <Text style={styles.bulkBtnText}>{tr('tasks.bulkTomorrow')}</Text>
+          </Pressable>
+          <Pressable onPress={bulkRemove} style={styles.bulkBtn} accessibilityRole="button">
+            <Text style={[styles.bulkBtnText, { color: colors.danger }]}>{tr('tasks.bulkDelete')}</Text>
+          </Pressable>
+        </View>
+      )}
       <UndoSnackbar notice={undo.notice} onDone={undo.dismiss} />
     </SafeAreaView>
   );
@@ -382,6 +460,26 @@ const makeStyles = (c: Colors) =>
     sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.muted },
     rowSpacing: { marginBottom: 8 },
     noMargin: { marginBottom: 0 },
+    selectedCard: { borderColor: c.primary, borderWidth: 2 },
+    bulkBar: {
+      position: 'absolute',
+      left: 16,
+      right: 16,
+      bottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 16,
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.border,
+      elevation: 6,
+    },
+    bulkCount: { flex: 1, fontSize: 14, fontWeight: '700', color: c.text },
+    bulkBtn: { paddingHorizontal: 8, paddingVertical: 8 },
+    bulkBtnText: { fontSize: 14, fontWeight: '700', color: c.primary },
     showOlderBtn: { alignItems: 'center', paddingVertical: 16, marginTop: 4 },
     showOlderText: { fontSize: 14, fontWeight: '600', color: c.primary },
   });
