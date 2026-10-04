@@ -24,7 +24,10 @@ jest.mock('expo-file-system', () => ({
   writeAsStringAsync: jest.fn(),
 }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: async () => true, shareAsync: jest.fn() }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => {
+  const React = require('react');
+  return { router: { push: jest.fn() }, useFocusEffect: (cb: () => void) => React.useEffect(cb, [cb]) };
+});
 jest.mock('@/lib/notifications', () => ({ rescheduleEverything: (...a: unknown[]) => (mockReschedule as any)(...a) }));
 jest.mock('@/ui/AppData', () => ({
   useAppData: () => ({ authUser: null, user: { id: mockUserId }, notifyDataChanged: mockNotify }),

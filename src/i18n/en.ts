@@ -818,6 +818,8 @@ export const en: Dict = {
   'profile.importErr.newerVersion': 'This file comes from a newer version of Erek. Update the app first.',
   'profile.importErr.empty': 'There is nothing to import in this file.',
   'profile.data': 'My data',
+  'data.lastExport': 'Last export: {date}',
+  'data.neverExported': 'You haven’t exported yet.',
   'data.exportHint': 'Share all your habits, tasks and goals as one file: save it to Drive or send it to yourself.',
   'data.importHint': 'Restore a file you exported earlier, for example on a new phone. Your existing records stay as they are.',
   'profile.export': 'Export my data',

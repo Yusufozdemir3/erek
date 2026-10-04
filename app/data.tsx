@@ -2,26 +2,40 @@
 // file (export) or bring such a file back, e.g. on a new phone (import). The
 // header title comes from the root layout.
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { importData, summarize } from '@/db/importData';
 import { useI18n } from '@/i18n/I18nProvider';
+import { getLastExportDate, setLastExportDate } from '@/lib/exportPrefs';
+import { todayDate } from '@/lib/helpers';
 import { rescheduleEverything } from '@/lib/notifications';
 import { pickExportFile } from '@/lib/pickExport';
 import { shareDataExport } from '@/lib/shareExport';
 import { useAppData } from '@/ui/AppData';
 import { makeProfileStyles } from '@/ui/profileStyles';
 import { useTheme } from '@/ui/ThemeProvider';
-import type { Colors } from '@/ui/theme';
+import { shortDate, type Colors } from '@/ui/theme';
 
 export default function DataScreen() {
   const { colors } = useTheme();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const styles = makeProfileStyles(colors);
   const local = makeStyles(colors);
   const { user, notifyDataChanged } = useAppData();
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
+  const [lastExport, setLastExport] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      getLastExportDate().then((d) => alive && setLastExport(d));
+      return () => {
+        alive = false;
+      };
+    }, [])
+  );
 
   const exportData = async () => {
     if (busy) return;
@@ -29,6 +43,11 @@ export default function DataScreen() {
     try {
       const r = await shareDataExport(user.id, t('profile.exportTitle'));
       if (r === 'unavailable') Alert.alert(t('profile.export'), t('profile.exportUnavailable'));
+      else {
+        const today = todayDate();
+        await setLastExportDate(today);
+        setLastExport(today);
+      }
     } catch {
       Alert.alert(t('profile.export'), t('profile.exportFailed'));
     } finally {
@@ -98,6 +117,9 @@ export default function DataScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {action('download', t('profile.export'), t('data.exportHint'), exportData)}
       {action('upload', t('profile.import'), t('data.importHint'), importFile, true)}
+      <Text style={local.last}>
+        {lastExport ? t('data.lastExport', { date: shortDate(lastExport, lang) }) : t('data.neverExported')}
+      </Text>
     </ScrollView>
   );
 }
@@ -106,4 +128,5 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     hint: { fontSize: 13, lineHeight: 19, color: c.muted, marginTop: 8 },
+    last: { fontSize: 12, color: c.faint, textAlign: 'center', marginTop: 16 },
   });

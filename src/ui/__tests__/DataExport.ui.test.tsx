@@ -2,6 +2,7 @@
 // dosya her durumda silinir; paylaşım yoksa ya da hata olursa kullanıcı bilgilendirilir.
 
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, waitFor } from '@testing-library/react-native';
 import DataScreen from '../../../app/data';
 import { renderUI } from '@/test/renderWithProviders';
@@ -23,10 +24,14 @@ jest.mock('expo-sharing', () => ({
   shareAsync: (...a: unknown[]) => (mockShare as any)(...a),
 }));
 jest.mock('@/db/exportData', () => ({ buildExport: (...a: unknown[]) => (mockBuild as any)(...a) }));
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('expo-router', () => {
+  const React = require('react');
+  return { router: { push: jest.fn() }, useFocusEffect: (cb: () => void) => React.useEffect(cb, [cb]) };
+});
 jest.mock('@/ui/AppData', () => ({ useAppData: () => ({ authUser: null, user: { id: 'u1' } }) }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  await AsyncStorage.clear();
   jest.clearAllMocks();
   mockAvailable.mockResolvedValue(true);
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -60,6 +65,22 @@ describe('shareDataExport', () => {
 });
 
 describe('Verilerim ekranı: dışa aktar', () => {
+  it('hiç dışa aktarılmadıysa söyler; paylaşım sonrası bugünün tarihini yazar', async () => {
+    const u = await renderUI(<DataScreen />);
+    expect(await u.findByText('Henüz dışa aktarmadın.')).toBeTruthy();
+    fireEvent.press(u.getByLabelText('Verilerimi dışa aktar'));
+    await waitFor(() => expect(u.queryByText('Henüz dışa aktarmadın.')).toBeNull());
+    expect(u.getByText(/Son dışa aktarma:/)).toBeTruthy();
+  });
+
+  it('paylaşım yoksa "son dışa aktarma" yazılmaz', async () => {
+    mockAvailable.mockResolvedValue(false);
+    const u = await renderUI(<DataScreen />);
+    fireEvent.press(await u.findByLabelText('Verilerimi dışa aktar'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    expect(u.getByText('Henüz dışa aktarmadın.')).toBeTruthy();
+  });
+
   it('dokununca paylaşım açılır', async () => {
     const u = await renderUI(<DataScreen />);
     fireEvent.press(await u.findByLabelText('Verilerimi dışa aktar'));
