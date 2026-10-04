@@ -27,6 +27,7 @@ import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { makeHabitFormStyles } from '@/ui/habitFormStyles';
+import { HABIT_SUGGESTIONS } from '@/ui/setupWizard/wizardLogic';
 import { HabitAppearancePicker } from '@/ui/habit/HabitAppearancePicker';
 import {
   buildSchedule,
@@ -378,6 +379,25 @@ export function HabitForm({
           <Text style={styles.counter}>
             {title.length}/{TITLE_MAX_LEN}
           </Text>
+          {/* Ideas — only when creating, and only while the title is still empty. */}
+          {initial === undefined && title.length === 0 && (
+            <View style={styles.suggestRow}>
+              {HABIT_SUGGESTIONS.slice(0, 6).map((s) => (
+                <Pressable
+                  key={s.id}
+                  style={styles.suggestChip}
+                  onPress={() => {
+                    setTitle(t(s.labelKey));
+                    if (!icon) setIcon(s.icon);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(s.labelKey)}
+                >
+                  <Text style={styles.suggestText}>{t(s.labelKey)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </>
       )}
 

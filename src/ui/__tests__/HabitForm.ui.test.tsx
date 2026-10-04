@@ -28,6 +28,25 @@ beforeEach(async () => {
   userId = userRepo.getOrCreateLocal().id;
 });
 
+describe('HabitForm — fikir düğmeleri', () => {
+  it('oluştururken boş başlıkta görünür; dokununca başlık ve simge dolar, sonra kaybolur', async () => {
+    const onSubmit = jest.fn();
+    const u = await renderUI(<HabitForm userId={userId} kind="binary" submitLabel="Kaydet" onSubmit={onSubmit} />);
+    fireEvent.press(u.getByLabelText('Su iç'));
+    expect(u.getByPlaceholderText('Alışkanlık başlığı').props.value).toBe('Su iç');
+    expect(u.queryByLabelText('Kitap oku')).toBeNull(); // başlık doldu, fikirler gitti
+    fireEvent.press(u.getByText('Kaydet'));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Su iç', icon: 'water' }));
+  });
+
+  it('düzenlerken (initial var) fikir düğmesi yok', async () => {
+    const u = await renderUI(
+      <HabitForm userId={userId} kind="binary" submitLabel="Kaydet" onSubmit={jest.fn()} initial={{ title: '' }} />
+    );
+    expect(u.queryByLabelText('Su iç')).toBeNull();
+  });
+});
+
 describe('HabitForm — düzenleme modu (stepped=false), ikili (binary)', () => {
   it('başlık boşsa gönderim yapılmaz', async () => {
     const onSubmit = jest.fn();

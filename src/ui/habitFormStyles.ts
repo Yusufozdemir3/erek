@@ -116,6 +116,18 @@ export const makeHabitFormStyles = (c: Colors) =>
     dayChipSel: { borderColor: c.primary, backgroundColor: c.primary },
     dayChipText: { fontSize: 13, fontWeight: '700', color: c.muted },
     dayChipTextSel: { color: c.onAccent },
+    // Ideas under an empty title when creating a habit.
+    suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+    suggestChip: {
+      minHeight: 40,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    suggestText: { fontSize: 13, fontWeight: '600', color: c.muted },
     targetInput: { flex: 1, marginBottom: 0 },
     hint: { fontSize: 12, color: c.faint, marginTop: 4, marginBottom: 12 },
     goalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
