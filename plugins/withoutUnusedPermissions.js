@@ -29,16 +29,29 @@ const REMOVED_PERMISSIONS = [
   'android.permission.WRITE_EXTERNAL_STORAGE',
 ];
 
+// ONE remove marker per permission, and no plain declaration of it left behind.
+// Two things used to defeat this: (1) other config plugins (expo-file-system,
+// expo-dev-client...) add these permissions as PLAIN lines to the main manifest
+// itself — a marker only removes what comes from LIBRARY manifests, so the
+// plain line survived and the permission shipped in the release APK; (2) an
+// incremental prebuild (without --clean) pushed one more marker every time.
+// Unit-tested in plugins/__tests__.
+function applyRemovals(manifest) {
+  manifest.$['xmlns:tools'] = manifest.$['xmlns:tools'] || 'http://schemas.android.com/tools';
+  const keep = (manifest['uses-permission'] || []).filter(
+    (p) => !REMOVED_PERMISSIONS.includes(p.$['android:name'])
+  );
+  manifest['uses-permission'] = [
+    ...keep,
+    ...REMOVED_PERMISSIONS.map((name) => ({ $: { 'android:name': name, 'tools:node': 'remove' } })),
+  ];
+}
+
 module.exports = function withoutUnusedPermissions(config) {
   return withAndroidManifest(config, (cfg) => {
-    const manifest = cfg.modResults.manifest;
-    manifest.$['xmlns:tools'] = manifest.$['xmlns:tools'] || 'http://schemas.android.com/tools';
-    manifest['uses-permission'] = manifest['uses-permission'] || [];
-    for (const name of REMOVED_PERMISSIONS) {
-      manifest['uses-permission'].push({
-        $: { 'android:name': name, 'tools:node': 'remove' },
-      });
-    }
+    applyRemovals(cfg.modResults.manifest);
     return cfg;
   });
 };
+module.exports.applyRemovals = applyRemovals;
+module.exports.REMOVED_PERMISSIONS = REMOVED_PERMISSIONS;
