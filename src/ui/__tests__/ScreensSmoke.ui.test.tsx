@@ -8,6 +8,8 @@ import { resetTestDb } from '@/test/dbTestUtils';
 import { goalEntryRepo, goalMilestoneRepo, goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo, userRepo } from '@/db';
 import { shiftYmd, todayDate } from '@/lib/helpers';
 
+import HabitDetail from '../../../app/habit/[id]';
+import GoalDetail from '../../../app/goal/[id]';
 import TodayScreen from '../../../app/(tabs)/index';
 import TasksScreen from '../../../app/(tabs)/tasks';
 import HabitsScreen from '../../../app/(tabs)/habits';
@@ -28,7 +30,8 @@ jest.mock('expo-router', () => {
   const React = require('react');
   return {
     useFocusEffect: (cb: () => void | (() => void)) => React.useEffect(cb, [cb]),
-    router: { push: jest.fn(), navigate: jest.fn() },
+    router: { push: jest.fn(), navigate: jest.fn(), back: jest.fn(), replace: jest.fn() },
+    useLocalSearchParams: () => ({ id: (globalThis as { __smokeId?: string }).__smokeId, tab: (globalThis as { __smokeTab?: string }).__smokeTab }),
     Redirect: () => null,
   };
 });
@@ -106,7 +109,7 @@ describe('taze kurulumda ekranlar açılır', () => {
 });
 
 // A phone that's been used: every kind of habit/task/goal, history, reminders.
-function seedEverything() {
+function seedEverything(): { habitId: string; goalId: string } {
   const uid = mockUserId;
   const goal = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 100, unit: 'km', deadline: shiftYmd(todayDate(), 40) });
   goalMilestoneRepo.create(goal.id, '50 km', { amount: 50 });
@@ -129,12 +132,35 @@ function seedEverything() {
   const done = taskRepo.create({ user_id: uid, title: 'Bitti', due_date: todayDate() });
   taskRepo.setCompleted(done.id, true);
   taskRepo.create({ user_id: uid, title: 'Tekrarlı', due_date: todayDate(), recurrence: { freq: 'daily' } as never });
+  return { habitId: num.id, goalId: goal.id };
 }
 
 describe('kullanılmış telefonda ekranlar açılır', () => {
   it.each(SCREENS)('%s', async (_name, make) => {
     seedEverything();
     const u = await renderUI(<TimerProvider>{make()}</TimerProvider>);
+    await waitFor(() => expect(u.toJSON()).not.toBeNull());
+  });
+});
+
+describe('ayrıntı ekranları dolu veritabanıyla açılır', () => {
+  afterEach(() => {
+    delete (globalThis as { __smokeId?: string }).__smokeId;
+    delete (globalThis as { __smokeTab?: string }).__smokeTab;
+  });
+
+  it('alışkanlık istatistikleri (sayısal, geçmişli)', async () => {
+    const { habitId } = seedEverything();
+    (globalThis as { __smokeId?: string }).__smokeId = habitId;
+    const u = await renderUI(<TimerProvider><HabitDetail /></TimerProvider>);
+    await waitFor(() => expect(u.toJSON()).not.toBeNull());
+  });
+
+  it.each(['stats', 'edit', undefined])('hedef ekranı, sekme: %s', async (tab) => {
+    const { goalId } = seedEverything();
+    (globalThis as { __smokeId?: string }).__smokeId = goalId;
+    (globalThis as { __smokeTab?: string }).__smokeTab = tab;
+    const u = await renderUI(<TimerProvider><GoalDetail /></TimerProvider>);
     await waitFor(() => expect(u.toJSON()).not.toBeNull());
   });
 });
