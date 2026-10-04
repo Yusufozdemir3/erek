@@ -7,6 +7,7 @@
 // If it can't be imported, the app keeps working normally in Expo Go, just with
 // the widget disabled.
 
+import './src/lib/safeImmediate';
 import 'expo-router/entry';
 
 try {
