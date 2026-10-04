@@ -210,6 +210,8 @@ export const de: Dict = {
   'widget.counterTitle': 'Zähler',
   'widget.tasksTitle': 'Aufgaben',
   'widget.tasksEmpty': 'Heute keine Aufgaben fällig',
+  'widget.goalsTitle': 'Ziele',
+  'widget.goalsEmpty': 'Keine offenen Ziele',
   'widget.counterEmpty': 'Heute nichts zu zählen. Lege in Erek eine Gewohnheit mit Tagesmenge an.',
 
   'empty.todayTitle': 'Für heute alles erledigt',

@@ -223,6 +223,8 @@ export const tr: Dict = {
   'widget.counterTitle': 'Sayaçlar',
   'widget.tasksTitle': 'Görevler',
   'widget.tasksEmpty': 'Bugün bekleyen görev yok',
+  'widget.goalsTitle': 'Hedefler',
+  'widget.goalsEmpty': 'Açık hedef yok',
   'widget.counterEmpty': 'Bugün sayılacak alışkanlık yok. Erek’te günlük miktarı olan bir alışkanlık ekle.',
 
   // Empty states

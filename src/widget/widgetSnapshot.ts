@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const WIDGET_NAME = 'ErekToday';
 export const COUNTER_WIDGET_NAME = 'ErekCounter';
 export const TASKS_WIDGET_NAME = 'ErekTasks';
+export const GOALS_WIDGET_NAME = 'ErekGoals';
 export const SNAPSHOT_KEY = 'widget:today';
 
 export interface WidgetHabit {
@@ -32,6 +33,14 @@ export interface WidgetTask {
   title: string;
   color: string; // the priority color
   completed: boolean;
+}
+
+// A goal on the Goals widget (display only): open goals, soonest deadline first.
+export interface WidgetGoal {
+  id: string;
+  title: string;
+  percent: number; // 0-100, whole number
+  percentLabel: string; // localized ("%40" / "40%")
 }
 
 // The colors the widget will render with — embedded in the snapshot so the
@@ -64,6 +73,9 @@ export interface WidgetSnapshot {
   tasks?: WidgetTask[]; // missing in snapshots written by an older build
   tasksTitle?: string; // the tasks widget's header
   tasksEmptyLabel?: string; // the tasks widget's text when nothing is due
+  goals?: WidgetGoal[]; // missing in snapshots written by an older build
+  goalsTitle?: string; // the goals widget's header
+  goalsEmptyLabel?: string; // the goals widget's text when there is no open goal
   doneCount: number;
   totalCount: number;
   habits: WidgetHabit[];

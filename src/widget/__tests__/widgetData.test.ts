@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userRepo } from '../../db/repositories/userRepo';
 import { habitRepo } from '../../db/repositories/habitRepo';
 import { taskRepo } from '../../db/repositories/taskRepo';
+import { goalRepo } from '../../db/repositories/goalRepo';
 import { getDb } from '../../db/database';
 import { resetTestDb } from '../../test/dbTestUtils';
 import { todayDate } from '../../lib/helpers';
@@ -128,6 +129,20 @@ describe('görevler', () => {
     await appendPending({ id: 'a', kind: 'task', taskId: t.id, date: today(), completed: true });
     await refreshWidget(uid);
     expect((await readSnapshot())?.tasks?.[0]).toMatchObject({ title: 'Market', completed: true });
+  });
+});
+
+describe('hedefler', () => {
+  it('anlık görüntüde açık hedefler yüzdeleriyle gelir, biten gelmez', async () => {
+    const a = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 100, deadline: '2999-01-01' });
+    goalRepo.addProgress(a.id, 40);
+    const done = goalRepo.create({ user_id: uid, title: 'Bitti', goal_type: 'numeric', target_value: 10 });
+    goalRepo.addProgress(done.id, 10);
+    const s = await buildTodaySnapshot(uid);
+    expect(s.goals).toEqual([expect.objectContaining({ title: 'Koş', percent: 40 })]);
+    expect(s.goals![0].percentLabel).toContain('40');
+    expect(s.goalsTitle).toBeTruthy();
+    expect(s.goalsEmptyLabel).toBeTruthy();
   });
 });
 

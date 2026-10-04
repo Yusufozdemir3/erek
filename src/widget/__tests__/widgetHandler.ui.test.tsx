@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TodayWidget } from '../TodayWidget';
 import { CounterWidget } from '../CounterWidget';
 import { TasksWidget } from '../TasksWidget';
+import { GoalsWidget } from '../GoalsWidget';
 import { widgetTaskHandler } from '../widgetTaskHandler';
 import { FALLBACK_COLORS, readSnapshot, writeSnapshot, type WidgetSnapshot } from '../widgetSnapshot';
 import { INC_ACTION, TASK_ACTION, TOGGLE_ACTION, localYmd, onWidgetAction, readPending } from '../widgetQueue';
@@ -37,6 +38,9 @@ function snap(over: Partial<WidgetSnapshot> = {}): WidgetSnapshot {
       { id: 'market', title: 'Market', color: '#f59e0b', completed: false },
       { id: 'mail', title: 'Mail', color: '#10b981', completed: true },
     ],
+    goals: [{ id: 'g1', title: 'Koş', percent: 40, percentLabel: '%40' }],
+    goalsTitle: 'Hedefler',
+    goalsEmptyLabel: 'Açık hedef yok',
     tasksTitle: 'Görevler',
     tasksEmptyLabel: 'Bugün bekleyen görev yok',
     habits: [
@@ -131,6 +135,21 @@ describe('TasksWidget', () => {
   });
 });
 
+describe('GoalsWidget', () => {
+  it('hedef, yüzde ve çubuk görünür; dokunulabilir tek şey kartın kendisi', () => {
+    const root = GoalsWidget({ snapshot: snap() }) as El;
+    expect(clicks(root)).toEqual([['OPEN_APP', null]]);
+    expect(texts(root)).toEqual(expect.arrayContaining(['Hedefler', 'Koş', '%40']));
+    const flex = walk(root).map((e) => e.props.style?.flex).filter((f) => typeof f === 'number');
+    expect(flex).toEqual(expect.arrayContaining([40, 60]));
+  });
+
+  it('hedef yoksa açıklama; dünkü görüntüde satır yok', () => {
+    expect(texts(GoalsWidget({ snapshot: snap({ goals: [] }) }) as El)).toContain('Açık hedef yok');
+    expect(texts(GoalsWidget({ snapshot: snap({ date: '2000-01-01' }) }) as El)).not.toContain('Koş');
+  });
+});
+
 describe('widgetTaskHandler', () => {
   const info = (widgetName: string) => ({ widgetName, widgetId: 1, width: 300, height: 200, screenInfo: {} as any });
 
@@ -212,7 +231,7 @@ describe('widgetTaskHandler', () => {
     expect(render).toHaveBeenCalledTimes(1);
   });
 
-  it('görev dokunuşu: kuyruğa girer, görüntü güncellenir, diğer İKİ widget da tazelenir', async () => {
+  it('görev dokunuşu: kuyruğa girer, görüntü güncellenir, diğer ÜÇ widget da tazelenir', async () => {
     await writeSnapshot(snap());
     const render = jest.fn();
     await widgetTaskHandler({
@@ -226,7 +245,7 @@ describe('widgetTaskHandler', () => {
     expect((await readSnapshot())?.tasks?.map((t) => [t.id, t.completed])).toEqual([['market', true], ['mail', true]]);
     expect((render.mock.calls[0][0] as El).type).toBe(TasksWidget);
     const refreshed = mockRequestUpdate.mock.calls.map((c) => (c[0] as { widgetName: string }).widgetName).sort();
-    expect(refreshed).toEqual(['ErekCounter', 'ErekToday']);
+    expect(refreshed).toEqual(['ErekCounter', 'ErekGoals', 'ErekToday']);
   });
 
   it('ekleme/güncelleme olayında doğru widget çizilir', async () => {

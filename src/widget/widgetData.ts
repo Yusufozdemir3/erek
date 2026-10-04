@@ -12,7 +12,7 @@
 
 import { Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { habitRepo, taskRepo } from '@/db';
+import { goalMilestoneRepo, goalRepo, habitRepo, milestoneViews, taskRepo } from '@/db';
 import { refreshTaskReminders } from '@/lib/notifications';
 import { isScheduledOn, isWithinHabitDates, todayDate } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
@@ -26,9 +26,11 @@ import {
   darkColors,
   lightColors,
   fullDateLabel,
+  percentLabel,
   type AccentKey,
 } from '@/ui/theme';
 import { writeSnapshot, type WidgetColors, type WidgetSnapshot } from './widgetSnapshot';
+import { pickGoals } from './widgetGoals';
 import { applyAll, readPending, removePending, serialized } from './widgetQueue';
 
 // More than this wouldn't fit any widget size; the snapshot stays small.
@@ -110,6 +112,19 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
       completed: t.completed_at !== null,
     }));
 
+  // Open goals for the Goals widget: numeric goals by current/target, milestone
+  // goals by how many of their milestones are reached.
+  const goals = pickGoals(
+    goalRepo.listByUser(userId).map((g) => {
+      let ratio = goalRepo.progressRatio(g);
+      if (g.goal_type !== 'numeric') {
+        const views = milestoneViews(goalMilestoneRepo.listByGoal(g.id), g.current_value);
+        ratio = views.length > 0 ? views.filter((v) => v.reached).length / views.length : 0;
+      }
+      return { id: g.id, title: g.title, deadline: g.deadline, completed: goalRepo.isCompleted(g), ratio };
+    })
+  ).map((g) => ({ ...g, percentLabel: percentLabel(g.percent, lang) }));
+
   return {
     date: today,
     dateLabel: fullDateLabel(today, lang),
@@ -123,6 +138,9 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     tasks,
     tasksTitle: translate(lang, 'widget.tasksTitle'),
     tasksEmptyLabel: translate(lang, 'widget.tasksEmpty'),
+    goals,
+    goalsTitle: translate(lang, 'widget.goalsTitle'),
+    goalsEmptyLabel: translate(lang, 'widget.goalsEmpty'),
     doneCount,
     totalCount: habits.length,
     habits,

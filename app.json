@@ -82,6 +82,17 @@
               "updatePeriodMillis": 1800000
             },
             {
+              "name": "ErekGoals",
+              "label": "Erek — Hedefler",
+              "description": "Açık hedeflerin ve ilerlemen",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
               "name": "ErekCounter",
               "label": "Erek — Sayaç",
               "description": "Su, sayfa gibi sayılı alışkanlıklara tek dokunuşla +1",
