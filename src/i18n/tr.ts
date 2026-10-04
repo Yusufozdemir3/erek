@@ -443,6 +443,7 @@ export const tr: Dict = {
 
   // Goal detail screen (goal/[id].tsx) — tabs
   'goal.tabOverview': 'Genel',
+  'goal.contributorsTitle': 'Katkı payı',
   'goal.tabStats': 'İstatistik',
   'goal.tabEdit': 'Düzenle',
 

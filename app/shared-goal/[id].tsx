@@ -23,6 +23,8 @@ import { makeGoalStyles } from '@/ui/goal/goalStyles';
 import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';
 import { fmtAmount, fmtGoalValue } from '@/ui/goal/goalFormat';
 import { GoalEntryHistory } from '@/ui/goal/GoalEntryHistory';
+import { GoalContributors } from '@/ui/goal/GoalContributors';
+import { contributionShares } from '@/lib/goalContributions';
 import { NUMBER_MAX_LEN } from '@/ui/formLimits';
 
 type Tab = 'overview' | 'stats';
@@ -168,6 +170,12 @@ export default function SharedGoalScreen() {
                       </Pressable>
                     </View>
                     <Text style={styles.milestoneHint}>{t('sharedGoal.contributeHint', { name: ownerName })}</Text>
+
+                    <GoalContributors
+                      shares={contributionShares(stats.entries, authUser?.id ?? '', (key) => nameOf(key))}
+                      unit={goal.unit}
+                      nameOf={(key) => nameOf(key)}
+                    />
 
                     <GoalEntryHistory
                       entries={stats.entries}

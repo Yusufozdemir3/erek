@@ -34,6 +34,8 @@ import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';
 import { LinkedHabitRow } from '@/ui/goal/GoalStatCards';
 import { fmtAmount, fmtGoalValue } from '@/ui/goal/goalFormat';
 import { GoalEntryHistory } from '@/ui/goal/GoalEntryHistory';
+import { GoalContributors } from '@/ui/goal/GoalContributors';
+import { contributionShares, OWNER_KEY } from '@/lib/goalContributions';
 import { GoalShareSection } from '@/ui/goal/GoalShareSection';
 import { useFriendNames } from '@/ui/sharedTaskUi';
 
@@ -59,6 +61,10 @@ export default function GoalDetailScreen() {
   const goal = stats.goal;
   // Names for entries a friend added to this goal (shared goal, see sharedGoals.ts).
   const contributorNames = useFriendNames(stats.entries.map((e) => e.added_by));
+  // Group goal: who added how much (only once a friend has contributed too).
+  const shareName = (key: string) =>
+    key === OWNER_KEY ? t('sharedGoal.you') : contributorNames.get(key) ?? t('friends.unknownName');
+  const shares = contributionShares(stats.entries, OWNER_KEY, shareName);
 
   // — Overview tab: data entry ("entry") — the user types whatever amount they
   // want, and "Add" applies it as a DELTA on top of the accumulated progress
@@ -287,6 +293,8 @@ export default function GoalDetailScreen() {
                         <Text style={styles.entryAddText}>{t('common.add')}</Text>
                       </Pressable>
                     </View>
+
+                    <GoalContributors shares={shares} unit={goal.unit} nameOf={shareName} />
 
                     {/* Entry history — merged per minute, grouped per day (see GoalEntryHistory). */}
                     <GoalEntryHistory

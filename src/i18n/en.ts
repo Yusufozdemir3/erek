@@ -423,6 +423,7 @@ export const en: Dict = {
 
   // Goal detail screen (goal/[id].tsx) — tabs
   'goal.tabOverview': 'Overview',
+  'goal.contributorsTitle': 'Contributions',
   'goal.tabStats': 'Stats',
   'goal.tabEdit': 'Edit',
 
