@@ -648,6 +648,8 @@ export const en: Dict = {
   'voiceCmd.habitAmount': '“{title}”: +{n} added',
   'voiceCmd.alreadyDone': '“{title}” is already done',
   'voiceCmd.taskDone': 'Task “{title}” completed',
+  'voiceCmd.taskPostponed': 'Task “{title}” moved to tomorrow',
+  'voiceCmd.postponeRecurring': '“{title}” repeats – change it in the task itself',
   'voiceCmd.undone': 'Undone',
   'voiceCmd.addAsTaskTitle': 'No command found. Add it as a task?',
   'voiceCmd.addAsTask': 'Add as task',

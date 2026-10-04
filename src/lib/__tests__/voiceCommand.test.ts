@@ -200,3 +200,28 @@ describe('güvenlik', () => {
     expect(one('9999 bardak su içtim', 'tr')).toMatchObject({ amount: 999 });
   });
 });
+
+describe('görevi yarına erteleme', () => {
+  const postponed = (text: string, lang: 'tr' | 'en' | 'de') => {
+    const r = one(text, lang);
+    return r.kind === 'postpone' ? r.task.id : r;
+  };
+
+  it('üç dilde ertelenir', () => {
+    expect(postponed('alışveriş yapmayı yarına ertele', 'tr')).toBe('alisveris');
+    expect(postponed('Annemi ara görevini yarına ertele', 'tr')).toBe('anne');
+    expect(postponed('postpone the Annemi ara task to tomorrow', 'en')).toBe('anne');
+    expect(postponed('move alisveris yap to tomorrow', 'en')).toBe('alisveris');
+    expect(postponed('verschiebe Alışveriş yap auf morgen', 'de')).toBe('alisveris');
+  });
+
+  it('"yarın" tek başına erteleme değildir; "ertele" tek başına da değil', () => {
+    expect(one('yarın alışveriş yap', 'tr')).toEqual(NONE);
+    expect(one('alışveriş yapmayı ertele', 'tr')).toEqual(NONE);
+  });
+
+  it('alışkanlık ertelenmez, eşleşmeyen cümle komut olmaz', () => {
+    expect(one('kitap okumayı yarına ertele', 'tr')).toEqual(NONE);
+    expect(one('dişçiyi yarına ertele', 'tr')).toEqual(NONE);
+  });
+});

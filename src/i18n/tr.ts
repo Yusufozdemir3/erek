@@ -676,6 +676,8 @@ export const tr: Dict = {
   'voiceCmd.habitAmount': '“{title}”: +{n} eklendi',
   'voiceCmd.alreadyDone': '“{title}” zaten tamamlanmış',
   'voiceCmd.taskDone': '“{title}” görevi tamamlandı',
+  'voiceCmd.taskPostponed': '“{title}” görevi yarına ertelendi',
+  'voiceCmd.postponeRecurring': '“{title}” tekrarlıyor – görevin kendisinden değiştir',
   'voiceCmd.undone': 'Geri alındı',
   'voiceCmd.addAsTaskTitle': 'Komut bulamadım. Görev olarak ekleyeyim mi?',
   'voiceCmd.addAsTask': 'Görev olarak ekle',

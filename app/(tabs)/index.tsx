@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
+import { buildScheduleLabels, extractTime, scheduleLabel, shiftYmd, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
 import { cancelTaskReminders, refreshTaskReminders } from '@/lib/notifications';
@@ -232,6 +232,27 @@ export default function TodayScreen() {
   // Runs a command the parser matched to one of today's items and describes
   // what happened; the Undo reverses exactly that write.
   const applyVoiceTarget = (target: Target): CommandNotice => {
+    if (target.kind === 'postpone') {
+      const t = tasks.find((x) => x.id === target.task.id);
+      if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };
+      if (t.recurrence) return { text: tr('voiceCmd.postponeRecurring', { title: t.title }) };
+      // Keep the time of day, move only the date.
+      const time = extractTime(t.due_date);
+      const next = (d: string) => (time ? `${d}T${time}:00` : d);
+      taskRepo.update(t.id, { due_date: next(shiftYmd(today, 1)) });
+      notifySuccess();
+      refreshTaskReminders(t.id);
+      reload();
+      const before = t.due_date;
+      return {
+        text: tr('voiceCmd.taskPostponed', { title: t.title }),
+        undo: () => {
+          taskRepo.update(t.id, { due_date: before });
+          refreshTaskReminders(t.id);
+          reload();
+        },
+      };
+    }
     if (target.kind === 'task') {
       const t = tasks.find((x) => x.id === target.task.id);
       if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };

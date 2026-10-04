@@ -35,7 +35,8 @@ export interface CommandItems {
 
 export type Target =
   | { kind: 'habit'; habit: CommandHabit; amount: number } // amount: what to add (numeric) — 1 for binary
-  | { kind: 'task'; task: CommandTask };
+  | { kind: 'task'; task: CommandTask }
+  | { kind: 'postpone'; task: CommandTask }; // "move X to tomorrow"
 
 export type VoiceCommand =
   | { kind: 'none' }
@@ -90,6 +91,9 @@ interface LangKit {
   nounPrefixes: string[];
   // Does this single word say "done"?
   isDoneWord(w: string): boolean;
+  // Stem prefixes (folded) of "postpone/move" and "tomorrow".
+  postponePrefixes: string[];
+  tomorrowPrefixes: string[];
   // Do a spoken word and a title word mean the same thing?
   same(spoken: string, title: string): boolean;
 }
@@ -97,7 +101,7 @@ interface LangKit {
 // — Turkish —
 // Folded, so ı=i and ü=u. Endings that follow a stem in speech: past tense
 // ("-dum, -tim"), accusative/dative/plural/ablative/locative, progressive.
-const TR_SUFFIX = /^(?:[dt][iu][mnk]?|[dt][iu]n[iu]z|[dt][iu]k|y?[iu]|y?[ae]|n[iu]|l[ae]r|[dt][ae]n?|[iu]yor(?:um|uz)?|m[iu]s|[iu]m|[iu]n|si|su)$/;
+const TR_SUFFIX = /^(?:[dt][iu][mnk]?|[dt][iu]n[iu]z|[dt][iu]k|y?[iu]|y?[ae]|n[iu]|l[ae]r|[dt][ae]n?|[iu]yor(?:um|uz)?|m[iu]s|[iu]m|[iu]n|si|su|m[ae](?:y[iu]|[dt][ae]n?|n[iu]|si)?)$/;
 const SOFTEN: Record<string, string> = { p: 'b', t: 'd', k: 'g' }; // ç is folded to c: not told apart from c
 
 function trStem(w: string): string {
@@ -135,6 +139,8 @@ const TR: LangKit = {
   ]),
   stop: new Set(['ben', 'bugun', 'az', 'once', 'simdi', 've', 'da', 'de', 'bir', 'artik', 'zaten', 'hemen']),
   nounPrefixes: ['gorev', 'aliskanlik'],
+  postponePrefixes: ['ertel', 'kaydir'],
+  tomorrowPrefixes: ['yarin'],
   isDoneWord: (w) => TR.generic.has(w) || (w.length >= 5 && /[dt][iu][mk]$/.test(w)),
   same: trSame,
 };
@@ -172,6 +178,8 @@ const EN: LangKit = {
     'it', 'that', 'this', 'to', 'of', 'some', 'for', 'with', 'and',
   ]),
   nounPrefixes: ['task', 'todo', 'habit'],
+  postponePrefixes: ['postpone', 'reschedul', 'delay', 'push', 'move', 'defer'],
+  tomorrowPrefixes: ['tomorrow'],
   isDoneWord: (w) =>
     EN.generic.has(w) || (w.length >= 4 && w.endsWith('ed')) || Object.prototype.hasOwnProperty.call(EN_IRREGULAR, w),
   same: (a, b) => a === b || enStem(a) === enStem(b),
@@ -202,6 +210,8 @@ const DE: LangKit = {
     'meine', 'mein', 'meinen', 'und', 'auch', 'jetzt', 'es', 'ist', 'bin', 'nun',
   ]),
   nounPrefixes: ['aufgabe', 'gewohnheit'],
+  postponePrefixes: ['verschieb', 'aufschieb', 'verleg'],
+  tomorrowPrefixes: ['morgen'],
   isDoneWord: (w) => DE.generic.has(w) || /^ge.{3,}(?:t|en)$/.test(w) || Object.prototype.hasOwnProperty.call(DE_IRREGULAR, w),
   same: (a, b) => a === b || deStem(a) === deStem(b),
 };
@@ -215,6 +225,7 @@ interface Heard {
   content: number[]; // indexes of words that identify an item
   units: Set<number>; // words right after a number ("2 bardak"): counted only when they match
   done: boolean;
+  postpone: boolean; // a postpone word AND "tomorrow" were both said
 }
 
 function listen(text: string, lang: Lang): Heard {
@@ -235,13 +246,18 @@ function listen(text: string, lang: Lang): Heard {
     }
   }
   let done = false;
+  const isPost = (w: string) => kit.postponePrefixes.some((p) => w.startsWith(p));
+  const isTomorrow = (w: string) => kit.tomorrowPrefixes.some((p) => w.startsWith(p));
+  const postpone = words.some(isPost) && words.some(isTomorrow);
   words.forEach((w, i) => {
     if (kit.isDoneWord(w)) done = true;
     if (used.has(i) || kit.stop.has(w) || kit.generic.has(w)) return;
     if (kit.nounPrefixes.some((p) => w.startsWith(p))) return;
+    // These words only stop being content when they form a postpone command.
+    if (postpone && (isPost(w) || isTomorrow(w))) return;
     content.push(i);
   });
-  return { words, amount, content, units, done };
+  return { words, amount, content, units, done, postpone };
 }
 
 // Share of the spoken content words that some word of the title matches.
@@ -269,7 +285,12 @@ function coverage(heard: Heard, title: string, lang: Lang): number {
 
 export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems): VoiceCommand {
   const heard = listen(text, lang);
-  if (!heard.done || heard.content.length === 0) return { kind: 'none' };
+  if (heard.content.length === 0) return { kind: 'none' };
+  // "X'i yarına ertele" concerns a task only; a habit can't be moved to another day.
+  if (heard.postpone) {
+    return pick(items.tasks.map((task) => ({ score: coverage(heard, task.title, lang), target: { kind: 'postpone', task } })));
+  }
+  if (!heard.done) return { kind: 'none' };
 
   const scored: { score: number; target: Target }[] = [];
   for (const habit of items.habits) {
@@ -284,6 +305,12 @@ export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems)
     const score = coverage(heard, task.title, lang);
     if (score >= MIN_COVERAGE) scored.push({ score, target: { kind: 'task', task } });
   }
+  return pick(scored);
+}
+
+// The best-matching targets as a command: none, one, or a short list to choose from.
+function pick(all: { score: number; target: Target }[]): VoiceCommand {
+  const scored = all.filter((s) => s.score >= MIN_COVERAGE);
   if (scored.length === 0) return { kind: 'none' };
 
   scored.sort((a, b) => b.score - a.score);
