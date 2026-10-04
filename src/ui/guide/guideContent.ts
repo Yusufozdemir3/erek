@@ -21,4 +21,13 @@ export const GUIDES: Record<GuideId, GuidePage[]> = {
     { emoji: '📈' },
     { emoji: '👥', needsAccount: true },
   ],
+  habits: [
+    { emoji: '🌱' },
+    { emoji: '✅' },
+    { emoji: '📅' },
+    { emoji: '🔥' },
+    { emoji: '😴' },
+    { emoji: '🔔' },
+    { emoji: '🔗', cta: { route: '/(tabs)/goals' } },
+  ],
 };

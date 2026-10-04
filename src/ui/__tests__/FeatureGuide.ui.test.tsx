@@ -4,6 +4,7 @@
 import { fireEvent, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GoalsScreen from '../../../app/(tabs)/goals';
+import HabitsScreen from '../../../app/(tabs)/habits';
 import { FeatureGuide } from '../guide/FeatureGuide';
 import { renderUI } from '@/test/renderWithProviders';
 import { resetTestDb } from '@/test/dbTestUtils';
@@ -25,12 +26,14 @@ jest.mock('@/ui/AppData', () => ({
 }));
 jest.mock('@/lib/notifications', () => ({
   cancelGoalReminders: jest.fn(async () => {}),
+  cancelHabitReminders: jest.fn(async () => {}),
   rescheduleEverything: jest.fn(async () => {}),
 }));
 jest.mock('@/ui/ProfileButton', () => ({ ProfileButton: () => null }));
 jest.mock('@/ui/SharedLists', () => ({
   SharedGoalsSection: () => null,
-  useSharedLists: () => ({ sharedGoals: [], hideGoal: jest.fn() }),
+  SharedHabitsSection: () => null,
+  useSharedLists: () => ({ sharedGoals: [], sharedHabits: [], hideGoal: jest.fn(), hideHabit: jest.fn() }),
 }));
 
 beforeEach(async () => {
@@ -108,5 +111,36 @@ describe('Hedefler ekranında rehber', () => {
     expect(u.queryByText('Hedef nedir?')).toBeNull();
     fireEvent.press(u.getByLabelText('Bu ekranın rehberini aç'));
     expect(await u.findByText('Hedef nedir?')).toBeTruthy();
+  });
+});
+
+describe('Alışkanlıklar ekranında rehber', () => {
+  it('yeni kurulumda ilk girişte açılır; Hedeflere git düğmesi rotayı açar', async () => {
+    await AsyncStorage.setItem('guide:newInstall', '1');
+    await AsyncStorage.setItem('onboarding:done', '1');
+    const u = await renderUI(<HabitsScreen />);
+    expect(await u.findByText('Alışkanlık nedir?')).toBeTruthy();
+    for (let i = 0; i < 6; i++) fireEvent.press(await u.findByText('İleri'));
+    fireEvent.press(await u.findByText('Hedeflere git'));
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/goals');
+    await waitFor(() => expect(u.queryByText('Alışkanlık nedir?')).toBeNull());
+  });
+
+  it('eski kullanıcıda yalnızca ? ile açılır, Hedefler rehberinden bağımsız görülür', async () => {
+    await AsyncStorage.setItem('onboarding:done', '1');
+    await AsyncStorage.setItem('guide:seen:goals', '1');
+    const u = await renderUI(<HabitsScreen />);
+    await u.findByLabelText('Bu ekranın rehberini aç');
+    expect(u.queryByText('Alışkanlık nedir?')).toBeNull();
+    fireEvent.press(u.getByLabelText('Bu ekranın rehberini aç'));
+    expect(await u.findByText('Alışkanlık nedir?')).toBeTruthy();
+  });
+
+  it('Hedefler rehberini görmüş yeni kullanıcı Alışkanlıklar rehberini yine görür', async () => {
+    await AsyncStorage.setItem('guide:newInstall', '1');
+    await AsyncStorage.setItem('onboarding:done', '1');
+    await AsyncStorage.setItem('guide:seen:goals', '1');
+    const u = await renderUI(<HabitsScreen />);
+    expect(await u.findByText('Alışkanlık nedir?')).toBeTruthy();
   });
 });

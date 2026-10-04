@@ -22,6 +22,8 @@ import { SearchBox } from '@/ui/SearchBox';
 import { HabitEditModal } from '@/ui/HabitEditModal';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HeaderActions } from '@/ui/HeaderActions';
+import { FeatureGuide } from '@/ui/guide/FeatureGuide';
+import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { MetaLine } from '@/ui/MetaLine';
 import { StreakBadge } from '@/ui/StreakBadge';
 import { usePullRefresh } from '@/ui/usePullRefresh';
@@ -39,6 +41,7 @@ export default function HabitsScreen() {
   const { t, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user } = useAppData();
+  const guide = useFeatureGuide('habits');
   const [editing, setEditing] = useState<Habit | null>(null); // null = panel closed
   // Only one card's swipe actions may be open at a time.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
@@ -116,7 +119,7 @@ export default function HabitsScreen() {
       >
         <View style={shared.headerRow}>
           <Text style={shared.greeting}>{t('tabs.habits')}</Text>
-          <HeaderActions />
+          <HeaderActions onHelp={guide.open} />
         </View>
         <Text style={shared.subtitle}>{t('screen.habitsSubtitle')}</Text>
         {showSearch && (
@@ -228,6 +231,7 @@ export default function HabitsScreen() {
         onChanged={reload}
       />
       <UndoSnackbar notice={undo.notice} onDone={undo.dismiss} />
+      <FeatureGuide guide="habits" visible={guide.visible} onClose={guide.close} />
     </SafeAreaView>
   );
 }
