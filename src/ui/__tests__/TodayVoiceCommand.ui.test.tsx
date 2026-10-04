@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import TodayScreen from '../../../app/(tabs)/index';
 import { renderUI } from '@/test/renderWithProviders';
 import { resetTestDb } from '@/test/dbTestUtils';
-import { habitRepo, taskRepo, userRepo } from '@/db';
+import { goalRepo, habitRepo, taskRepo, userRepo } from '@/db';
 import { shiftYmd, todayDate } from '@/lib/helpers';
 
 const mockListeners: Record<string, Set<(e: unknown) => void>> = {};
@@ -51,14 +51,24 @@ jest.mock('@/ui/AppData', () => ({
     notifyDataChanged: jest.fn(),
   }),
 }));
-jest.mock('@/ui/TimerProvider', () => ({
-  useTimer: () => ({ isRunning: () => false, active: () => null, start: jest.fn(), pause: jest.fn() }),
-}));
+const mockTimer = {
+  running: null as string | null,
+  isRunning: (_k: string, id: string) => mockTimer.running === id,
+  active: () => (mockTimer.running ? { kind: 'habit', id: mockTimer.running } : null),
+  start: jest.fn((_k: string, id: string) => {
+    mockTimer.running = id;
+  }),
+  pause: jest.fn(() => {
+    mockTimer.running = null;
+  }),
+};
+jest.mock('@/ui/TimerProvider', () => ({ useTimer: () => mockTimer }));
 jest.mock('@/widget/widgetData', () => ({ refreshWidget: jest.fn() }));
 jest.mock('@/lib/notifications', () => ({
   refreshTaskReminders: jest.fn(),
   cancelTaskReminders: jest.fn(async () => {}),
   scheduleTaskReminders: jest.fn(),
+  scheduleGoalReminders: jest.fn(async () => true),
 }));
 jest.mock('@/ui/ProfileButton', () => ({ ProfileButton: () => null }));
 jest.mock('@/ui/Confetti', () => ({ Confetti: () => null }));
@@ -94,6 +104,7 @@ beforeEach(async () => {
   await resetTestDb();
   await AsyncStorage.clear();
   jest.clearAllMocks();
+  mockTimer.running = null;
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   mockUserId = userRepo.getOrCreateLocal().id;
   mockSelectedDate = todayDate();
@@ -206,5 +217,50 @@ describe('Bugün: sesle işaretle', () => {
     mockSelectedDate = '2000-01-01';
     const u = await renderUI(<TodayScreen />);
     expect(u.queryByLabelText('Sesle işaretle')).toBeNull();
+  });
+});
+
+describe('Bugün: sesle yönetim (erteleme, hedef, zamanlayıcı)', () => {
+  it('görevi yarına erteler, saati korur; Geri al eski tarihi getirir', async () => {
+    habitRepo.create({ user_id: mockUserId, title: 'Başka' });
+    const due = `${todayDate()}T15:30:00`;
+    const t = taskRepo.create({ user_id: mockUserId, title: 'Alışveriş yap', due_date: due });
+    const u = await renderUI(<TodayScreen />);
+
+    await say(u, 'alışveriş yapmayı yarına ertele');
+
+    await waitFor(() => expect(taskRepo.getById(t.id)?.due_date).toBe(`${shiftYmd(todayDate(), 1)}T15:30:00`));
+    expect(await u.findByText('“Alışveriş yap” görevi yarına ertelendi')).toBeTruthy();
+    fireEvent.press(u.getByText('Geri al'));
+    expect(taskRepo.getById(t.id)?.due_date).toBe(due);
+  });
+
+  it('sayısal hedefe ilerleme ekler; Geri al düşer', async () => {
+    habitRepo.create({ user_id: mockUserId, title: 'Başka' });
+    const g = goalRepo.create({ user_id: mockUserId, title: 'Koşu mesafesi', goal_type: 'numeric', target_value: 100, unit: 'km' });
+    const u = await renderUI(<TodayScreen />);
+
+    await say(u, 'koşu mesafesi hedefime 5 km ekle');
+
+    await waitFor(() => expect(goalRepo.getById(g.id)?.current_value).toBe(5));
+    expect(await u.findByText('“Koşu mesafesi” hedefine 5 km eklendi')).toBeTruthy();
+    fireEvent.press(u.getByText('Geri al'));
+    expect(goalRepo.getById(g.id)?.current_value).toBe(0);
+  });
+
+  it('zamanlayıcıyı başlatır ve durdurur', async () => {
+    const h = habitRepo.create({ user_id: mockUserId, title: 'Meditasyon', kind: 'timer', target_amount: 1200 });
+    const u = await renderUI(<TodayScreen />);
+
+    await say(u, 'meditasyonu başlat');
+    await waitFor(() => expect(mockTimer.start).toHaveBeenCalledWith('habit', h.id));
+    expect(await u.findByText('“Meditasyon” zamanlayıcısı başladı')).toBeTruthy();
+
+    await say(u, 'zamanlayıcıyı durdur');
+    await waitFor(() => expect(mockTimer.pause).toHaveBeenCalled());
+    expect(await u.findByText('“Meditasyon” zamanlayıcısı durduruldu ve kaydedildi')).toBeTruthy();
+
+    await say(u, 'zamanlayıcıyı durdur');
+    expect(await u.findByText('Çalışan zamanlayıcı yok')).toBeTruthy();
   });
 });
