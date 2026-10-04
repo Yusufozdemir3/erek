@@ -74,9 +74,9 @@ const NUM_WORDS: Record<Lang, Record<string, number>> = {
 };
 const TENS = new Set([20, 30, 40, 50, 60]);
 
-// The number starting at tokens[i]: [value, tokens used] or null. "yirmi beş",
+// The whole number starting at words[i]: [value, words used] or null. "yirmi beş",
 // "twenty five" are two words; "bir" before a non-unit is handled by the caller.
-function numberAt(words: string[], i: number, lang: Lang): [number, number] | null {
+function wholeNumberAt(words: string[], i: number, lang: Lang): [number, number] | null {
   const w = words[i];
   if (/^\d{1,4}$/.test(w)) return [Math.min(Number(w), MAX_AMOUNT), 1];
   const v = NUM_WORDS[lang][w];
@@ -86,6 +86,38 @@ function numberAt(words: string[], i: number, lang: Lang): [number, number] | nu
     if (next !== undefined && next >= 1 && next <= 9) return [v + next, 2];
   }
   return [v, 1];
+}
+
+// One digit said after "point"/"komma": "two point five" -> 5.
+function digitAt(words: string[], i: number, lang: Lang): number | null {
+  const w = words[i] ?? '';
+  const d = /^\d$/.test(w) ? Number(w) : NUM_WORDS[lang][w];
+  return d !== undefined && d >= 0 && d <= 9 ? d : null;
+}
+
+// The number starting at words[i], with halves and decimals as people say them:
+// "2,5" / "2.5", "iki buçuk", "two and a half", "two point five", "zweieinhalb",
+// "zwei komma fünf". Rounded to 2 decimals so sums don't drift.
+function numberAt(words: string[], i: number, lang: Lang): [number, number] | null {
+  const w = words[i];
+  if (/^\d{1,4}[.,]\d{1,2}$/.test(w)) return [Math.min(Math.round(Number(w.replace(',', '.')) * 100) / 100, MAX_AMOUNT), 1];
+  if (lang === 'de') {
+    if (w === 'anderthalb') return [1.5, 1];
+    const m = /^(.+)einhalb$/.exec(w);
+    const whole = m ? NUM_WORDS.de[m[1]] : undefined;
+    if (whole !== undefined) return [whole + 0.5, 1];
+  }
+  const n = wholeNumberAt(words, i, lang);
+  if (!n) return null;
+  const [value, used] = n;
+  const at = i + used;
+  if (lang === 'tr' && words[at] === 'bucuk') return [value + 0.5, used + 1];
+  if (lang === 'en' && words[at] === 'and' && words[at + 1] === 'a' && words[at + 2] === 'half') return [value + 0.5, used + 3];
+  if ((lang === 'en' && words[at] === 'point') || (lang === 'de' && words[at] === 'komma')) {
+    const d = digitAt(words, at + 1, lang);
+    if (d !== null) return [value + d / 10, used + 2];
+  }
+  return n;
 }
 
 // — Per-language knowledge —
@@ -221,7 +253,7 @@ const DE: LangKit = {
   generic: new Set(['erledigt', 'fertig', 'geschafft', 'gemacht', 'abgehakt', 'abgeschlossen']),
   stop: new Set([
     'ich', 'habe', 'hab', 'heute', 'gerade', 'eben', 'schon', 'die', 'der', 'das', 'den', 'dem',
-    'meine', 'mein', 'meinen', 'und', 'auch', 'jetzt', 'es', 'ist', 'bin', 'nun',
+    'meine', 'mein', 'meinen', 'zum', 'zur', 'zu', 'und', 'auch', 'jetzt', 'es', 'ist', 'bin', 'nun',
   ]),
   nounPrefixes: ['aufgabe', 'gewohnheit'],
   postponePrefixes: ['verschieb', 'aufschieb', 'verleg'],
@@ -325,7 +357,7 @@ export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems)
     if (habit.kind === 'timer') continue; // a timer is run, not told
     const score = coverage(heard, habit.title, lang);
     if (score >= MIN_COVERAGE) {
-      const amount = habit.kind === 'numeric' ? Math.max(1, heard.amount ?? 1) : 1;
+      const amount = habit.kind === 'numeric' ? heard.amount && heard.amount > 0 ? heard.amount : 1 : 1;
       scored.push({ score, target: { kind: 'habit', habit, amount } });
     }
   }

@@ -254,3 +254,31 @@ describe('hedefe ilerleme ekleme', () => {
     expect(r).toMatchObject({ kind: 'one', target: { kind: 'habit', amount: 2 } });
   });
 });
+
+describe('ondalık ve buçuklu sayılar', () => {
+  const dec = items({
+    habits: [{ id: 'su', title: 'Su iç', kind: 'numeric' }],
+    goals: [{ id: 'kos', title: 'Koşu' }],
+  });
+  const amt = (text: string, lang: 'tr' | 'en' | 'de') => {
+    const r = parseVoiceCommand(text, lang, dec);
+    return r.kind === 'one' && (r.target.kind === 'habit' || r.target.kind === 'goal') ? r.target.amount : r;
+  };
+
+  it('rakamla: 2,5 ve 2.5', () => {
+    expect(amt('2,5 bardak su içtim', 'tr')).toBe(2.5);
+    expect(amt('koşu hedefime 2.5 km ekle', 'tr')).toBe(2.5);
+    expect(amt('0,25 bardak su içtim', 'tr')).toBe(0.25);
+  });
+  it('sözle: buçuk / and a half / point / einhalb / komma', () => {
+    expect(amt('iki buçuk bardak su içtim', 'tr')).toBe(2.5);
+    expect(amt('bir buçuk bardak su içtim', 'tr')).toBe(1.5);
+    expect(amt('add two and a half km to my Koşu goal', 'en')).toBe(2.5);
+    expect(amt('add two point five km to my Koşu goal', 'en')).toBe(2.5);
+    expect(amt('zweieinhalb km zum Ziel Koşu hinzugefügt', 'de')).toBe(2.5);
+    expect(amt('drei komma fünf km zum Ziel Koşu hinzugefügt', 'de')).toBe(3.5);
+  });
+  it('0,5 gibi küçük miktar 1\'e yuvarlanmaz', () => {
+    expect(amt('0,5 bardak su içtim', 'tr')).toBe(0.5);
+  });
+});
