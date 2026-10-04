@@ -646,7 +646,7 @@ export const de: Dict = {
   'voice.err.busy': 'Die Spracherkennung ist beschäftigt – versuch es gleich noch einmal.',
   'voice.err.generic': 'Spracheingabe hat nicht geklappt – noch einmal?',
   'voice.err.download': 'Das Paket konnte nicht heruntergeladen werden.',
-  'voiceCmd.hint': 'Per Sprache abhaken oder anlegen: „Wasser getrunken“, „morgen Mama anrufen“',
+  'voiceCmd.hint': 'Per Sprache: „Wasser getrunken“, „morgen Mama anrufen“, „Einkaufen auf morgen verschieben“, „30 Seiten zum Leseziel hinzufügen“',
   'voiceCmd.startA11y': 'Per Sprache abhaken',
   'voiceCmd.habitDone': '„{title}“ abgehakt',
   'voiceCmd.habitAmount': '„{title}“: +{n} hinzugefügt',

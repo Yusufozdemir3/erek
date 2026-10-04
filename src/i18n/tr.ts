@@ -670,7 +670,7 @@ export const tr: Dict = {
   'voice.err.busy': 'Konuşma tanıma meşgul, birazdan tekrar dene.',
   'voice.err.generic': 'Sesli giriş çalışmadı, tekrar dener misin?',
   'voice.err.download': 'Paket indirilemedi.',
-  'voiceCmd.hint': 'Sesle işaretle ya da görev ekle: “su içtim”, “yarın annemi ara”',
+  'voiceCmd.hint': 'Sesle yönet: “su içtim”, “yarın annemi ara”, “alışveriş görevini yarına ertele”, “kitap hedefime 20 sayfa ekle”',
   'voiceCmd.startA11y': 'Sesle işaretle',
   'voiceCmd.habitDone': '“{title}” işaretlendi',
   'voiceCmd.habitAmount': '“{title}”: +{n} eklendi',
