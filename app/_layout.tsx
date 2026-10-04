@@ -1,11 +1,14 @@
 // Expo Router root layout. Wraps every screen with AppDataProvider:
 // this way the data layer (SQLite + anonymous user) is ready before the first render.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { LogBox } from 'react-native';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import { applyAppFont } from '@/ui/applyFont';
+import { fontFamilyFor, type FontChoice } from '@/ui/fontFamily';
+import { initFont, useFontChoice } from '@/ui/fontStore';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import {
   ThemeProvider as NavThemeProvider,
@@ -44,9 +47,18 @@ LogBox.ignoreLogs([
 // but the app preference was light, the navigation shell's background (screen
 // transition backdrop, modal backdrop) stayed dark. We fix this by binding
 // NavThemeProvider to our own scheme.
+// Wrap Text/TextInput once, before anything renders; the chosen typeface is read live.
+applyAppFont();
+
+function navFonts(choice: FontChoice): Theme['fonts'] {
+  const f = (weight: string) => ({ fontFamily: fontFamilyFor(choice, weight) ?? 'sans-serif', fontWeight: 'normal' as const });
+  return { regular: f('400'), medium: f('500'), bold: f('700'), heavy: f('800') };
+}
+
 function ThemedStack() {
   const { colors, scheme } = useTheme();
   const { t } = useI18n();
+  const fontChoice = useFontChoice();
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
   const navTheme: Theme = {
     ...base,
@@ -59,6 +71,10 @@ function ThemedStack() {
       border: colors.border,
       primary: colors.primary,
     },
+    // The navigation theme names the system font for tab labels and headers
+    // (an explicit fontFamily, which applyAppFont leaves alone) — point it at
+    // the chosen typeface; with the phone's own font the theme's fonts stay.
+    fonts: fontChoice === 'system' ? base.fonts : navFonts(fontChoice),
   };
   return (
     <NavThemeProvider value={navTheme}>
@@ -124,6 +140,15 @@ function RootLayout() {
   // out blank; see package.json.)
   useFonts({ ...Feather.font, ...Ionicons.font });
 
+  // TYPEFACE: the user's choice (Profile › Appearance) is restored before the
+  // first render — text drawn with a family that isn't loaded yet would stay in
+  // the system font. initFont never rejects: on any problem it falls back to the
+  // phone's own font rather than leaving the app blank.
+  const [fontReady, setFontReady] = useState(false);
+  useEffect(() => {
+    initFont().finally(() => setFontReady(true));
+  }, []);
+
   // Notification handler and Android channel are set up once (doesn't request
   // permission). The haptics preference is also cached here (haptics.ts is
   // outside React).
@@ -132,6 +157,8 @@ function RootLayout() {
     ensureAndroidChannel();
     loadHapticsPref().catch(() => {});
   }, []);
+
+  if (!fontReady) return null;
 
   return (
     <I18nProvider>

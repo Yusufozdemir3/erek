@@ -8,6 +8,7 @@ import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
 import { getVoiceSupport } from '@/lib/voice';
 import { speechLocale } from '@/lib/voiceLogic';
 import { getOnlineConsent, setOnlineConsent } from '@/lib/voicePrefs';
+import { FontPicker } from '@/ui/FontPicker';
 import { makeProfileStyles } from '@/ui/profileStyles';
 import { useTheme, type ThemeMode } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -153,6 +154,9 @@ export default function AppearanceScreen() {
           })}
         </View>
       </View>
+
+      {/* Typeface: every option shown in its own font; applies at once */}
+      <FontPicker />
 
       {/* Haptics (in-app tactile feedback) — SEPARATE from notification vibration:
           this is the feedback you feel on touches like checking off/+−/timer. */}
