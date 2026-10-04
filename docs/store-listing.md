@@ -481,7 +481,17 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
 - [ ] Profil › Gizlilik ve çevrimdışı sayfası telefonun gerçek durumunu gösteriyor
       (hesap, mikrofon, çevrim içi tanıma onayı, bildirim izni)
 
+**Yeni özellikler (cihazda bir kez dene)**
+- [ ] Widget'lar (Bugün, Sayaç, Görevler, Hedefler): ekle; uygulama kapalıyken dokun, açınca işlenmiş olsun
+- [ ] Bugün'de sesle işaretle ("su içtim"), Geri al; haftalık özet ve Pazar/Pazartesi kartı
+- [ ] Uygulama kilidi: aç, uygulamadan çık-gir, 60 sn'den uzun arka plan; telefonun ekran kilidi
+      kaldırılırsa kullanıcı kilitlenmiyor
+- [ ] Profil › Verilerim: dışa aktar, içe aktar (aynı dosya iki kez = değişiklik yok)
+- [ ] Silince "Geri al" çubuğu (görev, alışkanlık, hedef)
+
 **Build**
+- [ ] İzinler: `aapt2 dump permissions app-release.apk` çıktısında SYSTEM_ALERT_WINDOW ve
+      WRITE/READ_EXTERNAL_STORAGE YOK (RECORD_AUDIO, USE_BIOMETRIC, POST_NOTIFICATIONS beklenen)
 - [ ] `google-services.json` derlemede: yerelde proje kökünde, EAS'te
       `GOOGLE_SERVICES_JSON` dosya değişkeni (yoksa push sessizce kapalı kalır,
       hatırlatmalar paylaş penceresine düşer)
