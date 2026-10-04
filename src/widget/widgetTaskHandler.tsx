@@ -22,7 +22,6 @@ const newActionId = () => `${Date.now().toString(36)}-${Math.random().toString(3
 
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<void> {
   const name = props.widgetInfo.widgetName;
-  console.log(`[widget] ${props.widgetAction} ${name} click=${props.clickAction ?? '-'}`);
   switch (props.widgetAction) {
     case 'WIDGET_ADDED':
     case 'WIDGET_UPDATE':
