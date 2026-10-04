@@ -282,3 +282,38 @@ describe('ondalık ve buçuklu sayılar', () => {
     expect(amt('0,5 bardak su içtim', 'tr')).toBe(0.5);
   });
 });
+
+describe('sesle zamanlayıcı', () => {
+  const timers = items({
+    habits: [
+      { id: 'med', title: 'Meditasyon', kind: 'timer' },
+      { id: 'kitap', title: 'Kitap oku', kind: 'binary' },
+    ],
+  });
+  const run = (text: string, lang: 'tr' | 'en' | 'de') => parseVoiceCommand(text, lang, timers);
+
+  it('başlatır; söylenen süre yok sayılır (hedef zaten kayıtlı)', () => {
+    for (const [t, l] of [
+      ['meditasyonu başlat', 'tr'],
+      ['yirmi dakika meditasyon başlat', 'tr'],
+      ['start Meditasyon', 'en'],
+      ['starte Meditasyon', 'de'],
+    ] as const) {
+      expect(run(t, l)).toMatchObject({ kind: 'one', target: { kind: 'timer', habit: { id: 'med' } } });
+    }
+  });
+
+  it('durdurur: adıyla ya da yalnız "zamanlayıcıyı durdur"', () => {
+    expect(run('zamanlayıcıyı durdur', 'tr')).toEqual({ kind: 'stopTimer' });
+    expect(run('stop the timer', 'en')).toEqual({ kind: 'stopTimer' });
+    expect(run('Timer stoppen', 'de')).toEqual({ kind: 'stopTimer' });
+    expect(run('meditasyonu durdur', 'tr')).toEqual({ kind: 'stopTimer', habitId: 'med' });
+  });
+
+  it('zamanlayıcı olmayan alışkanlık başlatılmaz, "stop" gündelik cümleyi bozmaz', () => {
+    expect(run('kitap oku başlat', 'tr')).toEqual(NONE);
+    expect(run('kitap okumayı durdur', 'tr')).toEqual(NONE);
+    const quit = items({ habits: [{ id: 'q', title: 'Stop smoking', kind: 'binary' }] });
+    expect(parseVoiceCommand('stop smoking done', 'en', quit)).toMatchObject({ kind: 'one', target: { kind: 'habit', habit: { id: 'q' } } });
+  });
+});

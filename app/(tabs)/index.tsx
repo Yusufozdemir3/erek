@@ -13,10 +13,11 @@ import { Feather } from '@expo/vector-icons';
 import { goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, isTimeUnit, scheduleLabel, shiftYmd, toYmd, todayDate } from '@/lib/helpers';
-import { notifySuccess, tapLight } from '@/lib/haptics';
+import { notifySuccess, tapLight, tapMedium } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
 import { cancelTaskReminders, refreshTaskReminders, scheduleGoalReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
+import { useTimer } from '@/ui/TimerProvider';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView } from '@/ui/useTodayData';
 import { VoiceCommandBar, type CommandNotice } from '@/ui/VoiceCommandBar';
@@ -73,6 +74,7 @@ export default function TodayScreen() {
   // selectedDate is shared (AppData): the central ＋ menu reads it from here to
   // add a new task with the viewed day as its default date.
   const { user, selectedDate, setSelectedDate } = useAppData();
+  const timer = useTimer();
   const today = todayDate();
 
   const [showPicker, setShowPicker] = useState(false);
@@ -233,6 +235,14 @@ export default function TodayScreen() {
   // Runs a command the parser matched to one of today's items and describes
   // what happened; the Undo reverses exactly that write.
   const applyVoiceTarget = (target: Target): CommandNotice => {
+    if (target.kind === 'timer') {
+      const h = habits.find((x) => x.id === target.habit.id);
+      if (!h || h.kind !== 'timer' || !h.target) return { text: tr('voiceCmd.notUnderstood') };
+      if (timer.isRunning('habit', h.id)) return { text: tr('voiceCmd.timerAlready', { title: h.title }) };
+      timer.start('habit', h.id);
+      tapMedium();
+      return { text: tr('voiceCmd.timerStarted', { title: h.title }) };
+    }
     if (target.kind === 'goal') {
       const g = goalRepo.getById(target.goal.id);
       if (!g || g.goal_type !== 'numeric') return { text: tr('voiceCmd.notUnderstood') };
@@ -358,6 +368,18 @@ export default function TodayScreen() {
     };
   };
 
+  // "Stop the timer": whatever runs now, or the named habit's timer.
+  const stopVoiceTimer = (habitId?: string): CommandNotice => {
+    const running = timer.active();
+    if (!running || running.kind !== 'habit' || (habitId && running.id !== habitId)) {
+      return { text: tr('voiceCmd.timerNone') };
+    }
+    const title = habits.find((h) => h.id === running.id)?.title ?? '';
+    timer.pause();
+    tapMedium();
+    return { text: tr('voiceCmd.timerStopped', { title }) };
+  };
+
   const handleVoiceCommand = (text: string, show: (n: CommandNotice) => void) => {
     const cmd = parseVoiceCommand(text, lang, {
       habits: habits.map((h) => ({ id: h.id, title: h.title, kind: h.kind })),
@@ -381,6 +403,10 @@ export default function TodayScreen() {
       );
       return;
     }
+    if (cmd.kind === 'stopTimer') {
+      show(stopVoiceTimer(cmd.habitId));
+      return;
+    }
     if (cmd.kind === 'one') {
       show(applyVoiceTarget(cmd.target));
       return;
@@ -390,7 +416,7 @@ export default function TodayScreen() {
       tr('voiceCmd.chooseTitle'),
       undefined,
       cmd.options.map((o) => ({
-        text: o.kind === 'habit' ? o.habit.title : o.kind === 'goal' ? o.goal.title : o.task.title,
+        text: o.kind === 'habit' || o.kind === 'timer' ? o.habit.title : o.kind === 'goal' ? o.goal.title : o.task.title,
         onPress: () => show(applyVoiceTarget(o)),
       })),
       { cancelable: true }

@@ -43,12 +43,14 @@ export type Target =
   | { kind: 'habit'; habit: CommandHabit; amount: number } // amount: what to add (numeric) — 1 for binary
   | { kind: 'task'; task: CommandTask }
   | { kind: 'postpone'; task: CommandTask } // "move X to tomorrow"
-  | { kind: 'goal'; goal: CommandGoal; amount: number }; // "add 5 km to my running goal"
+  | { kind: 'goal'; goal: CommandGoal; amount: number } // "add 5 km to my running goal"
+  | { kind: 'timer'; habit: CommandHabit }; // "start meditation"
 
 export type VoiceCommand =
   | { kind: 'none' }
   | { kind: 'one'; target: Target }
-  | { kind: 'choose'; options: Target[] }; // several fit equally well (2-3)
+  | { kind: 'choose'; options: Target[] } // several fit equally well (2-3)
+  | { kind: 'stopTimer'; habitId?: string }; // "stop the timer" (habitId when a habit was named)
 
 export const MIN_COVERAGE = 0.6; // share of the spoken content words that must match
 const MAX_OPTIONS = 3;
@@ -136,6 +138,10 @@ interface LangKit {
   // Stem prefixes of "add" and of "goal" ("add 5 km to my reading goal").
   addPrefixes: string[];
   goalPrefixes: string[];
+  // "start" / "stop" and the nouns for a timer.
+  startPrefixes: string[];
+  stopPrefixes: string[];
+  timerPrefixes: string[];
   // Do a spoken word and a title word mean the same thing?
   same(spoken: string, title: string): boolean;
 }
@@ -185,6 +191,9 @@ const TR: LangKit = {
   tomorrowPrefixes: ['yarin'],
   addPrefixes: ['ekle'],
   goalPrefixes: ['hedef'],
+  startPrefixes: ['baslat', 'basla'],
+  stopPrefixes: ['durdur', 'duraklat'],
+  timerPrefixes: ['zamanlayic', 'sayac', 'kronometre'],
   isDoneWord: (w) => TR.generic.has(w) || (w.length >= 5 && /[dt][iu][mk]$/.test(w)),
   same: trSame,
 };
@@ -226,6 +235,9 @@ const EN: LangKit = {
   tomorrowPrefixes: ['tomorrow'],
   addPrefixes: ['add'],
   goalPrefixes: ['goal'],
+  startPrefixes: ['start', 'begin'],
+  stopPrefixes: ['stop', 'pause'],
+  timerPrefixes: ['timer', 'stopwatch'],
   isDoneWord: (w) =>
     EN.generic.has(w) || (w.length >= 4 && w.endsWith('ed')) || Object.prototype.hasOwnProperty.call(EN_IRREGULAR, w),
   same: (a, b) => a === b || enStem(a) === enStem(b),
@@ -260,6 +272,9 @@ const DE: LangKit = {
   tomorrowPrefixes: ['morgen'],
   addPrefixes: ['hinzu', 'addier'],
   goalPrefixes: ['ziel'],
+  startPrefixes: ['start', 'beginn'],
+  stopPrefixes: ['stopp', 'pausier', 'anhalt'],
+  timerPrefixes: ['timer', 'stoppuhr'],
   isDoneWord: (w) => DE.generic.has(w) || /^ge.{3,}(?:t|en)$/.test(w) || Object.prototype.hasOwnProperty.call(DE_IRREGULAR, w),
   same: (a, b) => a === b || deStem(a) === deStem(b),
 };
@@ -275,6 +290,10 @@ interface Heard {
   done: boolean;
   postpone: boolean; // a postpone word AND "tomorrow" were both said
   add: boolean; // an "add" word AND a number were both said
+  start: boolean; // a "start" word was said
+  stop: boolean; // a "stop/pause" word was said
+  timerNoun: boolean; // "timer" itself was said
+  cmdWords: Set<number>; // start/stop/timer words: not part of an item's name
 }
 
 function listen(text: string, lang: Lang): Heard {
@@ -301,6 +320,13 @@ function listen(text: string, lang: Lang): Heard {
   const isAdd = (w: string) => kit.addPrefixes.some((p) => w.startsWith(p));
   const isGoalWord = (w: string) => kit.goalPrefixes.some((p) => w.startsWith(p));
   const add = amount !== null && words.some(isAdd);
+  const isStart = (w: string) => kit.startPrefixes.some((p) => w.startsWith(p));
+  const isStop = (w: string) => kit.stopPrefixes.some((p) => w.startsWith(p));
+  const isTimerNoun = (w: string) => kit.timerPrefixes.some((p) => w.startsWith(p));
+  const cmdWords = new Set<number>();
+  words.forEach((w, i) => {
+    if (isStart(w) || isStop(w) || isTimerNoun(w)) cmdWords.add(i);
+  });
   words.forEach((w, i) => {
     if (kit.isDoneWord(w)) done = true;
     if (used.has(i) || kit.stop.has(w) || kit.generic.has(w)) return;
@@ -310,7 +336,12 @@ function listen(text: string, lang: Lang): Heard {
     if (add && (isAdd(w) || isGoalWord(w))) return;
     content.push(i);
   });
-  return { words, amount, content, units, done, postpone, add };
+  return {
+    words, amount, content, units, done, postpone, add, cmdWords,
+    start: words.some(isStart),
+    stop: words.some(isStop),
+    timerNoun: words.some(isTimerNoun),
+  };
 }
 
 // Share of the spoken content words that some word of the title matches.
@@ -338,6 +369,19 @@ function coverage(heard: Heard, title: string, lang: Lang): number {
 
 export function parseVoiceCommand(text: string, lang: Lang, items: CommandItems): VoiceCommand {
   const heard = listen(text, lang);
+  // Timers are run, not ticked: "meditasyonu başlat", "zamanlayıcıyı durdur".
+  if (heard.start || heard.stop) {
+    const rest: Heard = { ...heard, content: heard.content.filter((i) => !heard.cmdWords.has(i)) };
+    const timers = items.habits.filter((h) => h.kind === 'timer');
+    const named = rest.content.length > 0 ? pick(timers.map((habit) => ({ score: coverage(rest, habit.title, lang), target: { kind: 'timer', habit } }))) : null;
+    if (heard.stop) {
+      // Either a timer is named, or the sentence is only "stop the timer".
+      if (named?.kind === 'one' && named.target.kind === 'timer') return { kind: 'stopTimer', habitId: named.target.habit.id };
+      if (heard.timerNoun && rest.content.length === 0) return { kind: 'stopTimer' };
+    } else if (named && named.kind !== 'none') {
+      return named;
+    }
+  }
   if (heard.content.length === 0) return { kind: 'none' };
   // "X'i yarına ertele" concerns a task only; a habit can't be moved to another day.
   if (heard.postpone) {

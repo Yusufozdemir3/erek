@@ -51,6 +51,9 @@ jest.mock('@/ui/AppData', () => ({
     notifyDataChanged: jest.fn(),
   }),
 }));
+jest.mock('@/ui/TimerProvider', () => ({
+  useTimer: () => ({ isRunning: () => false, active: () => null, start: jest.fn(), pause: jest.fn() }),
+}));
 jest.mock('@/widget/widgetData', () => ({ refreshWidget: jest.fn() }));
 jest.mock('@/lib/notifications', () => ({
   refreshTaskReminders: jest.fn(),
