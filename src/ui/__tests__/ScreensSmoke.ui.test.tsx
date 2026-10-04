@@ -34,7 +34,7 @@ jest.mock('@/ui/AppData', () => ({
   useAppData: () => ({
     user: { id: mockUserId },
     authUser: null,
-    selectedDate: new Date().toISOString().slice(0, 10).replace(/-(\d\d)-(\d\d)$/, '-$1-$2'),
+    selectedDate: require('@/lib/helpers').todayDate(),
     setSelectedDate: jest.fn(),
     dataVersion: 0,
     notifyDataChanged: jest.fn(),
