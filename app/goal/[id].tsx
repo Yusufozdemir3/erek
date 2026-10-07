@@ -1,16 +1,6 @@
-// Goal DETAIL screen — tabbed: Overview · Stats · Milestones · Edit.
-// Editing used to open in a separate modal (GoalEditModal); it's now a tab on
-// this screen — one single source of truth, lower maintenance cost.
-// Milestones (goal_milestones) can now be added as an optional checklist on
-// BOTH goal types — for 'milestone' type it keeps its automatic-completion
-// logic, for 'numeric' type it's purely an organizational aid (a numeric
-// goal's completion always comes from current_value>=target_value).
-// ALL data ENTRY ("entry") happens on the Overview tab: a +1/+5/−1 counter for
-// numeric goals, manual "mark completed" for milestone goals — the list screen
-// (goals.tsx) is now a read-only summary/navigation surface.
-// Opens from the "Goals" tab in three ways: tap the title (edit tab), swipe to
-// edit (edit tab), the 📊 icon (stats tab); otherwise defaults to Overview.
-// Architecture rule: no SQL; only useGoalStats + goalRepo/goalMilestoneRepo are called.
+// Goal detail screen, in tabs: Overview (progress entry, history, manual
+// completion) · Stats · Steps · Edit. The Goals list only navigates here.
+// Steps work on both goal types; only a 'milestone' goal completes from them.
 
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -49,37 +39,24 @@ export default function GoalDetailScreen() {
   const stats = useGoalStats(id);
   const [activeTab, setActiveTab] = useState<GoalTab>((tab as GoalTab) || 'overview');
   const [newMilestone, setNewMilestone] = useState('');
-  // The new milestone's optional amount (only shown for a numeric goal) and due date.
+  // A new step's optional amount (numeric goals) and due date.
   const [newMilestoneAmount, setNewMilestoneAmount] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState<string | null>(null);
   const [showMilestoneDatePicker, setShowMilestoneDatePicker] = useState(false);
-  // The amount field is COLLAPSED by default (as a chip) — tapping the chip expands it.
+  // The amount field starts as a chip.
   const [showMilestoneAmount, setShowMilestoneAmount] = useState(false);
-  // Free-form amount input on the Overview tab ("how much {unit} did you add?").
   const [entryText, setEntryText] = useState('');
 
   const goal = stats.goal;
-  // Names for entries a friend added to this goal (shared goal, see sharedGoals.ts).
+  // Names of friends who added to this goal.
   const contributorNames = useFriendNames(stats.entries.map((e) => e.added_by));
-  // Group goal: who added how much (only once a friend has contributed too).
   const shareName = (key: string) =>
     key === OWNER_KEY ? t('sharedGoal.you') : contributorNames.get(key) ?? t('friends.unknownName');
   const shares = contributionShares(stats.entries, OWNER_KEY, shareName);
 
-  // — Overview tab: data entry ("entry") — the user types whatever amount they
-  // want, and "Add" applies it as a DELTA on top of the accumulated progress
-  // (goalRepo.addProgress is a delta, not an absolute value — entering a
-  // negative number also works as a correction). addProgress itself logs the
-  // daily entry (so linked-habit contributions land in the history too; see
-  // goalRepo.addProgress).
-  // After any mutation that may have changed completion status, rebuild
-  // reminders from the current state: scheduleGoalReminders already just
-  // cancels on its own for a completed/reminder-less goal (cancel-then-maybe-
-  // schedule pattern). A permission denial (ok=false) is SILENTLY ignored here
-  // (showing a warning on every entry/milestone change would be annoying) —
-  // only handleEditSubmit (the moment the user deliberately changes the
-  // reminder) checks the result and shows a warning. A real error (rejection)
-  // stays at least visible via console.warn — it used to be swallowed entirely.
+  // After anything that may change completion, rebuild the reminders (none
+  // for a completed goal). A missing permission is only reported from the
+  // Edit tab, where the user changes reminders on purpose.
   const refreshReminder = (): Promise<boolean> => {
     const g = goalRepo.getById(id);
     if (!g) return Promise.resolve(true);
@@ -93,11 +70,9 @@ export default function GoalDetailScreen() {
     if (!goal) return;
     const parsed = parseFloat(entryText.replace(',', '.'));
     if (!Number.isFinite(parsed) || parsed === 0) return;
-    // For a time-measured goal, minutes are entered but seconds are stored
-    // (same unit as target/current_value — see the identical pattern in GoalForm).
+    // Duration goals: minutes typed, seconds stored.
     const amount = isTimeUnit(goal.unit) ? Math.round(parsed * 60) : parsed;
-    // addProgress itself writes the entry record (with the actual applied
-    // difference) — calling goalEntryRepo.create here too would DOUBLE-log it.
+    // A delta (negative = correction); addProgress writes the entry itself.
     goalRepo.addProgress(goal.id, amount);
     const g = goalRepo.getById(goal.id);
     g && goalRepo.progressRatio(g) >= 1 ? notifySuccess() : tapLight();
@@ -114,7 +89,7 @@ export default function GoalDetailScreen() {
     stats.reload();
   };
 
-  // — Milestones tab: mutations (used to live in GoalEditModal) —
+  // — Steps tab —
   const syncGoalCompletion = () => {
     if (!goal) return;
     const { done, total } = goalMilestoneRepo.countForGoal(goal.id);
@@ -133,20 +108,18 @@ export default function GoalDetailScreen() {
   };
   const refreshMilestones = () => {
     syncGoalCompletion();
-    refreshReminder(); // milestones may have completed or reopened the goal
+    refreshReminder(); // steps may have completed or reopened the goal
     stats.reload();
   };
   const addMilestone = () => {
     const v = newMilestone.trim();
     if (!v || !goal) return;
-    // The amount is only meaningful for a numeric goal; if filled in, the
-    // milestone becomes its own independent target (filled by entries, never
-    // checked off manually) — otherwise it's an ordinary checklist item.
+    // Numeric goals: an amount makes the step a threshold; empty = a checklist item.
     const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
     const amount =
       goal.goal_type === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
         ? isTimeUnit(goal.unit)
-          ? Math.round(parsedAmount * 60) // minutes are entered, seconds are stored
+          ? Math.round(parsedAmount * 60) // minutes -> seconds
           : parsedAmount
         : null;
     goalMilestoneRepo.create(goal.id, v, { amount, due_date: newMilestoneDate });
@@ -156,8 +129,7 @@ export default function GoalDetailScreen() {
     setShowMilestoneAmount(false);
     refreshMilestones();
   };
-  // Only checklist (amount-less) milestones are checked off manually; a
-  // threshold milestone's state is derived from entries (see milestoneViews).
+  // Only checklist steps are ticked by hand; thresholds fill from progress.
   const toggleMilestone = (m: GoalMilestone) => {
     goalMilestoneRepo.setCompleted(m.id, m.completed === 0);
     refreshMilestones();
@@ -167,17 +139,8 @@ export default function GoalDetailScreen() {
     refreshMilestones();
   };
 
-  // — Edit tab —
-  // Manually changing "Current value" is a pure CORRECTION by DEFAULT — tempo/
-  // projection (goalProjection.ts) is fed from the entry history, so it isn't
-  // written there. If the user checks GoalForm's "Also add to progress
-  // history" box, the difference is logged as an entry instead.
-  // THE DECISION ITSELF NOW LIVES IN THE REPO (goalRepo.update's
-  // log_manual_change field): since current_value is derived from entries (see
-  // migration019), the question "does this go to the baseline or to an entry"
-  // has exactly one correct answer, and both can't happen at once. Writing an
-  // entry here as well used to detach the total from current_value, and the
-  // value would jump on its own on the next sync round.
+  // — Edit tab — goalRepo.update decides where a manual "Current value" change
+  // goes (log_manual_change); don't write an entry here as well.
   const handleEditSubmit = (values: GoalFormValues) => {
     if (!goal) return;
     goalRepo.update(goal.id, {
@@ -191,8 +154,7 @@ export default function GoalDetailScreen() {
         : {}),
     });
     reminderRepo.replaceAll('goal', goal.id, values.remind_times);
-    // The moment the user DELIBERATELY changed the reminder — warn on
-    // permission denial (same pattern as the habit/task edit panels).
+    // The user changed reminders on purpose: warn if permission is missing.
     refreshReminder().then((ok) => {
       if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
     });
@@ -206,7 +168,6 @@ export default function GoalDetailScreen() {
     router.back();
   };
 
-  // The Milestones tab now exists for both goal types (see the file-header comment).
   const TABS: { key: GoalTab; labelKey: string; icon: keyof typeof Feather.glyphMap }[] = [
     { key: 'overview', labelKey: 'goal.tabOverview', icon: 'home' },
     { key: 'stats', labelKey: 'goal.tabStats', icon: 'bar-chart-2' },
@@ -233,7 +194,6 @@ export default function GoalDetailScreen() {
           <>
             <Text style={shared.greeting}>{goal.title}</Text>
 
-            {/* Tab bar */}
             <View style={styles.tabBar}>
               {TABS.map((tb) => {
                 const active = activeTab === tb.key;
@@ -252,7 +212,7 @@ export default function GoalDetailScreen() {
               })}
             </View>
 
-            {/* — OVERVIEW — */}
+            {/* — Overview — */}
             {activeTab === 'overview' && (
               <View>
                 {stats.completed && (
@@ -275,9 +235,6 @@ export default function GoalDetailScreen() {
                             goal.target_value != null ? ` / ${fmtAmount(goal.target_value)}` : ''
                           }${goal.unit ? ` ${goal.unit}` : ''}`}
                     </Text>
-                    {/* Data entry lives here — the user types an amount and
-                        taps Add (see the file-header comment). Entering a
-                        negative number also works as a correction. */}
                     <View style={styles.entryInputRow}>
                       <TextInput
                         style={styles.entryInput}
@@ -296,7 +253,6 @@ export default function GoalDetailScreen() {
 
                     <GoalContributors shares={shares} unit={goal.unit} nameOf={shareName} />
 
-                    {/* Entry history — merged per minute, grouped per day (see GoalEntryHistory). */}
                     <GoalEntryHistory
                       entries={stats.entries}
                       unit={goal.unit}
@@ -311,7 +267,7 @@ export default function GoalDetailScreen() {
                       {stats.milestonesDone}/{stats.milestonesTotal}{' '}
                       {t('goal.milestoneCountSuffix', { n: stats.milestonesTotal })}
                     </Text>
-                    {/* Manual "mark completed" toggle — stays in sync with the Milestones tab when there are milestones. */}
+                    {/* Manual completion, kept in step with the Steps tab. */}
                     <Pressable
                       style={[styles.completeToggleBtn, stats.completed && styles.completeToggleBtnDone]}
                       onPress={toggleGoalCompleted}
@@ -344,20 +300,13 @@ export default function GoalDetailScreen() {
               </View>
             )}
 
-            {/* — STATS — a single result band at the top, a compact summary
-                row below it and labeled groups (required pace / your pace).
-                Hierarchy instead of dozens of equal boxes: the eye goes
-                straight to "will I make it?" first. */}
+            {/* — Stats — */}
             {activeTab === 'stats' && (
               <GoalStatsTab goal={goal} stats={stats} t={t} lang={lang} styles={styles} />
             )}
 
-            {/* — MILESTONES — two modes: on a numeric goal, an amount-bearing
-                milestone = its OWN INDEPENDENT target (e.g. "first 5km"/"first
-                20km"/"first 50km" — all fill from current_value simultaneously,
-                CANNOT be checked off, and show a percentage bar); an
-                amount-less milestone = a manually checked checklist item
-                (subtask pattern). See goalMilestoneRepo.milestoneViews. */}
+            {/* — Steps — thresholds fill from progress ("first 5 km", "first
+                20 km" side by side); amount-less steps are ticked by hand. */}
             {activeTab === 'milestones' && (
               <View>
                 {stats.milestoneViews.map((v) => {
@@ -428,14 +377,8 @@ export default function GoalDetailScreen() {
                   );
                 })}
 
-                {/* The add row is PROGRESSIVE: by default it's just a title
-                    field + ＋. It used to also have the amount box and date
-                    button on the same row, and their fixed widths
-                    (76+~40+44+gaps ≈ 184px) left only ~135px for the title
-                    field itself — down to ~105px once a date was picked (user
-                    feedback: "not clean"). Now both appear in the chip row
-                    below only once you start typing a title: the common case
-                    (type a title, hit Enter) stays a single clean row. */}
+                {/* Just a title and ＋; the amount/date chips appear below once a
+                    title is typed, so the title field keeps its width. */}
                 <View style={styles.milestoneAddRow}>
                   <TextInput
                     style={styles.milestoneInput}
@@ -457,9 +400,7 @@ export default function GoalDetailScreen() {
                     <Text style={styles.milestoneAddText}>＋</Text>
                   </Pressable>
                 </View>
-                {/* Chips: hidden while the title is empty — BUT stay visible if
-                    an amount/date is already filled in, otherwise clearing the
-                    title would silently discard the value the user had entered. */}
+                {/* Still shown when an amount/date is filled in, so clearing the title loses nothing. */}
                 {(newMilestone.trim().length > 0 || newMilestoneDate != null || newMilestoneAmount.length > 0) && (
                   <View style={styles.milestoneChipRow}>
                     {goal.goal_type === 'numeric' &&
@@ -516,10 +457,6 @@ export default function GoalDetailScreen() {
                     </Pressable>
                   </View>
                 )}
-                {/* The app's own date picker — this used to be the native
-                    DateTimePicker, with the same job (giving a milestone a due
-                    date) done by DatePickerModal on the creation screen but by
-                    the system calendar here. One picker: the same look/behavior everywhere. */}
                 <DatePickerModal
                   visible={showMilestoneDatePicker}
                   value={new Date(`${newMilestoneDate ?? todayDate()}T00:00:00`)}
@@ -532,7 +469,7 @@ export default function GoalDetailScreen() {
               </View>
             )}
 
-            {/* — EDIT — */}
+            {/* — Edit — */}
             {activeTab === 'edit' && (
               <GoalForm
                 key={goal.id}

@@ -1,12 +1,5 @@
-// goalProjection tests.
-//
-// MODEL (user decision 2026-07-23): since start and end date are REQUIRED,
-// all calculations are done along that axis:
-//   • avgDaily   = current / days elapsed (NOT a rolling 7/30-day window)
-//   • last7Total = the sum of entries in the last 7 days (since the question itself is windowed)
-//   • projectedFinishDate  = today + remaining/avgDaily
-//   • projectedAtDeadline  = current + avgDaily × days left (if the deadline has passed: current)
-//   • behindAmount         = target − projectedAtDeadline
+// goalProjection: pace and projections along the start → deadline axis (see
+// the file's header for the formulas).
 
 import { goalProjection, type GoalEntryLike } from '../goalProjection';
 
@@ -179,7 +172,7 @@ describe('goalProjection — projeksiyonlar', () => {
     });
     expect(p.projectedFinishDate).toBeNull();
     expect(p.avgDaily).not.toBeNull(); // the rate can still be shown
-    // NO forward extrapolation: since addProgress used to clamp at the target, "you'll exceed it" would have been wrong.
+    // A completed goal isn't extrapolated.
     expect(p.projectedAtDeadline).toBe(200);
     expect(p.behindAmount).toBe(0);
   });

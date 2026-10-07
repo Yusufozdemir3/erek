@@ -1,42 +1,16 @@
-// (kopya kurulum) Bugün ekranı, geciken görev işareti. Orijinal: sesle işaretleme söylenen cümle gerçek veritabanında
-// alışkanlık/görev değiştirir, bildirim satırı sonucu söyler, Geri al çalışır.
-// Tanıyıcı '@/lib/voice' üzerinden taklit edilir (bkz. TaskFormVoice testi).
+// Today: a task carried over from an earlier day shows its date as overdue.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import TodayScreen from '../../../app/(tabs)/index';
 import { renderUI } from '@/test/renderWithProviders';
 import { resetTestDb } from '@/test/dbTestUtils';
-import { habitRepo, taskRepo, userRepo } from '@/db';
+import { taskRepo, userRepo } from '@/db';
 import { shiftYmd, todayDate } from '@/lib/helpers';
 import { shortDate } from '@/ui/theme';
 
-const mockListeners: Record<string, Set<(e: unknown) => void>> = {};
 let mockUserId = '';
 let mockSelectedDate = '';
 
-jest.mock('@/lib/voice', () => {
-  const React = require('react');
-  return {
-    getVoiceSupport: jest.fn(async () => 'onDevice'),
-    getMicPermission: jest.fn(async () => 'granted'),
-    requestMicPermission: jest.fn(async () => true),
-    downloadOfflinePack: jest.fn(async () => 'done'),
-    startListening: jest.fn(),
-    stopListening: jest.fn(),
-    abortListening: jest.fn(),
-    useSpeechRecognitionEvent: (name: string, listener: (e: unknown) => void) => {
-      const ref = React.useRef(listener);
-      ref.current = listener;
-      React.useEffect(() => {
-        const fn = (e: unknown) => ref.current(e);
-        (mockListeners[name] ??= new Set()).add(fn);
-        return () => {
-          mockListeners[name].delete(fn);
-        };
-      }, [name]);
-    },
-  };
-});
 jest.mock('expo-router', () => {
   const React = require('react');
   return { useFocusEffect: (cb: () => void | (() => void)) => React.useEffect(cb, [cb]) };
@@ -51,7 +25,7 @@ jest.mock('@/ui/AppData', () => ({
   }),
 }));
 jest.mock('@/ui/TimerProvider', () => ({
-  useTimer: () => ({ isRunning: () => false, active: () => null, start: jest.fn(), pause: jest.fn() }),
+  useTimer: () => ({ isRunning: () => false }),
 }));
 jest.mock('@/widget/widgetData', () => ({ refreshWidget: jest.fn() }));
 jest.mock('@/lib/notifications', () => ({
@@ -75,6 +49,7 @@ jest.mock('react-native-reanimated', () => {
   return { __esModule: true, default: A, LinearTransition: { duration: () => ({}) } };
 });
 
+jest.setTimeout(20000);
 
 beforeEach(async () => {
   await resetTestDb();

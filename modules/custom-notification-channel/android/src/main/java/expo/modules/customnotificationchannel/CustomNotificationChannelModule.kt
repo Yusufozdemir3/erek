@@ -10,16 +10,10 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
-// expo-notifications'ın JS'e açtığı kanal API'si `sound` alanına yalnızca
-// uygulamaya gömülü bir ses dosyasının adını kabul eder (res/raw'da arar,
-// bulamazsa sessizce varsayılan sese düşer) — cihazın zil sesi seçicisinden
-// gelen content:// URI'yi ASLA doğrudan kanala uygulayamaz. Bu modül o sınırı
-// aşar: NotificationChannel.setSound'u ham Uri ile çağırır.
-//
-// Android'de bir kanalın sesi/titreşimi OLUŞTURULDUKTAN SONRA koddan
-// değiştirilemez (yalnız kullanıcı sistem ayarından). Bu yüzden JS tarafı ses
-// tercihi değişince createChannel'ı YENİ bir channelId ile çağırır; eski kanal
-// öylece kalır (ID'si bir daha kullanılmaz).
+// expo-notifications kanala yalnızca uygulamaya gömülü bir sesi verebilir;
+// telefonda seçilen zil sesi (content:// URI) için bu modül
+// NotificationChannel.setSound'u ham Uri ile çağırır. Bir kanalın sesi sonradan
+// değişmediğinden JS her yeni ses için yeni bir channelId kullanır.
 class CustomNotificationChannelModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("CustomNotificationChannel")
@@ -46,16 +40,7 @@ class CustomNotificationChannelModule : Module() {
       manager.createNotificationChannel(channel)
     }
 
-    // Artık kullanılmayan eski özel-ses kanallarını temizler (ör. kullanıcı
-    // sesi tekrar tekrar değiştirince biriken eski channelId'ler).
-    Function("deleteChannel") { channelId: String ->
-      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return@Function
-      val context = appContext.reactContext ?: throw Exceptions.ReactContextLost()
-      val manager = context.getSystemService(NotificationManager::class.java) ?: return@Function
-      manager.deleteNotificationChannel(channelId)
-    }
-
-    // Seçilen sesin görünen adı (Profil'de göstermek için) — alınamazsa null.
+    // Seçilen sesin görünen adı; alınamazsa null.
     Function("getSoundTitle") { soundUri: String ->
       val context = appContext.reactContext ?: return@Function null
       try {

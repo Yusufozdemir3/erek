@@ -61,7 +61,7 @@ export function CounterWidget({ snapshot }: { snapshot: WidgetSnapshot | null })
                 style={{ fontSize: 12, fontWeight: '600', color: h.completed ? hex(c.done) : hex(c.muted) }}
               />
             </FlexWidget>
-            {/* The +1 button — the only part of the row that takes a tap */}
+            {/* Only the +1 button takes a tap */}
             <FlexWidget
               clickAction={INC_ACTION}
               clickActionData={{ habitId: h.id }}

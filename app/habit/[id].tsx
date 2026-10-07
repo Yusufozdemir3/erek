@@ -1,13 +1,5 @@
-// Habit stats screen — summary numbers, Goal/Score/History card, monthly
-// calendar, and badges at the bottom.
-// Opens from the "Habits" tab when tapping a card's weekly history strip.
-// Architecture rule: no SQL; only useHabitStats (via habitRepo) is called.
-//
-// This file is ONLY the PAGE SKELETON: data loading, header, section order.
-// The body lives in src/ui/habit/HabitStatsBody.tsx (shared with a friend's
-// read-only view, app/shared-habit/[id].tsx); sections in
-// HabitStatsSections.tsx, formatters in habitStatsFormat.ts, styles in
-// habitStatsStyles.ts (audit finding H1).
+// Habit stats screen (from the Habits tab's 7-day strip). The page skeleton
+// only; the body is ui/habit/HabitStatsBody.tsx, shared with a friend's habit.
 
 import { useState } from 'react';
 import { Pressable, ScrollView, Text } from 'react-native';

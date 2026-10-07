@@ -17,12 +17,9 @@ function createTask(extra: Partial<Parameters<typeof taskRepo.create>[0]> = {}) 
   return taskRepo.create({ user_id: userId, title: 'Görev', ...extra });
 }
 
-// The query behind the "Tasks" screen. Completed tasks never dropped from the list,
-// so it grew unbounded over the years (and all of it rendered at once);
-// now it returns all ACTIVE tasks + only those completed within the last N days.
+// The Tasks screen: every open task + only recently completed ones.
 describe('listForScreen / countCompletedBefore', () => {
-  // We write directly to completed_at: setCompleted always stamps "now",
-  // but the test needs to produce a task completed in the past.
+  // setCompleted always stamps "now".
   function completeAt(id: string, iso: string): void {
     const { getDb } = require('../database');
     getDb().runSync(`UPDATE tasks SET completed_at = ? WHERE id = ?`, [iso, id]);
@@ -143,9 +140,7 @@ describe('listByUser — sıralama: saatliler üstte (kendi içi saate göre), s
   });
 
   it('saatli görevler kendi aralarında SAATE göre sıralanır (öncelik etkisiz)', () => {
-    // The one with an earlier time but lower priority should come before
-    // the one with a later time but higher priority — priority only breaks
-    // ties within the same time, not the "timed vs. untimed" grouping.
+    // Among timed tasks the time wins over priority.
     const earlyLow = createTask({ title: 'Erken düşük', due_date: '2026-07-05T09:00:00', priority: 'low' });
     const lateHigh = createTask({ title: 'Geç yüksek', due_date: '2026-07-05T18:00:00', priority: 'high' });
     const ids = taskRepo.listByUser(userId).map((t) => t.id);

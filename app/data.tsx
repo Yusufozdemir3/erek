@@ -1,6 +1,4 @@
-// "My data" sub-screen of Profile: take your habits, tasks and goals out as a
-// file (export) or bring such a file back, e.g. on a new phone (import). The
-// header title comes from the root layout.
+// Profile › My data: export everything as a file, or import one (e.g. on a new phone).
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';

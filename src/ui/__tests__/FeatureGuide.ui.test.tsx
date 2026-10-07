@@ -151,22 +151,24 @@ describe('Alışkanlıklar ekranında rehber', () => {
 });
 
 describe('Görevler ekranında rehber', () => {
-  it('yeni kurulumda ilk girişte açılır; hesapsızken paylaşım sayfası yok (6 sayfa)', async () => {
+  it('yeni kurulumda ilk girişte açılır; hesapsızken paylaşım sayfası yok (7 sayfa)', async () => {
     await AsyncStorage.setItem('guide:newInstall', '1');
     await AsyncStorage.setItem('onboarding:done', '1');
     const u = await renderUI(<TasksScreen />);
     expect(await u.findByText('Görev nedir?')).toBeTruthy();
     for (let i = 0; i < 5; i++) fireEvent.press(await u.findByText('İleri'));
     expect(await u.findByText('Hatırlatma ve sesle ekleme')).toBeTruthy();
+    fireEvent.press(await u.findByText('İleri'));
+    expect(await u.findByText('Sesle hızlı ekleme')).toBeTruthy();
     expect(u.getByText('Tamam')).toBeTruthy();
   });
 
-  it('girişliyken yedinci sayfa paylaşımı anlatır; ? ile yeniden açılır', async () => {
+  it('girişliyken sekizinci sayfa paylaşımı anlatır; ? ile yeniden açılır', async () => {
     mockAuth = { id: 'a', isAnonymous: false };
     await AsyncStorage.setItem('onboarding:done', '1');
     const u = await renderUI(<TasksScreen />);
     fireEvent.press(await u.findByLabelText('Bu ekranın rehberini aç'));
-    for (let i = 0; i < 6; i++) fireEvent.press(await u.findByText('İleri'));
+    for (let i = 0; i < 7; i++) fireEvent.press(await u.findByText('İleri'));
     expect(await u.findByText('Arkadaşınla paylaş')).toBeTruthy();
   });
 });

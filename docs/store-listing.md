@@ -92,11 +92,11 @@ Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma saati ekleyebi
 
 ▸ HAFTALIK ÖZET
 
-Son 7 günün tamamlama oranı, önceki haftayla karşılaştırma, günlük çubuklar. Bugün ekranında "su içtim" diyerek alışkanlığı sesle işaretleyebilirsin.
+Son 7 günün tamamlama oranı, önceki haftayla karşılaştırma, günlük çubuklar.
 
 ▸ ANA EKRAN WIDGET'LARI
 
-Bugünün alışkanlıklarını ve görevlerini ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar.
+Bugünün alışkanlıklarını ve görevlerini ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar; küçük düğme widget’larıyla seçtiğin alışkanlığı tek dokunuşla tamamlar ya da artırırsın.
 
 ▸ REKLAMLAR
 
@@ -112,7 +112,7 @@ Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedefler
 
 Profil › Gizlilik ve çevrimdışı, neyin nerede durduğunu telefonunun gerçek durumuna göre gösterir. Uygulama içi analitik yok, verilerin satılmaz.
 ```
-(3969)
+(3896)
 
 ---
 
@@ -179,7 +179,7 @@ Add as many reminder times as you like to habits, tasks and goals. Notifications
 
 ▸ WEEKLY REVIEW
 
-Your completion rate for the last 7 days, compared with the week before, plus a bar per day. On Today you can check a habit off by voice: say "I drank water".
+Your completion rate for the last 7 days, compared with the week before, plus a bar per day.
 
 ▸ HOME SCREEN WIDGETS
 
@@ -199,7 +199,7 @@ Erek works fully without an account or internet: your habits, tasks, goals, remi
 
 Profile › Privacy and offline shows what is kept where, based on your phone’s actual state. No in-app analytics; your data is never sold.
 ```
-(3952)
+(3886)
 
 ---
 
@@ -266,7 +266,7 @@ Füge Gewohnheiten, Aufgaben und Zielen beliebig viele Erinnerungszeiten hinzu. 
 
 ▸ WOCHENRÜCKBLICK
 
-Quote der letzten 7 Tage, Vergleich zur Vorwoche. Unter Heute hakst du per Sprache ab: „Wasser getrunken“.
+Quote der letzten 7 Tage, Vergleich zur Vorwoche.
 
 ▸ HOMESCREEN-WIDGETS
 
@@ -286,7 +286,7 @@ Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinne
 
 Profil › Datenschutz und Offline zeigt, was wo liegt. Keine In-App-Analyse; deine Daten werden nie verkauft.
 ```
-(3989)
+(3932)
 
 ---
 
@@ -393,6 +393,7 @@ tanıma durumunda; cihazda tanımada hiç toplanmaz.)
 | Beyan | Cevap |
 |---|---|
 | Reklamlar | **Evet, uygulamada reklam var** (AdMob, tam ekran) |
+| Uygulama içi satın alma / abonelik | **Hayır** — 1.1.0'da satın alma yok (Erek Plus sonraki sürüme ertelendi) |
 | Reklam kimliği | **Evet, kullanılıyor** — amaç: reklam (`AD_ID` izni manifestte) |
 | Hesap silme | Uygulama içi yol: Profil › Hesabı sil. **Web bağlantısı:** https://yusufozdemir3.github.io/erek-privacy/#hesap-silme (EN: `#delete-account`) — sayfa uygulama dışından e-postayla silme talebini anlatıyor |
 | Veri güvenliği | Yukarıdaki tablo |
@@ -404,36 +405,33 @@ tanıma durumunda; cihazda tanımada hiç toplanmaz.)
 
 ## Yenilikler (bu sürüm — en fazla 500 karakter)
 
-Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
+Son Play yüklemesi: versionCode 10 (2026-09-24). Bu sürüm: 1.1.0, incelemede. Erek Plus bu sürümde YOK (Plus/RevenueCat 1.1'e ertelendi); notlarda geçmez.
 
 **TR**
 ```
-• Görevleri sesle ekle: mikrofona dokun, söyle — tarih ve saat kendiliğinden dolar.
-• Arkadaşlar: davet koduyla bağlan; alışkanlık, görev ve hedeflerini paylaş. Ortak hedeflere birlikte ilerleme ekleyin.
-• Bugün ekranında 7 günlük tarih şeridi.
-• Profilde Google hesabının fotoğrafı.
-• Görev saati artık kartın sağında.
-• Tarih değiştirirken yaşanan çökme giderildi; senkron ve bildirimlerde güvenilirlik düzeltmeleri.
+• Yeni widget'lar: Görevler, Hedefler, Sayaç ve tek alışkanlık için küçük Evet/Hayır ve Sayaç düğmeleri — uygulamayı açmadan dokunup işaretle.
+• Bugün'de hafta şeridini kaydırarak günler arasında gez; sekme geçişleri ve şerit animasyonlu.
+• Uygulama kilidi, verilerini dışa/içe aktarma ve silince "Geri al".
+• Haftalık özet, arama, yazı tipi seçimi.
+• Sesli görev eklerken duraklamada artık hemen kapanmıyor.
 ```
 
 **EN**
 ```
-• Add tasks by voice: tap the mic and speak — the date and time fill in for you.
-• Friends: connect with an invite code and share habits, tasks and goals. Add progress to shared goals together.
-• A 7-day date strip on the Today screen.
-• Your Google profile photo in the header.
-• Task times now sit on the right of the card.
-• Fixed a crash when changing the date; reliability fixes for sync and notifications.
+• New widgets: Tasks, Goals, Counter, plus small one-habit Yes/No and Counter buttons — tap to check off without opening the app.
+• Swipe the week strip on Today to move between days; tab switches and the strip are animated.
+• App lock, export/import your data, and Undo after deleting.
+• Weekly review, search, font choice.
+• Voice tasks no longer stop the moment you pause.
 ```
 
 **DE**
 ```
-• Aufgaben per Sprache: aufs Mikrofon tippen, sprechen – Datum und Uhrzeit füllen sich selbst.
-• Freunde: per Einladungscode verbinden und Gewohnheiten, Aufgaben und Ziele teilen. Gemeinsam Fortschritt zu geteilten Zielen eintragen.
-• 7-Tage-Datumsleiste auf dem Heute-Bildschirm.
-• Dein Google-Profilbild in der Kopfzeile.
-• Die Uhrzeit von Aufgaben steht jetzt rechts auf der Karte.
-• Absturz beim Datumswechsel behoben; Zuverlässigkeitskorrekturen bei Synchronisierung und Benachrichtigungen.
+• Neue Widgets: Aufgaben, Ziele, Zähler sowie kleine Ja/Nein- und Zähler-Buttons für eine Gewohnheit – antippen, ohne die App zu öffnen.
+• Wochenleiste auf Heute wischen, um Tage zu wechseln; Tab-Wechsel und Leiste sind animiert.
+• App-Sperre, Daten exportieren/importieren und „Rückgängig“ nach dem Löschen.
+• Wochenrückblick, Suche, Schriftauswahl.
+• Sprachaufgaben stoppen nicht mehr bei jeder Pause.
 ```
 
 ---
@@ -486,7 +484,7 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Ondan bu yana gelenler:
 
 **Yeni özellikler (cihazda bir kez dene)**
 - [ ] Widget'lar (Bugün, Sayaç, Görevler, Hedefler): ekle; uygulama kapalıyken dokun, açınca işlenmiş olsun
-- [ ] Bugün'de sesle işaretle ("su içtim"), Geri al; haftalık özet ve Pazar/Pazartesi kartı
+- [ ] Haftalık özet ve Pazar/Pazartesi kartı
 - [ ] Uygulama kilidi: aç, uygulamadan çık-gir, 60 sn'den uzun arka plan; telefonun ekran kilidi
       kaldırılırsa kullanıcı kilitlenmiyor
 - [ ] Profil › Verilerim: dışa aktar, içe aktar (aynı dosya iki kez = değişiklik yok)

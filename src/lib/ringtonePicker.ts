@@ -1,14 +1,7 @@
-// Opens the device's system ringtone/notification sound picker (Android-only).
-// expo-notifications CANNOT use the selected content:// URI DIRECTLY — the
-// channel API only accepts a bundled sound file NAME, and silently falls back
-// to the default for an arbitrary URI (see the note at the top of
-// customNotificationChannel.ts). That's why the URI is handed off to our own
-// native channel module.
-//
-// expo-intent-launcher was just added in this round (same reason as
-// modules/custom-notification-channel) — the native side may not be found yet
-// in a not-yet-compiled build (including Expo Go); a dynamic import + try/catch
-// returns canceled silently in that case.
+// Android's system notification-sound picker (expo-intent-launcher). The
+// picked content:// URI goes to our own channel module, since
+// expo-notifications can't use it (customNotificationChannel.ts). Without the
+// native side (Expo Go, an older build) it reports canceled.
 
 import { Platform } from 'react-native';
 
@@ -22,7 +15,7 @@ const TYPE_NOTIFICATION = 2; // android.media.RingtoneManager.TYPE_NOTIFICATION
 
 export interface RingtonePickResult {
   canceled: boolean;
-  uri: string | null; // null = user picked "Silent" (also null on cancel, but distinguished by canceled=true)
+  uri: string | null; // null = "Silent" (or canceled, see canceled)
 }
 
 export async function pickNotificationSound(existingUri?: string | null): Promise<RingtonePickResult> {
@@ -43,7 +36,7 @@ export async function pickNotificationSound(existingUri?: string | null): Promis
     const picked = extra[EXTRA_PICKED_URI];
     return { canceled: false, uri: typeof picked === 'string' ? picked : null };
   } catch (e) {
-    console.warn('[Bildirim] Ses seçici açılamadı:', e); // native module missing (Expo Go / older build) or some other error
+    console.warn('[Bildirim] Ses seçici açılamadı:', e);
     return { canceled: true, uri: null };
   }
 }

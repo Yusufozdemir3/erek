@@ -1,12 +1,10 @@
-// Pure decisions behind voice input (no native module here, so it's testable
-// in the Node project). voice.ts talks to the recognizer; this file decides
-// WHICH recognizer may be used and how errors read.
+// Pure decisions behind voice input: which recognizer may be used and how
+// errors read (voice.ts talks to the recognizer).
 //
-// Privacy rule (A+ in the voice-task plan): audio stays on the device by
-// default. Android only GUARANTEES that from Android 13 (a dedicated
-// on-device recognizer); below that, or without the language pack, the only
-// option is Google's online recognition — used only after the user agreed to
-// it once (stored per device, revocable under Appearance).
+// Audio stays on the device by default. Android only guarantees that from
+// Android 13 (an on-device recognizer); otherwise, or without the language
+// pack, Google's online recognition is used only after a one-time consent
+// (revocable under Appearance).
 
 import type { Lang } from '@/i18n/translations';
 
@@ -89,3 +87,8 @@ export function voiceErrorKind(code: string): VoiceErrorKind {
 
 // Hard cap on one listening session: the mic must never stay open by accident.
 export const MAX_LISTEN_MS = 30_000;
+
+// How long a pause ends the session. Android's default (~1.5 s) cut people off
+// while they were still thinking; 3 s leaves room to pause between words.
+export const SILENCE_END_MS = 3_000;
+export const SILENCE_MAYBE_END_MS = 2_500; // must stay below SILENCE_END_MS

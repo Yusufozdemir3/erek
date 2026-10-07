@@ -1,6 +1,5 @@
-// "Account & sync" sub-screen of Profile — Google/e-mail account status, sign-out,
-// cloud sync status, and (at the very bottom, deliberately quiet) account deletion.
-// Only reachable while ACCOUNTS_ENABLED is on.
+// Profile › Account & sync: the account, sign-out, sync status and — quietly,
+// at the bottom — account deletion.
 
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
@@ -27,10 +26,7 @@ export default function AccountSyncScreen() {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeProfileStyles(colors);
-  // Sync status is kept in AppData, NOT here: most sync runs happen without this
-  // screen ever opening (startup + foregrounding). Keeping a local copy would
-  // have hidden the result of those automatic runs — that was exactly the bug
-  // that got fixed.
+  // From AppData, so automatic rounds show here too.
   const {
     user,
     refreshUser,
@@ -47,7 +43,6 @@ export default function AccountSyncScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Is the account linked to an email? (an anonymous session doesn't count as "linked")
   const linked = authUser != null && !authUser.isAnonymous && authUser.email != null;
 
   useFocusEffect(
@@ -57,8 +52,7 @@ export default function AccountSyncScreen() {
     }, [])
   );
 
-  // The only question sign-out may ask: a REAL data-loss warning, shown only
-  // when some local changes never reached the cloud. Resolves true = sign out anyway.
+  // Sign-out's only question: changes that never reached the cloud. true = sign out anyway.
   const confirmUnsyncedSignOut = (n: number): Promise<boolean> =>
     new Promise((resolve) => {
       Alert.alert(
@@ -72,25 +66,17 @@ export default function AccountSyncScreen() {
       );
     });
 
-  // SIGN-OUT — data belongs to the account (see the "DATA BELONGS TO THE
-  // ACCOUNT" note in sync/syncEngine.ts). It used to ask "erase the data on
-  // this device too?" after every sign-out — a technical question users
-  // shouldn't have to answer. Now:
-  //   1) back up whatever is pending (a last sync round),
-  //   2) only if something STILL didn't make it (offline, server error) warn
-  //      once, with the count,
-  //   3) sign out and let the device forget the account's data; signing back
-  //      in brings it all back from the cloud.
-  // This also covers the shared-device concern the old prompt was for.
+  // Sign-out: a last sync, a warning only if something still didn't make it,
+  // then the device forgets the account's data (signing in brings it back).
   const doSignOut = async () => {
     setSigningOut(true);
     try {
-      await syncNow(); // best effort — pendingChangeCount() below is what decides
+      await syncNow(); // best effort; pendingChangeCount() decides
       const pending = pendingChangeCount();
       if (pending > 0 && !(await confirmUnsyncedSignOut(pending))) return;
       await signOutAccount();
       await forgetAccountOnDevice();
-      // The forgotten habits/tasks/goals' triggers are still in the OS queue.
+      // The forgotten items' triggers are still queued.
       await cancelAllReminders();
       userRepo.downgradeToLocal(user.id);
       clearSyncStatus();
@@ -100,18 +86,15 @@ export default function AccountSyncScreen() {
       setAuthUser(null);
       setSignedIn(false);
     } catch (e) {
-      // Used to be swallowed into console.warn — the user believed they were
-      // signed out while the session was still there.
+      // Tell the user: the session may still be there.
       Alert.alert(t('profile.signOutFailedTitle'), e instanceof Error ? e.message : String(e));
     } finally {
       setSigningOut(false);
     }
   };
 
-  // Account deletion: irreversible — two-step with a native confirmation dialog.
-  // The cloud account plus all cloud data is deleted; ON-DEVICE data remains and
-  // the user continues without an account (unlike sign-out, which forgets the
-  // data on the device because it still lives in the account).
+  // Irreversible, so confirmed. The cloud account and data go; the device keeps
+  // its data and continues without an account (sign-out does the opposite).
   const confirmDeleteAccount = () => {
     Alert.alert(
       t('profile.deleteAccount'),
@@ -133,8 +116,6 @@ export default function AccountSyncScreen() {
       setAuthUser(null);
       setSignedIn(false);
       clearSyncStatus();
-      // No follow-up question: the account is gone, the data stays on this
-      // device and the app simply continues without an account.
       Alert.alert(t('profile.deletedTitle'), t('profile.deletedBody'));
     } catch (e) {
       Alert.alert(t('profile.deleteFailedTitle'), e instanceof Error ? e.message : String(e));
@@ -180,10 +161,7 @@ export default function AccountSyncScreen() {
         ) : (
           <>
             <Text style={styles.muted}>{t('profile.notLinkedBody')}</Text>
-            {/* Sign-in is now GOOGLE-ONLY (see ui/LoginScreen.tsx). This is the
-                sign-in path for a user who skipped the opening gate with "Skip
-                for now". The email+password screen (/account) wasn't deleted,
-                it's just unlinked. */}
+            {/* Google sign-in for someone who skipped it at first launch. */}
             <Pressable
               style={styles.syncBtn}
               onPress={() => router.push('/login')}
@@ -214,10 +192,7 @@ export default function AccountSyncScreen() {
               </Text>
             </View>
 
-            {/* LAST BACKUP — the one signal that's genuinely meaningful to the
-                user: "how stale is my cloud copy?". It survives app restarts
-                (see AppData.LAST_SYNC_KEY). The ↑/↓ counts are only that run's
-                detail; this line is the status itself. */}
+            {/* "How old is my backup?" — survives restarts. */}
             {signedIn && (
               <View style={[styles.statusRow, styles.statusRowSpaced]}>
                 <Text style={styles.muted}>{t('profile.lastBackup')}</Text>
@@ -235,10 +210,7 @@ export default function AccountSyncScreen() {
                 })}
               </Text>
             )}
-            {/* The error is now PERSISTENT: an error from an automatic run at
-                startup or when foregrounding lands here too (it used to go
-                nowhere). Ownership conflicts get their own readable message —
-                the raw Postgres message tells the user nothing. */}
+            {/* Errors of automatic rounds too; an ownership conflict gets a readable message. */}
             {syncResult?.status === 'error' && (
               <Text style={styles.errText}>
                 {syncResult.ownershipConflict
@@ -267,8 +239,7 @@ export default function AccountSyncScreen() {
         )}
       </View>
 
-      {/* Account deletion: irreversible, so it's a small quiet link at the very
-          bottom instead of a button next to "Sign out". */}
+      {/* Irreversible, so a quiet link at the bottom. */}
       {linked && (
         <>
           <Pressable

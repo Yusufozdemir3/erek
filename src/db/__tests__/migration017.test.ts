@@ -1,9 +1,5 @@
-// migration017: converts the DASHLESS 32-character reminder ids produced by
-// migration016 into canonical UUID form.
-//
-// Why it matters: the cloud's reminders.id is a `uuid` column — it accepts
-// dashless text but returns it WITH DASHES on pull. When the ids didn't match,
-// the same reminder got inserted locally as a second row and the notification fired twice.
+// migration017: dashless reminder ids from migration016 become canonical
+// UUIDs (Postgres returns them dashed; a mismatch duplicated reminders).
 
 import { getDb } from '../database';
 import { migration017 } from '../migrations/001_initial';

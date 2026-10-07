@@ -1,6 +1,5 @@
-// Tombstone cleanup. Most tests here ask "does it avoid deleting what it
-// SHOULDN'T" — an incorrect cleanup means sync loses the deletion info and
-// the record "resurrects" from another device.
+// Tombstone cleanup. Most tests check what it must NOT delete: a lost
+// deletion makes the record come back from another device.
 
 import { getDb } from '../database';
 import { purgeOldTombstones, TOMBSTONE_TTL_DAYS } from '../maintenance';

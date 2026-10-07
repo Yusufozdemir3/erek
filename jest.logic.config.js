@@ -1,11 +1,7 @@
-// Pure logic + repository + sync tests run in a Node environment (fast, no native).
-// Native modules are swapped for test doubles (moduleNameMapper):
-//   - expo-sqlite  -> a node:sqlite-based in-memory fake (real SQL behavior)
-//   - expo-crypto  -> node:crypto randomUUID
-//   - async-storage -> the package's official jest mock
-//   - google-signin -> a local stub (the package ships ESM, which the Node project can't parse)
-// Component (UI) tests run in a SEPARATE project (jest.ui.config.js) with jest-expo;
-// this project ignores them (*.ui.test.tsx).
+// Logic, repository and sync tests in Node (fast, no native modules), with
+// doubles: expo-sqlite → a node:sqlite in-memory fake (real SQL), expo-crypto →
+// randomUUID, AsyncStorage → its official mock, google-signin → a local stub
+// (it ships ESM). *.ui.test.tsx runs in jest.ui.config.js instead.
 /** @type {import('jest').Config} */
 module.exports = {
   displayName: 'logic',

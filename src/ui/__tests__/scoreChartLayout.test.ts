@@ -1,12 +1,5 @@
-// Score chart layout tests.
-//
-// REGRESSION (caught on an emulator, 2026-07-23): for a chart with a SINGLE
-// point, the plot area was inflated by a whole extra `spacing`
-// (`Math.max(1, n-1) * spacing`), overflowing the screen; the ScrollView
-// auto-scrolled to the end on open, leaving the single point off-screen on
-// the left — the user saw an EMPTY-looking chart. This only became possible
-// once the score lock was removed (previously the chart wasn't drawn with
-// fewer than 7 days of data).
+// scoreChartLayout. A single point once got a whole extra spacing, scrolled
+// off-screen and left the chart looking empty.
 
 import { AXIS_W, chartLayout, LABEL_W_MAX, POINT_SPACING_MIN } from '../scoreChartLayout';
 

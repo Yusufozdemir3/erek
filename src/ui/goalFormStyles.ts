@@ -1,8 +1,4 @@
-// GoalForm's style factory — SPLIT OUT of src/ui/GoalForm.tsx (review finding
-// H1: the form component was 600+ lines and a large chunk of that was the style dictionary).
-//
-// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the factory
-// is called at render time so it can be regenerated when the theme changes.
+// GoalForm's styles, built per render from the theme.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -96,7 +92,7 @@ export const makeGoalFormStyles = (c: Colors) =>
     subTitle: { flex: 1, fontSize: 14, color: c.text },
     subMeta: { fontSize: 11, fontWeight: '600', color: c.muted },
     subDelete: { fontSize: 20, color: c.faint, paddingHorizontal: 4 },
-    // — Progressive chips (amount / date) — same visual language as milestoneChip* on the detail screen.
+    // — Amount / date chips, as on the detail screen —
     subChipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
     subChip: {
       paddingHorizontal: 12,

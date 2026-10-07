@@ -11,7 +11,7 @@
 
 import { Platform } from 'react-native';
 import { ExpoSpeechRecognitionModule as Speech, useSpeechRecognitionEvent } from 'expo-speech-recognition';
-import { localeInstalled, type VoiceSupport } from '@/lib/voiceLogic';
+import { localeInstalled, SILENCE_END_MS, SILENCE_MAYBE_END_MS, type VoiceSupport } from '@/lib/voiceLogic';
 
 export { useSpeechRecognitionEvent };
 
@@ -65,6 +65,10 @@ export function startListening(locale: string, onDevice: boolean): void {
     maxAlternatives: 1,
     continuous: false,
     requiresOnDeviceRecognition: onDevice,
+    androidIntentOptions: {
+      EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: SILENCE_END_MS,
+      EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: SILENCE_MAYBE_END_MS,
+    },
   });
 }
 

@@ -1,12 +1,8 @@
-// Friend connections via invite code. Deliberately NOT part of the offline-first
-// sync engine (syncEngine.TABLES): inviting/redeeming is inherently an online
-// action, and friends' data never belongs in the local SQLite database. Every
-// call is a SECURITY DEFINER RPC that validates the caller server-side (see the
-// FRIENDS / SHARING section of supabase/schema.sql).
-//
-// The friend list is cached in AsyncStorage for name badges and offline
-// display. The cache (and any other sharing cache, `shared:*`) holds OTHER
-// people's data, so it's wiped on sign-out, account deletion and account switch.
+// Friend connections via invite code — online-only RPCs that check the caller
+// server-side (schema.sql FRIENDS / SHARING), deliberately outside the sync
+// engine. The friend list is cached for name badges and offline display; like
+// every `shared:*` cache it holds OTHER people's data and is wiped on
+// sign-out, account deletion and account switch.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { taskRepo } from '../db/repositories/taskRepo';
@@ -109,8 +105,7 @@ export async function getCachedFriends(): Promise<Friend[]> {
   }
 }
 
-// Wipes other people's data from the device: tasks shared with me plus every
-// friends/sharing cache. Called on sign-out, account deletion and account switch.
+// Wipes other people's data: tasks shared with me and every sharing cache.
 export async function clearSharedData(): Promise<void> {
   try {
     taskRepo.purgeSharedWithMe();

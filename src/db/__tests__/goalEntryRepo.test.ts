@@ -1,16 +1,12 @@
-// goalEntryRepo tests: entry history is only a LOG — it NEVER mutates
-// goals.current_value (see the file-header comment there), it just keeps a
-// record of "how much was added when". Same pattern as subtaskRepo/goalMilestoneRepo.
+// goalEntryRepo: creating, listing and deleting entries (addProgress writes
+// them; goalRepo.test.ts covers how they drive current_value).
 
 import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
 
-// updated_at has millisecond resolution; if two consecutive creates land in
-// the same millisecond, listByGoal's ORDER BY updated_at DESC (having no
-// secondary sort key) doesn't guarantee "newest first". Scenarios that test
-// ordering use a short wait to force a real time gap.
+// Two creates in the same millisecond would tie on updated_at; ordering tests wait.
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 let goalId: string;

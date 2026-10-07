@@ -1,14 +1,9 @@
-// The widgets' background (headless) task handler. Runs when an Android
-// widget event fires (added/update/resized/click); reads the ready-made
-// snapshot from AsyncStorage and renders the widget. Does NOT touch SQLite
-// (unreliable in a headless context) — the snapshot is produced by the app
-// process (widgetData.refreshWidget), and taps go through the queue in
-// widgetQueue.ts, which the app drains into SQLite.
-//
-// Registered in index.js ONLY in a real build (when the native module exists).
+// The widgets' headless task handler (add/update/resize/click). It never
+// touches SQLite: it draws from the stored snapshot, and taps go through the
+// widgetQueue.ts queue that the app drains. Registered in index.js in real builds only.
 
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
-import { readSnapshot, writeSnapshot } from './widgetSnapshot';
+import { readPicks, readSnapshot, setPick, writeSnapshot } from './widgetSnapshot';
 import {
   actionFromClick,
   appendPending,
@@ -26,22 +21,23 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
     case 'WIDGET_ADDED':
     case 'WIDGET_UPDATE':
     case 'WIDGET_RESIZED': {
-      props.renderWidget(widgetFor(name, await readSnapshot(), props.widgetInfo));
+      props.renderWidget(widgetFor(name, await readSnapshot(), props.widgetInfo, await readPicks()));
       break;
     }
-    // A row/button tap (OPEN_APP taps open the app natively and never get here).
+    // OPEN_APP taps open the app natively and never get here.
     case 'WIDGET_CLICK': {
       await serialized(async () => {
         const snapshot = await readSnapshot();
+        const picks = await readPicks();
         const action = actionFromClick(snapshot, props.clickAction, props.clickActionData, newActionId());
         if (!snapshot || !action) {
-          props.renderWidget(widgetFor(name, snapshot, props.widgetInfo));
+          props.renderWidget(widgetFor(name, snapshot, props.widgetInfo, picks));
           return;
         }
         await appendPending(action);
         const next = applyToSnapshot(snapshot, action);
         await writeSnapshot(next);
-        props.renderWidget(widgetFor(name, next, props.widgetInfo));
+        props.renderWidget(widgetFor(name, next, props.widgetInfo, picks));
         // The other widgets show the same items — keep them in step.
         await updateWidgets(
           next,
@@ -52,7 +48,9 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps): Promise<
       emitWidgetAction();
       break;
     }
-    // WIDGET_DELETED: nothing to do.
+    case 'WIDGET_DELETED':
+      await setPick(props.widgetInfo.widgetId, null);
+      break;
     default:
       break;
   }

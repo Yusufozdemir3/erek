@@ -1,14 +1,6 @@
-// Data loading logic for the goal stats screen: progress, remaining
-// amount/steps, the daily/weekly/monthly pace needed to hit the deadline, and
-// habits linked to this goal. Does NOT require a new history table — it's
-// derived from the same sources as GoalEditModal's "current status" strip
-// (goal.current_value/target_value/deadline), just shown here in a richer form
-// on a separate screen (same pattern as useHabitStats).
-//
-// Since the screen is now a single persistent tabbed component
-// (Overview/Stats/Steps/Edit) instead of a separate modal that used to unmount
-// on every open, there's NO automatic refocus after milestone/goal mutations —
-// the caller must manually call the returned `reload` after every mutation.
+// Goal screen data: progress, the pace needed by the deadline, actual pace and
+// projections, steps, linked habits and entries. The tabbed goal screen stays
+// mounted, so callers must call `reload` after every change.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -33,42 +25,29 @@ export interface GoalStats {
   daysLeft: number | null; // null = no deadline; negative means overdue
   isOverdue: boolean;
   overdueDays: number | null; // only populated (positive) while isOverdue
-  // Numeric only: the pace needed to hit the deadline in time ("how much do I
-  // need to do per day/week to finish by the set date"). Both are null if
-  // there's no deadline, it's completed, or the deadline has passed.
+  // Numeric: the pace needed to finish by the deadline; null without an open
+  // deadline or once completed.
   dailyPace: number | null;
   weeklyPace: number | null;
-  // — Actual pace + projections (numeric); see lib/goalProjection.ts —
-  // All computed on the start–deadline axis (both are required fields).
-  // "How much am I doing per day": current / days elapsed.
+  // — Actual pace + projections (numeric; lib/goalProjection.ts) —
   avgDaily: number | null;
-  // "What will the amount be at the deadline at this rate"; the actual value if the deadline has passed.
   projectedAtDeadline: number | null;
-  // "At this rate, what date will I finish" ("YYYY-MM-DD"; if within a reasonable range).
   projectedFinishDate: string | null;
-  // Difference at the deadline: positive = falls short, negative = exceeds the target.
+  // > 0 short at the deadline, < 0 ahead.
   behindAmount: number | null;
-  // Days elapsed from the start date to today (inclusive).
   daysElapsed: number | null;
-  // "How much did I do in the last 7 days" — from the entry history.
   last7Total: number | null;
-  // Steps can now be optional on EITHER type ('numeric' goals can also have a
-  // checklist) — these fields are populated whenever milestonesTotal>0, regardless of type.
+  // Steps (either goal type).
   milestones: GoalMilestone[];
-  // Step views: steps with an amount become cumulative threshold bars filled
-  // from current_value; those without become a checklist (see goalMilestoneRepo.milestoneViews).
+  // With an amount: a threshold filled from current_value; without: a checklist item.
   milestoneViews: MilestoneView[];
   milestonesDone: number;
   milestonesTotal: number;
   milestonesRemaining: number;
-  // The stats tab's step section now shows ONLY the next step instead of an
-  // AGGREGATE pace (days/step, steps/week) — see lib/milestoneStats.ts.
-  // null if there are no steps or all are completed.
+  // The step being worked on (lib/milestoneStats.ts); null if none is left.
   nextMilestone: NextMilestoneStat | null;
-  // Habits linked to this goal (marked via goal_id) — see HabitForm.linkGoal.
   linkedHabits: LinkedHabit[];
-  // Progress entries (newest to oldest) — since migration019 these ARE the
-  // source of current_value (baseline + sum of entries).
+  // Newest first; current_value = baseline + these.
   entries: GoalEntry[];
   reload: () => void;
 }
@@ -99,10 +78,7 @@ const EMPTY_BASE = {
   entries: [] as GoalEntry[],
 };
 
-// PURE: every number the goal screens show, from already-loaded rows. Shared
-// by the owner's own goal screen (useGoalStats, rows from SQLite) and a
-// friend's shared goal (useSharedGoal, rows from the server) — so both show
-// exactly the same pace, projection and milestone math.
+// Pure, so a friend's shared goal (useSharedGoal) gets exactly the same numbers.
 export function computeGoalStats(
   goal: Goal,
   milestones: GoalMilestone[],
@@ -126,27 +102,19 @@ export function computeGoalStats(
   const isOverdue = daysLeft != null && daysLeft < 0;
   const overdueDays = isOverdue ? -daysLeft! : null;
 
-  // Pace is only meaningful for a not-yet-completed goal with a deadline in
-  // the future (today included). "Today is the deadline" (daysLeft=0) -> all
-  // of the remainder falls on today, the divisor is treated as at least 1.
+  // Only for an open goal whose deadline is today or later (today = divide by 1).
   const effectiveDays = daysLeft != null && daysLeft >= 0 ? Math.max(1, daysLeft) : null;
   const dailyPace =
     !completed && remaining != null && effectiveDays != null ? remaining / effectiveDays : null;
   const weeklyPace = dailyPace != null ? dailyPace * 7 : null;
 
-  // Steps: a required part of a 'milestone' goal; on a 'numeric' goal either a
-  // quantity-based threshold or (if quantity-less) a checklist that does NOT
-  // affect completion. "Done" comes from the views: thresholds are counted
-  // from current_value, checklist steps from the completed column.
+  // On a numeric goal, steps never affect completion.
   const views = computeMilestoneViews(milestones, goal.current_value);
   const milestonesDone = views.filter((v) => v.reached).length;
   const milestonesTotal = views.length;
   const milestonesRemaining = Math.max(0, milestonesTotal - milestonesDone);
-  // Next step: the single threshold the user is currently working on.
   const nextMilestone = nextMilestoneStat(views, goal.current_value, today);
 
-  // Actual pace + projections (only meaningful for numeric goals). Extracted
-  // into a pure function (see lib/goalProjection.ts — design decisions + tests).
   const projection =
     goal.goal_type === 'numeric'
       ? goalProjection({
@@ -206,8 +174,6 @@ export function useGoalStats(goalId: string): GoalStats {
       setStats(EMPTY_BASE);
       return;
     }
-    // Habits linked to this goal — instead of a separate query, all of the
-    // user's habits are already fetched in a single list (the list size is small).
     const linkedHabits: LinkedHabit[] = habitRepo
       .listByUser(goal.user_id)
       .filter((h) => h.goal_id === goal.id)

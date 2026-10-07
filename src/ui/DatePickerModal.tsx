@@ -1,7 +1,5 @@
-// Custom calendar date picker — replaces the native
-// @react-native-community/datetimepicker. Month grid + month navigation +
-// "Today" shortcut. Tapping a day picks it and closes immediately (no extra
-// "OK" step — a single-tap flow). Visually the same centered-card pattern as ModalCard.
+// Our calendar date picker: month grid, month navigation and "Today". A tap on
+// a day picks it and closes.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -22,7 +20,7 @@ interface Props {
   title?: string;
 }
 
-const WEEKDAY_LETTERS_START_MONDAY = [1, 2, 3, 4, 5, 6, 0]; // JS getDay() order, starting Monday
+const WEEKDAY_LETTERS_START_MONDAY = [1, 2, 3, 4, 5, 6, 0]; // JS getDay() values
 
 function startOfDay(d: Date): Date {
   const out = new Date(d);
@@ -30,8 +28,7 @@ function startOfDay(d: Date): Date {
   return out;
 }
 
-// A 6-week (42-day) grid starting from the 1st of the month — including
-// overflow days from the previous/next month, so the calendar always stays a full rectangle.
+// Always 6 weeks, padded with the neighboring months' days.
 function buildMonthGrid(monthAnchor: Date): Date[] {
   const first = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
   const firstWeekday = (first.getDay() + 6) % 7; // Monday = 0
@@ -58,7 +55,7 @@ export function DatePickerModal({
   const styles = makeStyles(colors);
   const [monthAnchor, setMonthAnchor] = useState(() => new Date(value.getFullYear(), value.getMonth(), 1));
 
-  // The modal should return to the selected date's month on every open (the value may have changed while closed).
+  // Each open starts at the selected date's month.
   useEffect(() => {
     if (visible) setMonthAnchor(new Date(value.getFullYear(), value.getMonth(), 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,20 +1,19 @@
-// Multi reminder-time editor — used by all three of HabitForm/TaskForm/GoalForm
-// (a list of "HH:MM" instead of a single remind_at; see reminderRepo).
-// Pure UI: the list + time picker live here, while persistence
-// (reminderRepo.replaceAll) and notification scheduling belong to the caller
-// (same pattern as the other form fields — nothing is written until onSubmit).
+// The reminder-times editor of the habit, task and goal forms. UI only: saving
+// and scheduling happen in the caller on submit.
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { hmToDate, toHm } from '@/lib/helpers';
-import { MAX_REMINDERS_PER_ENTITY } from '@/ui/formLimits';
+import { reminderLimit } from '@/plus/plusLogic';
+import { promptPlus } from '@/plus/openPlus';
+import { useFeaturesUnlocked } from '@/plus/plusStore';
 import { TimePickerModal } from '@/ui/TimePickerModal';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
 
 interface Props {
-  label: string; // "Reminder time" | "Reminder" | "Daily reminder" — provided by the caller
+  label: string;
   times: string[];
   onChange: (times: string[]) => void;
 }
@@ -24,11 +23,12 @@ export function ReminderListEditor({ label, times, onChange }: Props) {
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const [showPicker, setShowPicker] = useState(false);
+  const unlocked = useFeaturesUnlocked();
+  const limit = reminderLimit(unlocked);
 
-  // The cap is enforced both here and by hiding the button: if the list fills up
-  // while the picker is already open (or a future caller adds one), it should
-  // never be silently exceeded.
-  const atMax = times.length >= MAX_REMINDERS_PER_ENTITY;
+  // Checked here as well as by hiding the button (the picker may already be open).
+  // Existing reminders beyond a free limit stay; only adding stops.
+  const atMax = times.length >= limit;
 
   const addTime = (picked: Date) => {
     const hm = toHm(picked);
@@ -57,11 +57,18 @@ export function ReminderListEditor({ label, times, onChange }: Props) {
             <Text style={styles.addBtnText}>＋ {t('reminders.add')}</Text>
           </Pressable>
         )}
+        {atMax && !unlocked && (
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => promptPlus('reminders', t)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.addBtnText}>{t('reminders.morePlus')}</Text>
+          </Pressable>
+        )}
       </View>
       {times.length === 0 && <Text style={styles.hint}>{t('reminders.none')}</Text>}
-      {atMax && (
-        <Text style={styles.hint}>{t('reminders.max', { n: MAX_REMINDERS_PER_ENTITY })}</Text>
-      )}
+      {atMax && unlocked && <Text style={styles.hint}>{t('reminders.max', { n: limit })}</Text>}
 
       <TimePickerModal
         visible={showPicker}

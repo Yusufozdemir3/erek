@@ -1,6 +1,4 @@
-// nextMilestoneStat tests — the "next milestone" section under the goal
-// statistics (user decision 2026-07-23: a single threshold instead of an
-// aggregate milestone pace).
+// nextMilestoneStat — the "next milestone" block of the goal stats.
 
 import { nextMilestoneStat } from '../milestoneStats';
 import type { GoalMilestone, MilestoneView } from '@/db';

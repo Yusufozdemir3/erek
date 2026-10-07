@@ -107,6 +107,30 @@
               "updatePeriodMillis": 1800000
             },
             {
+              "name": "ErekHabitCheck",
+              "label": "Erek — Evet/Hayır düğmesi",
+              "description": "Seçtiğin alışkanlık için tek dokunuşla tamamla",
+              "minWidth": "40dp",
+              "minHeight": "40dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 1,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "ErekHabitCount",
+              "label": "Erek — Sayaç düğmesi",
+              "description": "Seçtiğin sayılı alışkanlık her dokunuşta bir artar",
+              "minWidth": "40dp",
+              "minHeight": "40dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 1,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000
+            },
+            {
               "name": "ErekCounter",
               "previewImage": "./assets/widget-previews/counter.png",
               "label": "Erek — Sayaç",

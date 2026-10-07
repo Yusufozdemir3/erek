@@ -6,6 +6,9 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { isFontFree } from '@/plus/plusLogic';
+import { openPlus } from '@/plus/openPlus';
+import { useFeaturesUnlocked } from '@/plus/plusStore';
 import { useI18n } from '@/i18n/I18nProvider';
 import { FONT_CHOICES, FONT_NAMES, fontFamilyFor, type FontChoice } from '@/ui/fontFamily';
 import { isFontLoaded, loadFontFiles, setFontChoice, useFontChoice } from '@/ui/fontStore';
@@ -17,6 +20,7 @@ export function FontPicker() {
   const { t } = useI18n();
   const styles = makeProfileStyles(colors);
   const choice = useFontChoice();
+  const unlocked = useFeaturesUnlocked();
   const [, setTick] = useState(0);
   const [busy, setBusy] = useState<FontChoice | null>(null);
 
@@ -35,6 +39,11 @@ export function FontPicker() {
 
   const pick = async (next: FontChoice) => {
     if (next === choice || busy) return;
+    // Bundled typefaces are Plus: a locked row leads to the Plus screen.
+    if (!unlocked && !isFontFree(next)) {
+      openPlus();
+      return;
+    }
     setBusy(next);
     const ok = await setFontChoice(next);
     setBusy(null);
@@ -47,6 +56,7 @@ export function FontPicker() {
       <View style={{ gap: 8, marginTop: 4 }}>
         {FONT_CHOICES.map((c) => {
           const on = choice === c;
+          const locked = !unlocked && !isFontFree(c);
           const label = c === 'system' ? t('profile.fontSystem') : FONT_NAMES[c];
           // An explicit fontFamily is left alone by applyAppFont, so each row keeps its own font.
           const own = (weight: string) =>
@@ -61,7 +71,7 @@ export function FontPicker() {
               onPress={() => pick(c)}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
-              accessibilityLabel={label}
+              accessibilityLabel={locked ? `${label}. ${t('plus.lockedA11y')}` : label}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -81,6 +91,7 @@ export function FontPicker() {
                 </Text>
               </View>
               {on && <Feather name="check-circle" size={20} color={colors.primary} />}
+              {locked && <Feather name="lock" size={18} color={colors.faint} />}
             </Pressable>
           );
         })}

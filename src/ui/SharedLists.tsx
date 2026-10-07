@@ -1,9 +1,6 @@
-// "Shared with you" lists for the Habits and Goals tabs. What friends share with
-// you used to live only on the Friends screen; now it appears where the thing
-// belongs (like shared tasks in the Tasks tab), as read-only rows under your own
-// list. Tap = open the shared screen, long-press = remove it from your list.
-// Data is cache-first, then refreshed from the server; offline just keeps the
-// last known list. Signed-out / accounts-off users never see anything here.
+// "Shared with you" lists under the Habits and Goals tabs: read-only rows, tap to
+// open, long-press to remove. Cache first, then the server; offline keeps the
+// last list. Nothing shows when signed out.
 
 import { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -29,7 +26,7 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { DEFAULT_HABIT_COLOR, percentLabel, type Colors } from '@/ui/theme';
 
-// Loads one kind of shared list, cache first. `enabled` is false for signed-out users.
+// `enabled` is false when signed out.
 function useSharedList<T>(enabled: boolean, getCached: () => Promise<T[]>, getFresh: () => Promise<T[]>) {
   const [items, setItems] = useState<T[]>([]);
   const seq = useRef(0);

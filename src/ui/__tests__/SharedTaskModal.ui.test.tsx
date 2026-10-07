@@ -126,6 +126,7 @@ describe('SharedTaskModal', () => {
 
     fireEvent.press(getByLabelText('Süt'));
 
+    await act(async () => {});
     await waitFor(() => expect(queryByText('Tamamlandı')).toBeNull());
     expect(taskRepo.getById('t-shared')?.completed_at).toBeNull();
     void task;

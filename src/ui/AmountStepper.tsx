@@ -1,8 +1,5 @@
-// The −/＋ amount stepper for numeric habits ("5/8 cups").
-// Used on both the "Today" and "Habits" screens. Purely visual + three
-// actions; changing the value is done via habitRepo.incrementAmount in the
-// calling screen. Tapping the amount text lets you type a number directly on
-// the keyboard (instead of incrementing one by one with +/-).
+// The −/＋ stepper of numeric habits ("5/8 cups"); the screen writes the value.
+// Tapping the amount lets the user type it.
 
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -16,11 +13,11 @@ interface Props {
   unit: string | null;
   onDec: () => void;
   onInc: () => void;
-  onSet: (value: number) => void; // absolute value entered from the keyboard
-  disabled?: boolean; // true: a future day is being viewed, not editable
+  onSet: (value: number) => void; // a typed total
+  disabled?: boolean; // a future day
 }
 
-// Don't show decimals for whole numbers (5, 5.5).
+// 5, 5.5 — no trailing decimals.
 function fmt(n: number): string {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
@@ -33,11 +30,8 @@ export function AmountStepper({ amount, target, unit, onDec, onInc, onSet, disab
   const [text, setText] = useState('');
   const reached = amount >= target;
 
-  // When the keyboard closes after onSubmitEditing, onBlur also fires; the two
-  // would run commit() twice in the same editing session, and since onSet
-  // applies the absolute value as "current DB value + diff" (habitRepo.incrementAmount
-  // works relatively), the second call would mistakenly add the value on top
-  // again. The ref ensures only the first commit in a session goes through.
+  // onSubmitEditing is followed by onBlur; the value is applied as a relative
+  // increment, so a second commit would add it twice. One commit per edit.
   const committedRef = useRef(false);
 
   const startEdit = () => {

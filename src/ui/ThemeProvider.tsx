@@ -1,12 +1,12 @@
-// Theme (light/dark) context. User preference: 'light' | 'dark' | 'system'
-// (stored in AsyncStorage). When 'system' is selected, the phone's theme
-// (useColorScheme) is followed. Screens/components get the active palette +
-// shared styles via useTheme(). ThemeProvider sits at the VERY OUTSIDE of the
-// tree so every surface (loading screen, modals, status bar) follows the theme.
+// Theme context: 'light' | 'dark' | 'system' (AsyncStorage), plus accent and
+// dark style. Sits outermost so every surface (loading screen, modals, status
+// bar) follows it. Components use useTheme().
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { effectiveAccent } from '@/plus/plusLogic';
+import { useFeaturesUnlocked } from '@/plus/plusStore';
 import {
   ACCENT_THEMES,
   type AccentKey,
@@ -19,8 +19,7 @@ import {
 } from '@/ui/theme';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
-// Dark theme style: 'warm' = warm ink (default), 'black' = full black (AMOLED).
-// Only makes a visible difference while dark theme is active.
+// 'warm' (default) or 'black' (AMOLED); dark theme only.
 export type DarkStyle = 'warm' | 'black';
 const MODE_KEY = 'theme:mode';
 const ACCENT_KEY = 'theme:accent';
@@ -32,9 +31,9 @@ interface ThemeApi {
   scheme: 'light' | 'dark'; // the theme actually applied
   mode: ThemeMode;          // user preference
   setMode: (m: ThemeMode) => void;
-  accent: AccentKey;        // accent (brand) color preference
+  accent: AccentKey; // the accent APPLIED (a Plus one falls back to a free one while locked)
   setAccent: (a: AccentKey) => void;
-  darkStyle: DarkStyle;     // dark theme's style (warm / full black)
+  darkStyle: DarkStyle;
   setDarkStyle: (s: DarkStyle) => void;
 }
 
@@ -47,12 +46,14 @@ export function useTheme(): ThemeApi {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const system = useColorScheme(); // 'light' | 'dark' | null
+  const system = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
   const [accent, setAccentState] = useState<AccentKey>(DEFAULT_ACCENT);
   const [darkStyle, setDarkStyleState] = useState<DarkStyle>('warm');
+  // The saved choice is kept while locked and returns with Plus.
+  const unlocked = useFeaturesUnlocked();
+  const appliedAccent = effectiveAccent(accent, unlocked);
 
-  // Load saved preferences once.
   useEffect(() => {
     AsyncStorage.getItem(MODE_KEY).then((v) => {
       if (v === 'light' || v === 'dark' || v === 'system') setModeState(v);
@@ -83,9 +84,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const scheme: 'light' | 'dark' =
     mode === 'system' ? (system === 'dark' ? 'dark' : 'light') : mode;
   const base = scheme === 'dark' ? (darkStyle === 'black' ? blackColors : darkColors) : lightColors;
-  // The accent color only overrides primary/primarySoft; all remaining tones
-  // (background/text/done/danger etc.) come from the active light/dark theme.
-  const accentPalette = ACCENT_THEMES[accent][scheme];
+  // The accent overrides only primary/primarySoft.
+  const accentPalette = ACCENT_THEMES[appliedAccent][scheme];
   const colors: Colors = useMemo(
     () => ({ ...base, primary: accentPalette.primary, primarySoft: accentPalette.primarySoft }),
     [base, accentPalette]
@@ -93,8 +93,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const shared = useMemo(() => makeShared(colors), [colors]);
 
   const value = useMemo<ThemeApi>(
-    () => ({ colors, shared, scheme, mode, setMode, accent, setAccent, darkStyle, setDarkStyle }),
-    [colors, shared, scheme, mode, accent, darkStyle]
+    () => ({ colors, shared, scheme, mode, setMode, accent: appliedAccent, setAccent, darkStyle, setDarkStyle }),
+    [colors, shared, scheme, mode, appliedAccent, darkStyle]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

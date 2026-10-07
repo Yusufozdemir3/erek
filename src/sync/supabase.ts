@@ -1,7 +1,6 @@
-// Supabase client (React Native compatible).
-// Credentials are read from .env (EXPO_PUBLIC_-prefixed variables get baked
-// into the build). The anon key is public-safe; RLS (row-level security)
-// protects the data. If not configured, the client is null and sync silently disables itself.
+// Supabase client. Credentials come from .env (EXPO_PUBLIC_ vars are baked into
+// the build); the anon key is public-safe, RLS protects the data. Unconfigured
+// → the client is null and sync stays off.
 
 import 'react-native-url-polyfill/auto';
 import 'react-native-get-random-values';
@@ -14,13 +13,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// AsyncStorage is plain, unencrypted storage - a session token stored there
-// could be read by anyone with device/file access. SecureStore (Keychain on
-// iOS, Keystore-backed on Android) is encrypted but has a ~2KB size limit
-// that a Supabase session (access + refresh token + user JSON) can exceed.
-// This adapter combines both: the actual session blob lives in AsyncStorage,
-// encrypted with an AES key that itself is stored in SecureStore. Recommended
-// pattern from Supabase's own Expo guide.
+// The session sits in AsyncStorage (plain storage) encrypted with an AES key
+// kept in SecureStore, whose ~2KB limit a whole session can exceed — the
+// pattern from Supabase's Expo guide.
 class LargeSecureStore {
   private async encrypt(key: string, value: string): Promise<string> {
     const encryptionKey = crypto.getRandomValues(new Uint8Array(32));
@@ -57,8 +52,7 @@ class LargeSecureStore {
 
 const secureSessionStorage = new LargeSecureStore();
 
-// Is the URL a valid http(s) address? (validated so a missing/wrong .env
-// value doesn't crash the whole app; if invalid, sync silently disables itself)
+// A missing or malformed .env value turns sync off instead of crashing the app.
 function isValidHttpUrl(value: string | undefined): boolean {
   if (!value) return false;
   try {
@@ -69,31 +63,27 @@ function isValidHttpUrl(value: string | undefined): boolean {
   }
 }
 
-// Is sync configured? (.env filled in and the URL valid)
 export const isSyncConfigured = isValidHttpUrl(url) && Boolean(anonKey);
 
-// CLIENT CAPABILITY HEADER — sent with every request. The tasks SELECT policy
-// only returns tasks shared WITH the caller when this header is present (see
-// public.client_supports_sharing() in supabase/schema.sql). Older app versions
-// don't send it, so they never see a friend's task: they'd store it as their
-// OWN, and the first edit/check-off would be rejected by RLS and permanently
-// wedge that device's sync. It is a compatibility gate, not a security one —
-// sending it only reveals rows the caller is already entitled to.
+// Sent with every request: tasks shared WITH the caller are returned only when
+// it's present (client_supports_sharing() in schema.sql). Older versions would
+// store a friend's task as their own and wedge their sync on the first edit.
+// A compatibility gate, not a security one.
 export const SHARING_CAPABILITY_HEADER = 'x-erek-sharing';
 
 export const supabase: SupabaseClient | null = isSyncConfigured
   ? createClient(url!, anonKey!, {
       global: { headers: { [SHARING_CAPABILITY_HEADER]: '1' } },
       auth: {
-        storage: secureSessionStorage, // encrypted session persistence (see LargeSecureStore above)
+        storage: secureSessionStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,    // no URL in RN
+        detectSessionInUrl: false,
       },
     })
   : null;
 
-// Auto-refresh the token while the app is foregrounded, stop while backgrounded.
+// Refresh the token only while the app is in the foreground.
 if (supabase) {
   AppState.addEventListener('change', (state) => {
     if (state === 'active') supabase.auth.startAutoRefresh();

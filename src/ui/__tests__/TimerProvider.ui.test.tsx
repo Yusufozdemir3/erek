@@ -1,20 +1,7 @@
-// TimerProvider component test — specifically the RESTORE-AFTER-PROCESS-DEATH
-// path (see lib/timerLogic.isStaleSession/restoreCommitDelta).
-//
-// WHY THIS IS NEEDED SEPARATELY: timerLogic.test.ts already covers those two
-// functions as PURE math (critical P1 fix). But the actual bug class lived in
-// the WIRING: a wiring mistake like "commit(a) should be
-// commit(a, restoreCommitDelta(a))" wouldn't break either of the pure
-// function tests — both work correctly on their own, it's just that one is
-// calling the other with the WRONG ARGUMENT. This file runs TimerProvider's
-// mount effect against a real AsyncStorage + a real habitRepo (in-memory
-// SQLite) and verifies the amount WRITTEN to the DB — i.e. it asks exactly
-// the "is the wiring correct" question.
-//
-// DATE CALCULATION: `todayDate()` (the one TimerProvider uses) is based on
-// LOCAL time. "today/yesterday" in the test are computed with the same
-// function — using `toISOString().slice(0,10)` (UTC) would land on the WRONG
-// day depending on the test machine's UTC offset, making the test flaky on its own.
+// TimerProvider's restore after the process died, on real AsyncStorage and
+// SQLite: the pure functions are tested in timerLogic.test.ts, this checks
+// they're wired right (what actually lands in the DB). Dates use todayDate()
+// (local), as the provider does — UTC would flake by time zone.
 
 import { useEffect } from 'react';
 import { Text } from 'react-native';
@@ -74,10 +61,7 @@ beforeEach(async () => {
 
 describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
   it('İKİ GÜN KAPALI KALAN SEANS: DB\'ye 48 saat değil, hedefe kalan kadarı yazılır', async () => {
-    // This is exactly the bug that got fixed (see the file-header comment in
-    // TimerProvider): a session with a 20-min target started in the evening,
-    // the app gets killed, and if it's opened two days later, the ENTIRE
-    // elapsed time was being written to habit_logs.amount.
+    // Killed overnight, reopened two days later: only the 20 minutes may be booked.
     const habit = habitRepo.create({
       user_id: userId,
       title: 'Kitap oku',
@@ -105,9 +89,7 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
       </TimerProvider>
     );
 
-    // Wait until the async restore (AsyncStorage read + DB write) finishes —
-    // a single `act(async () => {})` doesn't guarantee all microtasks have
-    // flushed on a parallel run; waitFor polls for the actual result.
+    // waitFor, since one act() may not flush the async restore under load.
     await waitFor(() => expect(habitRepo.getAmountOn(habit.id, yesterday)).toBe(20 * 60));
 
     // The session MUST close — it shouldn't keep running with a stale session.
@@ -195,9 +177,7 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
 });
 
 describe('TimerProvider — yerel veri toptan değişirken (hesap birleştirme / silme)', () => {
-  // Merge regenerates every id; the running timer kept the OLD habit id, and
-  // pausing it afterwards inserted a log for a habit that no longer existed
-  // -> FOREIGN KEY failure inside a press handler -> crash in a release build.
+  // After a merge the running timer's old habit id is gone; pausing must not crash.
   it('değişimden ÖNCE çalışan süreyi yazar ve seansı kapatır', async () => {
     const habit = habitRepo.create({ user_id: userId, title: 'Kitap oku', kind: 'timer', target_amount: 20 * 60 });
     const today = todayDate();

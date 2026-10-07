@@ -74,6 +74,7 @@ describe('AppLockGate', () => {
     const u = await renderUI(<AppLockGate />);
     expect(await u.findByText('Erek kilitli')).toBeTruthy();
     fireEvent.press(u.getByLabelText('Kilidi aç'));
+    await act(async () => {});
     await waitFor(() => expect(u.queryByText('Erek kilitli')).toBeNull());
     expect(mockAuth).toHaveBeenCalledTimes(2);
   });

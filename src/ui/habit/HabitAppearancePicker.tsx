@@ -1,11 +1,5 @@
-// The habit's APPEARANCE: emoji/icon grid + color palette. SPLIT OUT of
-// HabitForm (audit finding H1). This was the only truly independent block in
-// the form — it just reads two values and calls two setters; it never
-// touches the wizard's step state, validation rules, or submit.
-//
-// Tapping the already-selected option REMOVES the selection (both are
-// optional: no icon falls back to the default glyph, no color falls back to
-// DEFAULT_HABIT_COLOR).
+// The habit's icon grid and color palette. Tapping the selected one clears it
+// (defaults: the generic glyph, DEFAULT_HABIT_COLOR).
 
 import { Pressable, Text, View } from 'react-native';
 import { HABIT_ICON_SET, HabitIconGlyph } from '@/ui/habitIcons';
@@ -17,7 +11,7 @@ export interface HabitAppearancePickerProps {
   onIconChange: (icon: string | null) => void;
   color: string | null;
   onColorChange: (color: string | null) => void;
-  /** Accent color of the selected icon — the default habit color if none is selected. */
+  /** Tint of the icons: the chosen color or the default. */
   previewColor: string;
   colors: Colors;
   styles: HabitFormStyles;

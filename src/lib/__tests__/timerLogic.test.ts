@@ -1,7 +1,5 @@
-// Tests for the timer's pure time math. Pinning the `now` parameter verifies
-// the wall-clock behavior deterministically — including time elapsed while
-// the app is closed, the target boundary, turning the clock back, and the
-// midnight-rollover decision.
+// Timer math with `now` pinned: time passing while closed, the target, a clock
+// turned back, midnight.
 
 import {
   commitDelta,
@@ -65,9 +63,7 @@ describe('commitDelta', () => {
   });
 
   it('GECE YARISI KARARI: 23:50 → 00:20 seansının tamamı tek delta olarak döner (başlangıç gününe yazılır)', () => {
-    // Decision: the session is recorded on the day it started (a.date is
-    // fixed). The full 30 minutes is a single piece; it isn't split at
-    // midnight rollover, and isn't clamped at the target either.
+    // All 30 minutes go to the starting day, unsplit and unclamped.
     const a = timer({ date: '2026-07-08' }); // assume it started at 23:50
     expect(commitDelta(a, T0 + 30 * 60_000)).toBe(1800);
     expect(a.date).toBe('2026-07-08'); // the date field doesn't change — always the starting day
@@ -91,10 +87,7 @@ describe('isFinished', () => {
   });
 });
 
-// Restoring after process death. The wall-clock model is correct while the
-// app is OPEN (the user can choose to exceed the target), but while the
-// process was dead the timer wasn't really running during that gap — these
-// two functions represent that difference.
+// Restoring after the process died: the wall clock no longer tells the truth.
 describe('isStaleSession', () => {
   it('aynı gün + hedef dolmamış: seans sürüyor sayılır', () => {
     expect(isStaleSession(timer(), '2026-07-08', T0 + 5 * 60_000)).toBe(false);
@@ -111,11 +104,7 @@ describe('isStaleSession', () => {
 
 describe('restoreCommitDelta', () => {
   it('İKİ GÜN KAPALI KALAN SEANS: 48 saat değil, hedefe kalan kadarı yazılır', () => {
-    // This was exactly the bug that got fixed: if a session with a 20-minute
-    // target was started in the evening, the app was killed, and it's
-    // reopened two days later, the ENTIRE elapsed time used to be written to
-    // the day the session started (~172800 sec). Since the entry landed on a
-    // past day, it couldn't even be undone with "Reset".
+    // Reopened two days later: must not book ~172800 seconds on the starting day.
     const a = timer();
     expect(commitDelta(a, T0 + 2 * DAY_MS)).toBe(2 * 86_400); // raw wall clock: 48 hours
     expect(restoreCommitDelta(a, T0 + 2 * DAY_MS)).toBe(20 * 60); // written: capped at the target

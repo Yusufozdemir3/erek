@@ -1,12 +1,7 @@
-// The setup wizard: a guided, step-by-step first run (look → first habit, task
-// and goal → notifications → widget → account), replacing the old 4-slide
-// intro. Every step can be skipped on its own and the whole thing can be
-// skipped at any point; nothing is mandatory and everything it sets can be
-// changed later. It runs on first launch (OnboardingGate) and again from
-// Profile › Setup wizard (app/setup.tsx).
-//
-// This file is the shell (navigation, progress, skip logic, closing work); the
-// pages themselves are in WizardSteps.tsx and the pure parts in wizardLogic.ts.
+// The setup wizard's shell (navigation, progress, skipping, closing work): look →
+// first habit, task, goal → notifications → widget → account. Every step and
+// the whole wizard can be skipped. Runs on first launch (OnboardingGate) and
+// from Profile › Setup wizard. Pages: WizardSteps.tsx; pure parts: wizardLogic.ts.
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
@@ -28,10 +23,12 @@ import {
   WelcomeStep,
   WidgetStep,
   type StepProps,
+  type WizardForm,
 } from './WizardSteps';
 import { makeWizardStyles } from './wizardStyles';
 import {
   buildSteps,
+  continueBlocked,
   progress,
   SKIPPABLE,
   type Created,
@@ -68,6 +65,7 @@ export function SetupWizard({ onDone }: Props) {
   const [outcomes, setOutcomes] = useState<Outcomes>({});
   const [created, setCreated] = useState<Created>({});
   const [finishing, setFinishing] = useState(false);
+  const [form, setForm] = useState<WizardForm | null>(null);
   const maxIndex = useRef(0);
   const scroll = useRef<ScrollView>(null);
 
@@ -76,6 +74,7 @@ export function SetupWizard({ onDone }: Props) {
   const isLast = index === steps.length - 1;
   const step = progress(steps, index);
   const completed = outcomes[id] === 'done';
+  const blocked = continueBlocked(form, completed);
 
   const markDone = useCallback((s: StepId) => setOutcomes((o) => (o[s] === 'done' ? o : { ...o, [s]: 'done' })), []);
   const onCompleted = useCallback(() => markDone(id), [id, markDone]);
@@ -94,9 +93,12 @@ export function SetupWizard({ onDone }: Props) {
     scroll.current?.scrollTo({ y: 0, animated: false });
   };
 
-  // "Continue" on a page where nothing was done counts as skipping it.
+  // "Continue" saves a filled-in form first (so nothing typed is lost); on a
+  // page where nothing was done it counts as skipping it.
   const next = () => {
-    if (SKIPPABLE.has(id) && outcomes[id] === undefined) setOutcomes((o) => ({ ...o, [id]: 'skipped' }));
+    if (blocked) return;
+    if (form?.ready) form.submit();
+    else if (SKIPPABLE.has(id) && outcomes[id] === undefined) setOutcomes((o) => ({ ...o, [id]: 'skipped' }));
     go(index + 1);
   };
   const skipStep = () => {
@@ -107,9 +109,8 @@ export function SetupWizard({ onDone }: Props) {
   const finish = async (skippedAll: boolean) => {
     if (finishing) return;
     setFinishing(true);
-    // Reminders of what was created here were only saved, not scheduled — the
-    // notification page may have just asked for the permission they need.
-    // Skipping everything created nothing, so there is nothing to schedule.
+    // Reminders made here were only saved; schedule them now that the
+    // notification page may have granted permission.
     if (!skippedAll && (await notificationPermission()).granted) {
       await rescheduleEverything(user.id).catch(() => {});
     }
@@ -117,10 +118,10 @@ export function SetupWizard({ onDone }: Props) {
     onDone({ skippedAll, accountSeen: accountAt >= 0 && maxIndex.current >= accountAt });
   };
 
-  const props: StepProps = { userId: user.id, onCompleted, onCreated };
+  const props: StepProps = { userId: user.id, onCompleted, onCreated, registerForm: setForm };
   const signedIn = !!authUser && !authUser.isAnonymous;
 
-  let page: JSX.Element;
+  let page: React.JSX.Element;
   switch (id) {
     case 'welcome':
       page = <WelcomeStep />;
@@ -214,10 +215,11 @@ export function SetupWizard({ onDone }: Props) {
             </Pressable>
           )}
           <Pressable
-            style={styles.nextBtn}
+            style={[styles.nextBtn, blocked && styles.primaryBtnOff]}
             onPress={isLast ? () => finish(false) : next}
-            disabled={finishing}
+            disabled={finishing || blocked}
             accessibilityRole="button"
+            accessibilityState={{ disabled: finishing || blocked }}
             accessibilityLabel={isLast ? t('wizard.finish') : isFirst ? t('wizard.start') : t('wizard.next')}
           >
             <Text style={styles.nextText}>{isLast ? t('wizard.finish') : isFirst ? t('wizard.start') : t('wizard.next')}</Text>

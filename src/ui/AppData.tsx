@@ -1,7 +1,6 @@
-// App-wide shared data context.
-// Its only job: run initDataLayer() ONCE at launch and expose the active user
-// (anonymous or with an account) to every screen. Screens get user.id from
-// here, then call repository functions directly - no SQL leaks into the context.
+// App-wide context: runs initDataLayer() once at launch and exposes the local
+// user, the account, the sync state and a few shared UI values. Screens call
+// the repositories themselves; no SQL lives here.
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
@@ -17,66 +16,46 @@ import { runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
+import { usePlusState } from '@/plus/plusStore';
 import { drainWidgetQueue, refreshWidget } from '@/widget/widgetData';
 import { onWidgetAction } from '@/widget/widgetQueue';
 
 interface AppData {
   user: User;
-  // Re-reads the local user from the DB (e.g. so the email updates after
-  // linking an account). Refreshes the user reference held by screens.
+  // Re-reads the local user (e.g. its email after signing in).
   refreshUser: () => void;
-  // The signed-in Google/Supabase account (null = no session, e.g. never
-  // signed in or fully signed out). Kept here (not just in Profile's own
-  // state) because the header's ProfileButton shows the account's avatar on
-  // every screen. Callers re-fetch this after sign-in/out/delete so the
-  // avatar updates without waiting for Profile to regain focus.
+  // The signed-in account (null = none). Kept here because the header's
+  // ProfileButton shows its avatar on every screen; callers refresh it after
+  // sign-in, sign-out and deletion.
   authUser: AuthUser | null;
   refreshAuthUser: () => void;
-  // Increments whenever data is added from somewhere off-screen (e.g. the
-  // central ＋ menu). List hooks put this in their reload dependency, so the
-  // visible list refreshes even without a focus change (closing a modal on
-  // top doesn't fire a focus event).
+  // Bumped when data changes off-screen (the ＋ menu, a widget tap). List hooks
+  // reload on it, since closing a modal fires no focus event.
   dataVersion: number;
   notifyDataChanged: () => void;
-  // The day currently being viewed on the "Today" screen ("YYYY-MM-DD"). Since
-  // the central ＋ menu (AddSheet) lives in the tab bar, it doesn't know which
-  // day is displayed; sharing it here lets a new task default to the viewed day.
+  // The day shown on Today, so the ＋ menu can default a new task to it.
   selectedDate: string;
   setSelectedDate: (d: string) => void;
-  // — SYNC STATE —
-  // The result of the last round (automatic or manual, doesn't matter). The
-  // Profile screen shows this; the reason it's kept HERE is that automatic
-  // rounds run even without the screen open: the launch sync's result used to
-  // not be written anywhere, and a persistent error (RLS conflict, expired
-  // session, stale cloud schema) NEVER surfaced to the user — there was no way
-  // to find out they had no backup.
+  // — Sync state, shared by automatic and manual rounds so a persistent error
+  // (RLS conflict, expired session, stale cloud schema) reaches Profile.
   syncResult: SyncResult | null;
-  // The time of the last SUCCESSFUL sync (epoch ms). Persisted across app
-  // restarts (AsyncStorage). null = this device has never had a successful sync.
+  // Last SUCCESSFUL sync (epoch ms), persisted; null = never.
   lastSyncAt: number | null;
   syncing: boolean;
-  // Manual sync (the button in Profile, the first round after sign-in). Updates
-  // the SAME state as automatic rounds. Returns the result because some callers
-  // (LoginScreen) branch their flow on it — but they must all go through here so
-  // the "last backup" timestamp and error state stay collected in one place.
+  // A manual round; returns the result for callers that branch on it.
   syncNow: () => Promise<SyncResult>;
-  // Forgets the sync status (result + "last backup" time). Called when the
-  // device stops belonging to an account (sign-out, account deletion):
-  // otherwise "Last backup: 10:42" would keep describing an account that's gone.
+  // After sign-out or account deletion, so "Last backup" doesn't describe a gone account.
   clearSyncStatus: () => void;
 }
 
 const LAST_SYNC_KEY = 'sync:lastSuccessAt';
 
-// We don't want to sync EVERY time the app comes to the foreground (needless
-// traffic/battery for a user switching between apps); but we also don't want
-// to keep data stuck on the device during a session left open for hours. The
-// balance: at most once per this interval.
+// Foreground sync at most this often: not on every app switch, but a session
+// left open for hours still gets backed up.
 const FOREGROUND_SYNC_MIN_GAP_MS = 5 * 60 * 1000;
 
 const AppDataContext = createContext<AppData | null>(null);
 
-// Screens access the user via this hook. Throws early if called outside the Provider.
 export function useAppData(): AppData {
   const value = useContext(AppDataContext);
   if (!value) {
@@ -85,8 +64,7 @@ export function useAppData(): AppData {
   return value;
 }
 
-// For components that also render outside the provider (e.g. shared form
-// fields under test): null instead of throwing.
+// For components that may render outside the provider (e.g. form fields in tests).
 export function useOptionalAppData(): AppData | null {
   return useContext(AppDataContext);
 }
@@ -94,6 +72,7 @@ export function useOptionalAppData(): AppData | null {
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const { colors } = useTheme();
   const { t } = useI18n();
+  const plusState = usePlusState();
   const [user, setUser] = useState<User | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,45 +81,31 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
-  // The last sync ATTEMPT (successful or not) — used by the foreground
-  // trigger's interval gate. Kept separate from lastSyncAt: in a setup that
-  // always errors, lastSyncAt would never advance and the gate would never
-  // close (retrying on every focus).
+  // Last sync ATTEMPT, for the foreground gate: with lastSyncAt alone, a setup
+  // that always fails would retry on every focus.
   const lastSyncAttemptRef = useRef(0);
-  // Which DAY reminders were last rescheduled on ("YYYY-MM-DD").
-  // Their validity is date-dependent (habit start/end, task due date, goal
-  // deadline) but OS triggers don't know dates; so they need to be rebuilt once
-  // per day rollover. A DAY gate, not a duration one: everything that needs
-  // fixing is tied to the calendar day.
+  // The day reminders were last rebuilt: their validity is date-bound, so they
+  // are rebuilt once per day rollover.
   const lastRescheduleDayRef = useRef<string | null>(null);
 
   const notifyDataChanged = useCallback(() => setDataVersion((v) => v + 1), []);
 
-  // The single sync entry point: launch, coming to foreground, and the button
-  // in Profile all go through here — so state stays collected in one place and
-  // the three paths can never end up inconsistent.
+  // Launch, foreground and the Profile button all sync through here.
   const syncUser = useCallback(async (userId: string): Promise<SyncResult> => {
     if (!ACCOUNTS_ENABLED) return { status: 'disabled' };
     lastSyncAttemptRef.current = Date.now();
     setSyncing(true);
     try {
       const r = await runSync(userId);
-      // 'busy' isn't an error (see SyncResult): it means another round is in
-      // progress. Must NOT overwrite state — otherwise the result of a
-      // manually started round, or a real error on screen, would get wiped out
-      // by a colliding automatic round.
+      // Another round is running: keep its (or a real error's) state on screen.
       if (r.status === 'busy') return r;
       setSyncResult(r);
       if (r.status === 'ok') {
         const at = r.at ?? Date.now();
         setLastSyncAt(at);
         AsyncStorage.setItem(LAST_SYNC_KEY, String(at)).catch(() => {});
-        // The pull changed local rows (another device's edits landed): the OS
-        // notification queue, the open screen and the widget were all built
-        // from the old state. Without this, a habit deleted on another device
-        // kept its daily reminder here, and one added there wasn't scheduled
-        // until the next cold start / day rollover. Pull is idempotent, so
-        // pulled > 0 only when something really changed.
+        // Another device's changes landed: reminders, the open screen and the
+        // widget were built from the old rows.
         if ((r.pulled ?? 0) > 0) {
           rescheduleEverything(userId);
           setDataVersion((v) => v + 1);
@@ -159,8 +124,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Last successful sync timestamp: the answer to "how old is my backup"
-    // must survive an app restart too.
     AsyncStorage.getItem(LAST_SYNC_KEY).then((v) => {
       const n = v ? Number(v) : NaN;
       if (Number.isFinite(n)) setLastSyncAt(n);
@@ -168,38 +131,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Sets up the schema and guarantees an anonymous user. Runs only on first launch.
     initDataLayer()
       .then(({ user }) => {
         setUser(user);
-        // On launch, reschedule existing reminders based on the DB (a device
-        // reboot / app update may have cleared them). During the migration
-        // from the old single-reminder schema to multiple reminders, the OS
-        // notification queue is nuked once on first launch (see the file-header
-        // comment) — right after that, the reschedule* call below rebuilds
-        // everything from scratch with the new schema, based on current DB
-        // state. Exits silently if permission is missing.
+        // Rebuild reminders from the DB (a reboot or update can clear them),
+        // after the one-time multi-reminder migration.
         migrateToMultiReminderIfNeeded()
           .catch(() => {})
           .finally(() => {
             lastRescheduleDayRef.current = todayDate();
             rescheduleEverything(user.id);
           });
-        // Sync once in the background on launch (silently skipped if not
-        // configured). IF THE USER ISN'T SIGNED IN THIS CALL SENDS NOTHING:
-        // runSync's first step asks ensureSignedIn, which returns null when
-        // there's no session, and the round ends with 'disabled' (an anonymous
-        // session is NEVER opened — see sync/auth.ts). So data only ever leaves
-        // the device once the user has knowingly signed into an account.
-        // The result is written to syncResult (Profile shows it) — the .catch
-        // here used to be DEAD CODE: runSync never throws, it returns the
-        // error; so a persistent sync failure never reached anywhere.
+        // Sends nothing unless the user signed in (sync/auth.ts).
         syncUser(user.id);
         refreshAuthUser();
-        // Cold launch — one of the TWO triggers for the full-screen interstitial
-        // ad (the other is AppState 'active' below — see the file-header
-        // comment in lib/ads.ts). It enforces its own frequency cap, no extra
-        // gate needed here.
+        // Cold start is one of the two ad triggers (lib/ads.ts).
         maybeShowInterstitial();
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
@@ -213,23 +159,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     currentAuthUser().then(setAuthUser);
   }, []);
 
-  // Refresh the home-screen widget once the user is ready and on every data
-  // change. dataVersion increments via notifyDataChanged (adding via the ＋
-  // menu, a timer commit, a goal update…) → this effect covers all of them.
-  // Habit check-offs on the Today screen use a local reload, so there's a
-  // separate call there too. refreshWidget is a silent no-op outside Android and in Expo Go.
-  // The theme is a trigger too: the snapshot carries the colours, so switching
-  // light/dark or the accent in Appearance must repaint the widgets right away,
-  // not at the next time the app comes to the foreground.
+  // Repaint the home-screen widgets on every data change and when the theme
+  // changes (the snapshot carries its colors). Today's check-offs reload
+  // locally and refresh the widget themselves.
   useEffect(() => {
     if (user) refreshWidget(user.id);
-  }, [user, dataVersion, colors.bg, colors.primary]);
+  }, [user, dataVersion, colors.bg, colors.primary, plusState.plus]);
 
-  // Taps on the home-screen widgets (check-off / +1) are queued by the
-  // headless handler, which can't use SQLite (see widget/widgetQueue.ts).
-  // Written into SQLite once the user is ready, on every foreground, and right
-  // away when a tap arrives while the app's JS is alive. A drain that changed
-  // something bumps dataVersion → the screens reload and the widget refreshes.
+  // Widget taps are queued by the headless handler, which can't use SQLite
+  // (widget/widgetQueue.ts). They're written once the user is ready, on every
+  // foreground, and right away while the app is alive.
   useEffect(() => {
     if (!user) return;
     const drain = () => {
@@ -250,16 +189,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, notifyDataChanged]);
 
-  // Also refresh when the app comes to the foreground: time spent in the
-  // background, a day rollover, and theme/language changes (made in Profile)
-  // should reflect on the widget on the next open.
-  //
-  // ALSO SYNC: sync's ONLY automatic trigger used to be this provider's mount,
-  // i.e. a COLD launch. Since Android keeps the process alive for days, a user
-  // who opens the app daily could go days without `runSync` ever running;
-  // everything marked during that time would stay device-only (lost if the
-  // phone is lost) and a second device would never update — "cloud backup"
-  // wouldn't hold up in practice. See FOREGROUND_SYNC_MIN_GAP_MS for the interval gate.
+  // On every foreground: widget, sync (Android keeps the process alive for
+  // days, so launch alone isn't enough), the ad gate, and reminders after a
+  // day rollover.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s !== 'active' || !user) return;
@@ -267,14 +199,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       if (Date.now() - lastSyncAttemptRef.current >= FOREGROUND_SYNC_MIN_GAP_MS) {
         syncUser(user.id);
       }
-      // Coming to foreground — the second trigger for the interstitial ad (see
-      // the cold-launch call above). DELIBERATELY not on habit/task
-      // COMPLETION — see the file-header comment in lib/ads.ts.
       maybeShowInterstitial();
-      // If the day changed, rebuild reminders from scratch for the current
-      // date: a habit that ended yesterday should go quiet, one starting today
-      // should be scheduled. Since the process can stay alive for days, doing
-      // this only at launch wasn't enough (see the header comment on rescheduleEverything).
       const today = todayDate();
       if (lastRescheduleDayRef.current !== today) {
         lastRescheduleDayRef.current = today;
@@ -284,10 +209,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [user, syncUser]);
 
-  // Memoize the context value: producing a new object on every render was
-  // forcing ALL consumers (every screen, every list hook) to re-render even
-  // for fields that didn't change. Most hooks (via useCallback) are already
-  // stable; what actually changes is sync state and the selected day.
+  // Memoized so consumers only re-render when a field actually changes.
   const value = useMemo<AppData | null>(
     () =>
       user
@@ -332,8 +254,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // value is null whenever user is null (the useMemo above) — the two move
-  // together, so null is never passed to the provider past this point.
+  // value is null exactly when user is.
   if (!user || !value) {
     return (
       <View style={[styles.center, { backgroundColor: colors.bg }]}>
@@ -346,7 +267,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  // Colors are supplied inline at render time based on the theme (backgroundColor/color).
   center: {
     flex: 1,
     alignItems: 'center',

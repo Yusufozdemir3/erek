@@ -1,7 +1,6 @@
-// A friend checking off a task (or one of its subtasks) shared WITH them. These
-// are the recipient's ONLY write paths (tasks/subtasks RLS keeps UPDATE
-// owner-only): the server flips completion and nothing else, then returns the
-// row's new values so the local copy can mirror them without being queued for push.
+// A friend checking off a task (or subtask) shared WITH them — their only write
+// path (RLS keeps UPDATE owner-only). The server flips completion and returns
+// the new values, which the local copy mirrors without being queued for push.
 
 import { supabase } from './supabase';
 import { SharingError, toSharingError } from './sharingErrors';

@@ -1,7 +1,5 @@
-// "Habits" tab — all habits, today's check mark, streak, and the last 7 days'
-// history. Tapping the box checks off/undoes today.
-// No adding here: that happens from the ＋ menu in the tab bar.
-// Architecture rule: no SQL; only habitRepo is called.
+// Habits tab: every habit with today's state, streak and the last 7 days.
+// Adding happens from the ＋ menu.
 
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -42,15 +40,14 @@ export default function HabitsScreen() {
   const styles = makeStyles(colors);
   const { user } = useAppData();
   const guide = useFeatureGuide('habits');
-  const [editing, setEditing] = useState<Habit | null>(null); // null = panel closed
-  // Only one card's swipe actions may be open at a time.
+  const [editing, setEditing] = useState<Habit | null>(null);
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   const { today, habits: allHabits, reload } = useHabitsData(user.id);
   const [query, setQuery] = useState('');
   const words = useMemo(() => queryWords(query, lang), [query, lang]);
   const searching = words.length > 0;
-  // A typed search stays visible even if the list later shrinks below the threshold.
+  // A typed search stays visible even if the list shrinks.
   const showSearch = allHabits.length >= SEARCH_MIN_HABITS || query.length > 0;
   const habits = useMemo(
     () => (searching ? allHabits.filter((h) => matchesWords(h.title, words, lang)) : allHabits),
@@ -62,8 +59,7 @@ export default function HabitsScreen() {
     shared_.reload();
   });
 
-  // Weekday letters for the 7-day squares (oldest → today); the squares used to
-  // be unlabeled, so you couldn't tell which square was which day.
+  // Weekday letters under the 7-day squares (oldest → today).
   const weekLabels = lastDays(7).map((d) =>
     new Date(`${d}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], { weekday: 'narrow' })
   );
@@ -83,10 +79,7 @@ export default function HabitsScreen() {
   const undo = useUndoNotice();
 
   const removeHabit = (h: HabitListItem) => {
-    // habitRepo.softDelete cleans up the reminder ROWS; what's cancelled here
-    // is the trigger sitting in the OS's notification queue. cancelByPrefix
-    // reads the native list, so it can reject — if not caught this becomes an
-    // "unhandled rejection".
+    // softDelete removed the reminder rows; this cancels the OS triggers (may reject).
     habitRepo.softDelete(h.id);
     cancelHabitReminders(h.id).catch((e) =>
       console.warn('[Notification] Failed to cancel reminders for deleted habit:', e)
@@ -148,11 +141,10 @@ export default function HabitsScreen() {
               editA11yLabel={t('common.editA11y', { title: h.title })}
               deleteA11yLabel={t('common.deleteA11y', { title: h.title })}
             >
-            {/* marginBottom removed (0) — see the same fix comment in tasks.tsx. */}
+            {/* spacing on the wrapper, see tasks.tsx */}
             <View style={[shared.card, styles.habitCard, styles.noMargin]}>
               <View style={styles.habitTop}>
-                {/* For a numeric habit the circle is only a status indicator
-                    (not tappable); for a binary habit, tapping the circle checks off today. */}
+                {/* Binary habits check off today here; others only show status. */}
                 {h.target != null ? (
                   <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                 ) : (
@@ -166,7 +158,6 @@ export default function HabitsScreen() {
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                   </Pressable>
                 )}
-                {/* Tapping the title opens the edit panel */}
                 <Pressable
                   style={styles.titleArea}
                   onPress={() => openEdit(h)}
@@ -187,8 +178,7 @@ export default function HabitsScreen() {
                     ]}
                   />
                 </Pressable>
-                {/* No counter on this tab: amounts are entered on Today. Numeric/
-                    timer habits show today's progress as plain text instead. */}
+                {/* Amounts are entered on Today; here only as text. */}
                 {h.target != null ? (
                   <Text style={[styles.progress, h.completedToday && styles.progressDone]}>
                     {h.kind === 'timer'
@@ -199,7 +189,7 @@ export default function HabitsScreen() {
                   h.streak > 0 && <StreakBadge streak={h.streak} />
                 )}
               </View>
-              {/* Last 7 days — tapping it opens the stats screen */}
+              {/* Opens the stats screen */}
               <Pressable
                 style={styles.week}
                 onPress={() => router.push({ pathname: '/habit/[id]', params: { id: h.id } })}

@@ -1,12 +1,7 @@
-// What the user sees when a screen crashes while rendering, instead of the app
-// closing. Used as the root route's ErrorBoundary (app/_layout.tsx), which
-// expo-router mounts OUTSIDE our providers — so this screen needs nothing from
-// them: system light/dark, and its own three-language text picked from the
-// device language.
-//
-// The error is reported once (technical report only, see lib/sentryScrub.ts).
-// "Try again" re-renders the route; if it keeps failing the user can still
-// close the app — their data is untouched (nothing was written by the crash).
+// Shown instead of closing the app when a screen crashes while rendering — the
+// root route's ErrorBoundary. expo-router mounts it OUTSIDE our providers, so
+// it uses the system theme and its own three-language text. The error is
+// reported once (sentryScrub.ts); data is untouched, "Try again" re-renders.
 
 import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';

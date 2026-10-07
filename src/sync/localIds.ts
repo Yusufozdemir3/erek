@@ -1,29 +1,17 @@
-// LOCAL IDENTITY REGENERATION — the heart of the "merge" (fork) flow.
+// Gives every local data row a new id — the core of the account "merge".
+// Ids don't change with the account, so pushing rows that already belong to
+// another account's cloud is an UPDATE that RLS rejects, wedging sync. With new
+// ids the push INSERTS copies and never touches the old account's rows.
 //
-// THE PROBLEM (seen in the field, 2026-07-23): ids are generated on the
-// device and DON'T change when the account changes. If the same device's data
-// was previously pushed to account A (or an anonymous session), and a push is
-// then attempted under account B, Postgres returns:
-//   "new row violates row-level security policy (USING expression)"
-// Because upsert(onConflict: id) tries to UPDATE the existing row; that row
-// belongs to a different uid, and RLS's USING clause hides it from B. Sync
-// permanently locks up on that table — the tables behind it never get their turn.
-//
-// THE FIX: local rows get a NEW id. That makes the push an INSERT instead of
-// an update; the old account's cloud rows are never touched, and the conflict
-// becomes mathematically impossible. Local data is preserved exactly (only its ids change).
-//
-// FK ORDER: the schema has NO ON UPDATE CASCADE (see migration001), so
-// changing a parent's id would break its children. That's why constraints are
-// turned off FOR THE DURATION OF THE TRANSACTION — in SQLite, `PRAGMA
-// foreign_keys` has no effect INSIDE a transaction, so the order is: PRAGMA
-// OFF → BEGIN → updates → COMMIT → PRAGMA ON → verify with foreign_key_check.
+// The schema has no ON UPDATE CASCADE, so references are rewritten by hand
+// with foreign keys off. SQLite ignores that PRAGMA inside a transaction:
+// PRAGMA OFF → BEGIN → updates → COMMIT → PRAGMA ON → foreign_key_check.
 
 import { getDb } from '@/db/database';
 import { newId } from '@/lib/helpers';
 
-// The tables whose ids get regenerated, and the columns that POINT TO them.
-// reminders.entity_id points to three possible parents; entity_type disambiguates.
+// Tables whose ids are regenerated, and the columns pointing at them
+// (reminders.entity_id has three possible parents, told apart by entity_type).
 interface IdTable {
   table: string;
   refs: { table: string; column: string; where?: string }[];
@@ -53,8 +41,7 @@ const ID_TABLES: IdTable[] = [
       { table: 'reminders', column: 'entity_id', where: "entity_type = 'task'" },
     ],
   },
-  // Child tables' OWN ids also get regenerated: they too get pushed to the
-  // cloud with their own ids and can hit the same conflict.
+  // Children's own ids too: they're pushed under their own ids as well.
   { table: 'habit_logs', refs: [] },
   { table: 'subtasks', refs: [] },
   { table: 'goal_milestones', refs: [] },
@@ -65,21 +52,17 @@ const ID_TABLES: IdTable[] = [
 export interface ReassignResult {
   /** Table name -> number of rows whose id changed. */
   counts: Record<string, number>;
-  /** Old id -> new id (parent tables only; for the caller to map if it wants to). */
+  /** Old habit id -> new habit id. */
   habitIdMap: Map<string, string>;
 }
 
-// Assigns a new id to every local data row and updates all internal
-// references. The users table is NOT touched (it isn't synced, it's the device identity).
-//
-// This operation doesn't change the local DATA, only its ids. The caller
-// should follow up with prepareFullResync + runSync to push the data to the new account as a copy.
+// Only ids change, never the data; users (the device identity) is untouched.
+// Follow with prepareFullResync + runSync to push the copy.
 export function reassignLocalIds(): ReassignResult {
   const db = getDb();
   const counts: Record<string, number> = {};
   const habitIdMap = new Map<string, string>();
 
-  // Constraints must be turned off outside a transaction (an SQLite rule).
   db.execSync('PRAGMA foreign_keys = OFF;');
   db.execSync('BEGIN;');
   try {
@@ -109,11 +92,10 @@ export function reassignLocalIds(): ReassignResult {
   }
   db.execSync('PRAGMA foreign_keys = ON;');
 
-  // We ran with constraints off: EXPLICITLY verify the result is consistent.
-  // (A silent broken reference turns into very hard-to-diagnose bugs later.)
+  // We ran with constraints off: verify nothing was left dangling.
   const broken = db.getAllSync<Record<string, unknown>>('PRAGMA foreign_key_check;');
   if (broken.length > 0) {
-    throw new Error(`Kimlik yenileme sonrası ${broken.length} kırık referans bulundu`); // "N broken references found after id regeneration"
+    throw new Error(`Kimlik yenileme sonrası ${broken.length} kırık referans bulundu`);
   }
 
   return { counts, habitIdMap };

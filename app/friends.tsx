@@ -1,13 +1,8 @@
-// Friends screen (modal, opened from the "Friends" row on Profile): the people
-// you're connected with, plus ONE "Add a friend" card that holds both halves of
-// connecting (share your invite code / enter a friend's code). What friends
-// shared with you no longer lives here — it shows up in the Habits and Goals tabs
-// (see ui/SharedLists.tsx), like shared tasks do in the Tasks tab.
-// The row only shows while signed in; the signed-out branch below is just a
-// fallback for a deep link or signing out while this screen is open.
-// Connections are online-only by design (see src/sync/friends.ts): the list is
-// shown from cache first, then refreshed; every network call is caught here
-// because an uncaught rejection would close the app in a release build.
+// Friends (opened from Profile): your connections and one "Add a friend" card
+// (share your invite code / enter a friend's). What friends share with you
+// shows in the Habits, Goals and Tasks tabs instead. Signed-out is only a
+// fallback (a deep link, or signing out while here). Online-only: cache first,
+// then refreshed, every call caught (an uncaught rejection closes a release build).
 
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -42,6 +37,9 @@ import {
 } from '@/sync';
 import { ensurePermission } from '@/lib/notifications';
 import { syncPushRegistration } from '@/lib/pushRegistration';
+import { canAddFriend } from '@/plus/plusLogic';
+import { promptPlus } from '@/plus/openPlus';
+import { useFeaturesUnlocked } from '@/plus/plusStore';
 import { useAppData } from '@/ui/AppData';
 import { FeatureGuide } from '@/ui/guide/FeatureGuide';
 import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
@@ -72,6 +70,7 @@ export default function FriendsScreen() {
   const guide = useFeatureGuide('friends', signedIn);
 
   const [friends, setFriends] = useState<Friend[]>([]);
+  const unlocked = useFeaturesUnlocked();
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [invite, setInvite] = useState<Invite | null>(null);
@@ -146,6 +145,10 @@ export default function FriendsScreen() {
   const redeem = async () => {
     const normalized = normalizeInviteCode(code);
     if (normalized.length !== INVITE_CODE_LENGTH || redeemBusy) return;
+    if (!canAddFriend(unlocked, friends.length)) {
+      promptPlus('friends', t);
+      return;
+    }
     setRedeemBusy(true);
     try {
       const friend = await redeemInvite(normalized);

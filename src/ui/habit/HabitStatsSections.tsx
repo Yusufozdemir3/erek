@@ -1,15 +1,10 @@
-// Visual sections of the habit stats screen — SPLIT OUT of app/habit/[id].tsx
-// (audit finding H1: the screen file was 750 lines and ~390 of that was
-// already standalone presentational components).
-//
-// All of them are read-only: they don't read data or perform mutations; they
-// just render the given props. The `styles` prop comes from the screen's
-// style factory (habitStatsStyles.ts) so theme/sizing stays managed from a
-// single place.
+// Presentational sections of the habit stats screen: they only render props;
+// `styles` comes from habitStatsStyles.ts.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
 import type { Habit } from '@/db';
 import type { BucketTotal, GoalPeriodStat, HabitStats } from '@/ui/useHabitStats';
 import type { CalendarDay } from '@/ui/useHabitCalendar';
@@ -62,32 +57,42 @@ export function StatCard({
   );
 }
 
-// Small Day/Week/Month tab selector — used by both the Score and History
-// sections (the periodRow/periodBtn styles are SHARED with the Completion chart).
+// The Day/Week/Month tabs of the Score and History sections.
 export function PeriodTabs({
   period,
   onChange,
   t,
   styles,
+  locked = [],
+  onLocked,
 }: {
   period: ChartPeriod;
   onChange: (p: ChartPeriod) => void;
   t: (key: string) => string;
   styles: Styles;
+  // Periods that need Plus: they show a lock and call onLocked instead.
+  locked?: readonly ChartPeriod[];
+  onLocked?: () => void;
 }) {
   return (
     <View style={styles.statsPeriodRow}>
       {PERIOD_OPTIONS.map((p) => {
         const sel = period === p.key;
+        const isLocked = locked.includes(p.key);
         return (
           <Pressable
             key={p.key}
             style={[styles.periodBtn, styles.statsPeriodBtn, sel && styles.periodBtnSel]}
-            onPress={() => onChange(p.key)}
+            onPress={() => (isLocked ? onLocked?.() : onChange(p.key))}
             accessibilityRole="tab"
             accessibilityState={{ selected: sel }}
+            accessibilityLabel={isLocked ? `${t(p.labelKey)}. ${t('plus.lockedA11y')}` : undefined}
           >
-            <Text style={[styles.periodText, sel && styles.periodTextSel]}>{t(p.labelKey)}</Text>
+            <Text style={[styles.periodText, sel && styles.periodTextSel]}>
+              {t(p.labelKey)}
+              {isLocked ? ' ' : ''}
+            </Text>
+            {isLocked && <Feather name="lock" size={11} color="#9ca3af" />}
           </Pressable>
         );
       })}
@@ -112,20 +117,13 @@ export function HistoryBars({
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const didAutoScroll = useRef(false);
-  // The component doesn't remount when the period (Day/Week/Month) changes,
-  // so the flag stayed set and the "latest data on the right" auto-scroll got
-  // skipped — the user would tap a tab and end up looking at the OLDEST of 30
-  // buckets. The same fix exists in the Score chart (see ScoreLineChart).
+  // Scroll to the newest bucket again when the tab changes (no remount).
   useEffect(() => {
     didAutoScroll.current = false;
   }, [period, buckets.length]);
   const [containerWidth, setContainerWidth] = useState(0);
   const max = Math.max(1, ...buckets.map((b) => b.total));
-  // Column width: divide the screen into HISTORY_VISIBLE_COLS buckets. If
-  // there are FEWER buckets than that (e.g. only 4 weeks), the existing
-  // buckets fill the container — otherwise the bars stuck to the left edge
-  // and left an ugly gap on the right (same fix as in the Score chart, see
-  // ScoreLineChart).
+  // HISTORY_VISIBLE_COLS columns per screen; fewer buckets stretch to fill it.
   const colWidth = containerWidth > 0 ? containerWidth / Math.min(buckets.length, HISTORY_VISIBLE_COLS) : 0;
 
   return (
@@ -145,9 +143,7 @@ export function HistoryBars({
           <View style={styles.statsHistoryRow}>
             {buckets.map((b, i) => {
               const pct = b.total > 0 ? Math.max(6, Math.round((b.total / max) * 100)) : 0;
-              // Value text sits INSIDE the bar, near the top (user request:
-              // "have the amounts written inside the columns"). If the bar is
-              // too short to fit a line, the text moves ABOVE the bar.
+              // The value sits inside the bar's top, or above a bar too short for it.
               const barH = (HISTORY_TRACK_H * pct) / 100;
               const inside = barH >= HISTORY_VALUE_MIN_BAR;
               const valueTop = inside
@@ -172,8 +168,7 @@ export function HistoryBars({
                   {
                     width: colWidth,
                     top: valueTop,
-                    // Inside the bar the background is the habit color;
-                    // outside, and on a faded (partial) bar, the background is the card itself.
+                    // On the bar: contrast ink; above it or on a faded bar: the habit color.
                     color: inside && !b.partial ? inkOn(color) : color,
                   },
                 ]}
@@ -202,6 +197,8 @@ export function HabitDarkStatsCard({
   lang,
   t,
   styles,
+  lockedPeriods = [],
+  onLocked,
 }: {
   stats: HabitStats;
   habit: Habit;
@@ -210,6 +207,8 @@ export function HabitDarkStatsCard({
   lang: Lang;
   t: (key: string, params?: Record<string, string | number>) => string;
   styles: Styles;
+  lockedPeriods?: readonly ChartPeriod[];
+  onLocked?: () => void;
 }) {
   const GOAL_LABEL_KEY: Record<GoalPeriodStat['key'], string> = {
     today: 'stats.goalToday',
@@ -220,17 +219,12 @@ export function HabitDarkStatsCard({
   };
 
   const [scorePeriod, setScorePeriod] = useState<ChartPeriod>('day');
-  const [historyPeriod, setHistoryPeriod] = useState<ChartPeriod>('week');
+  const [historyPeriod, setHistoryPeriod] = useState<ChartPeriod>(lockedPeriods.includes('week') ? 'day' : 'week');
 
-  // The chart is now horizontally scrollable (see ScoreLineChart) — ALL
-  // existing buckets are shown, and whatever doesn't fit the screen is
-  // reached by scrolling; no separate window clipping is needed.
+  // Every bucket; the chart scrolls.
   const scoreBuckets = stats.series ? stats.series[scorePeriod] : [];
   const scoreUnit = t(PERIOD_UNIT_KEY[scorePeriod]);
-  // Label: just the day number, with the month name added once when the
-  // month changes (SAME logic as historyBarLabel — identical to the pattern
-  // in the "History" bars; user request: don't repeat the month at every
-  // point, don't clutter it).
+  // Labelled like the History bars (historyBarLabel).
   const scorePoints = scoreBuckets.map((b, i) => ({
     value: b.score,
     label: historyBarLabel(scorePeriod, b.date, i > 0 ? scoreBuckets[i - 1].date : null, lang),
@@ -273,7 +267,14 @@ export function HabitDarkStatsCard({
             <Text style={styles.statsTitle}>{t('stats.scoreTitle')}</Text>
             <Text style={styles.statsMeta}>{t('stats.scoreWindow', { n: scoreBuckets.length, unit: scoreUnit })}</Text>
           </View>
-          <PeriodTabs period={scorePeriod} onChange={setScorePeriod} t={t} styles={styles} />
+          <PeriodTabs
+            period={scorePeriod}
+            onChange={setScorePeriod}
+            t={t}
+            styles={styles}
+            locked={lockedPeriods}
+            onLocked={onLocked}
+          />
           {scoreBuckets.length > 0 && (
             <View style={{ marginTop: 10 }}>
               <ScoreLineChart
@@ -293,7 +294,14 @@ export function HabitDarkStatsCard({
           <View style={styles.statsHeadRow}>
             <Text style={styles.statsTitle}>{t('stats.historyTitle')}</Text>
           </View>
-          <PeriodTabs period={historyPeriod} onChange={setHistoryPeriod} t={t} styles={styles} />
+          <PeriodTabs
+            period={historyPeriod}
+            onChange={setHistoryPeriod}
+            t={t}
+            styles={styles}
+            locked={lockedPeriods}
+            onLocked={onLocked}
+          />
           {historyBuckets.length > 0 && (
             <HistoryBars
               buckets={historyBuckets}
@@ -310,9 +318,7 @@ export function HabitDarkStatsCard({
   );
 }
 
-// Month calendar: Monday-first week grid, day number in each cell. Future
-// days (not yet happened) share the same neutral look as "not scheduled" —
-// deliberately the same style so it doesn't need a separate legend entry.
+// Monday-first month grid. Future days look like unscheduled ones (no extra legend).
 export function MonthCalendar({
   weeks,
   color,

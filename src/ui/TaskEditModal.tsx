@@ -1,12 +1,6 @@
-// Task edit panel (a modal that centers the page).
-// Opens when a task is tapped on the "Today"/"Tasks" screen. Title, priority, due
-// date, and time fields live in the shared TaskForm component; this file is just
-// the modal shell + persistence (update/delete) and the subtask (checklist) section.
-// Note: title/priority/date are written on "Save"; subtasks are written
-// IMMEDIATELY (checklist behavior) — onChanged fires on every change so the
-// "1/3 subtasks" badge on the list behind it stays current. The creation side
-// (AddSheet) uses the same TaskForm but without the subtask section.
-// Architectural rule: no SQL - only taskRepo/subtaskRepo are called.
+// The task edit modal: TaskForm plus saving, deleting and the subtask section.
+// Fields are saved on "Save"; subtasks are written immediately, with
+// onChanged on each change so the list's "1/3" badge stays current.
 
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -25,7 +19,7 @@ import { useFriends } from '@/ui/sharedTaskUi';
 interface Props {
   task: Task | null; // null = panel closed
   onClose: () => void;
-  onChanged: () => void; // let the parent refresh the list after save/delete
+  onChanged: () => void;
 }
 
 export function TaskEditModal({ task, onClose, onChanged }: Props) {
@@ -36,7 +30,6 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const [newSubtask, setNewSubtask] = useState('');
   const friends = useFriends(true);
 
-  // Load subtasks for the selected task every time the panel opens.
   useEffect(() => {
     if (task) {
       setSubtasks(subtaskRepo.listByTask(task.id));
@@ -46,9 +39,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
   if (!task) return null;
 
-  // Auto-completes the parent task once all subtasks are done; if one is
-  // reopened (or a new incomplete subtask is added), reopens the parent too.
-  // This rule never kicks in for a task with no subtasks.
+  // All subtasks done completes the task; reopening or adding one reopens it.
   const syncParentCompletion = () => {
     const { done, total } = subtaskRepo.countForTask(task.id);
     if (total === 0) return;
@@ -59,20 +50,15 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
     if (shouldBeCompleted && !isCompleted) {
       taskRepo.setCompleted(task.id, true);
       notifySuccess();
-      // A recurring task may have advanced (still not completed, but with a new
-      // date) — the decision is made by looking at the current DB state.
+      // A recurring task may have moved instead.
       refreshTaskReminders(task.id);
     } else if (!shouldBeCompleted && isCompleted) {
       taskRepo.setCompleted(task.id, false);
       tapLight();
-      // Reopened — reminders should return if it's not yet overdue (same
-      // function: reschedules since the task is no longer completed).
       refreshTaskReminders(task.id);
     }
   };
 
-  // Subtask changes are written immediately; both the in-panel list and the
-  // screen behind it (badge counts) get refreshed.
   const refreshSubtasks = () => {
     syncParentCompletion();
     setSubtasks(subtaskRepo.listByTask(task.id));
@@ -107,7 +93,6 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       shared_with_id: values.shared_with_id,
     });
     const reminders = reminderRepo.replaceAll('task', task.id, values.remind_times);
-    // Date/time/reminders may have changed — reminders are rescheduled based on the current values.
     const updated = taskRepo.getById(task.id);
     if (updated) {
       scheduleTaskReminders(updated, reminders).then((ok) => {
@@ -130,7 +115,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   return (
     <ModalCard visible onClose={onClose}>
       <Text style={styles.heading}>{tr('task.edit')}</Text>
-      {/* key: when switching to a different task, the form is remounted with fresh initial values */}
+      {/* key: a different task remounts the form */}
       <TaskForm
         key={task.id}
         initial={{
@@ -147,7 +132,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
         onSubmit={handleSave}
         onDelete={handleDelete}
       >
-            {/* Subtasks — saved immediately (doesn't wait for Save) */}
+            {/* Saved immediately */}
             <Text style={styles.label}>{tr('task.subtasks')}</Text>
             {subtasks.map((s) => {
               const done = s.completed === 1;

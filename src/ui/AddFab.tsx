@@ -1,13 +1,8 @@
-// The central ＋ quick-add button (speed-dial).
-// ＋ is a square button; tapping it rotates it 45° into an ×, and three
-// options (Task · Habit · Goal) fan open upward with a spring (swing) motion.
-// Picking an option opens the relevant type directly in the AddSheet form.
-//
-// Two pieces are driven together by the same `open` state:
-//   • AddFabButton — the square button in the middle of the tab bar (the rotating ＋).
-//   • AddFab       — the full-screen overlay (backdrop + the spring-out options).
-// Since the overlay wouldn't fit inside the tab bar, it's drawn as a sibling of
-// Tabs in _layout (on top of it).
+// The central ＋ (speed-dial). Tapping rotates the square into an × and the
+// Task · Habit · Goal options (and "voice task", where speech works) spring open;
+// picking one opens that AddSheet form.
+// AddFabButton sits in the tab bar; AddFab, the full-screen overlay, is a
+// sibling of Tabs in _layout. Both follow the same `open` state.
 
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -20,19 +15,16 @@ import type { Colors } from '@/ui/theme';
 
 type AddStep = Exclude<Step, 'menu'>;
 
-// Fixed accent colors for the option circles (readable in both theme modes).
-// Icon: the same line-icon set as the tab bar (EntityIcon); label is an i18n
-// key (the same 'add.*' keys as the AddSheet menu — single source, consistent text).
-const OPTIONS: { step: AddStep; type: EntityType; labelKey: string; color: string }[] = [
-  { step: 'goal', type: 'goal', labelKey: 'add.goal', color: '#f59e0b' },
-  { step: 'habit', type: 'habit', labelKey: 'add.habit', color: '#f97316' },
-  { step: 'task', type: 'task', labelKey: 'add.task', color: '#6366f1' },
+// Option colors readable in both themes.
+// `voice`: the task form opens with the mic already listening.
+const OPTIONS: { key: string; step: AddStep; type: EntityType; labelKey: string; color: string; voice?: boolean }[] = [
+  { key: 'goal', step: 'goal', type: 'goal', labelKey: 'add.goal', color: '#f59e0b' },
+  { key: 'habit', step: 'habit', type: 'habit', labelKey: 'add.habit', color: '#f97316' },
+  { key: 'voice', step: 'task', type: 'voice', labelKey: 'add.voiceTask', color: '#0ea5e9', voice: true },
+  { key: 'task', step: 'task', type: 'task', labelKey: 'add.task', color: '#6366f1' },
 ];
 
-// The square ＋ button in the tab bar. While `open`, ＋ rotates 45° into an ×.
-// A LONG PRESS opens a separate action (independent timer picker — see
-// TimerPicker); `onLongPress` is left optional so it doesn't CONFLICT with a
-// short tap (if not passed, the button reacts only to short taps, as before).
+// A long press opens the standalone timer picker (TimerPicker) when given.
 export function AddFabButton({
   open,
   onPress,
@@ -76,8 +68,7 @@ export function AddFabButton({
       accessibilityHint={onLongPress ? t('timer.longPressHint') : undefined}
       accessibilityState={{ expanded: open }}
     >
-      {/* The whole square frame rotates; the ＋ inside rotates with it into an ×.
-          The ＋ is drawn with two bars → independent of font metrics, perfectly centered. */}
+      {/* Two bars, not a glyph: centered regardless of font metrics. */}
       <Animated.View style={[styles.square, { transform: [{ rotate }] }]}>
         <View style={styles.plusBox}>
           <View style={styles.plusBarH} />
@@ -88,23 +79,24 @@ export function AddFabButton({
   );
 }
 
-// The full-screen overlay: backdrop + options that spring open.
 export function AddFab({
   open,
   onClose,
   onPick,
+  voiceAvailable,
 }: {
   open: boolean;
   onClose: () => void;
-  onPick: (step: AddStep) => void;
+  onPick: (step: AddStep, voice?: boolean) => void;
+  voiceAvailable: boolean;
 }) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
-  // A separate animation value per option (staggered spring entrance) + backdrop.
+  // One value per option, for the staggered entrance.
   const anims = useRef(OPTIONS.map(() => new Animated.Value(0))).current;
   const backdrop = useRef(new Animated.Value(0)).current;
-  // Separate mount state so it stays in the tree until the close animation finishes.
+  // Stays mounted until the close animation ends.
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -143,23 +135,24 @@ export function AddFab({
 
       <View style={styles.fan} pointerEvents="box-none">
         {OPTIONS.map((opt, i) => {
+          if (opt.voice && !voiceAvailable) return null;
           const a = anims[i];
-          // The spring: glides from bottom to top, arriving with a slight "swing" rotation.
+          // Rises with a slight swing.
           const translateY = a.interpolate({ inputRange: [0, 1], outputRange: [56, 0] });
           const scale = a.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
           const rotate = a.interpolate({ inputRange: [0, 1], outputRange: ['-14deg', '0deg'] });
           return (
             <Animated.View
-              key={opt.step}
+              key={opt.key}
               style={[styles.optionRow, { opacity: a, transform: [{ translateY }, { rotate }, { scale }] }]}
               pointerEvents="box-none"
             >
-              <Pressable style={styles.labelBtn} onPress={() => onPick(opt.step)} hitSlop={6}>
+              <Pressable style={styles.labelBtn} onPress={() => onPick(opt.step, opt.voice)} hitSlop={6}>
                 <Text style={styles.optionLabel}>{t(opt.labelKey)}</Text>
               </Pressable>
               <Pressable
                 style={[styles.optionCircle, { backgroundColor: opt.color }]}
-                onPress={() => onPick(opt.step)}
+                onPress={() => onPick(opt.step, opt.voice)}
                 accessibilityRole="button"
                 accessibilityLabel={t(opt.labelKey)}
               >
@@ -175,10 +168,7 @@ export function AddFab({
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    // — The square button in the tab bar —
-    // Align to top (flex-start) + shift up by half its own size (18): this way
-    // the square's vertical center sits exactly on the top edge, INDEPENDENT of
-    // the bar's height. When rotated 45°, the side corners line up with the edge.
+    // — The tab-bar button — its center sits on the bar's top edge, whatever the bar's height.
     buttonWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
     square: {
       width: 36,
@@ -187,7 +177,7 @@ const makeStyles = (c: Colors) =>
       backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
-      // Centers the square on the bar's top edge (half up = -18).
+      // half its size
       marginTop: -18,
       shadowColor: '#000',
       shadowOpacity: 0.2,
@@ -195,15 +185,13 @@ const makeStyles = (c: Colors) =>
       shadowOffset: { width: 0, height: 3 },
       elevation: 6,
     },
-    // The ＋ mark is drawn with two bars; the box is 16×16, bars perfectly centered.
     plusBox: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
     plusBarH: { position: 'absolute', width: 16, height: 2.5, borderRadius: 2, backgroundColor: c.onAccent },
     plusBarV: { position: 'absolute', width: 2.5, height: 16, borderRadius: 2, backgroundColor: c.onAccent },
 
-    // — The opening overlay —
+    // — The overlay —
     backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.35)' },
     fan: {
-      // Options are laid out centered, right above the tab bar.
       position: 'absolute',
       left: 0,
       right: 0,
@@ -216,7 +204,7 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'center',
       marginBottom: 18,
     },
-    // The circle sits dead center; the label is positioned absolutely to its left.
+    // The circle is centered; the label sits absolutely to its left.
     optionCircle: {
       width: 52,
       height: 52,

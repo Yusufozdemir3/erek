@@ -1,13 +1,6 @@
-// Notifications screen (modal) — used to be the "Notifications" card on Profile;
-// once sound and vibration became separate controls (see notificationPrefs +
-// channel architecture) the card got too big and moved to its own page. Opened
-// from Profile via an arrow row. The header title comes from the root layout's
-// native header.
-//
-// When a preference changes, all related reminders are IMMEDIATELY rebuilt
-// from the DB: this includes sound/vibration changes, because on Android the
-// channel (and therefore sound/vibration) gets baked into the notification AT
-// SCHEDULE TIME — rebuilding moves it from the old channel to the new one.
+// Profile › Notifications. Any change rebuilds the reminders from the DB at
+// once — on Android sound and vibration are fixed by the channel chosen when a
+// notification is scheduled, so rebuilding moves them to the new channel.
 
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -74,9 +67,6 @@ export default function NotificationsScreen() {
     if (!(await setNudgesEnabled(value).catch(() => false))) setNudgesOn(!value);
   };
 
-  // When sound/vibration/custom-sound changes, rebuild all reminders from the
-  // DB (scheduleX's own cancel-then-maybe-schedule logic handles on/off and
-  // channel changes automatically).
   const rescheduleAll = () => {
     rescheduleAllReminders(habitRepo.listByUser(user.id)).catch((e) =>
       console.warn('[Notification] Failed to rebuild after preference change:', e)
@@ -93,16 +83,13 @@ export default function NotificationsScreen() {
     setPrefs((p) => ({ ...p, [key]: value }));
     const saved = setNotificationPref(key, value).catch(() => {});
     rescheduleAll();
-    // The master switch also decides whether this phone receives friend
-    // nudges (see lib/pushRegistration.ts) — apply it now, not next foreground.
+    // The master switch also gates friend nudges (pushRegistration.ts): apply now.
     if (key === 'enabled') saved.then(() => syncPushRegistration(uid, lang));
-    // The weekly nudge isn't part of rescheduleAll (it has no entity): apply it
-    // once the new value is stored.
+    // The weekly review has no entity, so it's applied separately.
     if (key === 'enabled' || key === 'weeklyReview') saved.then(() => scheduleWeeklyReview());
   };
 
-  // Opens the device's ringtone picker; if a choice is made (including Silent)
-  // it's saved and reminders are rebuilt. Nothing changes on cancel.
+  // A pick (Silent included) is saved and applied; cancel changes nothing.
   const choosePickedSound = async () => {
     const result = await pickNotificationSound(prefs.customSoundUri);
     if (result.canceled) return;
@@ -126,7 +113,6 @@ export default function NotificationsScreen() {
         <Text style={styles.guideLinkText}>{t('notifications.guideLink')}</Text>
       </Pressable>
       <FeatureGuide guide="notifications" visible={guide.visible} onClose={guide.close} canShare={uid != null} />
-      {/* Master switch + reminder types */}
       <View style={styles.card}>
         <View style={styles.switchRow}>
           <Text style={styles.switchLabel}>{t('profile.notifEnabled')}</Text>
@@ -153,8 +139,7 @@ export default function NotificationsScreen() {
         ))}
       </View>
 
-      {/* Sound and vibration — two SEPARATE switches. On Android, every
-          combination maps to its own notification channel (see notifications.ts). */}
+      {/* Each sound × vibration combination is its own Android channel. */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('notifications.soundVibrationTitle')}</Text>
         <View style={[styles.switchRow, off && styles.rowDisabled]}>
@@ -178,9 +163,7 @@ export default function NotificationsScreen() {
         <Text style={styles.hint}>{t('notifications.soundVibrationHint')}</Text>
       </View>
 
-      {/* Custom notification sound — Android-specific (see ringtonePicker.ts +
-          customNotificationChannel.ts). The system sound picker requires a
-          native module; it stays hidden on a build that hasn't compiled it yet, or on iOS. */}
+      {/* Android only, and hidden without the native module. */}
       {Platform.OS === 'android' && (
         <View style={[styles.card, { marginTop: 16 }, off && styles.rowDisabled]}>
           <Text style={styles.cardTitle}>{t('notifications.customSoundTitle')}</Text>

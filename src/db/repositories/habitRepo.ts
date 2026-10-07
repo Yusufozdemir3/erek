@@ -1,14 +1,9 @@
-// Habit repository.
-// Important design decision: streak is NEVER stored, it's always computed from
-// logs. Reason: storing derived data creates inconsistency during sync. Logs
-// are the single source of truth.
+// Habits. Streaks are never stored, always computed from the logs: stored
+// derived data would drift during sync.
 
 import { getDb } from '../database';
 import {
   chunk,
-  isQuotaSchedule,
-  isScheduledOn,
-  isWithinHabitDates,
   newId,
   nowIso,
   parseJson,
@@ -18,28 +13,20 @@ import {
   toYmd,
   weekStartOf,
 } from '../../lib/helpers';
-import {
-  currentStreakFrom,
-  longestStreakFrom,
-  shiftWeek,
-  weekCompletionCounts,
-} from '../../lib/streaks';
+import { currentStreakFrom } from '../../lib/streaks';
 import type { GoalContribution, Habit, HabitKind, HabitLog, Recurrence } from '../../types/models';
 import { goalRepo } from './goalRepo';
 import { reminderRepo } from './reminderRepo';
 
-// Returned by toggleLog/incrementAmount when a contribution just pushed the
-// linked goal from not-completed to completed — the caller (UI) uses this to
-// offer unlinking the habit (see app/(tabs)/index.tsx and habits.tsx). null
-// otherwise (not linked, no completion transition, or the goal was already done).
+// Returned when this check-off just completed the linked goal, so the UI can
+// offer to unlink the habit; null otherwise.
 export interface GoalJustCompleted {
   goalId: string;
   goalTitle: string;
 }
 
-// Applies a progress delta to a goal and reports whether THIS delta is what
-// tipped it over into "completed" (false -> true only; already-done goals
-// report null so the prompt doesn't fire on every subsequent contribution).
+// Applies a delta and reports whether it is what completed the goal (an
+// already-done goal reports null, so the prompt doesn't repeat).
 function applyGoalDelta(goalId: string, delta: number): GoalJustCompleted | null {
   if (delta === 0) return null;
   const before = goalRepo.getById(goalId);
@@ -87,8 +74,8 @@ export interface CreateHabitInput {
   unit?: string | null;
   start_date?: string | null;
   end_date?: string | null;
-  goal_contribution?: GoalContribution | null; // NULL = per_completion (default)
-  goal_factor?: number;                        // only meaningful in 'amount' mode; defaults to 1
+  goal_contribution?: GoalContribution | null; // NULL = per_completion
+  goal_factor?: number;                        // 'amount' mode only; defaults to 1
 }
 
 export const habitRepo = {
@@ -164,14 +151,9 @@ export const habitRepo = {
     db.runSync(`UPDATE habits SET ${sets.join(', ')} WHERE id = ?`, vals);
   },
 
-  // Soft-deletes a habit AND its reminder rows.
-  // Reminders must be cleaned up here, NOT by the caller: deletion happens
-  // from four different places (the list screen, the edit panel, …) and each
-  // one would need to remember it separately — none of them did. The result
-  // was rows staying active and being pushed to the cloud forever, then
-  // getting a new identity and being re-sent again on account merge. The
-  // notification itself is a separate matter (the OS queue) and its caller
-  // cancels it — this is only about DATA.
+  // Soft-deletes the habit AND its reminder rows — here, not in each of the
+  // several callers, which kept forgetting. Cancelling the scheduled
+  // notification is the caller's job.
   softDelete(id: string): void {
     const db = getDb();
     const now = nowIso();
@@ -179,9 +161,8 @@ export const habitRepo = {
     reminderRepo.deleteAllForEntity('habit', id);
   },
 
-  // UNDO of softDelete: the row and the reminders its deletion took with it come
-  // back, and the change is queued for sync (a later updated_at wins over the
-  // deletion already sent). Returns false if the row isn't deleted.
+  // Undoes softDelete, reminders included; the newer updated_at wins over the
+  // deletion already synced. false if the row isn't deleted.
   restore(id: string): boolean {
     const db = getDb();
     const row = db.getFirstSync<{ deleted_at: string | null }>(`SELECT deleted_at FROM habits WHERE id = ?`, [id]);
@@ -191,8 +172,7 @@ export const habitRepo = {
     return true;
   },
 
-  // Marks a habit completed/not-completed for a given day.
-  // Thanks to UNIQUE(habit_id, log_date), the same day never gets two records - if one exists, it's updated.
+  // One row per day (UNIQUE(habit_id, log_date)): updated if it exists.
   toggleLog(habitId: string, date: string, completed: boolean): GoalJustCompleted | null {
     const db = getDb();
     const now = nowIso();
@@ -215,19 +195,10 @@ export const habitRepo = {
     return this.bumpGoalIfLinked(habitId, wasCompleted, completed);
   },
 
-  // If a habit is linked to a goal in "per_completion" mode (the default),
-  // updates the linked goal's progress ON THE COMPLETION TRANSITION: completed
-  // -> +1, undone -> −1. Only runs when the state actually changed; re-writing
-  // the same state (e.g. re-checking an already-completed day) doesn't affect
-  // the goal -> no double counting. Retroactively marking a past day is also a
-  // valid transition. goalRepo.addProgress clamps to the 0..target range and
-  // already ignores a non-numeric goal.
-  // Habits in 'amount' mode never reach this function (see incrementAmount) —
-  // for them the contribution depends on the actual amount difference at that moment, not the completion state.
-  // NOTE: in multi-device sync, goal.current_value is carried by LWW; this is
-  // the same existing limitation as manual +1/+5 progress (concurrent
-  // contributions don't merge).
-  // If `habit` is given (incrementAmount already fetched it), it's not queried again.
+  // per_completion mode: +1 when a day becomes completed, −1 when it's undone
+  // (past days included). Only on an actual transition, so rewriting the same
+  // state never double-counts. 'amount' mode is handled in incrementAmount.
+  // `habit` skips a second lookup when the caller already has it.
   bumpGoalIfLinked(
     habitId: string,
     wasCompleted: boolean,
@@ -240,7 +211,6 @@ export const habitRepo = {
     return applyGoalDelta(h.goal_id, isCompleted ? 1 : -1);
   },
 
-  // Whether a habit was completed on a given day.
   isCompletedOn(habitId: string, date: string): boolean {
     const db = getDb();
     const row = db.getFirstSync<any>(
@@ -250,7 +220,7 @@ export const habitRepo = {
     return row?.completed === 1;
   },
 
-  // Numeric habit: the amount done on a given day (0 if there's no record).
+  // 0 when there's no log.
   getAmountOn(habitId: string, date: string): number {
     const db = getDb();
     const row = db.getFirstSync<any>(
@@ -260,20 +230,15 @@ export const habitRepo = {
     return row?.amount ?? 0;
   },
 
-  // The MULTI version of getAmountOn + isCompletedOn: instead of the "Today"
-  // screen firing two separate queries per habit (N+1) for that day's
-  // amount+completion, it gets everything in one query. Since habit_logs has
-  // UNIQUE(habit_id, log_date), at most one row comes back per habit; a habit
-  // with no log doesn't show up at all in the result (the caller assumes
-  // amount=0 / completed=false).
+  // getAmountOn + isCompletedOn for many habits in one query. A habit without
+  // a log is missing from the result (= amount 0, not completed).
   getDayStates(
     habitIds: string[],
     date: string
   ): Record<string, { amount: number; completed: boolean }> {
     const db = getDb();
     const out: Record<string, { amount: number; completed: boolean }> = {};
-    // Chunked: the number of bound `IN (…)` parameters equals the list
-    // length, while SQLite's own limit is fixed (see helpers.chunk).
+    // Chunked to stay under SQLite's bound-parameter limit (helpers.chunk).
     for (const ids of chunk(habitIds)) {
       const placeholders = ids.map(() => '?').join(',');
       const rows = db.getAllSync<{ habit_id: string; amount: number; completed: number }>(
@@ -286,10 +251,8 @@ export const habitRepo = {
     return out;
   },
 
-  // The RANGE version of getDayStates: for the given habits, the set of days
-  // marked COMPLETED within [start, end], one set per habit. The "Habits"
-  // screen's last-7-days strip uses this — it used to fire a separate
-  // recentLogs query per habit (N+1 that grew linearly as the list got longer).
+  // Completed days within [start, end] for many habits in one query (the
+  // Habits screen's 7-day strip).
   completedDatesBetween(
     habitIds: string[],
     startYmd: string,
@@ -310,11 +273,9 @@ export const habitRepo = {
     return out;
   },
 
-  // REST DAY ("mola"): marks a day as skipped on purpose (sick, travelling) or
-  // takes the mark back. A skipped day counts as not scheduled everywhere
-  // (isWithinHabitDates): the streak freezes instead of breaking, the rate
-  // ignores it, no reminder. Only today and the past: a future day isn't
-  // "lived" yet. Entries older than a year are dropped so the list stays small.
+  // Rest day: a day skipped on purpose counts as unscheduled everywhere
+  // (isWithinHabitDates) — the streak freezes, the rate ignores it. Today and
+  // past days only; marks older than a year are dropped.
   setSkipped(habitId: string, ymd: string, skipped: boolean): void {
     const habit = this.getById(habitId);
     if (!habit) return;
@@ -329,9 +290,8 @@ export const habitRepo = {
     );
   },
 
-  // Numeric habit: changes that day's amount by a delta (never goes below 0).
-  // completed becomes 1 once the target is reached (amount >= target). If
-  // target is null/0, completed always stays 0. A single record is kept via UNIQUE(habit_id, log_date).
+  // Changes the day's amount by a delta (floored at 0); completed once
+  // amount >= target (never without a target).
   incrementAmount(habitId: string, date: string, delta: number, target: number | null): GoalJustCompleted | null {
     const db = getDb();
     const now = nowIso();
@@ -342,10 +302,7 @@ export const habitRepo = {
     const wasCompleted = existing?.completed === 1;
     const current = existing ? existing.amount ?? 0 : 0;
     const next = Math.max(0, current + delta);
-    // Clamping at the 0 floor can make the requested delta diverge from the
-    // difference actually applied (e.g. current=2, delta=-5 requested ->
-    // next=0, actual difference is -2) — in 'amount' mode, the goal reflects
-    // this actual difference, not the requested one.
+    // The floor can shrink the delta; 'amount' mode passes on the applied one.
     const appliedDelta = next - current;
     const completed = target != null && target > 0 && next >= target ? 1 : 0;
     if (existing) {
@@ -360,10 +317,8 @@ export const habitRepo = {
         [newId(), habitId, date, completed, next, now]
       );
     }
-    // Goal contribution is one of two modes: in 'amount' mode, EVERY change
-    // (not waiting for completion) applies the actual difference × the
-    // multiplier to the goal; otherwise (the default, per_completion) only the
-    // completion STATE transition applies +1/-1.
+    // 'amount' mode: every change adds difference × factor to the goal;
+    // per_completion: only a completion transition counts (±1).
     const habit = this.getById(habitId);
     if (habit?.goal_id && habit.goal_contribution === 'amount') {
       return applyGoalDelta(habit.goal_id, appliedDelta * habit.goal_factor);
@@ -371,19 +326,10 @@ export const habitRepo = {
     return this.bumpGoalIfLinked(habitId, wasCompleted, completed === 1, habit);
   },
 
-  // STREAK COMPUTATION: counts backward from today over the habit's SCHEDULED
-  // days. Only days that are due per the schedule AND within the lifespan
-  // (start/end) are considered — a gap on an unscheduled/out-of-range day
-  // doesn't break the streak (e.g. Tuesday doesn't matter for a Mon/Wed/Fri
-  // habit; neither do days after the end date). If today is scheduled but not
-  // yet marked, the streak isn't broken (it continues from the previous
-  // scheduled day). Stops at the first missed scheduled day.
-  // Under a QUOTA (X times a week) rule the result is a count of WEEKS, not
-  // days: consecutive weeks whose quota was met; if the current week hasn't
-  // met it yet, the streak isn't broken (the week isn't over), but it doesn't count either.
-  // If `preloaded` is given, the habit is NOT QUERIED again (same pattern as
-  // in bumpGoalIfLinked). List screens already hold the habit and call this
-  // function per row; the getById inside would mean an unnecessary second query per habit in the list.
+  // Counts back from today over SCHEDULED days only (schedule, lifespan, rest
+  // days), so unscheduled days never break it. An unmarked today doesn't break
+  // it either. Quota habits (X a week) count WEEKS that met the quota; the
+  // current week only counts once met. `preloaded` skips the lookup in lists.
   currentStreak(habitId: string, preloaded?: Habit | null): number {
     const db = getDb();
     const habit = preloaded !== undefined ? preloaded : this.getById(habitId);
@@ -394,34 +340,7 @@ export const habitRepo = {
     return currentStreakFrom(habit, rows.map((r) => r.log_date), todayDate());
   },
 
-  // Completion records from the last N days (for stats/calendar).
-  recentLogs(habitId: string, days: number): HabitLog[] {
-    const db = getDb();
-    const rows = db.getAllSync<any>(
-      `SELECT * FROM habit_logs
-       WHERE habit_id = ?
-       ORDER BY log_date DESC
-       LIMIT ?`,
-      [habitId, days]
-    );
-    return rows as HabitLog[];
-  },
-
-  // ALL logs from a given date (inclusive) through today (for the stats
-  // screen: heatmap, completion rate, total amount — all derived from this
-  // single query). Difference from recentLogs: it filters by date range, not
-  // row count — empty days (no log at all) must be filled in by the caller with the full list of days.
-  logsInRange(habitId: string, sinceYmd: string): HabitLog[] {
-    const db = getDb();
-    const rows = db.getAllSync<any>(
-      `SELECT * FROM habit_logs WHERE habit_id = ? AND log_date >= ? ORDER BY log_date ASC`,
-      [habitId, sinceYmd]
-    );
-    return rows as HabitLog[];
-  },
-
-  // ALL of a habit's historical logs (ascending by date). The stats screen's
-  // score/streak/day-of-week calculations are all derived from this one query.
+  // Every log, oldest first (the stats screen's single source).
   allLogs(habitId: string): HabitLog[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -431,8 +350,7 @@ export const habitRepo = {
     return rows as HabitLog[];
   },
 
-  // For a QUOTA (X times a week) habit, the number of completed days in the
-  // week of a given date — used for the "2/3 this week" indicator on the "Today" screen.
+  // Completed days in dateYmd's week, for a quota habit's "2/3".
   completionsInWeek(habitId: string, dateYmd: string): number {
     const db = getDb();
     const start = weekStartOf(dateYmd);
@@ -446,9 +364,7 @@ export const habitRepo = {
     return rows[0]?.n ?? 0;
   },
 
-  // Logs between two dates (inclusive) — for the calendar's month view.
-  // Difference from logsInRange: not an open-ended "through today", but a
-  // CLOSED range (used when browsing past months).
+  // Logs within a closed range (the calendar's month view).
   logsBetween(habitId: string, startYmd: string, endYmd: string): HabitLog[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -456,114 +372,5 @@ export const habitRepo = {
       [habitId, startYmd, endYmd]
     );
     return rows as HabitLog[];
-  },
-
-  // LONGEST STREAK: unlike currentStreak's "backward from today" approach,
-  // this scans the entire history from front to back, from the first
-  // completed day to today, and returns the longest consecutive scheduled-day
-  // streak it ever saw. Uses the same scheduled-day rule (a gap on an
-  // unscheduled/out-of-range day doesn't break the streak).
-  // Under a QUOTA rule the result is a count of WEEKS; if the current
-  // (unfinished) week hasn't met the quota, the streak isn't BROKEN but it
-  // isn't counted either (consistent with currentStreak).
-  longestStreak(habitId: string): number {
-    const db = getDb();
-    const habit = this.getById(habitId);
-    const rows = db.getAllSync<{ log_date: string }>(
-      `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1`,
-      [habitId]
-    );
-    return longestStreakFrom(habit, rows.map((r) => r.log_date), todayDate());
-  },
-
-  // ALL STREAKS: the SAME walk and SAME scheduled-day rule as longestStreak,
-  // but instead of a single "best" it collects EVERY consecutive streak in the
-  // past (length + start/end date) — for the stats screen's "streak history"
-  // list. Deliberately consistent: produces exactly the same result as
-  // longestStreak's no-tolerance-for-today rule (there is NO separate
-  // "current" special case).
-  // Under a QUOTA rule the entries are week-based (length = number of weeks,
-  // start/end = the Monday of the streak's first week / the Sunday of its last week).
-  allStreaks(habitId: string): { length: number; start: string; end: string }[] {
-    const db = getDb();
-    const habit = this.getById(habitId);
-    const isDue = (d: string) =>
-      isScheduledOn(habit?.schedule ?? null, d) &&
-      isWithinHabitDates(habit?.start_date ?? null, habit?.end_date ?? null, d, habit?.skip_dates);
-    const rows = db.getAllSync<any>(
-      `SELECT log_date FROM habit_logs WHERE habit_id = ? AND completed = 1 ORDER BY log_date ASC`,
-      [habitId]
-    );
-    if (rows.length === 0) return [];
-
-    if (isQuotaSchedule(habit?.schedule ?? null)) {
-      const quota = habit!.schedule!.timesPerWeek!;
-      const counts = weekCompletionCounts(rows.map((r) => r.log_date));
-      const currentWeek = weekStartOf(todayDate());
-      const streaks: { length: number; start: string; end: string }[] = [];
-      let cursor = weekStartOf(rows[0].log_date);
-      let run = 0;
-      let runStart: string | null = null;
-      let runEnd: string | null = null;
-      const flush = () => {
-        if (run > 0 && runStart && runEnd) {
-          const d = new Date(`${runEnd}T00:00:00`);
-          d.setDate(d.getDate() + 6); // the week's Sunday
-          streaks.push({ length: run, start: runStart, end: toYmd(d) });
-        }
-        run = 0;
-        runStart = null;
-        runEnd = null;
-      };
-      while (cursor <= currentWeek) {
-        if ((counts.get(cursor) ?? 0) >= quota) {
-          if (run === 0) runStart = cursor;
-          run++;
-          runEnd = cursor;
-        } else if (cursor !== currentWeek) {
-          flush(); // an unfinished current week doesn't break the streak (consistent with longestStreak)
-        }
-        cursor = shiftWeek(cursor, 1);
-      }
-      flush();
-      return streaks.sort((a, b) => b.length - a.length);
-    }
-
-    const completed = new Set<string>(rows.map((r) => r.log_date));
-    const today = todayDate();
-    const cursor = new Date(`${rows[0].log_date}T00:00:00`);
-    const end = new Date(`${today}T00:00:00`);
-
-    const streaks: { length: number; start: string; end: string }[] = [];
-    let run = 0;
-    let runStart: string | null = null;
-    let runEnd: string | null = null;
-    const flush = () => {
-      if (run > 0 && runStart && runEnd) streaks.push({ length: run, start: runStart, end: runEnd });
-      run = 0;
-      runStart = null;
-      runEnd = null;
-    };
-
-    while (cursor <= end) {
-      const y = cursor.getFullYear();
-      const m = String(cursor.getMonth() + 1).padStart(2, '0');
-      const d = String(cursor.getDate()).padStart(2, '0');
-      const dateStr = `${y}-${m}-${d}`;
-
-      if (isDue(dateStr)) {
-        if (completed.has(dateStr)) {
-          if (run === 0) runStart = dateStr;
-          run++;
-          runEnd = dateStr;
-        } else {
-          flush();
-        }
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    flush(); // also include a streak still open when the loop ends
-
-    return streaks.sort((a, b) => b.length - a.length);
   },
 };

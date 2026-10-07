@@ -1,10 +1,6 @@
-// Score tests. Model: the score STARTS AT ZERO and is earned; a neutral
-// (null) bucket neither raises nor lowers the score (see the header of habitScore.ts).
-//
-// This file is regression protection for two past bugs:
-//   (a) #21: buckets before the habit's birth suppressing the score — gone on
-//       its own under the starts-at-zero model (the leading zeros already keep the score at 0),
-//   (b) 2026-07-23: unscheduled days being counted as "missed" — now null.
+// The score starts at zero and is earned; a neutral (null) bucket changes
+// nothing (see habitScore.ts). Also guards: buckets before the habit's birth
+// must not drag the score, and unscheduled days must not count as missed.
 
 import {
   SCORE_EMA_ALPHA,
@@ -68,9 +64,7 @@ describe('puan SIFIRDAN başlar ve kazanılır (kullanıcı kararı 2026-07-23)'
 });
 
 describe('nötr kova (null) — plansız gün puanı düşürmez', () => {
-  // MEASURED BUG (2026-07-23): a habit scheduled Mon/Wed/Fri and never missed
-  // in 90 days was showing 42.7% on the Day tab — because the 4 unscheduled
-  // days were counted as "didn't do it." The Week/Month tabs said 100% at the same time.
+  // Mon/Wed/Fri never missed for 90 days must not read 42.7% (unscheduled days counted as misses).
   it('nötr kova puanı DEĞİŞTİRMEZ (bir öncekini tekrarlar)', () => {
     const scores = emaScores([1, null, null, null]);
     expect(scores[1]).toBe(scores[0]);
@@ -83,7 +77,6 @@ describe('nötr kova (null) — plansız gün puanı düşürmez', () => {
       const scheduled = [0, 2, 4].includes(i % 7); // Mon/Wed/Fri
       ratios.push(scheduled ? 1 : null);
     }
-    // The old behavior (0 instead of null) gave 42.7% here.
     expect(pct(last(emaScores(ratios)))).toBeGreaterThan(90);
   });
 
@@ -123,9 +116,7 @@ describe('emaScores — güncelliğe ağırlık verir (EMA olmanın anlamı)', (
 });
 
 describe('#21 regresyonu — hayalet kovalar artık puanı bozamaz', () => {
-  // Under the starts-at-zero model, the leading zeros keep the score at 0;
-  // the climb after the first real bucket is IDENTICAL to the trimmed array.
-  // So trimming (trimLeading) has no mathematical effect left — it's for display only.
+  // Leading zeros keep the score at 0, so trimming them changes nothing.
   it('öne eklenen hayalet sıfırlar sonucu değiştirmez', () => {
     const kesilmis = last(emaScores(Array(10).fill(1)));
     const hayaletli = last(emaScores([...Array(80).fill(0), ...Array(10).fill(1)]));

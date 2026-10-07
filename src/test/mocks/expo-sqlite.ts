@@ -28,9 +28,8 @@ class FakeSQLiteDatabase {
     return this.db.prepare(sql).all(...params) as T[];
   }
 
-  // Test helper: replaces the inner DB with a fresh in-memory instance.
-  // The wrapper object's identity is preserved — the singleton in database.ts stays valid.
-  // (In node:sqlite, foreign keys are on by default; no need to repeat the PRAGMA.)
+  // A fresh in-memory DB behind the same wrapper, so database.ts's singleton stays valid.
+  // (node:sqlite has foreign keys on by default.)
   __reset(): void {
     this.db.close();
     this.db = new DatabaseSync(':memory:');

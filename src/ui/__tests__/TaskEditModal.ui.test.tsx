@@ -1,13 +1,10 @@
-// TaskEditModal component test — this session's most important feature: the
-// parent task is AUTOMATICALLY completed when all subtasks are completed;
-// reopening one also reopens the parent task. Verified end-to-end with the
-// real repo (in-memory SQLite double); only the notification side effect is mocked.
+// TaskEditModal on the real (in-memory) repos: ticking every subtask completes
+// the task, reopening one reopens it.
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { subtaskRepo, taskRepo, userRepo } from '@/db';
 
-// This suite does real SQLite + a full render; under jest's parallel load the
-// default 5s timeout was occasionally getting hit (not a logic bug, just slowness).
+// Real SQLite + a full render can pass 5 s under a parallel run.
 jest.setTimeout(20000);
 import { todayDate } from '@/lib/helpers';
 import { resetTestDb } from '@/test/dbTestUtils';

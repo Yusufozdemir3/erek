@@ -1,6 +1,4 @@
-// The single entry point of the data layer.
-// UI only ever imports from here:
-//   import { db, taskRepo, habitRepo } from '@/db';
+// The data layer's single entry point: import { taskRepo, habitRepo } from '@/db'.
 
 import { runMigrations } from './database';
 import { purgeOldTombstones } from './maintenance';
@@ -34,13 +32,11 @@ export type {
   ReminderEntityType,
 } from '../types/models';
 
-// Called once at app startup. Sets up the schema, guarantees the anonymous user.
+// Once at startup: schema, the local user, tombstone cleanup.
 export async function initDataLayer() {
   await runMigrations();
   const user = userRepo.getOrCreateLocal();
-  // Clean up expired tombstone records (see maintenance.ts). Must NEVER block
-  // startup: the app failing to open because of a maintenance task would be
-  // far worse than the problem it fixes.
+  // Maintenance must never keep the app from opening.
   try {
     purgeOldTombstones();
   } catch (e) {

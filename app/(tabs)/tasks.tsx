@@ -1,18 +1,9 @@
-// "Tasks" tab — not just today's, but ALL active tasks.
-// Difference from the "Today" screen: tasks due in the future, or with no due
-// date, also show up here. Completed ones sink to the bottom of the list.
-// Tapping a task opens the edit panel.
-// No adding here: that happens from the ＋ menu in the tab bar.
-// Architecture rule: no SQL; only taskRepo is called.
+// Tasks tab: every open task (future and dated ones too), finished ones in a
+// collapsed section at the bottom. Tap to edit, swipe for edit/delete,
+// long-press to select several. Adding happens from the ＋ menu.
 //
-// VIRTUALIZATION (audit finding, P2): the list used to be drawn with
-// ScrollView + .map(), meaning EVERY task was mounted at once — each one a
-// SwipeableRow with its own PanResponder. Since a completed task never dropped
-// out of the list, for someone using the app for a year that meant thousands
-// of components: the JS thread locked up on every visit to the tab, and memory
-// kept growing. Now FlatList only mounts the visible rows; the QUERY itself is
-// also bounded (see taskRepo.listForScreen) — older completed tasks can be
-// revealed with a single tap if wanted.
+// A FlatList mounts only visible rows, and the query returns only recently
+// finished tasks (taskRepo.listForScreen) — a year of tasks stays fast.
 
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -49,8 +40,7 @@ import { PRIORITY_COLOR, shortDate, type Colors } from '@/ui/theme';
 // The search field only appears once the list is long enough to need it.
 const SEARCH_MIN_TASKS = 8;
 
-// Default visibility window for completed tasks. Long enough to answer "what
-// did I do yesterday", short enough not to turn the list into an archive.
+// Finished tasks listed by default; older ones are one tap away.
 const COMPLETED_WINDOW_DAYS = 30;
 
 function shiftDays(ymd: string, days: number): string {
@@ -59,13 +49,12 @@ function shiftDays(ymd: string, days: number): string {
   return toYmd(d);
 }
 
-// The list mixes task rows with ONE divider row ("Completed (N)") that
-// toggles the completed section — a single FlatList keeps virtualization.
+// Task rows plus one "Completed (N)" divider, in a single FlatList.
 type Row = { kind: 'task'; task: Task } | { kind: 'divider'; count: number };
 
 export default function TasksScreen() {
   const { colors, shared } = useTheme();
-  // Note: i18n's `t` is aliased to `tr` so it doesn't clash with the `t` (task) map variable below.
+  // `tr`, since `t` names tasks below.
   const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
   const { user, dataVersion, authUser } = useAppData();
@@ -73,37 +62,26 @@ export default function TasksScreen() {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  // A task shared WITH me that has subtasks: opens a window to tick them.
+  // A task shared WITH me with subtasks opens this to tick them.
   const [viewingShared, setViewingShared] = useState<Task | null>(null);
-  // Only one card's swipe actions may be open at a time.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
-  // The "1/3 subtasks" badge on a task card; only tasks that have subtasks get an entry.
   const [subtaskCounts, setSubtaskCounts] = useState<
     Record<string, { done: number; total: number }>
   >({});
-  // By default only RECENTLY completed tasks are listed; the user can expand
-  // to show all (stays expanded for the session).
   const [showAllCompleted, setShowAllCompleted] = useState(false);
   const [olderCompletedCount, setOlderCompletedCount] = useState(0);
-  // The completed section starts collapsed so finished work doesn't push
-  // pending tasks off screen; the header row shows how many are hidden.
   const [completedOpen, setCompletedOpen] = useState(false);
-  // Search narrows the list by title; while searching, finished tasks that
-  // match are listed too (searching for something you did is normal).
+  // A search also lists matching finished tasks.
   const [query, setQuery] = useState('');
-  // SELECTION MODE: long-press a task to start; null = off. Tapping rows then
-  // toggles them and a bar at the bottom acts on all of them at once.
+  // Selection mode (long press); null = off.
   const [selected, setSelected] = useState<Set<string> | null>(null);
 
   const reload = useCallback(() => {
-    // Ordering (completed ones to the bottom) now happens in SQL — no need to sort again in JS.
     const since = showAllCompleted ? null : shiftDays(todayDate(), -COMPLETED_WINDOW_DAYS);
     const list = taskRepo.listForScreen(user.id, since);
     setTasks(list);
     setOlderCompletedCount(since ? taskRepo.countCompletedBefore(user.id, since) : 0);
-    // Subtask badge counts in a single query (instead of N+1); tasks with no subtasks don't show up in the result.
     setSubtaskCounts(subtaskRepo.countsForTasks(list.map((t) => t.id)));
-    // dataVersion: refreshes without losing focus when a task is added from the ＋ menu.
   }, [user.id, dataVersion, showAllCompleted]);
 
   useFocusEffect(reload);
@@ -115,7 +93,7 @@ export default function TasksScreen() {
 
   const words = useMemo(() => queryWords(query, lang), [query, lang]);
   const searching = words.length > 0;
-  // A search that's been typed stays visible even if the list later shrinks below the threshold.
+  // A typed search stays visible even if the list shrinks.
   const showSearch = tasks.length >= SEARCH_MIN_TASKS || query.length > 0;
 
   const rows = useMemo<Row[]>(() => {
@@ -135,8 +113,6 @@ export default function TasksScreen() {
     return out;
   }, [tasks, olderCompletedCount, completedOpen, searching, words, lang]);
 
-  // Label set for the recurring-task badge ("🔁 Every day / Mon·Wed·Fri /
-  // Every year: ...") — see helpers.buildScheduleLabels.
   const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
   const sharedLabel = (t: Task): string | null => {
@@ -144,8 +120,6 @@ export default function TasksScreen() {
     return uid ? (friendNames.get(uid) ?? tr('friends.unknownName')) : null;
   };
 
-  // A task shared WITH me: read-only except the check-off and its subtasks'
-  // check-offs (see sharedTaskUi).
   const selecting = selected !== null;
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
@@ -184,12 +158,8 @@ export default function TasksScreen() {
     const completing = t.completed_at === null;
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
-    // Completing a recurring task may fast-forward it to its next date instead
-    // of marking it done (still not completed, just re-dated) — the decision
-    // is based on the current DB state (see refreshTaskReminders).
+    // A recurring task may have moved instead of completing.
     refreshTaskReminders(t.id);
-    // Re-sort (completed items sink); each card is an Animated.View +
-    // LinearTransition, so the position change animates smoothly (works under Fabric too).
     reload();
   };
 
@@ -211,7 +181,6 @@ export default function TasksScreen() {
     reload();
   };
 
-  // Runs one bulk action, leaves selection mode and offers one Undo for the lot.
   const finishBulk = (result: BulkResult, key: 'undo.bulkCompleted' | 'undo.bulkMoved' | 'undo.bulkDeleted') => {
     setSelected(null);
     if (result.count > 0) {
@@ -239,9 +208,8 @@ export default function TasksScreen() {
     ]);
   };
 
-  // Swipe edit/delete only on my own tasks; a task shared WITH me can't be
-  // edited or deleted here (only the owner can).
-  const wrapRow = (t: Task, card: JSX.Element) =>
+  // Swipe actions only on my own tasks.
+  const wrapRow = (t: Task, card: React.JSX.Element) =>
     t.shared_owner_uid || selecting ? (
       card
     ) : (
@@ -282,17 +250,14 @@ export default function TasksScreen() {
       const t = row.task;
       const done = t.completed_at !== null;
       const time = extractTime(t.due_date);
-      // Past-due and still open → the date is shown in the danger color.
       const overdue = !done && !!t.due_date && t.due_date.slice(0, 10) < todayDate();
       return (
         <Animated.View
           layout={LinearTransition.duration(260)}
           style={[styles.rowSpacing, i === 0 && { marginTop: 20 }]}
         >
-          {/* marginBottom removed (0) — shared.card's bottom spacing now
-              lives on the outer wrapper (rowSpacing); otherwise the card's
-              own unpainted margin would let the action panel's color bleed
-              through as a thin strip right under the card. */}
+          {/* Spacing lives on the wrapper (rowSpacing): a card margin would show
+              the swipe panel's color as a strip under the card. */}
           {wrapRow(t, (
             <View style={[shared.card, styles.noMargin, selected?.has(t.id) && styles.selectedCard]}>
               <Pressable
@@ -348,8 +313,6 @@ export default function TasksScreen() {
         </Animated.View>
       );
     },
-    // Rows must re-render when openRowId/subtaskCounts change, so they stay in
-    // the dependency list (together with FlatList's extraData).
     [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors, selected, tasks]
   );
 
@@ -359,8 +322,7 @@ export default function TasksScreen() {
         data={rows}
         renderItem={renderItem}
         keyExtractor={(r) => (r.kind === 'divider' ? 'completed-divider' : r.task.id)}
-        // Row appearance also depends on state outside the list (an open swipe,
-        // subtask badges) — FlatList doesn't know about these, so we declare them explicitly.
+        // Rows also depend on state FlatList can't see.
         extraData={`${openRowId}|${tasks.length}|${completedOpen}|${query}|${selected ? [...selected].join(',') : ''}`}
         contentContainerStyle={shared.content}
         keyboardShouldPersistTaps="handled"
@@ -398,9 +360,7 @@ export default function TasksScreen() {
           )
         }
         ListFooterComponent={
-          // If older completed tasks are hidden, they can be revealed with one
-          // tap. The button only shows up when something is genuinely hidden —
-          // it never promises an empty result.
+          // Only when older finished tasks are really hidden.
           !searching && completedOpen && olderCompletedCount > 0 ? (
             <Pressable
               style={styles.showOlderBtn}

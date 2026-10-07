@@ -1,23 +1,11 @@
-// Shared setup for UI (component) tests: test stand-ins for the native
-// modules that components running on react-test-renderer need.
-//
-// - @/ui/DatePickerModal, @/ui/TimePickerModal: custom calendar/wheel pickers
-//   (replacing the native @react-native-community/datetimepicker). In tests
-//   they're replaced with a stand-in that renders nothing but, while open,
-//   registers its onConfirm callback on global.__pickers. Tests simulate a
-//   date/time pick by calling `global.__pickers.date(date)` / `.time(date)`.
-// - @/lib/haptics: haptic feedback (expo-haptics) — a silent no-op in tests.
-// - expo-localization: the device language is pinned (tr) so i18n is deterministic.
-// - @expo/vector-icons: loads its glyph font via expo-font; throws in the jest
-//   environment since there's no native module ("loadedNativeFonts.forEach is
-//   not a function"). Icons are purely visual (accessibility labels live on
-//   the Pressable wrapping them), so they're replaced with a stand-in that renders nothing.
+// Stand-ins for native modules in UI tests:
+// - DatePickerModal / TimePickerModal render nothing; while open they register
+//   onConfirm on global.__pickers, so tests pick with __pickers.date(d) / .time(d);
+// - haptics: no-op; expo-localization: pinned to 'tr';
+// - @expo/vector-icons: render nothing (their font loader throws under jest;
+//   accessibility labels live on the wrapping Pressable).
 
-import '@testing-library/react-native/extend-expect';
-
-// Stand-ins that register onConfirm on global.__pickers, keyed by mode, while open.
-// Since jest.mock factories can't access outer-scope variables (a hoisting
-// restriction), each one repeats its own registration logic.
+// jest.mock factories can't share outer variables, so each repeats the registration.
 jest.mock('@/ui/DatePickerModal', () => ({
   DatePickerModal: (props: any) => {
     const g = globalThis as any;
@@ -35,20 +23,17 @@ jest.mock('@/ui/TimePickerModal', () => ({
   },
 }));
 
-// Haptics is a pure side effect; meaningless in tests, swallow it silently.
 jest.mock('@/lib/haptics', () => ({
   tapLight: jest.fn(),
   tapMedium: jest.fn(),
   notifySuccess: jest.fn(),
 }));
 
-// Vector icons: a stand-in that renders nothing (see the file header).
 jest.mock('@expo/vector-icons', () => {
   const Icon = () => null;
   return { Feather: Icon, Ionicons: Icon };
 });
 
-// Pin the device language (tr) — so the i18n default is deterministic.
 jest.mock('expo-localization', () => ({
   getLocales: () => [{ languageCode: 'tr' }],
 }));

@@ -1,10 +1,5 @@
-// Habit indicator circle — used on both the "Today" and "Habits" screens.
-// A circle outlined with the habit's color, always showing the habit's icon
-// (or the default glyph); completion is shown by filling the circle solid
-// (icon color flips to onAccent for contrast) rather than swapping the icon
-// out for a checkmark — the title's strikethrough is what signals "done".
-// Falls back to the default color if no icon/color is set.
-// Purely visual; tap behavior is defined by the calling screen (Pressable).
+// A habit's circle on Today and Habits: outlined in its color with its icon;
+// completed = filled (the icon switches to onAccent). Visual only.
 
 import { StyleSheet, View } from 'react-native';
 import { useTheme } from '@/ui/ThemeProvider';

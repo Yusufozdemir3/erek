@@ -1,18 +1,11 @@
-// Shared goals (Phase 4): the friend can VIEW a goal and CONTRIBUTE progress.
-// Like sharedHabits.ts this stays OUTSIDE the offline-first sync engine: a
-// friend's goal must never land in the local goals table (it would show up as
-// the recipient's own goal). Reads come from SECURITY DEFINER RPCs that verify
-// the share (supabase/schema.sql, PHASE 4) and are cached in AsyncStorage under
-// `shared:*`, which clearSharedData() wipes on sign-out / account switch.
+// Shared goals (schema.sql PHASE 4): a friend can view a goal and add progress.
+// Kept out of the sync engine — a friend's goal must never land in the local
+// goals table. Reads come from share-checking RPCs, cached under `shared:*`
+// (wiped by clearSharedData()).
 //
-// Contributing is ONLINE-ONLY by design: the entry is written server-side onto
-// the OWNER's goal (add_shared_goal_entry). Queuing it offline would need a
-// second outbox beside the sync engine for rows this device doesn't own — not
-// worth it for a single number the user can simply re-enter.
-//
-// On the owner's side nothing special happens: the friend's entry is an
-// ordinary goal_entries row (with added_by set) that arrives through the normal
-// pull and merges into current_value (see goalRepo.recomputeAllFromEntries).
+// Contributing is online-only: the entry is written onto the OWNER's goal
+// server-side; an offline queue for rows this device doesn't own isn't worth
+// it for one number. The owner simply pulls it as a goal_entries row (added_by set).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Goal, GoalEntry, GoalMilestone, GoalType } from '../types/models';
@@ -30,8 +23,7 @@ export interface SharedGoalDetail {
   goal: Goal;
   owner: Friend;
   milestones: GoalMilestone[];
-  // Newest first; added_by is ALWAYS set here (the owner's rows are resolved
-  // to the owner's uid server-side).
+  // Newest first; added_by is always set (the server fills in the owner's uid).
   entries: GoalEntry[];
   // uid -> display name of everyone who appears in `entries`.
   names: Record<string, string | null>;
@@ -46,9 +38,8 @@ function client() {
   return supabase;
 }
 
-// A remote goal row -> the app's Goal shape. Fields the friend never receives
-// (reminders, baseline) get neutral values; current_value is the server's
-// fresh total, which already includes every contribution.
+// Fields the friend never receives get neutral values; current_value is the
+// server's total including every contribution.
 function toGoal(row: any): Goal {
   return {
     id: row.id,

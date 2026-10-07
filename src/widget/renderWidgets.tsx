@@ -11,12 +11,19 @@ import { CounterWidget } from './CounterWidget';
 import { TasksWidget } from './TasksWidget';
 import { GoalsWidget } from './GoalsWidget';
 import { QuickAddWidget } from './QuickAddWidget';
+import { LockedWidget } from './LockedWidget';
+import { HabitButtonWidget } from './HabitButtonWidget';
+import { isWidgetFree } from '@/plus/plusLogic';
 import {
   COUNTER_WIDGET_NAME,
   GOALS_WIDGET_NAME,
+  HABIT_CHECK_WIDGET_NAME,
+  HABIT_COUNT_WIDGET_NAME,
   QUICKADD_WIDGET_NAME,
   TASKS_WIDGET_NAME,
   WIDGET_NAME,
+  readPicks,
+  type WidgetPicks,
   type WidgetSnapshot,
 } from './widgetSnapshot';
 
@@ -27,18 +34,16 @@ export const ALL_WIDGETS = [
   TASKS_WIDGET_NAME,
   GOALS_WIDGET_NAME,
   QUICKADD_WIDGET_NAME,
+  HABIT_CHECK_WIDGET_NAME,
+  HABIT_COUNT_WIDGET_NAME,
 ];
 
-// The library draws a widget into a bitmap as big as the size the launcher
-// reports, and shows it unscaled from the top-left. MIUI/HyperOS reports a size
-// about 8% larger than the visible frame (measured on a Redmi Note 8 Pro: a
-// 3-cell widget overshoots by ~16dp, a full-width one by more), so the card's
-// right/bottom edge, its rounded corners and anything near it (a "+1" button)
-// are cut off. Leaving a proportional strip empty keeps the card inside the
-// frame; other launchers report the exact size.
+// MIUI/HyperOS reports a widget size ~8% larger than the visible frame (Redmi
+// Note 8 Pro), and the bitmap is drawn unscaled from the top-left, so the right
+// and bottom edges got cut off. A proportional inset keeps the card inside.
 const MIUI_BRANDS = ['xiaomi', 'redmi', 'poco'];
 
-type WidgetSize = { width: number; height: number };
+type WidgetSize = { width: number; height: number; widgetId?: number };
 
 
 function needsMiuiInset(): boolean {
@@ -47,20 +52,37 @@ function needsMiuiInset(): boolean {
   return MIUI_BRANDS.some((b) => maker.includes(b));
 }
 
-function widgetBody(name: string, snapshot: WidgetSnapshot | null): React.JSX.Element {
+function widgetBody(
+  name: string,
+  snapshot: WidgetSnapshot | null,
+  widgetId: number | undefined,
+  picks: WidgetPicks
+): React.JSX.Element {
+  if (snapshot?.locked && !isWidgetFree(name)) return <LockedWidget snapshot={snapshot} name={name} />;
   if (name === COUNTER_WIDGET_NAME) return <CounterWidget snapshot={snapshot} />;
   if (name === TASKS_WIDGET_NAME) return <TasksWidget snapshot={snapshot} />;
   if (name === GOALS_WIDGET_NAME) return <GoalsWidget snapshot={snapshot} />;
   if (name === QUICKADD_WIDGET_NAME) return <QuickAddWidget snapshot={snapshot} />;
+  if (name === HABIT_CHECK_WIDGET_NAME || name === HABIT_COUNT_WIDGET_NAME) {
+    const habitId = widgetId === undefined ? null : (picks[String(widgetId)] ?? null);
+    return (
+      <HabitButtonWidget
+        snapshot={snapshot}
+        habitId={habitId}
+        kind={name === HABIT_COUNT_WIDGET_NAME ? 'numeric' : 'binary'}
+      />
+    );
+  }
   return <TodayWidget snapshot={snapshot} />;
 }
 
 export function widgetFor(
   name: string,
   snapshot: WidgetSnapshot | null,
-  size?: WidgetSize
+  size?: WidgetSize,
+  picks: WidgetPicks = {}
 ): React.JSX.Element {
-  const body = widgetBody(name, snapshot);
+  const body = widgetBody(name, snapshot, size?.widgetId, picks);
   if (!needsMiuiInset()) return body;
   return (
     <FlexWidget
@@ -82,11 +104,12 @@ export async function updateWidgets(
   snapshot: WidgetSnapshot | null,
   names: string[] = ALL_WIDGETS
 ): Promise<void> {
+  const picks = await readPicks();
   for (const widgetName of names) {
     try {
       await requestWidgetUpdate({
         widgetName,
-        renderWidget: (info) => widgetFor(widgetName, snapshot, info),
+        renderWidget: (info) => widgetFor(widgetName, snapshot, info, picks),
         widgetNotFound: () => {},
       });
     } catch {

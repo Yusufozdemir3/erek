@@ -1,19 +1,17 @@
-// Sihirbazın saf mantığı: adım sırası, atlanabilirlik, öneriler, tarih hesapları.
+// Sihirbazın saf mantığı: adım sırası, atlanabilirlik, tarih hesapları.
 
 import {
   buildSteps,
+  continueBlocked,
   dueDateOf,
   deadlineIn,
   DEADLINE_PRESET_DAYS,
-  GOAL_SUGGESTIONS,
-  HABIT_SUGGESTIONS,
   parseTarget,
   progress,
   scheduleFor,
   SKIPPABLE,
   summaryLines,
 } from '../wizardLogic';
-import { translations } from '@/i18n/translations';
 
 describe('buildSteps', () => {
   it('her şey varsa tam sıra: karşılama … bitiş', () => {
@@ -65,28 +63,6 @@ describe('progress', () => {
 
   it('adım çıkınca toplam kendiliğinden küçülür', () => {
     expect(progress(buildSteps({ accounts: false, widget: false }), 1)).toEqual({ current: 1, total: 5 });
-  });
-});
-
-describe('öneri listeleri', () => {
-  // (Simgelerin gerçekten var olduğu SetupWizard.ui.test'te denetlenir: habitIcons.tsx
-  // bir ekran bileşeni, bu hızlı Node ortamında derlenmez.)
-  it('her öneri üç dilde karşılanıyor', () => {
-    for (const s of HABIT_SUGGESTIONS) {
-      for (const lang of ['tr', 'en', 'de'] as const) expect(translations[lang][s.labelKey]).toBeTruthy();
-    }
-    for (const g of GOAL_SUGGESTIONS) {
-      for (const lang of ['tr', 'en', 'de'] as const) {
-        expect(translations[lang][g.labelKey]).toBeTruthy();
-        expect(translations[lang][g.unitKey]).toBeTruthy();
-      }
-      expect(g.target).toBeGreaterThan(0);
-    }
-  });
-
-  it('öneri kimlikleri benzersiz', () => {
-    expect(new Set(HABIT_SUGGESTIONS.map((s) => s.id)).size).toBe(HABIT_SUGGESTIONS.length);
-    expect(new Set(GOAL_SUGGESTIONS.map((s) => s.id)).size).toBe(GOAL_SUGGESTIONS.length);
   });
 });
 
@@ -155,5 +131,22 @@ describe('summaryLines', () => {
   it('hesap satırı yalnız bağlanıldıysa çıkar', () => {
     expect(summaryLines({}, { account: 'done' }, false, true)).toEqual([{ key: 'account' }]);
     expect(summaryLines({}, { account: 'done' }, false, false)).toEqual([]);
+  });
+});
+
+describe('continueBlocked', () => {
+  it('form yoksa Devam açık', () => {
+    expect(continueBlocked(null, false)).toBe(false);
+  });
+  it('boş form: adımda bir şey eklenene kadar kapalı', () => {
+    expect(continueBlocked({ ready: false, dirty: false }, false)).toBe(true);
+    expect(continueBlocked({ ready: false, dirty: false }, true)).toBe(false);
+  });
+  it('yarım form her zaman kapalı (yazılan kaybolmasın)', () => {
+    expect(continueBlocked({ ready: false, dirty: true }, false)).toBe(true);
+    expect(continueBlocked({ ready: false, dirty: true }, true)).toBe(true);
+  });
+  it('kaydedilebilir form açık', () => {
+    expect(continueBlocked({ ready: true, dirty: true }, false)).toBe(false);
   });
 });

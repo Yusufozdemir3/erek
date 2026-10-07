@@ -1,7 +1,5 @@
-// Data loading logic for the habit stats screen: summary numbers (current/
-// longest streak, completion rate, total amount), day/week/month completion
-// series (bar chart), and streak history.
-// All derived from the logsInRange/allLogs queries.
+// Habit stats screen data: streaks, totals, the score chart series, period
+// goals and the History card, all derived from the habit's logs.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -20,36 +18,26 @@ import {
 import { buildSeries, type HabitChartSeries } from '@/lib/habitSeries';
 import { currentStreakFrom, longestStreakFrom } from '@/lib/streaks';
 
-// The score chart's data generation and types moved to lib/habitSeries.ts (pure
-// logic, no React dependency — so its tests run fast in the 'logic' project).
-// Re-exported from here so screens can keep importing these types from this file.
 export type { ChartBucket, HabitChartSeries } from '@/lib/habitSeries';
 
 const WINDOW_DAYS = 90;
 
-// "Goal" comparison: the FULL period target for the current day/week/month/year
-// (future days included, "what would this be if you did this period entirely")
-// versus the amount accumulated so far. The 'today' row is meaningless for a
-// quota habit (no single-day target) — buildGoalPeriods filters it out.
+// The current day/week/month/quarter/year: its WHOLE target (future days
+// included) vs. what's done so far. Quota habits have no 'today' row.
 export interface GoalPeriodStat {
   key: 'today' | 'week' | 'month' | 'quarter' | 'year';
   done: number;
   goal: number;
 }
 
-// A bucket's (day/week/month) total on the "History" card — only meaningful for
-// numeric/timer (target_amount-having) habits (a binary habit has no concept of
-// "total amount"). If partial=true, the bucket either starts with no data
-// before today/this month (the habit's first bucket) or is still ongoing (not
-// finished yet) — the UI shows it faded.
+// One bar of the History card (numeric/timer habits). partial = the habit's
+// first bucket or one still running; drawn faded.
 export interface BucketTotal {
   bucketStart: string;
   total: number;
   partial: boolean;
 }
 
-// The "History" card's Day/Week/Month options — the same three-way period
-// pattern as CompletionChart, but carries the ACTUAL TOTAL amount instead of a ratio.
 export interface HistoryTotals {
   day: BucketTotal[];
   week: BucketTotal[];
@@ -60,15 +48,10 @@ export interface HabitStats {
   habit: Habit | null;
   currentStreak: number;
   longestStreak: number;
-  totalAmount: number | null;  // null if not numeric (no target_amount)
-  // NOTE: completionRate/scheduledCount/completedCount and streaks were REMOVED —
-  // lifetime completion rate was a blind copy of the EMA on the score card, and
-  // the streak history list was also dropped from the screen (see
-  // app/habit/[id].tsx). Both had that screen as their only consumer; keeping
-  // the fields would have meant a wasted query/loop on every load.
-  series: HabitChartSeries | null; // null if there are no logs at all
-  goalPeriods: GoalPeriodStat[]; // Today/Week/Month/3 Months/Year goal comparison
-  historyTotals: HistoryTotals | null; // "History" card — populated only for numeric/timer habits
+  totalAmount: number | null;  // null without a target
+  series: HabitChartSeries | null; // null without any logs
+  goalPeriods: GoalPeriodStat[];
+  historyTotals: HistoryTotals | null; // numeric/timer only
 }
 
 export const EMPTY_HABIT_STATS: HabitStats = {
@@ -81,14 +64,9 @@ export const EMPTY_HABIT_STATS: HabitStats = {
   historyTotals: null,
 };
 
-// Charts are now horizontally scrollable (see habit/[id].tsx) — fewer fit on
-// screen at once, but the reachable range via scrolling has grown.
+// Buckets per History tab; older ones are reached by scrolling.
 const HISTORY_BUCKETS = 30;
 
-// The "History" card's Day/Week/Month totals — only meaningful for a habit with
-// a target_amount (numeric/timer). The last HISTORY_BUCKETS buckets per period;
-// anything that doesn't fit on screen is reached by scrolling horizontally (see
-// habit/[id].tsx HistoryBars).
 function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): HistoryTotals | null {
   if (habit.target_amount == null || allLogs.length === 0) return null;
   const amountByDate = new Map(allLogs.map((l) => [l.log_date, l.amount ?? 0]));
@@ -114,7 +92,7 @@ function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): H
 
   // — Week: last HISTORY_BUCKETS weeks (Monday-first) —
   const monday = new Date(`${today}T00:00:00`);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); // this week's Monday
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
   const week: BucketTotal[] = [];
   for (let i = HISTORY_BUCKETS - 1; i >= 0; i--) {
     const start = new Date(monday);
@@ -148,8 +126,7 @@ function buildHistoryTotals(habit: Habit, allLogs: HabitLog[], today: string): H
   return { day, week, month };
 }
 
-// The period's FULL (future included) start/end day — the day/week/month/year
-// today falls within. 'today' is never generated for a quota habit (see the caller).
+// The full calendar periods containing today.
 function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: string; end: string }[] {
   const weekStart = weekStartOf(today);
   const weekEndD = new Date(`${weekStart}T00:00:00`);
@@ -157,8 +134,7 @@ function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: s
   const t = new Date(`${today}T00:00:00`);
   const monthStart = toYmd(new Date(t.getFullYear(), t.getMonth(), 1));
   const monthEnd = toYmd(new Date(t.getFullYear(), t.getMonth() + 1, 0));
-  // "3 Months": the current calendar quarter (Jan-Mar/Apr-Jun/Jul-Sep/Oct-Dec) —
-  // keeps the same "fixed calendar range" logic as the other periods of the year.
+  // "3 months" = the calendar quarter.
   const qStartMonth = Math.floor(t.getMonth() / 3) * 3;
   const quarterStart = toYmd(new Date(t.getFullYear(), qStartMonth, 1));
   const quarterEnd = toYmd(new Date(t.getFullYear(), qStartMonth + 3, 0));
@@ -171,11 +147,8 @@ function goalPeriodBounds(today: string): { key: GoalPeriodStat['key']; start: s
   ];
 }
 
-// For each period: goal = the target for ALL scheduled days in the period
-// (future included, "if you did this period entirely"), done = the actual
-// amount accumulated so far. Since a quota (X times a week) counts every day as
-// "available," the scheduled-day filter isn't applied; the target is scaled
-// from the weekly quota to the period's length instead.
+// goal = the target over every scheduled day of the period; done = so far.
+// A quota habit scales its weekly quota to the period instead.
 function buildGoalPeriods(habit: Habit, allLogs: HabitLog[], today: string): GoalPeriodStat[] {
   const logByDate = new Map(allLogs.map((l) => [l.log_date, l]));
   const perDayTarget = habit.target_amount ?? 1;
@@ -214,13 +187,9 @@ function buildGoalPeriods(habit: Habit, allLogs: HabitLog[], today: string): Goa
     });
 }
 
-// Pure: everything on the stats screen derived from the habit + its full log
-// history. Shared by the local screen (logs from SQLite) and a friend's shared
-// habit (logs fetched from the server, see useSharedHabit).
+// Pure, so a friend's shared habit (useSharedHabit) gets the same numbers.
 export function computeHabitStats(habit: Habit, allLogs: HabitLog[], today: string): HabitStats {
-  // The WINDOW_DAYS window is only read for the total amount; the
-  // scheduled/completed day counts and completion-rate calculation were
-  // REMOVED (see the HabitStats comment).
+  // The window only feeds the total amount.
   const windowStart = new Date(`${today}T00:00:00`);
   windowStart.setDate(windowStart.getDate() - (WINDOW_DAYS - 1));
   const windowStartYmd = toYmd(windowStart);
@@ -237,9 +206,6 @@ export function computeHabitStats(habit: Habit, allLogs: HabitLog[], today: stri
     currentStreak: currentStreakFrom(habit, completedDates, today),
     longestStreak: longestStreakFrom(habit, completedDates, today),
     totalAmount,
-    // Gate REMOVED (2026-07-23): since the score now starts at 0 and climbs
-    // step by step, the low value on early days isn't misleading — it IS the
-    // model; hiding it was hiding exactly the climb the user was meant to see.
     series: buildSeries(habit, allLogs),
     goalPeriods: buildGoalPeriods(habit, allLogs, today),
     historyTotals: buildHistoryTotals(habit, allLogs, today),

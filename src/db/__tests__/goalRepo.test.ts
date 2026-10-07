@@ -1,6 +1,5 @@
-// goalRepo tests: CRUD, numeric progress (addProgress) clamping,
-// current_value clamp in update, progressRatio, the counter logic being
-// silently ignored for milestone goals, and isCompleted/setCompleted.
+// goalRepo: CRUD, addProgress (0 floor, no ceiling, entries), the derived
+// current_value, progressRatio and milestone completion.
 
 import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
@@ -88,8 +87,6 @@ describe('listByUser', () => {
 describe('update', () => {
   it('başlık/hedef/birim/son tarihi değiştirir ve yeniden senkron bekletir (synced=0)', () => {
     const goal = numericGoal();
-    // The row read right after create has synced=0; we'd set it to 1 to fake being synced.
-    // (This is just to observe that update pulls synced back to 0.)
     goalRepo.update(goal.id, { title: '200 km koş', target_value: 200, unit: 'mil' });
     const fromDb = goalRepo.getById(goal.id)!;
     expect(fromDb.title).toBe('200 km koş');
@@ -111,8 +108,7 @@ describe('update', () => {
   });
 
   it('hedefi düşürmek birikmiş ilerlemeyi KESMEZ', () => {
-    // The clamp here used to pull 80 down to 50: the work the user had
-    // actually done was silently wiped out just because they lowered their target.
+    // Lowering the target must not cut progress down to it.
     const goal = numericGoal({ target_value: 100 });
     goalRepo.update(goal.id, { target_value: 50, current_value: 80 });
     const fromDb = goalRepo.getById(goal.id)!;
@@ -127,10 +123,8 @@ describe('update', () => {
   });
 });
 
-// addProgress now also writes the entry history (previously every caller had
-// to separately call goalEntryRepo.create, and habit contributions got missed).
-// The record must capture the ACTUAL delta applied, not the REQUESTED one — otherwise
-// history contradicts current_value and the tempo/projection computed from it inflates.
+// addProgress records the APPLIED delta, not the requested one, so history
+// and pace agree with current_value.
 describe('addProgress girdi geçmişi', () => {
   it('uygulanan farkı girdi olarak yazar ve döndürür', () => {
     const goal = numericGoal({ target_value: 100 });
@@ -179,9 +173,8 @@ describe('addProgress girdi geçmişi', () => {
   });
 });
 
-// current_value is now a DERIVED cache: value_baseline + the sum of active
-// entries (see migration019). If this invariant breaks, sync's post-pull
-// recompute shifts the user's value — hence it's tested separately.
+// current_value = value_baseline + live entries; if this breaks, the
+// post-pull recompute shifts the user's value.
 describe('current_value değişmezi (baseline + girdiler)', () => {
   const invariant = (goalId: string) => {
     const goal = goalRepo.getById(goalId)!;
@@ -205,9 +198,7 @@ describe('current_value değişmezi (baseline + girdiler)', () => {
   });
 
   it('"Mevcut değer"i ELLE değiştirmek baseline\'ı yazar, girdi geçmişine dokunmaz', () => {
-    // A manual correction isn't a day's work; it shouldn't inflate tempo (which is
-    // why no entry is written). But the value still needs to be written somewhere
-    // so it survives recompute — that place is the baseline.
+    // A correction isn't progress (no entry), so it lives in the baseline.
     const goal = numericGoal();
     goalRepo.addProgress(goal.id, 40);
     const entriesBefore = goalEntryRepo.listByGoal(goal.id).length;
@@ -255,10 +246,7 @@ describe('current_value değişmezi (baseline + girdiler)', () => {
     expect(goalRepo.getById(goal.id)!.current_value).toBe(100);
   });
 
-  // When "also add to progress history" is checked, the delta is written to the
-  // ENTRY, not the BASELINE. Doing both would make the total diverge from
-  // current_value, and the value would jump on the next recompute with the user
-  // doing nothing (this was exactly the bug the screen used to have — see the goalRepo.update comment).
+  // Checked: the delta goes to an entry only — both would count it twice.
   describe('log_manual_change', () => {
     it('işaretliyken fark girdi olarak yazılır, baseline sabit kalır', () => {
       const goal = numericGoal();
@@ -349,13 +337,8 @@ describe('addProgress', () => {
   });
 });
 
-// A goal that's OVERSHOT its target (current_value > target_value) is a normal
-// state: the timer doesn't STOP once it reaches the target, the user can keep
-// working. addProgress's ceiling clamp used to produce a delta in the OPPOSITE
-// of the requested direction on such a goal ("add +1" would pull current_value
-// back down to the ceiling, wiping out all the excess, and drop a huge negative
-// entry into history that never actually happened). The ceiling has been removed
-// entirely — these tests lock in that this behavior never comes back.
+// Passing the target is normal (the timer keeps going). Adding to such a goal
+// must never pull it back down to the target.
 describe('addProgress — hedefi aşmış hedef', () => {
   // Sets up a state where 100 minutes (6000s) were logged against a 1-hour (3600s) goal.
   const overshotGoal = () => {
@@ -384,9 +367,7 @@ describe('addProgress — hedefi aşmış hedef', () => {
     expect(goalRepo.getById(goal.id)!.current_value).toBe(5940);
   });
 
-  // The net effect of a linked habit's "check → uncheck" cycle must be ZERO.
-  // With the ceiling in place, +1 was swallowed while -1 was fully applied;
-  // every cycle silently stole 1 unit from the goal (see habitRepo.bumpGoalIfLinked).
+  // A linked habit's check → uncheck must net to zero, even on a full goal.
   it('hedef doluyken +1/-1 döngüsü simetriktir (net etki 0)', () => {
     const goal = numericGoal({ target_value: 100 });
     goalRepo.addProgress(goal.id, 100); // fully filled

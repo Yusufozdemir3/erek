@@ -1,9 +1,11 @@
 // The individual pages of the setup wizard. Each one is self-contained: it owns
 // its own form state, writes through the same repos the + sheet uses (no SQL
 // here), and tells the shell when it has done something (`onCompleted`) so the
-// shell can tell "done" from "skipped". Nothing in a step is mandatory.
+// shell can tell "done" from "skipped". The habit/task/goal pages also report
+// their open form (`registerForm`): "Continue" saves it, and won't leave an
+// empty or half-filled one — "Skip this step" does that.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { goalRepo, habitRepo, reminderRepo, taskRepo } from '@/db';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -12,6 +14,8 @@ import { todayDate } from '@/lib/helpers';
 import { ensurePermission, notificationPermission } from '@/lib/notifications';
 import { getNotificationPrefs, setNotificationPref } from '@/lib/notificationPrefs';
 import { parseTask } from '@/lib/quickAdd/parseTask';
+import { isAccentFree } from '@/plus/plusLogic';
+import { useFeaturesUnlocked } from '@/plus/plusStore';
 import { useAppData } from '@/ui/AppData';
 import { NUMBER_MAX_LEN, TITLE_MAX_LEN, UNIT_MAX_LEN } from '@/ui/formLimits';
 import { LineIcon, type LineIconId } from '@/ui/LineIcon';
@@ -26,21 +30,42 @@ import {
   DEADLINE_PRESET_DAYS,
   deadlineIn,
   dueDateOf,
-  GOAL_SUGGESTIONS,
-  HABIT_SUGGESTIONS,
   parseTarget,
   REMINDER_PRESETS,
   scheduleFor,
   summaryLines,
   type Created,
+  type FormStatus,
   type HabitFrequency,
   type Outcomes,
 } from './wizardLogic';
+
+export interface WizardForm extends FormStatus {
+  submit: () => void;
+}
 
 export interface StepProps {
   userId: string;
   onCompleted: () => void; // the user did something on this page
   onCreated: (kind: keyof Created, title: string) => void;
+  registerForm: (form: WizardForm | null) => void;
+}
+
+// Keeps the shell's view of this page's form current; null once it's closed
+// (the "added" view) or the page is gone.
+function useWizardForm(
+  registerForm: StepProps['registerForm'],
+  open: boolean,
+  ready: boolean,
+  dirty: boolean,
+  submit: () => void
+) {
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useEffect(() => {
+    registerForm(open ? { ready, dirty, submit: () => submitRef.current() } : null);
+  }, [registerForm, open, ready, dirty]);
+  useEffect(() => () => registerForm(null), [registerForm]);
 }
 
 function useWizardStyles() {
@@ -96,6 +121,7 @@ export function WelcomeStep() {
 export function LookStep({ onCompleted }: StepProps) {
   const { t, lang, setLang } = useI18n();
   const { mode, setMode, accent, setAccent, scheme } = useTheme();
+  const unlocked = useFeaturesUnlocked();
   const { styles } = useWizardStyles();
   const themes: { mode: ThemeMode; labelKey: string }[] = [
     { mode: 'light', labelKey: 'profile.themeLight' },
@@ -144,7 +170,7 @@ export function LookStep({ onCompleted }: StepProps) {
 
       <Text style={styles.label}>{t('profile.accentColor')}</Text>
       <View style={styles.accentRow}>
-        {ACCENT_ORDER.map((key) => {
+        {ACCENT_ORDER.filter((k) => unlocked || isAccentFree(k)).map((key) => {
           const on = accent === key;
           return (
             <Pressable
@@ -174,33 +200,21 @@ export function LookStep({ onCompleted }: StepProps) {
 
 // ------------------------------------------------------------------ habit
 
-export function HabitStep({ userId, onCompleted, onCreated }: StepProps) {
+export function HabitStep({ userId, onCompleted, onCreated, registerForm }: StepProps) {
   const { t } = useI18n();
   const { colors, styles } = useWizardStyles();
   const [title, setTitle] = useState('');
-  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [freq, setFreq] = useState<HabitFrequency>('daily');
   const [remind, setRemind] = useState<string | null>(null);
   const [added, setAdded] = useState<string | null>(null);
 
-  const pick = (id: string) => {
-    const s = HABIT_SUGGESTIONS.find((x) => x.id === id);
-    if (!s) return;
-    setSuggestion(id);
-    setTitle(t(s.labelKey));
-    setFreq(s.schedule?.timesPerWeek ? 'threePerWeek' : 'daily');
-  };
-
   const add = () => {
     const name = title.trim();
     if (!name) return;
-    const s = HABIT_SUGGESTIONS.find((x) => x.id === suggestion);
     const created = habitRepo.create({
       user_id: userId,
       title: name,
       kind: 'binary',
-      // The icon only belongs to the suggestion's own wording: a title edited by hand loses it.
-      icon: s && t(s.labelKey) === name ? s.icon : null,
       schedule: scheduleFor(freq),
       // Same as the habit form: a new habit starts today (otherwise the days before
       // it existed would count as missed in the statistics and the weekly review).
@@ -213,11 +227,12 @@ export function HabitStep({ userId, onCompleted, onCreated }: StepProps) {
     onCompleted();
     setAdded(name);
   };
+  const filled = title.trim().length > 0;
+  useWizardForm(registerForm, !added, filled, filled, add);
 
   const again = () => {
     setAdded(null);
     setTitle('');
-    setSuggestion(null);
     setFreq('daily');
     setRemind(null);
   };
@@ -236,19 +251,10 @@ export function HabitStep({ userId, onCompleted, onCreated }: StepProps) {
         </>
       ) : (
         <>
-          <Text style={styles.label}>{t('wizard.habit.pick')}</Text>
-          <View style={styles.chips}>
-            {HABIT_SUGGESTIONS.map((s) => (
-              <Chip key={s.id} label={t(s.labelKey)} on={suggestion === s.id} onPress={() => pick(s.id)} />
-            ))}
-          </View>
           <TextInput
             style={[styles.input, { marginTop: 12 }]}
             value={title}
-            onChangeText={(v) => {
-              setTitle(v);
-              setSuggestion(null);
-            }}
+            onChangeText={setTitle}
             placeholder={t('wizard.habit.placeholder')}
             placeholderTextColor={colors.faint}
             maxLength={TITLE_MAX_LEN}
@@ -290,7 +296,7 @@ export function HabitStep({ userId, onCompleted, onCreated }: StepProps) {
 
 // ------------------------------------------------------------------- task
 
-export function TaskStep({ userId, onCompleted, onCreated }: StepProps) {
+export function TaskStep({ userId, onCompleted, onCreated, registerForm }: StepProps) {
   const { t, lang } = useI18n();
   const { colors, styles } = useWizardStyles();
   const [text, setText] = useState('');
@@ -313,6 +319,7 @@ export function TaskStep({ userId, onCompleted, onCreated }: StepProps) {
     onCompleted();
     setAdded(title);
   };
+  useWizardForm(registerForm, !added, !!title, text.trim().length > 0, add);
 
   const again = () => {
     setAdded(null);
@@ -379,26 +386,16 @@ export function TaskStep({ userId, onCompleted, onCreated }: StepProps) {
 
 // ------------------------------------------------------------------- goal
 
-export function GoalStep({ userId, onCompleted, onCreated }: StepProps) {
+export function GoalStep({ userId, onCompleted, onCreated, registerForm }: StepProps) {
   const { t } = useI18n();
   const { colors, styles } = useWizardStyles();
   const [title, setTitle] = useState('');
   const [target, setTarget] = useState('');
   const [unit, setUnit] = useState('');
-  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [days, setDays] = useState<number>(90);
   const [added, setAdded] = useState<string | null>(null);
   const targetValue = parseTarget(target);
   const ready = title.trim().length > 0 && targetValue !== null;
-
-  const pick = (id: string) => {
-    const g = GOAL_SUGGESTIONS.find((x) => x.id === id);
-    if (!g) return;
-    setSuggestion(id);
-    setTitle(t(g.labelKey));
-    setTarget(String(g.target));
-    setUnit(t(g.unitKey));
-  };
 
   const add = () => {
     if (!ready || targetValue === null) return;
@@ -416,13 +413,14 @@ export function GoalStep({ userId, onCompleted, onCreated }: StepProps) {
     onCompleted();
     setAdded(name);
   };
+  const dirty = [title, target, unit].some((s) => s.trim().length > 0);
+  useWizardForm(registerForm, !added, ready, dirty, add);
 
   const again = () => {
     setAdded(null);
     setTitle('');
     setTarget('');
     setUnit('');
-    setSuggestion(null);
     setDays(90);
   };
 
@@ -440,19 +438,10 @@ export function GoalStep({ userId, onCompleted, onCreated }: StepProps) {
         </>
       ) : (
         <>
-          <Text style={styles.label}>{t('wizard.goal.pick')}</Text>
-          <View style={styles.chips}>
-            {GOAL_SUGGESTIONS.map((g) => (
-              <Chip key={g.id} label={t(g.labelKey)} on={suggestion === g.id} onPress={() => pick(g.id)} />
-            ))}
-          </View>
           <TextInput
             style={[styles.input, { marginTop: 12 }]}
             value={title}
-            onChangeText={(v) => {
-              setTitle(v);
-              setSuggestion(null);
-            }}
+            onChangeText={setTitle}
             placeholder={t('wizard.goal.placeholder')}
             placeholderTextColor={colors.faint}
             maxLength={TITLE_MAX_LEN}

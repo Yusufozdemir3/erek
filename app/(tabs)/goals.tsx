@@ -1,16 +1,6 @@
-// "Goals" tab — two goal types:
-//  - numeric: a progress bar (e.g. 40/100 km)
-//  - milestone: can be broken into steps (same logic as task/subtask) — auto-
-//    completes once all steps are done (if any).
-// Both types now have a due date (mandatory, set in GoalForm) and can have
-// optional milestones (goal_milestones) — not just mandatory for the
-// 'milestone' type, a 'numeric' goal can also get them as an optional checklist.
-// The list is a READ-ONLY summary/navigation surface: progress entry (numeric
-// stepper), marking complete (milestone), and adding milestones no longer
-// happen here — all of it lives on the /goal/[id] screen's 'Overview'/
-// 'Milestones' tabs ("entry" in one single place).
-// No adding here: that happens from the ＋ menu in the tab bar (the form lives in AddSheet).
-// Architecture rule: no SQL; only goalRepo/goalMilestoneRepo are called.
+// Goals tab: a read-only list (progress, steps, deadline). Progress entry and
+// steps live on the goal screen (/goal/[id]): the title opens its Edit tab, the
+// stats pill its Stats tab, anything else Overview. Adding is in the ＋ menu.
 
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -43,22 +33,16 @@ export default function GoalsScreen() {
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [milestoneCounts, setMilestoneCounts] = useState<Record<string, { done: number; total: number }>>({});
-  // Only one card's swipe actions may be open at a time.
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
-  // Editing is no longer a separate modal — it's the 'edit' tab on the
-  // /goal/[id] screen (see app/goal/[id].tsx). The stats icon opens the same
-  // screen on the 'stats' tab.
   const openGoal = (id: string, tab: 'stats' | 'edit') =>
     router.push({ pathname: '/goal/[id]', params: { id, tab } });
 
   const reload = useCallback(() => {
     const list = goalRepo.listByUser(user.id);
     setGoals(list);
-    // Milestone badges are derived from the views: a threshold (amount-bearing)
-    // milestone's "done" state lives NOT in the completed column but in the
-    // goal's current_value (see milestoneViews). The number of goals is small
-    // — a query per goal is acceptable (same rationale as useGoalStats.linkedHabits).
+    // Step counts come from the views (a threshold is done by current_value);
+    // a query per goal is fine for a short list.
     const counts: Record<string, { done: number; total: number }> = {};
     for (const g of list) {
       const views = milestoneViews(goalMilestoneRepo.listByGoal(g.id), g.current_value);
@@ -67,7 +51,6 @@ export default function GoalsScreen() {
       }
     }
     setMilestoneCounts(counts);
-    // dataVersion: refreshes without losing focus when a goal is added from the ＋ menu.
   }, [user.id, dataVersion]);
 
   useFocusEffect(reload);
@@ -77,8 +60,7 @@ export default function GoalsScreen() {
     shared_.reload();
   });
 
-  // Delete confirmation now lives in SwipeableRow's own two-tap action button
-  // (the panel that opens to the right) — deletion here is immediate.
+  // Already confirmed by SwipeableRow's second tap.
   const undo = useUndoNotice();
   const remove = (id: string) => {
     const title = goals.find((g) => g.id === id)?.title ?? '';
@@ -116,7 +98,6 @@ export default function GoalsScreen() {
         </View>
         <Text style={shared.subtitle}>{t('screen.goalsSubtitle')}</Text>
 
-        {/* LIST */}
         {goals.length === 0 ? (
           <EmptyState
             icon="goal"
@@ -143,21 +124,18 @@ export default function GoalsScreen() {
                 editA11yLabel={t('common.editA11y', { title: goal.title })}
                 deleteA11yLabel={t('common.deleteA11y', { title: goal.title })}
               >
-              {/* marginBottom removed (0) — see the same fix comment in tasks.tsx. */}
+              {/* spacing on the wrapper, see tasks.tsx */}
               <View style={[styles.goalCard, styles.noMargin]}>
                 <View style={styles.goalHead}>
-                  {/* Read-only status indicator — checking off now happens on
-                      /goal/[id]'s Overview tab (see the file-header comment). */}
+                  {/* Status only; completing happens on the goal screen. */}
                   {goal.goal_type === 'milestone' && (
                     <View style={[styles.checkbox, completed && styles.checkboxDone]}>
                       {completed && <Text style={styles.checkmark}>✓</Text>}
                     </View>
                   )}
-                  {/* Tapping the title opens the goal screen on the 'Edit' tab */}
                   <Pressable style={styles.titleArea} onPress={() => openGoal(goal.id, 'edit')}>
                     <Text style={[styles.goalTitle, completed && styles.goalTitleDone]}>{goal.title}</Text>
                   </Pressable>
-                  {/* Tapping the icon opens the same screen on the 'Stats' tab (see the week strip in habits.tsx) */}
                   <Pressable
                     onPress={() => openGoal(goal.id, 'stats')}
                     hitSlop={8}
@@ -176,8 +154,7 @@ export default function GoalsScreen() {
                     <View style={[styles.progressFill, { width: `${Math.round(ratio * 100)}%` }]} />
                   </View>
                 )}
-                {/* One compact meta row: value · percent · steps on the left,
-                    the due-date label on the right. */}
+                {/* value · percent · steps on the left, deadline on the right */}
                 {(() => {
                   const parts: string[] = [];
                   if (goal.goal_type === 'numeric') {
@@ -192,7 +169,6 @@ export default function GoalsScreen() {
                     );
                     if (goal.target_value != null) parts.push(percentLabel(Math.round(ratio * 100), lang));
                   }
-                  // Milestones can show on both types (see the file-header comment).
                   if (counts && counts.total > 0) {
                     parts.push(
                       `${counts.done}/${counts.total} ${t('goal.milestoneCountSuffix', { n: counts.total })}`
@@ -236,7 +212,7 @@ const makeStyles = (c: Colors) =>
       borderWidth: 1,
       borderColor: c.border,
       padding: 13,
-      marginBottom: 10, // overridden by noMargin (see rowSpacing); moved to the outer wrapper
+      marginBottom: 10, // overridden by noMargin (spacing is on the wrapper)
     },
     goalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
     checkbox: {
@@ -267,9 +243,8 @@ const makeStyles = (c: Colors) =>
     goalMeta: { fontSize: 14, color: c.muted, fontWeight: '600' },
     metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 },
     metaLeft: { flex: 1 },
-    // Due date — right end of the meta row.
     deadlineLeft: { fontSize: 12, color: c.streak, fontWeight: '700' },
-    // "Stats" entry: the bare chart icon wasn't self-explanatory, so it gets a label.
+    // Labelled: a bare chart icon wasn't clear.
     statsPill: {
       flexDirection: 'row',
       alignItems: 'center',

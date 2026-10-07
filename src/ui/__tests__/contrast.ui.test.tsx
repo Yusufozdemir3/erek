@@ -1,16 +1,6 @@
-// TEXT CONTRAST — a WCAG AA (4.5:1) guard.
-//
-// WHY THIS EXISTS: the color palette is tuned by hand, and saying "let's make
-// this tone a bit fainter" silently means losing accessibility. That's
-// exactly what the audit found: `faint` was 2.5:1 in light theme, and that
-// tone was used in REAL content like form placeholders, hint lines, and
-// footnotes — i.e. text that's unreadable in sunlight or with age-related
-// vision loss.
-//
-// Scope: text-bearing tones (text/muted/faint) are measured against both the
-// screen background and the card background. Decorative/divider tones
-// (border, line, track) are NOT text and aren't subject to the AA body
-// threshold — deliberately excluded.
+// WCAG AA (4.5:1) for the text tones (text/muted/faint) on the screen and card
+// backgrounds, so a palette tweak can't quietly cost readability. Border, line
+// and track aren't text and are excluded.
 
 import { blackColors, darkColors, lightColors, percentLabel, switchColors, type Colors } from '@/ui/theme';
 import { MISSED_TINT_ALPHA } from '@/ui/habit/habitStatsStyles';
@@ -57,8 +47,7 @@ describe('metin kontrastı — WCAG AA', () => {
   });
 
   it.each(PALETTES)('%s tema: metin tonları KART zemininde de AA geçer', (_name, colors) => {
-    // Most text sits on cards; since the card background differs from the
-    // screen background, it must be measured separately (in light theme the card is white, the screen a light gray).
+    // Cards differ from the screen background, so both are measured.
     const failing = TEXT_TOKENS.filter((token) => ratio(colors[token], colors.card) < AA_BODY).map(
       (token) => `${token} (${ratio(colors[token], colors.card).toFixed(2)}:1)`
     );
@@ -66,9 +55,7 @@ describe('metin kontrastı — WCAG AA', () => {
   });
 
   it.each(PALETTES)('%s tema: üç kademe arasındaki hiyerarşi korunur', (_name, colors) => {
-    // text should be the most legible, faint the palest. If the ordering
-    // broke while darkening tones to clear the threshold (e.g. faint ending
-    // up darker than muted), it would silently invert the visual hierarchy.
+    // text > muted > faint must stay in order.
     const t = ratio(colors.text, colors.bg);
     const m = ratio(colors.muted, colors.bg);
     const f = ratio(colors.faint, colors.bg);
@@ -82,10 +69,7 @@ describe('metin kontrastı — WCAG AA', () => {
     expect(ratio(lightColors.onAccent, lightColors.primary)).toBeGreaterThanOrEqual(4.5);
   });
 
-  // The day number on a missed calendar cell used to be the muted gray on red
-  // (~2:1) — 8th–16th of a month read as blank squares in the field screenshots.
-  // The cell is now a soft tint (danger @ MISSED_TINT_ALPHA) over the card; the
-  // day number is the normal text color, which must stay readable on it.
+  // A missed calendar day's number must stay readable on its tint.
   it.each(PALETTES)('%s tema: takvimde kaçırılan günün rakamı tonlu hücrede okunur', (_name, colors) => {
     const a = parseInt(MISSED_TINT_ALPHA, 16) / 255;
     const mix = (fg: string, bg: string) => {
@@ -96,9 +80,7 @@ describe('metin kontrastı — WCAG AA', () => {
     expect(ratio(colors.text, mix(colors.danger, colors.card))).toBeGreaterThanOrEqual(AA_BODY);
   });
 
-  // Not text, so the 3:1 non-text threshold (WCAG 1.4.11): the thumb must
-  // stand out from its track in both states. OFF used to be a card-colored
-  // thumb on a border-colored track (~1.3:1).
+  // Non-text 3:1 (WCAG 1.4.11): the thumb must stand out from its track.
   it.each(PALETTES)('%s tema: açma-kapama düğmesinin yuvarlağı izinden ayırt edilir', (_name, colors) => {
     const on = switchColors(colors, true);
     const off = switchColors(colors, false);

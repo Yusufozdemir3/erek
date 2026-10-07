@@ -1,12 +1,7 @@
-// Standalone timer picker — opens on a LONG PRESS of the central ＋ button (a
-// short tap opens the usual Task·Habit·Goal menu; see AddFab).
-// Shows timer-type habits + duration-based numeric goals (see helpers.TIME_UNIT)
-// in a single list; tapping a row routes TimerProvider to that target and starts
-// it — the SINGLE-active-timer rule is preserved (tapping another row while one
-// is running auto-commits the previous one).
-// Tapping an already-running row PAUSES it (not restart it — if TimerProvider.start
-// is called a second time for the same target, the commit is skipped and the
-// session's elapsed time up to that point would be lost; see the TimerProvider comment).
+// The standalone timer picker (long press on ＋): timer habits and duration
+// goals in one list. Tapping a row starts its timer (a running one is committed
+// first — one timer at a time); tapping the running row pauses it, since
+// starting the same target again would lose its elapsed time.
 
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -34,7 +29,7 @@ interface Row {
   title: string;
   icon: string | null;
   color: string | null;
-  amount: number; // seconds accumulated so far (from the DB, not live)
+  amount: number; // stored seconds (not live)
   target: number;
 }
 
@@ -45,7 +40,7 @@ export function TimerPicker({ visible, onClose }: Props) {
   const { user } = useAppData();
   const timer = useTimer();
 
-  // Only computed while the sheet is open (no unnecessary DB query while closed).
+  // Queried only while open.
   const rows = useMemo<Row[]>(() => {
     if (!visible) return [];
     const habitRows: Row[] = habitRepo

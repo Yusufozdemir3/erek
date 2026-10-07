@@ -82,6 +82,23 @@ describe('TaskForm — sesli giriş', () => {
     expect(queryByLabelText('Sesle doldur')).toBeNull();
   });
 
+  it('autoStartVoice: form açılınca mikrofon kendiliğinden dinlemeye başlar, bir kez', async () => {
+    const { getByPlaceholderText } = await renderUI(
+      <TaskForm submitLabel="Ekle" onSubmit={jest.fn()} enableVoice autoStartVoice />
+    );
+    await waitFor(() => expect(mocked.startListening).toHaveBeenCalledWith('tr-TR', true));
+    // A re-render (typing) must not start it again.
+    fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Süt al');
+    await act(async () => {});
+    expect(mocked.startListening).toHaveBeenCalledTimes(1);
+  });
+
+  it('autoStartVoice yoksa mikrofon kendiliğinden açılmaz', async () => {
+    await renderUI(<TaskForm submitLabel="Ekle" onSubmit={jest.fn()} enableVoice />);
+    await act(async () => {});
+    expect(mocked.startListening).not.toHaveBeenCalled();
+  });
+
   it('cümle forma dolar; gönderilen değerler doğru; hiçbir şey kendiliğinden kaydedilmez', async () => {
     const onSubmit = jest.fn();
     const { getByLabelText, getByText, getByDisplayValue } = await renderUI(

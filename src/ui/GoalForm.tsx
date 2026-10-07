@@ -1,22 +1,10 @@
-// Goal form FIELDS — shared by both creation (AddSheet) and editing (the
-// 'Edit' tab of app/goal/[id].tsx) (same pattern as Habit/TaskForm). Fields,
-// state and validation live here; persistence (create/update), the milestone
-// checklist section, and the modal/sheet shell belong to the caller. onSubmit
-// hands the final (converted) values up.
-//
-// goal_type now takes two values: 'numeric' (progress bar) | 'milestone'
-// (same logic as tasks/subtasks — can be split into steps). The type is only
-// chosen at CREATION (via a chip at the top, if the goalType prop isn't
-// passed), and is FIXED during editing (goalType prop is passed) — changing
-// the type would leave fields inconsistent.
-// Deadline now exists in BOTH types and is REQUIRED (same decision as
-// TaskForm's due date) — defaults to today, no option to remove it.
-// Milestones follow the exact same two-mode pattern as subtasks: a draft at
-// creation (enableMilestoneDraft), an instantly-written checklist at editing
-// (children).
-// Architecture rule: no SQL — only the caller's repo writes.
+// Goal form fields, shared by creation (AddSheet) and editing (the Edit tab of
+// app/goal/[id].tsx), like HabitForm. Saving and the modal belong to the caller.
+// The type ('numeric' | 'milestone') and a numeric goal's unit kind are picked
+// only at creation. The deadline is required (today by default). Steps can be
+// drafted at creation; later they're managed in the goal's Steps tab.
 
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { GoalType } from '@/db';
@@ -30,12 +18,8 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { makeGoalFormStyles } from '@/ui/goalFormStyles';
 import { longDateLabel, shortDate } from '@/ui/theme';
 
-// A draft step added at creation time. Used to be a plain `string` (title
-// only): since the step editor on the goal DETAIL screen could also take an
-// amount and due date, the same thing existed in two different forms (user
-// feedback). Fields map 1:1 to goal_milestones' own columns; amount is in
-// SECONDS (time-unit goals take minutes as input and convert here — same rule
-// as addMilestone on the detail screen).
+// A step drafted at creation, mirroring goal_milestones. amount is in SECONDS
+// for duration goals (typed in minutes, like the detail screen).
 export interface DraftMilestone {
   title: string;
   amount: number | null;
@@ -47,23 +31,19 @@ export interface GoalFormValues {
   goal_type: GoalType;
   target_value: number | null;
   unit: string | null;
-  // Only meaningful for editing + numeric; null at creation (repo defaults to 0).
+  // Editing a numeric goal only; null at creation.
   current_value: number | null;
   deadline: string;
-  remind_times: string[]; // daily-entry reminder times (0 or more)
-  // Only meaningful for numeric (the tempo/projection zero day — goalProjection.ts);
-  // null for milestone goals (no tempo calc for that type).
+  remind_times: string[]; // daily "log your goal" reminders
+  // Numeric only: day zero of the pace (goalProjection.ts).
   start_date: string | null;
-  milestones?: DraftMilestone[]; // only populated when enableMilestoneDraft
-  // Only meaningful for editing + numeric: when "Current value" is changed by
-  // hand, should the diff also be written to goal_entries and factored into
-  // tempo/projection? Defaults to false (a pure correction — see the checkbox
-  // description in GoalForm).
+  milestones?: DraftMilestone[]; // with enableMilestoneDraft
+  // Editing: also record a manual "Current value" change as progress (default: a silent correction).
   log_manual_change?: boolean;
 }
 
 interface Props {
-  goalType?: GoalType; // if fixed (editing), the type doesn't change; if omitted, chosen via a chip
+  goalType?: GoalType; // fixed when editing; omitted = picked at creation
   initial?: Partial<{
     title: string;
     target_value: number | null;
@@ -77,8 +57,7 @@ interface Props {
   onSubmit: (values: GoalFormValues) => void;
   onDelete?: () => void;
   autoFocusTitle?: boolean;
-  children?: ReactNode; // milestone checklist during editing (written instantly)
-  enableMilestoneDraft?: boolean; // the draft milestone editor at creation
+  enableMilestoneDraft?: boolean;
 }
 
 const TYPE_OPTIONS: { value: GoalType; labelKey: string }[] = [
@@ -93,7 +72,6 @@ export function GoalForm({
   onSubmit,
   onDelete,
   autoFocusTitle,
-  children,
   enableMilestoneDraft,
 }: Props) {
   const { colors } = useTheme();
@@ -103,10 +81,8 @@ export function GoalForm({
 
   const [title, setTitle] = useState(initial?.title ?? '');
   const [goalType, setGoalType] = useState<GoalType>(fixedType ?? 'numeric');
-  // Unit type for a numeric goal: 'amount' (free-form unit text) | 'time'
-  // (duration — target/current_value stored in SECONDS, entered in minutes;
-  // see helpers.TIME_UNIT). Only chosen at CREATION (like goalType itself) —
-  // changing it during editing would shift the unit of the existing current_value.
+  // 'amount' (free unit) | 'time' (typed in minutes, stored in seconds —
+  // helpers.TIME_UNIT). Fixed after creation: the stored value would change meaning.
   const initialIsTime = isTimeUnit(initial?.unit);
   const [unitMode, setUnitMode] = useState<'amount' | 'time'>(initialIsTime ? 'time' : 'amount');
   const [target, setTarget] = useState(
@@ -120,26 +96,16 @@ export function GoalForm({
       ? String(initialIsTime ? initial.current_value / 60 : initial.current_value)
       : ''
   );
-  // Manually editing "Current value" is a pure CORRECTION by default (doesn't
-  // affect tempo/projection); if the user is entering real retroactive
-  // progress, they can check this to also write the diff into the entry
-  // history (see handleEditSubmit at the end of the file).
   const [logManualChange, setLogManualChange] = useState(false);
-  // Every goal now has a required deadline — defaults to today at creation
-  // (same decision as TaskForm's due date), keeps the existing value when editing.
   const [deadline, setDeadline] = useState(initial?.deadline ?? todayDate());
-  // Daily-entry reminder times — the same multi-reminder pattern as HabitForm.
   const [remindTimes, setRemindTimes] = useState<string[]>(initial?.remind_times ?? []);
-  // The zero day for the tempo/projection calculation (see goalProjection.ts) —
-  // only meaningful for numeric. Defaults to today at creation (exactly the
-  // design decision: "the goal I open today has today as its first day").
+  // Day zero of the pace; today at creation.
   const [startDate, setStartDate] = useState(initial?.start_date ?? todayDate());
   const [showPicker, setShowPicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [draftMilestones, setDraftMilestones] = useState<DraftMilestone[]>([]);
   const [newMilestone, setNewMilestone] = useState('');
-  // Amount/date, the same progressive chips as the detail screen
-  // (app/goal/[id].tsx): keep the title row plain, extras a tap away.
+  // Amount/date chips, as on the detail screen.
   const [newMilestoneAmount, setNewMilestoneAmount] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState<string | null>(null);
   const [showMilestoneAmount, setShowMilestoneAmount] = useState(false);
@@ -148,14 +114,12 @@ export function GoalForm({
   const addDraftMilestone = () => {
     const m = newMilestone.trim();
     if (!m) return;
-    // Amount is only meaningful for numeric goals (the SAME rule as
-    // addMilestone on the detail screen): if filled in, the step becomes its
-    // own independent threshold; if empty, it's a plain checklist item.
+    // Numeric goals: an amount makes the step a threshold; empty = a checklist item.
     const parsedAmount = parseFloat(newMilestoneAmount.replace(',', '.'));
     const amount =
       goalType === 'numeric' && Number.isFinite(parsedAmount) && parsedAmount > 0
         ? isTime
-          ? Math.round(parsedAmount * 60) // entered in minutes, stored in seconds
+          ? Math.round(parsedAmount * 60) // minutes -> seconds
           : parsedAmount
         : null;
     setDraftMilestones((prev) => [...prev, { title: m, amount, due_date: newMilestoneDate }]);
@@ -167,9 +131,7 @@ export function GoalForm({
   const removeDraftMilestone = (i: number) =>
     setDraftMilestones((prev) => prev.filter((_, idx) => idx !== i));
 
-  // For a numeric goal, amount+unit are required — otherwise target_value/unit
-  // would stay null, creating a "goalless" goal whose progress bar is
-  // meaningless (same rule as the numeric habit in HabitForm, see trackingTargetValid).
+  // A numeric goal needs a target and a unit.
   const isTime = goalType === 'numeric' && unitMode === 'time';
   const targetNumPreview = parseFloat(target.replace(',', '.'));
   const canSubmit =
@@ -184,8 +146,7 @@ export function GoalForm({
     const numeric = goalType === 'numeric';
     const targetNum = parseFloat(target.replace(',', '.'));
     const currentNum = parseFloat(current.replace(',', '.'));
-    // In duration mode it's entered in minutes and converted to seconds for
-    // storage (the same pattern as the habit timer).
+    // Duration: minutes typed, seconds stored.
     const targetVal = Number.isFinite(targetNum) ? (isTime ? Math.round(targetNum * 60) : targetNum) : null;
     const currentVal = Number.isFinite(currentNum) ? (isTime ? Math.round(currentNum * 60) : currentNum) : null;
     onSubmit({
@@ -207,7 +168,6 @@ export function GoalForm({
 
   return (
     <>
-      {/* Title */}
       <Text style={styles.label}>{t('goal.titleShort')}</Text>
       <TextInput
         style={styles.input}
@@ -222,7 +182,7 @@ export function GoalForm({
         {title.length}/{TITLE_MAX_LEN}
       </Text>
 
-      {/* Type — only chosen at creation; FIXED during editing (display only) */}
+      {/* The type: picked at creation, display only when editing */}
       {fixedType ? (
         <Text style={styles.typeTag}>
           {t(fixedType === 'numeric' ? 'goal.typeNumeric' : 'goal.typeMilestone')}
@@ -249,11 +209,8 @@ export function GoalForm({
         </>
       )}
 
-      {/* Numeric fields */}
       {goalType === 'numeric' && (
         <>
-          {/* Unit type — only chosen at creation (FIXED like goalType;
-              changing it during editing would shift the unit of the existing current_value). */}
           {!isEditing && (
             <>
               <Text style={styles.label}>{t('goal.unitTypeLabel')}</Text>
@@ -338,11 +295,8 @@ export function GoalForm({
                 placeholderTextColor={colors.faint}
                 maxLength={NUMBER_MAX_LEN}
               />
-              {/* Default: this field is a pure CORRECTION, doesn't affect
-                  tempo/projection (see the GoalFormValues.log_manual_change
-                  comment). If checked, the diff is also written to the entry
-                  history — for retroactive real-progress entry scenarios
-                  (e.g. reading that hasn't been logged for a few days). */}
+              {/* Checked: the change counts as progress (e.g. unlogged days
+                  of reading); otherwise it's a silent correction. */}
               <Pressable
                 style={styles.checkRow}
                 onPress={() => setLogManualChange((v) => !v)}
@@ -359,10 +313,7 @@ export function GoalForm({
             </>
           )}
 
-          {/* The zero day for the tempo/projection calculation — things like the
-              "Last 7 days" average are capped by the actual number of days
-              elapsed since this date (see goalProjection.ts). A date later than
-              today can't be picked. */}
+          {/* Day zero of the pace; not later than today. */}
           <Text style={styles.label}>{t('goal.startDateLabel')}</Text>
           <View style={styles.row}>
             <Pressable
@@ -384,7 +335,6 @@ export function GoalForm({
         </>
       )}
 
-      {/* Deadline — now required in both types, cannot be removed */}
       <Text style={styles.label}>{t('goal.deadlineLabel')}</Text>
       <View style={styles.row}>
         <Pressable
@@ -404,22 +354,9 @@ export function GoalForm({
         onConfirm={onPickDate}
       />
 
-      {/* Daily-entry reminders — optional, multiple can be added ("don't forget
-          to log this goal" notifications arrive at these times). */}
       <ReminderListEditor label={t('goal.remindLabel')} times={remindTimes} onChange={setRemindTimes} />
 
-      {/* Milestone checklist during editing (written instantly, provided by the
-          parent) — no longer used: steps are now managed in a separate 'Steps'
-          tab in app/goal/[id].tsx. */}
-      {goalType === 'milestone' && children}
-
-      {/* The draft step editor at creation (created together with the goal
-          when submitted). BROUGHT IN SYNC with the step editor on the detail
-          screen (app/goal/[id].tsx):
-          - now visible for BOTH goal types (steps are valid for both; it used
-            to only open for 'milestone' type, yet a step could later be added
-            to a numeric goal too — the same thing existing in two different forms),
-          - title row stays plain, amount/date live in progressive chips. */}
+      {/* Draft steps, created with the goal (both types, like the detail screen). */}
       {enableMilestoneDraft && (
         <>
           <Text style={styles.label}>{t('goal.milestonesOptional')}</Text>
@@ -526,7 +463,6 @@ export function GoalForm({
         </>
       )}
 
-      {/* Actions — Delete only during editing (when onDelete is provided) */}
       <View style={styles.actions}>
         {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
         <Pressable

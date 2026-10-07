@@ -1,6 +1,5 @@
-// Data loading logic for the "Today" screen: tasks due on the selected day +
-// the day-specific status (amount/completion/streak) of habits scheduled that
-// day. Kept separate from the screen so index.tsx stays responsible only for rendering.
+// Today screen data: the selected day's tasks and the habits scheduled that
+// day with their amount, completion and streak.
 
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -18,16 +17,14 @@ export interface HabitView {
   color: string | null;
   target: number | null; // numeric: amount · timer: target seconds · binary: null
   unit: string | null;
-  amount: number;        // amount done on the selected day
-  completed: boolean;    // whether it was completed on the selected day
+  amount: number;        // on the selected day
+  completed: boolean;
   streak: number;
-  // For a QUOTA (X times a week) habit, that week's progress ("2/3 this week");
-  // null for other rules.
+  // Quota habits: the week's progress ("2/3").
   weekQuota: { done: number; target: number } | null;
 }
 
-// A habit the user rested on that day ("mola"): not counted anywhere, listed
-// at the bottom so the mark can be taken back.
+// A rest day: counted nowhere, listed last so it can be taken back.
 export interface SkippedHabitView {
   id: string;
   title: string;
@@ -36,34 +33,26 @@ export interface SkippedHabitView {
 }
 
 export function useTodayData(userId: string, selectedDate: string, today: string) {
-  // dataVersion: increments when something is added via the central ＋ menu. It
-  // goes into reload's dependencies; since useFocusEffect re-runs the effect
-  // when the callback changes even while the screen is focused, the list
-  // refreshes without needing a focus change.
+  // Reloads on dataVersion too (off-screen changes fire no focus event).
   const { dataVersion } = useAppData();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<HabitView[]>([]);
   const [skippedHabits, setSkippedHabits] = useState<SkippedHabitView[]>([]);
   // Per-day completion for the week strip's dots.
   const [weekProgress, setWeekProgress] = useState<WeekProgress>({});
-  // The "1/3 subtasks" badge on the task card; only tasks with subtasks are included.
+  // "1/3" badges; tasks without subtasks are absent.
   const [subtaskCounts, setSubtaskCounts] = useState<
     Record<string, { done: number; total: number }>
   >({});
 
   const reload = useCallback(() => {
-    // The cumulative "carried-over task" behavior is preserved for today; on
-    // other days, only tasks due that specific day are shown.
+    // Today also carries over earlier open tasks; other days show only their own.
     const isToday = selectedDate === today;
     const taskList = isToday
       ? taskRepo.listForToday(userId, selectedDate)
       : taskRepo.listByDueDate(userId, selectedDate);
     setTasks(taskList);
-    // Subtask badge counts in a single query (instead of N+1); tasks with no
-    // subtasks just don't end up in the result — no separate "total > 0" filter needed.
     setSubtaskCounts(subtaskRepo.countsForTasks(taskList.map((t) => t.id)));
-    // Only show habits that are scheduled on the selected day and within their
-    // lifespan (start/end date).
     const dueToday = habitRepo
       .listByUser(userId)
       .filter(
@@ -77,8 +66,6 @@ export function useTodayData(userId: string, selectedDate: string, today: string
         .filter((h) => h.skip_dates?.includes(selectedDate))
         .map((h) => ({ id: h.id, title: h.title, icon: h.icon, color: h.color }))
     );
-    // That day's amount+completion status in a single query (instead of two
-    // separate queries per habit). A habit with no log: amount 0, not completed.
     const dayStates = habitRepo.getDayStates(
       scheduled.map((h) => h.id),
       selectedDate
@@ -96,7 +83,6 @@ export function useTodayData(userId: string, selectedDate: string, today: string
           unit: h.unit,
           amount: state?.amount ?? 0,
           completed: state?.completed ?? false,
-          // We already have the habit — skip currentStreak's own getById.
           streak: habitRepo.currentStreak(h.id, h),
           weekQuota: isQuotaSchedule(h.schedule)
             ? {

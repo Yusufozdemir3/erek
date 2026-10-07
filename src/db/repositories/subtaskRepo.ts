@@ -1,6 +1,4 @@
-// Subtask repository — a simple checklist.
-// UI never sees SQL - it only calls these functions.
-// Every write refreshes updated_at and sets synced=0 (waiting for sync).
+// Subtasks — a plain checklist under a task.
 
 import { getDb } from '../database';
 import { chunk, newId, nowIso } from '../../lib/helpers';
@@ -19,10 +17,9 @@ function rowToSubtask(row: any): Subtask {
   };
 }
 
-// A subtask of a task shared WITH me belongs to someone else: like the task
-// itself it must never be edited locally (it'd be queued for push and the
-// server would reject it). Mutations are dropped with a warning — not thrown:
-// an uncaught throw in a UI handler closes the app in a release build.
+// A subtask of a task shared WITH me is someone else's: local edits would be
+// pushed and rejected. They're dropped with a warning, not thrown (an uncaught
+// throw in a handler closes a release build).
 function parentSharedWithMe(taskId: string): boolean {
   const row = getDb().getFirstSync<{ shared_owner_uid: string | null }>(
     `SELECT shared_owner_uid FROM tasks WHERE id = ?`,
@@ -36,10 +33,10 @@ function parentSharedWithMe(taskId: string): boolean {
 }
 
 export const subtaskRepo = {
-  // New subtask; appended to the end of the list (position = current max + 1).
+  // Appended last.
   create(taskId: string, title: string): Subtask {
     const db = getDb();
-    // Shared with me: nothing is written; the returned object just keeps callers working.
+    // Shared with me: nothing is written; the returned object keeps callers working.
     const dropped = parentSharedWithMe(taskId);
     const id = newId();
     const now = nowIso();
@@ -67,7 +64,7 @@ export const subtaskRepo = {
     };
   },
 
-  // A task's active subtasks, in the order they were added.
+  // In the order they were added.
   listByTask(taskId: string): Subtask[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -77,7 +74,7 @@ export const subtaskRepo = {
     return rows.map(rowToSubtask);
   },
 
-  // For the "2/3" badge on task cards: completed / total.
+  // The task card's "2/3".
   countForTask(taskId: string): { done: number; total: number } {
     const db = getDb();
     const row = db.getFirstSync<{ done: number; total: number }>(
@@ -88,14 +85,11 @@ export const subtaskRepo = {
     return { done: row?.done ?? 0, total: row?.total ?? 0 };
   },
 
-  // The MULTI version of countForTask: a list screen (Today/Tasks) gets all
-  // badge counts in a single GROUP BY instead of a per-task query (N+1). Only
-  // tasks with at least one (non-deleted) subtask show up — a task with no
-  // subtasks is absent from the result (the caller doesn't need a "total > 0" filter).
+  // countForTask for a whole list in one query; tasks without subtasks are absent.
   countsForTasks(taskIds: string[]): Record<string, { done: number; total: number }> {
     const db = getDb();
     const out: Record<string, { done: number; total: number }> = {};
-    // Chunked: the number of bound `IN (…)` parameters equals the list length (see helpers.chunk).
+    // Chunked to stay under SQLite's bound-parameter limit (helpers.chunk).
     for (const ids of chunk(taskIds)) {
       const placeholders = ids.map(() => '?').join(',');
       const rows = db.getAllSync<{ task_id: string; done: number; total: number }>(
@@ -120,9 +114,8 @@ export const subtaskRepo = {
     );
   },
 
-  // Writes the server's answer to a tick of a subtask shared WITH me
-  // (toggle_shared_subtask RPC). synced stays 1: this mirrors the cloud row, it
-  // isn't a local edit to push. Only ever touches subtasks of shared-with-me tasks.
+  // Mirrors the server's answer for a subtask shared WITH me; synced stays 1
+  // (it's the cloud row, not a local edit).
   applySharedCompletion(id: string, completed: boolean, updatedAt: string): void {
     getDb().runSync(
       `UPDATE subtasks SET completed = ?, updated_at = ?, synced = 1
@@ -131,10 +124,8 @@ export const subtaskRepo = {
     );
   },
 
-  // Resets (reopens) a task's COMPLETED subtasks. Called when a recurring task
-  // fast-forwards to its next occurrence — the new occurrence should start
-  // with a fresh (all unchecked) checklist. Only touches completed=1 rows;
-  // doesn't create unnecessary sync churn on ones that were already unchecked.
+  // Unticks the completed subtasks when a recurring task moves to its next
+  // occurrence (unticked ones aren't touched, so no sync churn).
   reopenForTask(taskId: string): void {
     const db = getDb();
     db.runSync(

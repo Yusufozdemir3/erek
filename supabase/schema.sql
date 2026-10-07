@@ -1,12 +1,9 @@
--- Habit App — Supabase şeması (Google girişi + RLS)
+-- Erek — Supabase şeması (Google girişi + RLS)
 -- Supabase panelinde: SQL Editor > New query > bu dosyayı yapıştır > Run.
 --
 -- PANEL AYARI: Authentication > Providers > "Anonymous sign-ins" KAPALI olmalı.
--- Uygulama artık anonim oturum açmıyor (bkz. src/sync/auth.ts): veri ancak
--- kullanıcı bilerek giriş yaptığında buluta çıkar. Ayarı açık bırakmak yalnızca
--- gereksiz bir saldırı yüzeyi olur — anon key APK'ya gömülü olduğundan onu
--- çıkaran herkes signInAnonymously ile geçerli bir `authenticated` jeton üretip
--- projede satır oluşturabilir.
+-- Uygulama anonim oturum açmaz (src/sync/auth.ts); açık kalırsa APK'daki anon
+-- key ile herkes `authenticated` bir jeton alıp satır oluşturabilir.
 --
 -- Tasarım: id'ler cihazda üretilen UUID. user_id = auth.uid() (giriş yapmış kullanıcı).
 -- Tarih/saat alanlarının çoğu uygulamada metin (ISO ya da "YYYY-MM-DD"); senkron
@@ -24,10 +21,8 @@ create table if not exists public.goals (
   deadline      text,
   completed_at  text,                      -- yalnız 'milestone' hedeflerde anlamlı
   remind_at     text,                      -- "HH:MM" günlük giriş hatırlatması
-  -- current_value TÜRETİLMİŞ bir önbellektir: value_baseline + goal_entries
-  -- toplamı (yerel migration019). Girdiler ayrı satırlar olarak senkronlandığı
-  -- için iki cihazın katkısı çakışmadan birleşir; baseline yalnız elle yapılan
-  -- düzeltmeleri ve bu değişiklikten önceki birikimi taşır.
+  -- current_value bir önbellektir: value_baseline + goal_entries (yerel
+  -- migration019). Girdiler satır satır birleşir; baseline elle düzeltmeleri taşır.
   value_baseline double precision not null default 0,
   updated_at    timestamptz not null,
   deleted_at    timestamptz
@@ -71,11 +66,8 @@ alter table public.habits add column if not exists end_date      text;
 alter table public.habits add column if not exists skip_dates    text;
 alter table public.habits add column if not exists kind          text not null default 'binary';
 update public.habits set kind = 'numeric' where kind = 'binary' and target_amount is not null and target_amount > 0;
--- Bağlı hedefe katkı biçimi + çarpan — yerel migration010'un karşılığı. Bu iki
--- kolon uzun süre HEM burada HEM senkron motorunun kolon listesinde eksikti;
--- sonuç, çok cihazlı kullanıcıda birim çarpanının sessizce varsayılana düşmesiydi.
--- İSTEMCİ GÜNCELLENMEDEN ÖNCE ÇALIŞTIRILMALI: kolonlar bulutta yoksa yeni
--- istemcinin push'u "Could not find the 'goal_contribution' column" ile patlar.
+-- Bağlı hedefe katkı biçimi + çarpan (yerel migration010). Yeni kolonlar
+-- İSTEMCİDEN ÖNCE eklenmeli, yoksa push "Could not find the ... column" ile düşer.
 alter table public.habits add column if not exists goal_contribution text;
 alter table public.habits add column if not exists goal_factor   double precision not null default 1;
 
@@ -133,15 +125,11 @@ alter table public.goal_milestones add column if not exists due_date text;
 alter table public.goals add column if not exists remind_at text;
 -- Tempo/projeksiyon hesabının sıfır günü — yerel migration015'in karşılığı.
 alter table public.goals add column if not exists start_date text;
--- Hedef ilerlemesinin girdilerle temsil edilmeyen parçası — yerel migration019'un
--- karşılığı. İSTEMCİ GÜNCELLENMEDEN ÖNCE ÇALIŞTIRILMALI (goal_contribution ile
--- aynı gerekçe): kolon bulutta yoksa yeni istemcinin push'u şema hatasıyla patlar.
+-- İlerlemenin girdilerle temsil edilmeyen parçası (yerel migration019).
 alter table public.goals add column if not exists value_baseline double precision not null default 0;
 
--- Hedefe eklenen ilerleme girdileri. Yerel migration019'dan beri ilerlemenin
--- KAYNAĞI bunlardır: current_value = value_baseline + aktif girdilerin toplamı
--- (goals.current_value yalnızca bir önbellek). Paylaşılan hedefte arkadaşın
--- katkısı da buraya satır olarak düşer (added_by, bkz. PHASE 4).
+-- İlerleme girdileri — ilerlemenin kaynağı (current_value = baseline + girdiler).
+-- Arkadaşın paylaşılan hedefe katkısı da buraya düşer (added_by, PHASE 4).
 create table if not exists public.goal_entries (
   id         uuid primary key,
   goal_id    uuid not null,
@@ -152,10 +140,8 @@ create table if not exists public.goal_entries (
 
 alter table public.habit_logs add column if not exists amount double precision not null default 0;
 
--- Çoklu hatırlatma. Bir alışkanlık/görev/hedefin (entity_type ayrımı) SIFIR ya
--- da DAHA FAZLA hatırlatma saati olabilir — yerel migration016'nın karşılığı.
--- Eski tekil remind_at kolonları (goals/habits/tasks) yukarıda dokunulmadan
--- kalır (artık okunmuyor); bu tablo tek doğru kaynak.
+-- Alışkanlık/görev/hedef başına istenen sayıda hatırlatma (yerel migration016).
+-- Eski remind_at kolonları duruyor ama okunmuyor.
 create table if not exists public.reminders (
   id          uuid primary key,
   entity_type text not null,       -- 'habit' | 'task' | 'goal'
@@ -177,16 +163,9 @@ create index if not exists idx_goal_entries_updated on public.goal_entries(updat
 create index if not exists idx_reminders_updated on public.reminders(updated_at);
 
 -- SUNUCU ZAMAN DAMGASI -----------------------------------------------------
--- updated_at İSTEMCİ saatinden gelir (offline-first: kaydı yazan cihaz damgalar).
--- Senkron pull'unu ona göre filtrelemek iki şeyi bozuyordu:
---   1) saati ileri kaymış bir cihaz filigranı geleceğe atıp aradaki satırları
---      kalıcı olarak atlatıyordu (sessiz veri kaybı),
---   2) bir satırın buluta ne zaman ULAŞTIĞI bilinmediği için sayfa sırası
---      istemci saatlerine göre karışabiliyordu.
--- Çözüm: sunucunun yazdığı ayrı bir damga. Pull filtresi + filigran
--- server_updated_at'e bakar; son-yazan-kazanır kıyası eskisi gibi updated_at'e
--- (kaydın gerçekten ne zaman değiştiğini o söyler).
--- İstemci bu kolonu ASLA yazmaz — trigger her insert/update'te üzerine yazar.
+-- updated_at istemci saatidir; ileri kaymış bir saat pull filigranını bozar.
+-- Pull filtresi ve filigran server_updated_at'e bakar, son-yazan-kazanır
+-- kıyası updated_at'e. İstemci bu kolonu yazmaz; trigger her yazışta damgalar.
 create or replace function public.set_server_updated_at()
 returns trigger language plpgsql as $$
 begin
@@ -310,12 +289,9 @@ create policy "own reminders" on public.reminders
   );
 
 -- HESAP SİLME ---------------------------------------------------------------
--- Uygulama içi "Hesabı sil" (Google Play hesap-silme zorunluluğu). İstemci
--- kendi auth kullanıcısını doğrudan silemez (admin API service_role ister ve
--- istemciye konamaz). Bu SECURITY DEFINER fonksiyon, ÇAĞIRAN kullanıcının tüm
--- verisini ve auth kaydını sunucu tarafında tek işlemde siler. SQL editöründe
--- çalıştırıldığında sahibi postgres olur; auth.users'a erişim yetkisi oradan
--- gelir. auth.uid() kullanıldığı için bir kullanıcı yalnızca KENDİNİ silebilir.
+-- Uygulama içi "Hesabı sil" (Play zorunluluğu). İstemci kendi auth kaydını
+-- silemez, bu SECURITY DEFINER fonksiyon çağıranın tüm verisini ve auth kaydını
+-- tek işlemde siler (sahibi postgres). auth.uid() ile yalnızca KENDİNİ.
 create or replace function public.delete_account()
 returns void
 language plpgsql
@@ -813,22 +789,16 @@ grant execute on function public.get_shared_habit_logs(uuid, timestamptz, uuid) 
 -- owner's sync on that row. Invalid values are corrected instead, and the
 -- correction bumps updated_at so every device adopts it via last-writer-wins.
 
--- MUST RUN BEFORE THE CLIENT UPDATE ships (same rule as goal_contribution):
--- the new client pushes shared_with_id, and a cloud without the column fails
--- every tasks push with "Could not find the 'shared_with_id' column".
+-- Run before shipping a client that pushes shared_with_id.
 alter table public.tasks add column if not exists shared_with_id uuid references auth.users(id) on delete set null;
 create index if not exists idx_tasks_shared_with on public.tasks(shared_with_id) where shared_with_id is not null;
 -- Lets the planner answer "user_id = me OR shared_with_id = me" with a BitmapOr.
 create index if not exists idx_tasks_user on public.tasks(user_id);
 
--- CLIENT CAPABILITY GATE. A task shared WITH me is only returned to clients
--- that understand sharing (they send the `x-erek-sharing: 1` header, see
--- src/sync/supabase.ts). An OLDER app version (e.g. the same account's second
--- device not yet updated) has no idea such rows exist: it would store the
--- friend's task as its own, and the first edit/check-off would be rejected by
--- RLS — wedging that device's sync for good. Without the header the policy
--- behaves exactly like the old "own tasks" one. Not a security boundary: the
--- header can only reveal rows the caller is already entitled to.
+-- CLIENT CAPABILITY GATE. Tasks shared WITH me go only to clients sending
+-- `x-erek-sharing: 1` (src/sync/supabase.ts); an older version would store a
+-- friend's task as its own and wedge its sync on the first edit. Without the
+-- header this is the plain "own tasks" policy. Not a security boundary.
 create or replace function public.client_supports_sharing()
 returns boolean
 language sql
@@ -984,14 +954,9 @@ grant execute on function public.remove_connection(uuid) to authenticated;
 -- (goal_entries RLS goes through goal ownership) and re-derive current_value
 -- from baseline + entries, so contributions merge without conflict.
 
--- Who added an entry. NULL = the goal's owner (every row written before this
--- phase, and every row the owner's own devices create). Deliberately NO foreign
--- key: if a contributor deletes their account, their past contributions stay in
--- the owner's history (unattributed), instead of the uid being nulled into
--- "added by the owner".
--- MUST RUN BEFORE THE CLIENT UPDATE ships (same rule as goal_contribution): the
--- new client pushes added_by, and a cloud without the column fails every
--- goal_entries push with "Could not find the 'added_by' column".
+-- Who added an entry; NULL = the owner. Deliberately no foreign key: a deleted
+-- contributor's entries stay in the history instead of turning into the owner's.
+-- Run before shipping a client that pushes added_by.
 alter table public.goal_entries add column if not exists added_by uuid;
 -- Rate limit lookup in add_shared_goal_entry.
 create index if not exists idx_goal_entries_added_by

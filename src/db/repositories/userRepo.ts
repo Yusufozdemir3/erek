@@ -1,7 +1,5 @@
-// User repository.
-// The foundation of the "start without signing in" flow: an anonymous local
-// user is created the first time the app opens. If the user later signs up,
-// this record gets linked to their email (is_anonymous -> 0).
+// The device's local user, created anonymous on first launch so the app works
+// without an account; signing in stamps the email on it (is_anonymous -> 0).
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -19,8 +17,7 @@ function rowToUser(row: any): User {
 }
 
 export const userRepo = {
-  // Returns the device's existing user; creates an anonymous one if there isn't one.
-  // Called at app startup - always guarantees a user.
+  // Always returns a user, creating the anonymous one if needed.
   getOrCreateLocal(): User {
     const db = getDb();
     const existing = db.getFirstSync<any>(
@@ -35,11 +32,10 @@ export const userRepo = {
        VALUES (?, NULL, 1, ?, NULL, 0)`,
       [id, now]
     );
-    // No need to query the newly-inserted row again — we already have the fields.
     return { id, email: null, is_anonymous: 1, updated_at: now, deleted_at: null, synced: 0 };
   },
 
-  // Upgrades the anonymous user to a registered account (when an account gets linked from Settings).
+  // After signing in.
   upgradeToAccount(id: string, email: string): void {
     const db = getDb();
     db.runSync(
@@ -48,7 +44,7 @@ export const userRepo = {
     );
   },
 
-  // On sign-out, turns the local user back to anonymous (data stays on the device).
+  // After signing out or deleting the account.
   downgradeToLocal(id: string): void {
     const db = getDb();
     db.runSync(

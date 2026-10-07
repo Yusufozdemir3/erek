@@ -1,3 +1,4 @@
+import type React from 'react';
 // Duman testi: taze kurulumda (boş veritabanı) ana ekranlar çökmeden açılır.
 // Her ekranın kendi testi ayrıntıyı denetler; burada tek amaç "açılıyor mu".
 
@@ -87,7 +88,7 @@ beforeEach(async () => {
   mockUserId = userRepo.getOrCreateLocal().id;
 });
 
-const SCREENS: [string, () => JSX.Element][] = [
+const SCREENS: [string, () => React.JSX.Element][] = [
   ['Bugün', () => <TodayScreen />],
   ['Görevler', () => <TasksScreen />],
   ['Alışkanlıklar', () => <HabitsScreen />],

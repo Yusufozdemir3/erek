@@ -66,8 +66,3 @@ export function fontFamilyFor(choice: FontChoice, weight: string | number | unde
   if (choice === 'system') return undefined;
   return `${PREFIX[choice]}_${FONT_WEIGHT_SUFFIX[weightNameFor(weight)]}`;
 }
-
-// The five family names a choice needs loaded.
-export function fontFamilyNames(choice: BundledFont): string[] {
-  return (Object.keys(FONT_WEIGHT_SUFFIX) as FontWeightName[]).map((w) => `${PREFIX[choice]}_${FONT_WEIGHT_SUFFIX[w]}`);
-}

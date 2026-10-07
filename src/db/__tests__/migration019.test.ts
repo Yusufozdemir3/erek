@@ -1,14 +1,6 @@
-// migration019: goal progress is now DERIVED (current_value =
-// value_baseline + the sum of active entries).
-//
-// This migration's one critical promise is BACKWARD COMPATIBILITY: it must not
-// change any goal's VISIBLE value, only split the same number into two parts
-// that can be merged without conflict from now on. A wrong backfill would
-// silently shift every live user's progress — hence the migration itself is tested.
-//
-// Setup: the migration list is applied by hand up to (but not including) 19,
-// "old world" data is written, then only 019 is run. This way the actual
-// production SQL is tested (not a copy of it).
+// migration019 (derived goal progress) must not change any goal's VISIBLE value
+// — a wrong backfill would shift every user's progress. The real migration SQL
+// runs: the list is applied up to 18, old-world data is written, then 019.
 
 import { getDb } from '../database';
 import { migrations } from '../migrations/001_initial';
@@ -75,8 +67,7 @@ describe('migration019 — ilerlemenin baseline + girdiler olarak ayrıştırıl
   });
 
   it('girdileri olan hedefte baseline yalnız girdilerle AÇIKLANAMAYAN farkı taşır', () => {
-    // Of the 40, 15 comes from entries (e.g. linked habit contributions), and
-    // 25 comes from a manual correction or from older versions that kept no entry record.
+    // 15 of the 40 come from entries, 25 from corrections or entry-less older versions.
     insertGoal('g1', 40);
     insertEntry('g1', 10);
     insertEntry('g1', 5);
@@ -99,8 +90,7 @@ describe('migration019 — ilerlemenin baseline + girdiler olarak ayrıştırıl
   });
 
   it('SİLİNMİŞ girdiler toplama katılmaz (yeniden hesapla aynı kural)', () => {
-    // If a deleted entry counted, the baseline would be computed short and the
-    // user's value would drop on the next recompute.
+    // A deleted entry must not shrink the baseline.
     insertGoal('g1', 30);
     insertEntry('g1', 10);
     insertEntry('g1', 99, true); // soft-deleted

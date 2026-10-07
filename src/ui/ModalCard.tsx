@@ -1,7 +1,5 @@
-// Centered modal shell — shared by both the add sheet (AddSheet) and the edit
-// panels (task/habit/goal): a centered card instead of a bottom sheet.
-// Long content scrolls inside a ScrollView; the card rises when the keyboard opens.
-// Tapping the backdrop dismisses it. Architectural rule: visual shell only, no data.
+// The centered modal shell of the add and edit forms: scrolls long content,
+// rises with the keyboard, closes on a backdrop tap. No data.
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
@@ -21,7 +19,6 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   children: ReactNode;
-  // Whether to wrap the content in a ScrollView (for long forms). Default: yes.
   scroll?: boolean;
 }
 
@@ -29,11 +26,8 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
   const { colors } = useTheme();
   const { t } = useI18n();
 
-  // On Android, the hardware back button triggers the Modal's onRequestClose
-  // directly. With the keyboard open, this used to close the whole form when the
-  // user's reflex was "use the back button to dismiss the keyboard," losing what
-  // they'd typed. Now, while the keyboard is open, back only dismisses it first;
-  // the modal only closes once the keyboard is already closed.
+  // Android back with the keyboard open only closes the keyboard, so a reflexive
+  // back press doesn't throw away what was typed.
   const keyboardVisible = useRef(false);
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () => {
@@ -71,7 +65,6 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
             accessibilityLabel={t('common.close')}
           />
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {/* Slim handle bar — centered at the top for a premium feel */}
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
             {scroll ? (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -104,13 +97,11 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    // Elevated card feel: soft shadow + Android elevation.
     shadowColor: '#000',
     shadowOpacity: 0.28,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
     elevation: 16,
-    // Let content scroll when a long form overflows.
     maxHeight: '100%',
   },
   handle: {

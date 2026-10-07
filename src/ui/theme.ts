@@ -1,22 +1,15 @@
 // Color palettes (light/dark) and shared styles used across screens.
-// Dark mode: colors are no longer static — the active palette is obtained from
-// ThemeProvider via useTheme(). Screens/components generate their styles at
-// render time with makeShared(colors) and their own makeStyles(colors) factories.
-// Backward compat: `colors` and `shared` are exported with the light palette (if
-// a spot hasn't been migrated yet, it just appears light — the build doesn't break).
+// The active palette comes from ThemeProvider (useTheme()); screens build their
+// styles at render time with makeShared(colors) and their own makeStyles(colors).
 
 import { StyleSheet } from 'react-native';
 import type { Priority } from '@/db';
 import type { Lang } from '@/i18n/translations';
 
-// The Intl/Date locale matching the active language (for month/day names).
-// Backward compat: DATE_LOCALE now lives in i18n/dateLocale.ts (plain data, no
-// RN dependency) — re-exported from here so existing imports don't break. NOTE:
-// `export ... from` doesn't bring the name into THIS module's scope, so it's also imported separately.
+// Re-exported for screens; imported too because `export … from` doesn't bind it here.
 import { DATE_LOCALE } from '@/i18n/dateLocale';
 export { DATE_LOCALE };
 
-// All color tokens for a single theme.
 export interface Colors {
   bg: string;         // screen background
   card: string;       // card/panel background
@@ -32,27 +25,20 @@ export interface Colors {
   danger: string;     // delete/error (red)
   track: string;      // progress bar/grid background
   inputBg: string;    // form input background
-  onAccent: string;   // text ON TOP of a colored button/mark (light in both modes)
+  onAccent: string;   // text on a colored button/mark
 }
 
-// — CONTRAST OF TEXT TONES —
-// text/muted/faint all carry REAL content: faint isn't just decoration, it's
-// form placeholders, hint lines, and footnotes. So all three must clear the
-// WCAG AA body-text threshold (4.5:1) against the background.
-// In the previous palette, faint was 2.5:1 in light, 3.9:1 in warm dark, 4.1:1 in
-// black — i.e. unreadable in sunlight or with age-related vision loss. faint was
-// darkened enough to clear the threshold; muted was shifted along with it (in
-// the light theme) so the hierarchy between the three levels isn't lost. Measured
-// ratios are in the comments; __tests__/contrast.ui.test.tsx verifies them so this
-// doesn't silently regress again.
+// text, muted and faint all carry real content (faint = placeholders, hints),
+// so each clears WCAG AA (4.5:1) on the background — measured ratios below,
+// enforced by __tests__/contrast.ui.test.tsx.
 export const lightColors: Colors = {
   bg: '#f8fafc',
   card: '#ffffff',
   border: '#e2e8f0',
   line: '#cbd5e1',
   text: '#0f172a',   // ~17:1
-  muted: '#4b5768',  // ~7.1:1 (old #64748b shifted to faint)
-  faint: '#64748b',  // ~4.6:1 (old #94a3b8 → 2.5:1, was below AA)
+  muted: '#4b5768',  // ~7.1:1
+  faint: '#64748b',  // ~4.6:1
   primary: '#4f46e5',
   primarySoft: '#e0e7ff',
   done: '#10b981',
@@ -63,11 +49,8 @@ export const lightColors: Colors = {
   onAccent: '#ffffff',
 };
 
-// Warm ink: a near-black background leaning toward brown (instead of a cool
-// slate/navy) — sits in the same family as the cream background in light mode
-// (#F4F1EA), and the text color is identical to that cream. This makes both
-// modes feel like part of the same editorial identity (see the accent colors:
-// pine/terracotta/ink/wine/mustard are also warm tones).
+// Warm dark: a brown-leaning near-black whose text is the light theme's cream,
+// so both modes share one warm identity with the accents.
 export const darkColors: Colors = {
   bg: '#161412',
   card: '#211f1c',
@@ -75,7 +58,7 @@ export const darkColors: Colors = {
   line: '#4a453f',
   text: '#f4f1ea',
   muted: '#a8a29a',  // ~7.3:1
-  faint: '#8d867c',  // ~5.1:1 (old #78726a → 3.9:1, was below AA)
+  faint: '#8d867c',  // ~5.1:1
   primary: '#818cf8',
   primarySoft: '#312e81',
   done: '#34d399',
@@ -86,10 +69,7 @@ export const darkColors: Colors = {
   onAccent: '#ffffff',
 };
 
-// FULL BLACK (AMOLED) dark style: pure black background + neutral dark grays.
-// Turns off pixels on OLED screens (battery + contrast). Unlike warm dark, there's
-// no brown tint — the user picks it from Profile > Appearance via "Dark theme
-// style" (see ThemeProvider.darkStyle). The accent still comes from ACCENT_THEMES' dark palette.
+// Pure black (AMOLED) dark style with neutral grays — Appearance › dark theme style.
 export const blackColors: Colors = {
   bg: '#000000',
   card: '#101010',
@@ -97,10 +77,8 @@ export const blackColors: Colors = {
   line: '#3a3a3a',
   text: '#f2f2f2',
   muted: '#9c9c9c',  // ~7.6:1
-  // Since the card background (#101010) is lighter than pure black, the
-  // measurement is done AGAINST IT: #7a7a7a gives 5.1:1 on pure black but drops
-  // to 4.43 on the card.
-  faint: '#7d7d7d',  // ~4.6:1 on the card (old #6e6e6e → 4.1:1, was below AA)
+  // Measured on the lighter card (#101010), the harder case.
+  faint: '#7d7d7d',  // ~4.6:1 on the card
   primary: '#818cf8',
   primarySoft: '#26264a',
   done: '#34d399',
@@ -111,13 +89,8 @@ export const blackColors: Colors = {
   onAccent: '#ffffff',
 };
 
-// Backward-compatible default (light). Migrated components use useTheme().colors.
-export const colors: Colors = lightColors;
-
-// Accent color (brand color) — chosen by the user in Profile, stored in
-// AsyncStorage (see ThemeProvider). Only overrides primary/primarySoft;
-// semantic colors like done/danger/streak and the background/text tones keep
-// coming from the theme (light/dark) — the accent color only carries "brand" meaning.
+// The accent (Appearance) overrides only primary/primarySoft; semantic and
+// background/text colors stay with the theme.
 export type AccentKey =
   | 'pine'
   | 'terracotta'
@@ -178,26 +151,23 @@ export const ACCENT_THEMES: Record<AccentKey, { light: AccentPalette; dark: Acce
   },
 };
 
-// Selector order on the Profile screen; the first element is the default accent color.
+// Picker order; the first is the default.
 export const ACCENT_ORDER: AccentKey[] = [
   'pine', 'terracotta', 'ink', 'indigo', 'wine', 'mustard',
   'ocean', 'plum', 'rose', 'slate',
 ];
 export const DEFAULT_ACCENT: AccentKey = 'pine';
 
-// Priority and habit colors are the same in both modes (vivid accents; readable in dark too).
+// Priority and habit colors are the same in both modes.
 export const PRIORITY_COLOR: Record<Priority, string> = {
   high: '#ef4444',
   medium: '#f59e0b',
   low: '#10b981',
 };
 
-// Order in the priority picker (low to high).
 export const PRIORITY_ORDER: Priority[] = ['low', 'medium', 'high'];
 
-// Habit color palette (for the icon set, see src/ui/habitIcons.tsx — this used
-// to hold a raw emoji list, since replaced with a line-vector icon set).
-// 16 colors — all vivid mid-tones readable in both themes.
+// Habit colors: mid-tones readable in both themes.
 export const HABIT_COLORS = [
   '#4f46e5', '#0ea5e9', '#10b981', '#f59e0b',
   '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6',
@@ -205,12 +175,9 @@ export const HABIT_COLORS = [
   '#a855f7', '#e11d48', '#a16207', '#64748b',
 ];
 
-// Default used when a habit has no color.
 export const DEFAULT_HABIT_COLOR = '#6366f1';
 
-// "YYYY-MM-DD" (or ISO) -> a short label like "Jun 28". lang determines which
-// locale (month names, etc.) is used to format it; noDateLabel is the translated
-// text shown when there's no value (the caller passes t('date.noDate')).
+// "YYYY-MM-DD" (or ISO) -> "Jun 28"; noDateLabel for null (pass t('date.noDate')).
 export function shortDate(value: string | null, lang: Lang = 'tr', noDateLabel = 'Tarihsiz'): string {
   if (!value) return noDateLabel;
   const ymd = value.slice(0, 10);
@@ -220,7 +187,7 @@ export function shortDate(value: string | null, lang: Lang = 'tr', noDateLabel =
   });
 }
 
-// "YYYY-MM-DD" (or ISO) -> a long label like "June 28, 2026".
+// -> "June 28, 2026"
 export function longDateLabel(value: string | null, lang: Lang = 'tr', noDateLabel = 'Tarihsiz'): string {
   if (!value) return noDateLabel;
   const ymd = value.slice(0, 10);
@@ -231,11 +198,7 @@ export function longDateLabel(value: string | null, lang: Lang = 'tr', noDateLab
   });
 }
 
-// ISO timestamp -> "Jul 15, 14:32" (date + time). What sets it apart from other
-// date labels is that it also shows the TIME: for places answering "exactly when
-// did this happen" (goal entry history, last sync timestamp).
-// A relative format ("3 days ago") was deliberately NOT CHOSEN: it requires
-// pluralization rules, which t() doesn't currently support (would produce "1 days ago" in English).
+// ISO -> "Jul 15, 14:32", for "exactly when" (entry history, last sync).
 export function dateTimeLabel(iso: string, lang: Lang = 'tr'): string {
   const d = new Date(iso);
   const date = d.toLocaleDateString(DATE_LOCALE[lang], { day: 'numeric', month: 'short' });
@@ -243,7 +206,7 @@ export function dateTimeLabel(iso: string, lang: Lang = 'tr'): string {
   return `${date}, ${time}`;
 }
 
-// "YYYY-MM-DD" -> a full label with weekday name (like "Monday, June 29, 2026").
+// -> "Monday, June 29, 2026"
 export function fullDateLabel(ymd: string, lang: Lang = 'tr'): string {
   return new Date(`${ymd}T00:00:00`).toLocaleDateString(DATE_LOCALE[lang], {
     weekday: 'long',
@@ -253,8 +216,7 @@ export function fullDateLabel(ymd: string, lang: Lang = 'tr'): string {
   });
 }
 
-// Produces the remaining-days label for a dated goal/task. The translated pieces
-// (how many days left/passed, "due today") come from the caller (t()).
+// Days left / overdue / due today; the translated pieces come from the caller.
 export function deadlineLabel(
   ymd: string | null,
   labels: { daysLeft: (n: number) => string; dueToday: string; daysAgo: (n: number) => string }
@@ -269,21 +231,15 @@ export function deadlineLabel(
   return labels.daysAgo(-diff);
 }
 
-// Generates shared styles for the active palette. Components: const { shared } = useTheme().
-// A percentage label in the reader's convention: Turkish puts the sign first
-// ("%53"), English after ("53%"), German after a (non-breaking) space ("53 %").
-// It used to be the Turkish form everywhere, so English/German screens read "%100".
+// "%53" (tr), "53%" (en), "53 %" (de, non-breaking space).
 export function percentLabel(n: number, lang: Lang = 'tr'): string {
   if (lang === 'tr') return `%${n}`;
   if (lang === 'de') return `${n} %`;
   return `${n}%`;
 }
 
-// Switch colors that stay visible in every theme. The thumb was always the
-// CARD color: fine on the accent track (ON, ≥5:1), but in the OFF state it was
-// a card-colored circle on a border-colored track (~1.3:1) — invisible, so you
-// couldn't tell an off switch was there at all. OFF now uses the faint gray
-// (≥3.3:1 in all three palettes; see contrast.ui.test.tsx).
+// Switch colors visible in every theme: an OFF thumb in the card color
+// vanished on its track (~1.3:1), so OFF uses faint (≥3.3:1).
 export function switchColors(c: Colors, value: boolean) {
   return {
     trackColor: { false: c.border, true: c.primary },
@@ -291,6 +247,7 @@ export function switchColors(c: Colors, value: boolean) {
   };
 }
 
+// Shared styles for a palette (useTheme().shared).
 export function makeShared(c: Colors) {
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: c.bg },
@@ -348,6 +305,3 @@ export function makeShared(c: Colors) {
     empty: { fontSize: 14, color: c.faint, paddingVertical: 8 },
   });
 }
-
-// Backward-compatible default shared styles (light). Migrated screens use useTheme().shared.
-export const shared = makeShared(lightColors);

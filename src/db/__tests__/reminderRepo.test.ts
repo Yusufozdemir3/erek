@@ -67,8 +67,7 @@ describe('replaceAll', () => {
     expect(reminderRepo.listByEntity('habit', habitId).map((r) => r.time)).toEqual(['09:00', '21:00']);
   });
 
-  // Re-creating unchanged times on every save churned tombstones AND made the
-  // other device drop the reminder during sync (see syncEngine.applyRemoteRow).
+  // Recreating unchanged times churned tombstones and lost reminders in sync.
   it('değişmeyen saatlerin satırına (id\'sine) dokunmaz, yalnız farkı yazar', () => {
     const keep = reminderRepo.create('habit', habitId, '08:00');
     const drop = reminderRepo.create('habit', habitId, '20:00');

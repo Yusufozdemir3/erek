@@ -2,14 +2,13 @@
 // katmanı, Google girişi ve AppData taklit edilir; repolar GERÇEK.
 
 import { Platform } from 'react-native';
-import { act, fireEvent, waitFor } from '@testing-library/react-native';
+import { fireEvent, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { goalRepo, habitRepo, reminderRepo, taskRepo, userRepo } from '@/db';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { renderUI } from '@/test/renderWithProviders';
 import { SetupWizard } from '../SetupWizard';
-import { deadlineIn, HABIT_SUGGESTIONS } from '../wizardLogic';
-import { HABIT_ICON_SET } from '@/ui/habitIcons';
+import { deadlineIn } from '../wizardLogic';
 import { todayDate } from '@/lib/helpers';
 
 let mockUserId = 'placeholder';
@@ -51,6 +50,9 @@ const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 type Utils = Awaited<ReturnType<typeof renderUI>>;
 
 const next = (u: Utils) => fireEvent.press(u.getByLabelText('Devam'));
+// Moves on without adding anything: "Skip this step" where offered, else Continue.
+const pass = (u: Utils) => fireEvent.press(u.queryByText('Bu adımı atla') ?? u.getByLabelText('Devam'));
+const continueDisabled = (u: Utils) => u.getByLabelText('Devam').props.accessibilityState?.disabled === true;
 const start = (u: Utils) => fireEvent.press(u.getByLabelText('Kuruluma başla'));
 
 beforeEach(async () => {
@@ -66,13 +68,6 @@ beforeEach(async () => {
 });
 
 afterEach(() => jest.restoreAllMocks());
-
-describe('SetupWizard — öneri verisi', () => {
-  it('her alışkanlık önerisinin simgesi uygulamanın simge kümesinde gerçekten var', () => {
-    const ids = new Set(HABIT_ICON_SET.map((i) => i.id));
-    for (const s of HABIT_SUGGESTIONS) expect(ids.has(s.icon)).toBe(true);
-  });
-});
 
 describe('SetupWizard — çerçeve', () => {
   it('karşılamayla açılır; ilerleme çubuğu yoktur', async () => {
@@ -102,12 +97,12 @@ describe('SetupWizard — çerçeve', () => {
     expect(mockReschedule).not.toHaveBeenCalled();
   });
 
-  it('hepsini "Devam" ile geçince adımlar atlanır, son sayfa boş durumu söyler', async () => {
+  it('her adımı atlayınca son sayfa boş durumu söyler', async () => {
     const onDone = jest.fn();
     const u = await renderUI(<SetupWizard onDone={onDone} />);
     start(u);
     expect(u.getByText('Adım 1/7')).toBeTruthy(); // dil ve görünüm … hesap = 7 adım
-    for (let i = 0; i < 7; i++) next(u);
+    for (let i = 0; i < 7; i++) pass(u);
     expect(u.getByText('Hazırsın!')).toBeTruthy();
     expect(u.getByText(/Şimdilik bir şey eklemedin/)).toBeTruthy();
     expect(u.queryByText('Hepsini atla')).toBeNull(); // son sayfada anlamsız
@@ -118,7 +113,7 @@ describe('SetupWizard — çerçeve', () => {
   it('Geri önceki adıma döner; adım sayısı ve ilerleme tutarlı', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    next(u);
+    pass(u);
     expect(u.getByText('Adım 2/7')).toBeTruthy();
     fireEvent.press(u.getByLabelText('Geri'));
     expect(u.getByText('Adım 1/7')).toBeTruthy();
@@ -130,9 +125,9 @@ describe('SetupWizard — çerçeve', () => {
   it('"Bu adımı atla" sonraki adıma geçirir; iş yapılınca düğme kaybolur', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u); // dil ve görünüm
-    next(u); // alışkanlık
+    pass(u); // alışkanlık
     expect(u.getByText('Bu adımı atla')).toBeTruthy();
-    fireEvent.press(u.getByLabelText('Su iç'));
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
     expect(u.queryByText('Bu adımı atla')).toBeNull(); // artık yapıldı: yalnız Devam
     next(u);
@@ -153,7 +148,7 @@ describe('SetupWizard — çerçeve', () => {
     const onDone = jest.fn();
     const u = await renderUI(<SetupWizard onDone={onDone} />);
     start(u);
-    next(u); // görünüm → alışkanlık
+    pass(u); // görünüm → alışkanlık
     fireEvent.press(u.getByLabelText('Kurulum sihirbazının tamamını atla'));
     await waitFor(() => expect(onDone).toHaveBeenCalledWith({ skippedAll: true, accountSeen: false }));
   });
@@ -171,29 +166,28 @@ describe('SetupWizard — dil ve görünüm', () => {
 });
 
 describe('SetupWizard — ilk alışkanlık', () => {
-  it('öneri + sıklık + hatırlatma: doğru kayıt oluşur', async () => {
+  it('ad + sıklık + hatırlatma: doğru kayıt oluşur', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    next(u);
-    fireEvent.press(u.getByLabelText('Kitap oku'));
-    expect(u.getByPlaceholderText('Alışkanlığın adı').props.value).toBe('Kitap oku');
+    pass(u);
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Kitap oku');
     fireEvent.press(u.getByLabelText('Hafta içi'));
     fireEvent.press(u.getByLabelText('21:00'));
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
 
     const [h] = habitRepo.listByUser(mockUserId);
-    expect(h).toMatchObject({ title: 'Kitap oku', kind: 'binary', icon: 'book', start_date: todayDate() });
+    expect(h).toMatchObject({ title: 'Kitap oku', kind: 'binary', icon: null, start_date: todayDate() });
     expect(h.schedule).toEqual({ freq: 'weekly', weekdays: [1, 2, 3, 4, 5] });
     expect(reminderRepo.listByEntity('habit', h.id).map((r) => r.time)).toEqual(['21:00']);
     expect(u.getByText('✓ “Kitap oku” eklendi')).toBeTruthy();
     expect(mockNotifyDataChanged).toHaveBeenCalled();
   });
 
-  it('"Haftada 3" öneri otomatik kota seçer; elle yazılan ad simgeyi düşürür', async () => {
+  it('"Haftada 3 kez" kota olarak kaydedilir', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    next(u);
-    fireEvent.press(u.getByLabelText('Spor yap'));
+    pass(u);
+    fireEvent.press(u.getByLabelText('Haftada 3 kez'));
     fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Boks');
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
     const [h] = habitRepo.listByUser(mockUserId);
@@ -205,7 +199,7 @@ describe('SetupWizard — ilk alışkanlık', () => {
   it('boş adla eklenemez', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    next(u);
+    pass(u);
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
     expect(habitRepo.listByUser(mockUserId)).toHaveLength(0);
   });
@@ -213,12 +207,12 @@ describe('SetupWizard — ilk alışkanlık', () => {
   it('"Bir tane daha ekle" formu sıfırlar; ikisi de kaydedilir', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    next(u);
-    fireEvent.press(u.getByLabelText('Su iç'));
+    pass(u);
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
     fireEvent.press(u.getByText('Bir tane daha ekle'));
     expect(u.getByPlaceholderText('Alışkanlığın adı').props.value).toBe('');
-    fireEvent.press(u.getByLabelText('Erken yat'));
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Erken yat');
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
     expect(habitRepo.listByUser(mockUserId).map((x) => x.title).sort()).toEqual(['Erken yat', 'Su iç']);
   });
@@ -227,8 +221,8 @@ describe('SetupWizard — ilk alışkanlık', () => {
 describe('SetupWizard — ilk görev', () => {
   async function toTask(u: Utils) {
     start(u);
-    next(u); // görünüm
-    next(u); // alışkanlık (atla)
+    pass(u); // görünüm
+    pass(u); // alışkanlık (atla)
   }
 
   it('yazılan cümleden başlık, tarih ve saat çıkar', async () => {
@@ -269,15 +263,15 @@ describe('SetupWizard — ilk görev', () => {
 describe('SetupWizard — ilk hedef', () => {
   async function toGoal(u: Utils) {
     start(u);
-    for (let i = 0; i < 3; i++) next(u); // görünüm, alışkanlık, görev
+    for (let i = 0; i < 3; i++) pass(u); // görünüm, alışkanlık, görev
   }
 
-  it('öneri alanları doldurur; 3 ay varsayılan son tarih', async () => {
+  it('alanlar doldurulunca kayıt oluşur; 3 ay varsayılan son tarih', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     await toGoal(u);
-    fireEvent.press(u.getByLabelText('Koş'));
-    expect(u.getByPlaceholderText('100').props.value).toBe('100');
-    expect(u.getByPlaceholderText('km').props.value).toBe('km');
+    fireEvent.changeText(u.getByPlaceholderText('Hedefin adı'), 'Koş');
+    fireEvent.changeText(u.getByPlaceholderText('100'), '100');
+    fireEvent.changeText(u.getByPlaceholderText('km'), 'km');
     fireEvent.press(u.getByText('Hedefi ekle'));
 
     const [g] = goalRepo.listByUser(mockUserId);
@@ -312,7 +306,7 @@ describe('SetupWizard — ilk hedef', () => {
 describe('SetupWizard — bildirimler', () => {
   async function toNotifications(u: Utils) {
     start(u);
-    for (let i = 0; i < 4; i++) next(u);
+    for (let i = 0; i < 4; i++) pass(u);
   }
 
   it('izin verilmemişse sorar; verilince açık görünür ve adım yapılmış sayılır', async () => {
@@ -346,13 +340,13 @@ describe('SetupWizard — bildirimler', () => {
     const onDone = jest.fn();
     const u = await renderUI(<SetupWizard onDone={onDone} />);
     start(u);
-    next(u);
-    fireEvent.press(u.getByLabelText('Su iç'));
+    pass(u);
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
     fireEvent.press(u.getByLabelText('08:00'));
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
     expect(mockReschedule).not.toHaveBeenCalled(); // eklerken planlanmaz (izin henüz sorulmadı)
     mockPermission.mockResolvedValue({ granted: true, canAskAgain: true });
-    for (let i = 0; i < 6; i++) next(u);
+    for (let i = 0; i < 6; i++) pass(u);
     fireEvent.press(u.getByLabelText('Erek’i aç'));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(mockReschedule).toHaveBeenCalledTimes(1);
@@ -363,7 +357,7 @@ describe('SetupWizard — bildirimler', () => {
     const onDone = jest.fn();
     const u = await renderUI(<SetupWizard onDone={onDone} />);
     start(u);
-    for (let i = 0; i < 7; i++) next(u);
+    for (let i = 0; i < 7; i++) pass(u);
     fireEvent.press(u.getByLabelText('Erek’i aç'));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(mockReschedule).not.toHaveBeenCalled();
@@ -374,7 +368,7 @@ describe('SetupWizard — widget ve hesap', () => {
   it('widget adımı üç adımlı yönerge gösterir', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    for (let i = 0; i < 5; i++) next(u);
+    for (let i = 0; i < 5; i++) pass(u);
     expect(u.getByText('Ana ekran widget’ı')).toBeTruthy();
     expect(u.getByText('Ana ekranda boş bir yere uzun bas.')).toBeTruthy();
     expect(u.getByText(/Erek — Bugün/)).toBeTruthy();
@@ -383,7 +377,7 @@ describe('SetupWizard — widget ve hesap', () => {
   it('hesap adımında Google düğmesi girişi başlatır', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    for (let i = 0; i < 6; i++) next(u);
+    for (let i = 0; i < 6; i++) pass(u);
     fireEvent.press(u.getByLabelText('Google ile devam et'));
     expect(mockSignIn).toHaveBeenCalledTimes(1);
   });
@@ -392,7 +386,7 @@ describe('SetupWizard — widget ve hesap', () => {
     mockAuthUser = { id: 'u1', email: 'ada@example.com', isAnonymous: false };
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    for (let i = 0; i < 6; i++) next(u);
+    for (let i = 0; i < 6; i++) pass(u);
     expect(u.getByText('Bağlandın ✓')).toBeTruthy();
     expect(u.getByText('Bağlı hesap: ada@example.com')).toBeTruthy();
     expect(u.queryByLabelText('Google ile devam et')).toBeNull();
@@ -404,18 +398,18 @@ describe('SetupWizard — son sayfa özeti', () => {
     mockPermission.mockResolvedValue({ granted: true, canAskAgain: true });
     const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
     start(u);
-    next(u);
-    fireEvent.press(u.getByLabelText('Su iç'));
+    pass(u);
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
     fireEvent.press(u.getByText('Alışkanlığı ekle'));
-    next(u);
+    pass(u);
     fireEvent.changeText(u.getByPlaceholderText('Ne yapman gerekiyor?'), 'süt al');
     fireEvent.press(u.getByText('Görevi ekle'));
-    next(u);
-    next(u); // hedef atlandı
+    pass(u);
+    pass(u); // hedef atlandı
     await u.findByText('Bildirimler açık ✓');
-    next(u);
-    next(u); // widget
-    next(u); // hesap atlandı
+    pass(u);
+    pass(u); // widget
+    pass(u); // hesap atlandı
     expect(u.getByText('Alışkanlık: Su iç')).toBeTruthy();
     expect(u.getByText('Görev: Süt al')).toBeTruthy();
     expect(u.queryByText(/^Hedef:/)).toBeNull();
@@ -424,5 +418,76 @@ describe('SetupWizard — son sayfa özeti', () => {
   });
 });
 
-// Keep act imported for clarity of intent in async flows above.
-void act;
+describe('SetupWizard — Devam ve form', () => {
+  it('boş formda Devam kapalı; basmak geçirmez, "Bu adımı atla" geçirir', async () => {
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
+    start(u);
+    pass(u); // görünüm → alışkanlık
+    expect(continueDisabled(u)).toBe(true);
+    next(u);
+    expect(u.getByText('Adım 2/7')).toBeTruthy();
+    fireEvent.press(u.getByText('Bu adımı atla'));
+    expect(u.getByText('Adım 3/7')).toBeTruthy();
+    expect(habitRepo.listByUser(mockUserId)).toHaveLength(0);
+  });
+
+  it('yazıp Devam’a basınca kaydeder ve geçer; özette yapıldı görünür', async () => {
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
+    start(u);
+    pass(u);
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Kitap oku');
+    fireEvent.press(u.getByLabelText('21:00'));
+    expect(continueDisabled(u)).toBe(false);
+    next(u);
+    expect(u.getByText('Adım 3/7')).toBeTruthy();
+    const [h] = habitRepo.listByUser(mockUserId);
+    expect(h).toMatchObject({ title: 'Kitap oku', kind: 'binary' });
+    expect(reminderRepo.listByEntity('habit', h.id).map((r) => r.time)).toEqual(['21:00']);
+
+    fireEvent.changeText(u.getByPlaceholderText('Ne yapman gerekiyor?'), 'süt al');
+    next(u);
+    expect(taskRepo.listByUser(mockUserId).map((t) => t.title)).toEqual(['Süt al']);
+
+    fireEvent.changeText(u.getByPlaceholderText('Hedefin adı'), 'Koş');
+    fireEvent.changeText(u.getByPlaceholderText('100'), '50');
+    next(u);
+    expect(goalRepo.listByUser(mockUserId)).toMatchObject([{ title: 'Koş', target_value: 50 }]);
+
+    for (let i = 0; i < 3; i++) pass(u); // bildirim, widget, hesap
+    expect(u.getByText('Alışkanlık: Kitap oku')).toBeTruthy();
+    expect(u.getByText('Görev: Süt al')).toBeTruthy();
+    expect(u.getByText(/^Hedef: Koş/)).toBeTruthy();
+  });
+
+  it('yarım hedef (adı var, miktarı yok) Devam’ı kapatır; kayıt oluşmaz', async () => {
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
+    start(u);
+    for (let i = 0; i < 3; i++) pass(u); // görünüm, alışkanlık, görev
+    fireEvent.changeText(u.getByPlaceholderText('Hedefin adı'), 'Piyano');
+    expect(continueDisabled(u)).toBe(true);
+    fireEvent.changeText(u.getByPlaceholderText('100'), '0');
+    expect(continueDisabled(u)).toBe(true);
+    fireEvent.changeText(u.getByPlaceholderText('100'), '20');
+    expect(continueDisabled(u)).toBe(false);
+    fireEvent.changeText(u.getByPlaceholderText('Hedefin adı'), '');
+    expect(continueDisabled(u)).toBe(true); // miktar var, ad yok
+    expect(goalRepo.listByUser(mockUserId)).toHaveLength(0);
+  });
+
+  it('ekledikten sonra boş "bir tane daha" formu Devam’ı kapatmaz; geri dönmek çift kayıt yapmaz', async () => {
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
+    start(u);
+    pass(u);
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
+    fireEvent.press(u.getByText('Alışkanlığı ekle'));
+    fireEvent.press(u.getByText('Bir tane daha ekle'));
+    expect(continueDisabled(u)).toBe(false);
+    next(u);
+    expect(u.getByText('Adım 3/7')).toBeTruthy();
+    fireEvent.press(u.getByLabelText('Geri'));
+    expect(u.getByText('Adım 2/7')).toBeTruthy();
+    expect(continueDisabled(u)).toBe(false); // adım zaten yapıldı
+    next(u);
+    expect(habitRepo.listByUser(mockUserId).map((h) => h.title)).toEqual(['Su iç']);
+  });
+});

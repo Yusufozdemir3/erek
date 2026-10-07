@@ -1,12 +1,6 @@
-// The on-card control for a timer habit.
-// A live counter "m:ss / m:ss" + Start/Pause button + (once there's progress) Reset.
-// Running state and ticks come from TimerProvider; once the target is reached
-// a ✓ badge appears but the timer does NOT stop — the user can keep running
-// past the target.
-// `editable` is only true for today (a past day is read-only).
-// Tapping the value text (while the timer isn't running) lets you enter
-// minutes by hand — the same "type it on the keyboard" pattern as
-// AmountStepper, converted to seconds and passed to onSet.
+// A timer habit's card control: live "m:ss / m:ss", start/pause and reset.
+// Reaching the target shows ✓ but keeps the controls (it can run on). Only
+// today is editable; tapping the value lets the user type minutes.
 
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -20,13 +14,13 @@ import type { Colors } from './theme';
 
 interface Props {
   habitId: string;
-  amount: number;      // seconds accumulated in the DB for that day (a snapshot)
-  target: number;      // target in seconds
-  editable?: boolean;  // is it today — controls only appear then
-  onSet?: (totalSeconds: number) => void; // absolute duration entered from the keyboard (seconds)
+  amount: number;      // seconds stored for that day
+  target: number;      // seconds
+  editable?: boolean;  // today only
+  onSet?: (totalSeconds: number) => void; // a typed total
 }
 
-// Converts seconds to minutes and shows it without decimals if it's a whole number (same pattern as AmountStepper.fmt).
+// Seconds as minutes, no trailing decimals.
 function fmtMinutes(totalSeconds: number): string {
   const mins = totalSeconds / 60;
   return mins % 1 === 0 ? String(mins) : mins.toFixed(1);
@@ -38,13 +32,12 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
   const styles = makeStyles(colors);
   const timer = useTimer();
   const running = timer.isRunning('habit', habitId);
-  // The live value while running; otherwise the accumulated amount in the DB.
   const live = running ? timer.liveSeconds('habit', habitId) ?? amount : amount;
   const reached = target > 0 && live >= target;
 
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
-  // Same as AmountStepper: a one-shot flag so onBlur + onSubmitEditing don't commit twice in the same session.
+  // onBlur + onSubmitEditing must commit only once (see AmountStepper).
   const committedRef = useRef(false);
 
   const startEdit = () => {
@@ -83,8 +76,6 @@ export function HabitTimer({ habitId, amount, target, editable, onSet }: Props) 
         </Pressable>
       )}
 
-      {/* Once the target is reached a ✓ badge appears but the controls don't
-          disappear — the user can keep running past the target if they want. */}
       {reached && <Text style={styles.doneCheck}>✓</Text>}
       {editable && (
         <Pressable

@@ -1,15 +1,7 @@
-// Row wrapper that reveals Edit+Delete actions on the right when swiped left.
-// Used in the Tasks/Habits/Goals lists — DELIBERATELY absent on the "Today"
-// screen (there the card already toggles on tap, which would conflict with swipe).
-// NO new native dependency was ADDED: react-native-gesture-handler wasn't
-// installed, and adding it would require a fresh native build. Instead this is
-// built with core React Native PanResponder + Animated (transform: translateX),
-// so it's testable immediately in the existing Expo Go / compiled APK.
-//
-// Delete is confirmed with a second tap (same safety pattern as
-// ConfirmDeleteButton — the app has NO single-tap deletes anywhere). Open/closed
-// state is kept in the PARENT (isOpen/onOpenChange) so only one row stays open at
-// a time — opening a new row automatically closes the previous ones.
+// Swipe a row left to reveal Edit + Delete (Tasks/Habits/Goals lists — not
+// Today, where tapping the card already checks it). Built with PanResponder +
+// Animated, so no gesture-handler native dependency. Delete needs a second tap,
+// like everywhere in the app. The parent owns isOpen, so one row is open at a time.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
@@ -45,21 +37,19 @@ export function SwipeableRow({
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const translateX = useRef(new Animated.Value(0)).current;
-  // Since gesture callbacks freeze at the first render, the `isOpen` prop is
-  // mirrored into a ref to keep it fresh (the classic PanResponder+useRef
-  // staleness issue).
+  // The PanResponder's callbacks are created once, so they read isOpen via a ref.
   const isOpenRef = useRef(isOpen);
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
-  const offsetRef = useRef(0); // translateX's resting value when the gesture starts
+  const offsetRef = useRef(0); // translateX at gesture start
   const [armed, setArmed] = useState(false);
 
   const animateTo = (value: number) => {
     Animated.spring(translateX, { toValue: value, useNativeDriver: true, bounciness: 0 }).start();
   };
 
-  // Stay in sync if closed externally (another row was opened).
+  // Closed from outside (another row opened).
   useEffect(() => {
     if (!isOpen) {
       animateTo(0);
@@ -127,8 +117,7 @@ export function SwipeableRow({
         {...panResponder.panHandlers}
       >
         {children}
-        {/* While open, tapping the card (including its edges) closes the row and
-            doesn't leak through to the edit tap underneath. */}
+        {/* While open, a tap on the card only closes it. */}
         {isOpen && <Pressable style={StyleSheet.absoluteFill} onPress={close} />}
       </Animated.View>
     </View>
@@ -137,8 +126,7 @@ export function SwipeableRow({
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    // overflow:'hidden' is CRITICAL — without it, the action panel peeks out from
-    // the edges even while the card is closed (this was the reported visual glitch).
+    // Without overflow hidden the actions peek out of a closed card.
     container: { overflow: 'hidden', borderRadius: 14 },
     sliding: { width: '100%' },
     actions: {

@@ -1,8 +1,4 @@
-// Small presentational components for the Goal Stats tab — SPLIT OUT of
-// app/goal/[id].tsx. None of them hold state or read data; they just render
-// the given props. The `styles` prop comes from the screen's style factory
-// (see goalStyles.ts) — components don't create their own StyleSheet so
-// theme/sizing stays managed from a single place.
+// Presentational cards of the goal Stats tab; `styles` comes from goalStyles.ts.
 
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';

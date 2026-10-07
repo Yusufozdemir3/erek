@@ -1,7 +1,4 @@
-// AmountStepper component test (numeric habit −/+ counter + keyboard entry).
-// This is the regression net for the "tap the value text → enter an absolute
-// value via keyboard" pattern (the same pattern was also ported to
-// HabitTimer). Access: providers (theme/language).
+// AmountStepper: −/+ and typing an absolute value on the keyboard.
 
 import { fireEvent } from '@testing-library/react-native';
 import { AmountStepper } from '@/ui/AmountStepper';

@@ -1,10 +1,5 @@
-// GoalForm component test — covers two features added in this session:
-//  (1) Multiple reminders (remind_times) — several times via ReminderListEditor.
-//  (2) The "Also add to progress history" checkbox for manually editing
-//      "Current value" (log_manual_change) — OFF by default, only shown when
-//      editing a numeric goal (see the file-header comment in GoalForm.tsx).
-// It also covers type selection (numeric/milestone) and the required-deadline
-// behavior (this component previously had no UI test at all).
+// GoalForm: type choice, the required deadline, several reminders, draft
+// steps, and the "also add to progress history" box (editing numeric goals only).
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { GoalForm } from '@/ui/GoalForm';
@@ -55,7 +50,7 @@ describe('GoalForm — oluşturma', () => {
     fireEvent.changeText(getByPlaceholderText('Hedef başlığı (örn. 100 km koş)'), 'Ev taşı');
     fireEvent.press(getByText('Parçalı'));
 
-    // The numeric fields are now GONE.
+    // No numeric fields.
     expect(() => getByPlaceholderText('örn. 100')).toThrow();
 
     fireEvent.changeText(getByPlaceholderText('Adım ekle…'), 'Kutuları topla');
@@ -68,8 +63,7 @@ describe('GoalForm — oluşturma', () => {
         target_value: null,
         unit: null,
         start_date: null,
-        // The draft milestone is no longer plain text but {title, amount, due date}:
-        // the creation screen was brought in line with the milestone editor on the detail screen.
+        // A draft step carries {title, amount, due date}, like the detail screen's.
         milestones: [{ title: 'Kutuları topla', amount: null, due_date: null }],
       })
     );

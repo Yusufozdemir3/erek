@@ -1,13 +1,7 @@
-// The add form opened by the central ＋ button (a centered modal — not a
-// bottom sheet). Since the ＋ menu usually already picks the type, it opens
-// directly on the relevant form (initialStep); "‹ Back" returns to the type
-// selection menu.
-// All types are added with FULL settings right at creation time: task
-// (TaskForm) and habit (HabitForm) share the same form as their edit panels;
-// goal has its own full form (moved from goals.tsx). After adding,
-// notifyDataChanged refreshes the lists on open screens and navigates to the
-// relevant tab.
-// Architecture rule: no SQL — repo calls only.
+// The add form behind the central ＋ (a centered modal). It usually opens
+// straight on the picked type's form (initialStep); "‹ Back" returns to the
+// type menu. Every type is created with its full form — the same one its edit
+// screen uses. After adding: refresh the lists and go to that tab.
 
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -30,42 +24,41 @@ export type Step = 'menu' | 'task' | 'habit' | 'goal';
 interface Props {
   visible: boolean;
   onClose: () => void;
-  // The step to jump to directly when opened. Since the central ＋ menu
-  // usually already picks a type, a form step is generally passed; if not,
-  // the type selection menu opens.
+  // Omitted = the type menu.
   initialStep?: Step;
+  // The task form opens with the mic already listening.
+  autoVoice?: boolean;
 }
 
-// Text is kept as i18n keys and translated with t() at render time. Icons come
-// from EntityIcon, the same line-icon set used in the tab bar (for consistency).
 const MENU_OPTIONS: { step: Step; type: EntityType; titleKey: string; descKey: string }[] = [
   { step: 'task', type: 'task', titleKey: 'add.task', descKey: 'add.taskDesc' },
   { step: 'habit', type: 'habit', titleKey: 'add.habit', descKey: 'add.habitDesc' },
   { step: 'goal', type: 'goal', titleKey: 'add.goal', descKey: 'add.goalDesc' },
 ];
 
-export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
+export function AddSheet({ visible, onClose, initialStep = 'menu', autoVoice = false }: Props) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const { user, notifyDataChanged, selectedDate } = useAppData();
   const [step, setStep] = useState<Step>(initialStep);
+  // Cleared once the user picks a type from the menu: only the first form listens.
+  const [listenNow, setListenNow] = useState(autoVoice);
   const friends = useFriends(visible);
 
-  // Return to the requested step (default menu) on every open.
   useEffect(() => {
-    if (visible) setStep(initialStep);
-  }, [visible, initialStep]);
+    if (visible) {
+      setStep(initialStep);
+      setListenNow(autoVoice);
+    }
+  }, [visible, initialStep, autoVoice]);
 
-  // After adding: close the menu, refresh the lists, navigate to the relevant tab.
   const finish = (tab: '/(tabs)/tasks' | '/(tabs)/habits' | '/(tabs)/goals') => {
     notifyDataChanged();
     onClose();
     router.navigate(tab);
   };
 
-  // A task is created with the same TaskForm as the edit panel — priority, due
-  // date, time, and (optionally) subtasks can all be set at creation time.
   const addTask = (values: TaskFormValues) => {
     const created = taskRepo.create({
       user_id: user.id,
@@ -76,9 +69,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
       recurrence: values.recurrence,
       shared_with_id: values.shared_with_id,
     });
-    // Create the draft subtasks in order, after the task itself is written.
     values.subtasks?.forEach((sub) => subtaskRepo.create(created.id, sub));
-    // If reminder times were chosen, notifications are set up right away (no-op otherwise).
     const reminders = reminderRepo.replaceAll('task', created.id, values.remind_times);
     scheduleTaskReminders(created, reminders).then((ok) => {
       if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
@@ -86,12 +77,9 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     finish('/(tabs)/tasks');
   };
 
-  // A habit is created with the same HabitForm as the edit panel — all
-  // settings (icon, color, frequency, date range, numeric target, reminders,
-  // linking to a goal) can be set at creation time.
   const addHabit = (values: HabitFormValues) => {
     const created = habitRepo.create({ user_id: user.id, ...values });
-    // If reminder times were chosen, schedule notifications (warn if permission is missing).
+    // Warns if notification permission is missing.
     const reminders = reminderRepo.replaceAll('habit', created.id, values.remind_times);
     if (reminders.length > 0) {
       scheduleHabitReminders(created, reminders).then((ok) => {
@@ -103,9 +91,6 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     finish('/(tabs)/habits');
   };
 
-  // A goal is created with the same GoalForm as the edit panel — the type
-  // (numeric/milestone) is only chosen here, the deadline is required, and
-  // draft milestones are written together with the goal.
   const addGoal = (values: GoalFormValues) => {
     const created = goalRepo.create({
       user_id: user.id,
@@ -119,9 +104,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
     values.milestones?.forEach((m) =>
       goalMilestoneRepo.create(created.id, m.title, { amount: m.amount, due_date: m.due_date })
     );
-    // If daily-entry reminders were chosen, they're set up right away (warn if
-    // permission is missing — same pattern as habit/task creation; the result
-    // used to not be checked at all).
+    // Warns if notification permission is missing.
     const reminders = reminderRepo.replaceAll('goal', created.id, values.remind_times);
     if (reminders.length > 0) {
       scheduleGoalReminders(created, reminders).then((ok) => {
@@ -137,7 +120,10 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
             <>
               <Text style={styles.heading}>{t('add.menuTitle')}</Text>
               {MENU_OPTIONS.map((opt) => (
-                <Pressable key={opt.step} style={styles.option} onPress={() => setStep(opt.step)}>
+                <Pressable key={opt.step} style={styles.option} onPress={() => {
+                  setListenNow(false);
+                  setStep(opt.step);
+                }}>
                   <View style={styles.optionIcon}>
                     <EntityIcon type={opt.type} size={22} color={colors.primary} />
                   </View>
@@ -150,8 +136,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
               ))}
             </>
           ) : (
-            // ModalCard already wraps its content in a ScrollView (the long
-            // habit form scrolls safely, the "Add" button never gets clipped).
+            // ModalCard scrolls its content.
             <>
               <View style={styles.formHead}>
                 <Pressable onPress={() => setStep('menu')} hitSlop={8}>
@@ -160,13 +145,12 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                 <Text style={styles.heading}>
                   {step === 'task' ? t('add.newTask') : step === 'habit' ? t('add.newHabit') : t('add.newGoal')}
                 </Text>
-                {/* spacer the width of the "‹ Back" on the left, to center the title */}
+                {/* balances "‹ Back" so the title is centered */}
                 <View style={styles.headSpacer} />
               </View>
 
               {step === 'habit' ? (
-                // The tracking type (checkbox/numeric/timer) is the wizard's own
-                // first step — `kind` isn't passed to HabitForm; the user picks it in stepped mode.
+                // No `kind`: the wizard's first step picks it.
                 <HabitForm
                   userId={user.id}
                   submitLabel={t('common.add')}
@@ -175,22 +159,18 @@ export function AddSheet({ visible, onClose, initialStep = 'menu' }: Props) {
                   onSubmit={addHabit}
                 />
               ) : step === 'task' ? (
-                // Task: the same full form as the edit panel (priority, date, time)
-                // + adding draft subtasks at creation time. The due date defaults to
-                // whichever day is currently viewed on the "Today" screen
-                // (selectedDate) — so a task added while viewing Friday goes to Friday.
+                // Due date defaults to the day shown on Today.
                 <TaskForm
                   initial={{ due_date: selectedDate }}
                   submitLabel={t('common.add')}
-                  autoFocusTitle
+                  autoFocusTitle={!listenNow}
                   enableSubtaskDraft
                   enableVoice
+                  autoStartVoice={listenNow}
                   shareFriends={friends}
                   onSubmit={addTask}
                 />
               ) : (
-                // Goal: the same GoalForm as the edit panel — the type
-                // (numeric/milestone) is only chosen when creating.
                 <GoalForm
                   submitLabel={t('common.add')}
                   autoFocusTitle
@@ -218,7 +198,7 @@ const makeStyles = (c: Colors) =>
       padding: 14,
       marginBottom: 10,
     },
-    // Rounded soft box for the emoji (premium feel).
+    // Rounded soft box behind the icon.
     optionIcon: {
       width: 44,
       height: 44,

@@ -1,5 +1,5 @@
-// Expo Router root layout. Wraps every screen with AppDataProvider:
-// this way the data layer (SQLite + anonymous user) is ready before the first render.
+// Root layout: providers (theme, i18n, data, timer), the screen stack and the
+// full-screen gates (setup wizard, login, app lock).
 
 import { useEffect, useState } from 'react';
 import { LogBox } from 'react-native';
@@ -9,6 +9,7 @@ import { useFonts } from 'expo-font';
 import { applyAppFont } from '@/ui/applyFont';
 import { fontFamilyFor, type FontChoice } from '@/ui/fontFamily';
 import { initFont, useFontChoice } from '@/ui/fontStore';
+import { initPlus, startPlusSync } from '@/plus/plusStore';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import {
   ThemeProvider as NavThemeProvider,
@@ -29,24 +30,16 @@ import { loadHapticsPref } from '@/lib/haptics';
 import { Sentry } from '@/lib/sentry';
 import { CrashScreen } from '@/ui/CrashScreen';
 
-// expo-notifications logs a warning in Expo Go that push (remote) notifications
-// aren't supported. Reminders are LOCAL notifications and work fine in Expo Go;
-// push is only used for friend nudges, which need a real build anyway (and
-// fall back to the share sheet without one). We suppress these expected
-// warnings to keep the console clean.
+// Expo Go warns that push isn't supported; reminders are local and work, and
+// push (friend nudges) needs a real build anyway.
 LogBox.ignoreLogs([
   'expo-notifications: Push notifications (remote notifications) functionality',
   '`expo-notifications` functionality is not fully supported in Expo Go',
 ]);
 
-// Theme-aware shell: status bar + Stack background/header colors follow the
-// active palette. Rendered INSIDE ThemeProvider since it uses useTheme.
-//
-// CRITICAL: expo-router's inner React Navigation container picks its theme
-// background from the SYSTEM color scheme. That's why, when the phone was dark
-// but the app preference was light, the navigation shell's background (screen
-// transition backdrop, modal backdrop) stayed dark. We fix this by binding
-// NavThemeProvider to our own scheme.
+// Status bar and stack colors follow the app's theme. NavThemeProvider gets our
+// scheme explicitly: React Navigation would follow the SYSTEM one, leaving dark
+// transition backdrops under a light app theme.
 // Wrap Text/TextInput once, before anything renders; the chosen typeface is read live.
 applyAppFont();
 
@@ -71,9 +64,8 @@ function ThemedStack() {
       border: colors.border,
       primary: colors.primary,
     },
-    // The navigation theme names the system font for tab labels and headers
-    // (an explicit fontFamily, which applyAppFont leaves alone) — point it at
-    // the chosen typeface; with the phone's own font the theme's fonts stay.
+    // Tab labels and headers get an explicit fontFamily from the nav theme,
+    // which applyAppFont leaves alone — so set the chosen one here.
     fonts: fontChoice === 'system' ? base.fonts : navFonts(fontChoice),
   };
   return (
@@ -88,16 +80,6 @@ function ThemedStack() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-        {/* The "account" ROUTE WAS REMOVED (the screen still lives at
-            src/ui/AccountScreen.tsx). Reason: sign-in is now Google-only (see
-            ui/LoginScreen.tsx) and nothing linked to that screen anymore — but
-            as long as it stayed under app/ the route was still LIVE and could
-            be opened with `habitapp://account`. It let you open a SECOND
-            account with email+password, ran sync directly via runSync
-            (bypassing AppData.syncNow) — meaning the "last backup" timestamp
-            and error state never updated — and never ran the account-switch
-            check (classifySignIn), so the RLS lockout we'd already fixed
-            could be reproduced again. */}
         <Stack.Screen name="profile" options={{ headerShown: true, title: t('profile.title'), presentation: 'modal' }} />
         <Stack.Screen name="appearance" options={{ headerShown: true, title: t('profile.appearance'), presentation: 'modal' }} />
         <Stack.Screen name="account-sync" options={{ headerShown: true, title: t('profile.accountSync'), presentation: 'modal' }} />
@@ -107,6 +89,7 @@ function ThemedStack() {
         <Stack.Screen name="review" options={{ headerShown: true, title: t('profile.review'), presentation: 'modal' }} />
         <Stack.Screen name="data" options={{ headerShown: true, title: t('profile.data'), presentation: 'modal' }} />
         <Stack.Screen name="guides" options={{ headerShown: true, title: t('guides.title'), presentation: 'modal' }} />
+        <Stack.Screen name="plus" options={{ headerShown: true, title: t('plus.title'), presentation: 'modal' }} />
         <Stack.Screen name="about" options={{ headerShown: true, title: t('profile.about'), presentation: 'modal' }} />
         <Stack.Screen name="setup" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen
@@ -118,40 +101,34 @@ function ThemedStack() {
         <Stack.Screen name="goal/[id]" />
         <Stack.Screen name="shared-goal/[id]" />
       </Stack>
-      {/* Onboarding shown once on first launch (manages its own flag). */}
       <OnboardingGate />
-      {/* Login screen shown once after onboarding — skippable, manages its
-          own flag, and never renders at all while ACCOUNTS_ENABLED is off. */}
       <LoginGate />
-      {/* Friend nudges: push registration + opening a tapped nudge. */}
       <PushBridge />
-      {/* App lock: covers everything (even open sheets) while locked; off by default. */}
+      {/* Covers everything, open sheets included, while locked. */}
       <AppLockGate />
     </NavThemeProvider>
   );
 }
 
 function RootLayout() {
-  // ICON FONTS: @expo/vector-icons icons (Feather/Ionicons) load glyph fonts
-  // via expo-asset; until they're ready, icons render as an empty <Text/>.
-  // We preload the fonts once at startup to avoid the "iconless" flash on the
-  // first render. (The truly critical dependency is expo-file-system — without
-  // it, expo-asset can't download in a RELEASE build and ALL icons would come
-  // out blank; see package.json.)
+  // Icon fonts are preloaded so the first render isn't iconless (they come via
+  // expo-asset, which needs expo-file-system in release builds).
   useFonts({ ...Feather.font, ...Ionicons.font });
 
-  // TYPEFACE: the user's choice (Profile › Appearance) is restored before the
-  // first render — text drawn with a family that isn't loaded yet would stay in
-  // the system font. initFont never rejects: on any problem it falls back to the
-  // phone's own font rather than leaving the app blank.
+  // The chosen typeface loads before the first render (text drawn earlier
+  // would stay in the system font). initFont never rejects.
   const [fontReady, setFontReady] = useState(false);
   useEffect(() => {
-    initFont().finally(() => setFontReady(true));
+    // Entitlements first (cache only, no network): the typeface that applies depends on them.
+    initPlus()
+      .then(initFont)
+      .finally(() => {
+        setFontReady(true);
+        startPlusSync(); // then follow the store (RevenueCat) in the background
+      });
   }, []);
 
-  // Notification handler and Android channel are set up once (doesn't request
-  // permission). The haptics preference is also cached here (haptics.ts is
-  // outside React).
+  // Once: notification handler and channels (no permission prompt), haptics pref.
   useEffect(() => {
     setNotificationHandler();
     ensureAndroidChannel();
@@ -173,12 +150,10 @@ function RootLayout() {
   );
 }
 
-// A screen that crashes while rendering shows this instead of closing the app.
-// expo-router mounts it outside our providers, so CrashScreen needs none.
+// A screen crashing while rendering shows this (outside our providers).
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return <CrashScreen error={error} retry={retry} report={(e) => Sentry.captureException(e)} />;
 }
 
-// If Sentry isn't configured (no DSN), this wrapper stays a harmless pass-through
-// layer — it reports nothing.
+// A pass-through without a Sentry DSN.
 export default Sentry.wrap(RootLayout);

@@ -1,9 +1,8 @@
 // "Remind your friend": a push to the item's OWNER through the send-nudge Edge
-// Function (supabase/functions/send-nudge). The notification only says WHO
-// reminded them — never the habit/goal title. When it can't be delivered
-// (the friend has no device registered or notifications off, offline, server
-// trouble) the old way is offered instead: a ready-made message through the
-// share sheet (WhatsApp, SMS, …), which also stays available as a small link.
+// Function — who reminded them, and the item's title (hidden on the lock
+// screen). When it can't be delivered (no device registered, notifications
+// off, offline) a ready-made message through the share sheet is offered
+// instead, which also stays available as a small link.
 
 import { useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';

@@ -1,9 +1,5 @@
-// The profile icon on the right side of screen headers. Tapping it opens the
-// Profile screen (account + cloud sync — the former Settings content) as a modal.
-// Since the Settings tab was removed, every tab shows this icon.
-// Signed into a Google account -> shows that account's profile photo instead
-// of the generic 👤 glyph; falls back to the glyph if there's no photo, the
-// session is anonymous, or the image fails to load.
+// The profile button in the screen headers: the Google account's photo when
+// signed in, otherwise (or if it fails to load) the generic glyph.
 
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet } from 'react-native';
@@ -19,8 +15,7 @@ export function ProfileButton() {
   const { t } = useI18n();
   const { authUser } = useAppData();
   const styles = makeStyles(colors);
-  // Tracks the URL that failed (not just a boolean) so switching to a
-  // different account's photo automatically retries instead of staying stuck on the fallback.
+  // Remembers WHICH url failed, so another account's photo is tried again.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const avatarUrl = authUser && !authUser.isAnonymous ? authUser.avatarUrl : null;
   const showAvatar = avatarUrl != null && avatarUrl !== failedUrl;

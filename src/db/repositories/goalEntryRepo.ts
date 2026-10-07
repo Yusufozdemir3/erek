@@ -1,9 +1,6 @@
-// Goal entry history (GoalEntry) repository — the same pattern as goalMilestoneRepo.
-// UI never sees SQL - it only calls these functions.
-// Since migration019 these rows ARE the source of a goal's progress:
-// current_value = value_baseline + sum of active entries (see goalRepo). Write
-// entries through goalRepo.addProgress, which also re-derives current_value —
-// creating one here alone leaves the cached total stale until the next sync.
+// Goal entries — since migration019 the source of a goal's progress
+// (current_value = value_baseline + live entries). Write them through
+// goalRepo.addProgress, which also re-derives current_value.
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -22,8 +19,7 @@ function rowToEntry(row: any): GoalEntry {
 }
 
 export const goalEntryRepo = {
-  // New entry record. Doesn't re-derive current_value on its own — see the
-  // file header (goalRepo.addProgress / goalRepo.update are the callers).
+  // Doesn't re-derive current_value (see the header).
   create(goalId: string, amount: number): GoalEntry {
     const db = getDb();
     const id = newId();
@@ -36,7 +32,7 @@ export const goalEntryRepo = {
     return { id, goal_id: goalId, amount, updated_at: now, deleted_at: null, synced: 0, added_by: null };
   },
 
-  // A goal's entry history, newest first.
+  // Newest first.
   listByGoal(goalId: string): GoalEntry[] {
     const db = getDb();
     const rows = db.getAllSync<any>(

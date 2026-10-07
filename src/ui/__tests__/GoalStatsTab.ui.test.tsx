@@ -1,11 +1,5 @@
-// GoalStatsTab tests — where audit findings H1+F1 intersect: this content
-// COULDN'T BE TESTED while embedded inside app/goal/[id].tsx (route files
-// aren't in scope for any jest project). Once split into its own component,
-// the 'ui' project can render it directly.
-//
-// Behaviors locked in: the three tones of the verdict banner, which cards
-// show up depending on numeric/milestone type, the red card when overdue,
-// the next-milestone block.
+// GoalStatsTab: the verdict's three tones, which cards show per goal type, the
+// overdue card and the next step.
 
 import { render, screen } from '@testing-library/react-native';
 import { GoalStatsTab } from '@/ui/goal/GoalStatsTab';

@@ -17,10 +17,9 @@ interface Props {
   onSelect: (v: number) => void;
   format: (v: number) => string;
   textColor: string;
-  fadeColor: string;
 }
 
-export function WheelColumn({ values, selected, onSelect, format, textColor, fadeColor }: Props) {
+export function WheelColumn({ values, selected, onSelect, format, textColor }: Props) {
   const listRef = useRef<FlatList<number>>(null);
   const selectedIndex = Math.max(0, values.indexOf(selected));
 

@@ -21,7 +21,7 @@ Erek; Expo ve React Native ile geliştirilmiş, offline-first çalışan bir al�
 - **Görevler** — öncelik, son tarih ve saat, alt görevler; tekrarlayan görevler tamamlandığında otomatik olarak bir sonraki tarihe taşınır.
 - **Hedefler** — sayısal hedefler (örn. 200 sayfa oku) ya da adım listesi, hız/tahmini bitiş tarihi projeksiyonlarıyla birlikte. Bir alışkanlık bir hedefe bağlanabilir; alışkanlık her tamamlandığında hedef kendiliğinden ilerler.
 - **Hatırlatmalar** — alışkanlık, görev ve hedefler için yerel bildirimler; ses ve titreşim ayarlanabilir.
-- **Ses** — görevi sesle ekle ("yarın akşam 7'de annemi ara"; telefonda varsa cihazda tanıma, çevrim içi ancak bir kez onay verirsen) ve Bugün ekranında alışkanlığı sesle işaretle ("su içtim"), geri alınabilir. Cümleler telefonda sabit kurallarla çözülür; ses kaydedilmez.
+- **Ses** — görevi sesle ekle ("yarın akşam 7'de annemi ara"; telefonda varsa cihazda tanıma, çevrim içi ancak bir kez onay verirsen). Cümleler telefonda sabit kurallarla çözülür; ses kaydedilmez.
 - **Ana ekran widget'ları** — üç Android widget'ı: Bugün (alışkanlığa dokun, işaretle), Sayaç (sayılı alışkanlıklara +1) ve Görevler (dokun, tamamla). Uygulama kapalıyken de çalışır: widget dokunuşu sıraya koyar, uygulama SQLite'a yazar.
 - **Haftalık özet** — son 7 günün tamamlama oranı, önceki haftayla karşılaştırma, günlük çubuklar, en istikrarlı ve ilgi bekleyen alışkanlık; Pazar/Pazartesi Bugün ekranında kart.
 - **Arkadaşlar ve paylaşım** — hesapla bir alışkanlığı, görevi (alt görevleriyle) ya da hedefi arkadaşınla paylaş; arkadaş hatırlatmaları push bildirimi olarak gelir.

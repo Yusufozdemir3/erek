@@ -1,5 +1,4 @@
-// goalMilestoneRepo tests: insertion order (position), toggle, soft delete,
-// counting + intermediate-threshold (amount) derivation. Same base pattern as subtaskRepo.test.ts.
+// goalMilestoneRepo: position order, toggle, soft delete, counts, threshold views.
 
 import { goalMilestoneRepo, milestoneViews } from '../repositories/goalMilestoneRepo';
 import { goalRepo } from '../repositories/goalRepo';

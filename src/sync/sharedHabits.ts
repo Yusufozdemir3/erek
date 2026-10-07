@@ -1,17 +1,11 @@
-// Read-only habit sharing (Phase 2). Like friends.ts this stays OUTSIDE the
-// offline-first sync engine: a friend's habit must never land in the local
-// habits table (it would show up as the recipient's own habit). Data comes
-// from SECURITY DEFINER RPCs that verify the share (supabase/schema.sql,
-// PHASE 2) and is cached in AsyncStorage under `shared:*`, which
-// clearSharedData() wipes on sign-out / account switch.
+// Read-only habit sharing (schema.sql PHASE 2). Kept out of the sync engine — a
+// friend's habit must never land in the local habits table. Data comes from
+// share-checking RPCs, cached under `shared:*` (wiped by clearSharedData()).
 //
-// PERFORMANCE: a habit's full history is downloaded ONCE; after that each
-// open fetches only rows changed since the stored keyset cursor
-// (server_updated_at, id). The cursor is rewound by a safety margin between
-// sessions for the same reason as the sync engine's WATERMARK_SAFETY_MS
-// (now() is transaction-start time, so commits can land out of order);
-// re-reading a few rows is harmless because merging is last-writer-wins by
-// log_date. At most MAX_CACHED_HABITS histories are kept (LRU).
+// A habit's history downloads once; later opens fetch only rows past a keyset
+// cursor (server_updated_at, id), rewound by SAFETY_MS like the sync
+// watermark. Merging is last-writer-wins by log_date, so re-reads are
+// harmless. At most MAX_CACHED_HABITS histories are kept (LRU).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Habit, HabitKind, HabitLog, Recurrence } from '../types/models';

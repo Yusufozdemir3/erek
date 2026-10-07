@@ -1,34 +1,24 @@
-// NEXT MILESTONE statistic — pure function (same rationale as
-// goalProjection/habitSeries: no React, testable, time is a parameter).
-//
-// MODEL (user decision 2026-07-23): under the goal statistics, instead of an
-// AGGREGATE summary of milestones (remaining steps / steps per day / per
-// week), only the status of the NEXT milestone is shown. The question the
-// user is actually asking at that moment isn't "how many steps are left in
-// total" but "what am I working on right now, and am I on track".
-//
-// Next milestone = the first NOT-YET-REACHED milestone in the list (position
-// order). For amount-based milestones, "reached" is derived from
-// current_value (a cumulative threshold); for amount-less (checklist)
-// milestones it comes from manual checking — see milestoneViews.
+// The goal stats show only the NEXT milestone — "what am I working on, am I on
+// track" — rather than totals. Next = the first one not yet reached, in
+// position order (milestoneViews decides "reached"). Pure; time is a parameter.
 
 import { diffDays } from './helpers';
 import type { MilestoneView } from '@/db';
 
 export interface NextMilestoneStat {
   title: string;
-  // — Populated for amount-based milestones; null for a checklist milestone —
+  // Amount-based milestones only (null for checklist ones):
   targetAmount: number | null; // the milestone's target
-  remainingAmount: number | null; // how much is left to that target (never goes below 0)
-  ratio: number; // 0..1 — the milestone's own completion ratio ("what percent are we at")
-  // — Populated for milestones with a due date —
+  remainingAmount: number | null; // never below 0
+  ratio: number; // 0..1
+  // Milestones with a due date only:
   dueDate: string | null;
   daysLeft: number | null; // negative means overdue
   isOverdue: boolean;
   overdueDays: number | null; // positive, populated only when isOverdue
 }
 
-// Statistic for the first unreached milestone; null if there are no milestones or all are completed.
+// null when there are no milestones or all are reached.
 export function nextMilestoneStat(
   views: MilestoneView[],
   currentValue: number,

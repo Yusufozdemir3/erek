@@ -1,18 +1,10 @@
-// PURE transforms for HabitForm — computations from form state (text inputs,
-// mode selections) to database fields. Used to be embedded inside
-// src/ui/HabitForm.tsx's submit: buried in the middle of a 980-line component
-// where no test could reach it (audit findings H1 + F1). Moved here because
-// they have no React dependency (same rationale as lib/timerLogic.ts,
-// lib/goalProjection.ts).
-//
-// SHARED RULE: invalid/empty input is NOT an error, it falls back to a safe
-// default — the user is never blocked from saving just because they left a
-// field half-filled.
+// Pure form → database transforms for HabitForm. Bad or empty input never
+// blocks saving; it falls back to a safe default.
 
 import { todayDate } from '@/lib/helpers';
 import type { HabitKind, Recurrence } from '@/db';
 
-// The four frequency modes in the form. 'daily' = every day (corresponds to Recurrence null).
+// The form's frequency modes; 'daily' = Recurrence null.
 export type FreqMode = 'daily' | 'days' | 'interval' | 'quota';
 
 export interface ScheduleInput {
@@ -21,12 +13,10 @@ export interface ScheduleInput {
   everyNText: string; // "every how many days" in 'interval' mode
   quotaText: string; // "how many times per week" in 'quota' mode
   startDate: string | null; // for the 'interval' anchor (defaults to today)
-  previousSchedule: Recurrence | null; // so the existing anchor is preserved when editing
+  previousSchedule: Recurrence | null; // keeps the interval anchor when editing
 }
 
-// Converts the frequency mode to a Recurrence. Invalid/empty inputs fall back
-// to "every day" (null): when no days are selected in the specific-days mode,
-// when the interval number is < 2, or when the quota number is outside 1-7.
+// Falls back to every day (null) for no days, an interval < 2 or a quota outside 1–7.
 export function buildSchedule(input: ScheduleInput): Recurrence | null {
   const { freqMode, weekdays, everyNText, quotaText, startDate, previousSchedule } = input;
 
@@ -37,9 +27,7 @@ export function buildSchedule(input: ScheduleInput): Recurrence | null {
   if (freqMode === 'interval') {
     const n = parseInt(everyNText, 10);
     if (Number.isFinite(n) && n >= 2) {
-      // Anchor (reference day): when editing, the existing anchor is kept so
-      // scheduled days don't shift; when creating, the anchor is the start
-      // date (defaults to today).
+      // Editing keeps the anchor so scheduled days don't shift; new = the start date.
       const anchor =
         previousSchedule?.freq === 'interval' && previousSchedule.anchor
           ? previousSchedule.anchor
@@ -59,9 +47,7 @@ export function buildSchedule(input: ScheduleInput): Recurrence | null {
   return null;
 }
 
-// Depending on the target/unit type: numeric = amount+unit, timer = entered
-// in MINUTES but stored in SECONDS (habit_logs.amount also accumulates in
-// seconds), binary = both null.
+// numeric = amount + unit; timer = minutes typed, seconds stored; binary = nulls.
 export function buildTarget(
   kind: HabitKind,
   targetText: string,
@@ -81,16 +67,14 @@ export function buildTarget(
   return { target_amount: null, unit: null };
 }
 
-// The user enters the ratio "how many {habit units} make one {goal unit}"
-// (e.g. 4 pages = 1 chapter); the goal_factor stored in the DB is the INVERSE
-// of this (0.25 — the actual multiplier to add to the goal). Invalid input
-// falls back to 1 (one-to-one contribution).
+// "4 pages = 1 chapter" is typed as 4; goal_factor stores the inverse (0.25).
+// Invalid input = 1.
 export function ratioToGoalFactor(ratioText: string): number {
   const parsed = parseFloat(ratioText.replace(',', '.'));
   return Number.isFinite(parsed) && parsed > 0 ? 1 / parsed : 1;
 }
 
-// End date cannot precede the start date; if it does, it's pulled to the start date (single-day range).
+// An end before the start becomes the start.
 export function clampEndDate(startDate: string | null, endDate: string | null): string | null {
   return endDate && startDate && endDate < startDate ? startDate : endDate;
 }

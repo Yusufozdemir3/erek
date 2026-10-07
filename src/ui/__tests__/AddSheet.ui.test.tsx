@@ -1,8 +1,5 @@
-// AddSheet component test — the central + menu (the most complex shared
-// surface: all three forms). Notifications (requires expo-notifications) and
-// router are mocked; taskRepo/habitRepo/goalRepo/subtaskRepo/goalMilestoneRepo/
-// reminderRepo are REAL (in-memory SQLite) — same pattern as
-// TaskEditModal.ui.test.tsx (end-to-end DB verification).
+// AddSheet — all three forms end to end on the real (in-memory) repos;
+// notifications and the router are mocked.
 
 import { Alert } from 'react-native';
 import { fireEvent, act } from '@testing-library/react-native';

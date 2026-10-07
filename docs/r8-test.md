@@ -18,7 +18,7 @@ Sonra her zamanki gibi Gradle ile APK/AAB derle. EAS için profil ortamına
 ## Cihazda gezilecekler (hepsi, sırayla)
 
 - Açılış, kurulum sihirbazı, tema (açık/koyu/sistem)
-- Bugün: alışkanlık/görev işaretle, sayaç +/−, zamanlayıcı başlat/durdur, sesle komut
+- Bugün: alışkanlık/görev işaretle, sayaç +/−, zamanlayıcı başlat/durdur
 - Bildirimler: hatırlatma kur, izin ver, bildirim gel, dokununca doğru ekran
 - Hedefler: ekle, ilerleme, istatistik, ortak hedef
 - Alışkanlık istatistiği + takvim + mola günü

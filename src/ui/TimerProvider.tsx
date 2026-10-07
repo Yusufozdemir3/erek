@@ -1,20 +1,9 @@
-// Timer engine — SHARED (Phase C: standalone timer) by both timer-type habits
-// (kind='timer') and duration-based numeric goals (unit=TIME_UNIT, see
-// helpers.ts). Only one timer runs at a time — regardless of type/target. The
-// running state is kept in AsyncStorage, so even if the app is closed/backgrounded,
-// time is tracked by real wall-clock time (computed from the startedAt timestamp).
-// On pause/finish, the accumulated seconds are written to the right place: habit
-// → habitRepo.incrementAmount (habit_logs.amount), goal → goalRepo.addProgress
-// (current_value + goal_entries, tempo/projection benefit automatically). Once
-// the target is reached it's COUNTED as completed (ratio caps at 1) BUT the
-// timer does NOT stop and the counter isn't clamped either — the user can keep
-// working past the target, and the extra time is honestly recorded too
-// (celebratedRef ensures a one-time-per-session commit+haptic+notification-cancel).
-// The notification is scheduled for the target moment.
-//
-// SQLite remains the single source of truth: this module only manages the
-// transient (running) state and the tick of "how much time has passed right
-// now"; the persistent total lives in the DB.
+// The timer engine, shared by timer habits and duration goals (unit = TIME_UNIT).
+// One timer runs at a time. Its running state is persisted, so time is
+// measured by the wall clock even while the app is closed. Pause/finish books
+// the seconds: habit → habitRepo.incrementAmount, goal → goalRepo.addProgress.
+// Reaching the target counts as completed but doesn't stop the timer; extra
+// time is recorded too. SQLite holds the totals; this only tracks the live session.
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,7 +12,6 @@ import { isTimeUnit, todayDate } from '@/lib/helpers';
 import { notifySuccess } from '@/lib/haptics';
 import { cancelTimerDone, scheduleTimerDone } from '@/lib/notifications';
 import { onLocalDataWillChange } from '@/lib/localDataEvents';
-// Pure time math lives in a separate module (testable); the midnight-rollover decision is there too.
 import {
   commitDelta,
   elapsedOf,
@@ -39,15 +27,13 @@ const ACTIVE_KEY = 'timer:active';
 
 interface TimerApi {
   isRunning: (kind: TimerKind, id: string) => boolean;
-  // Live seconds for the active target (base + elapsed, can exceed the target); null if not active.
+  // base + elapsed (may pass the target); null if this one isn't running.
   liveSeconds: (kind: TimerKind, id: string) => number | null;
-  // Type/id of the currently running timer — for the mini status strip (see TimerStrip).
+  // The running timer, for TimerStrip.
   active: () => { kind: TimerKind; id: string } | null;
   start: (kind: TimerKind, id: string) => void;
   pause: () => void;
-  // Only meaningful for 'habit' (resets today's accumulation); 'goal' targets
-  // keep total/persistent progress (not daily), so reset isn't supported for
-  // them — a deliberate restriction to prevent accidentally wiping monthly/yearly progress.
+  // Habits only (today's time); a goal's progress spans months and isn't resettable.
   reset: (kind: TimerKind, id: string) => void;
 }
 
@@ -62,16 +48,12 @@ export function useTimer(): TimerApi {
 export function TimerProvider({ children }: { children: React.ReactNode }) {
   const { notifyDataChanged } = useAppData();
   const [active, setActive] = useState<ActiveTimer | null>(null);
-  // Triggers a re-render every second. The value is NOT DISCARDED: the context
-  // value below is memoized with it (see useMemo) — since the live counter
-  // depends on `now`, it must refresh every tick, but renders OUTSIDE the tick
-  // (e.g. when AppData state above changes) shouldn't needlessly redraw consumers.
+  // Ticks every second; the memoized context value depends on it.
   const [now, setNow] = useState(Date.now());
-  // A ref to access the latest `active` inside intervals/async callbacks (so the closure doesn't go stale).
+  // The latest `active` for intervals and async callbacks.
   const activeRef = useRef<ActiveTimer | null>(null);
   activeRef.current = active;
-  // Whether this session's target-reached "celebration" (commit+haptic) has
-  // already happened — so it doesn't re-fire every second. Reset on every new session in start().
+  // The target-reached commit + haptic happens once per session.
   const celebratedRef = useRef(false);
 
   const persist = (a: ActiveTimer | null) => {
@@ -79,26 +61,18 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     else AsyncStorage.removeItem(ACTIVE_KEY);
   };
 
-  // Persist the active duration: add the elapsed seconds to the right place, cancel the notification.
-  // `seconds` is only provided on the restore path (see restoreCommitDelta) —
-  // in the normal pause/finish flow, the full running duration is written.
+  // Books the session's seconds and cancels its notification. `seconds` only
+  // on restore (restoreCommitDelta); otherwise the full running time.
   const commit = useCallback((a: ActiveTimer, seconds?: number) => {
     const delta = seconds ?? commitDelta(a);
     if (delta > 0) {
-      // The habit may be gone by now (deleted here or on another device and
-      // pulled, local data cleared): a log for a missing habit fails the FOREIGN
-      // KEY check, and this runs inside press handlers / the tick interval where
-      // a throw closes the app in a release build. Nothing left to credit -> skip.
-      // (goalRepo.addProgress already ignores a missing goal on its own.)
+      // The habit may be gone (deleted, wiped): its log would fail the foreign
+      // key inside a handler and crash a release build. A missing goal is ignored by addProgress.
       if (a.kind === 'habit') {
         if (habitRepo.getById(a.targetId)) {
           habitRepo.incrementAmount(a.targetId, a.date, delta, a.targetSeconds);
         }
       }
-      // There used to be a separate addTimeProgress (its only difference was not
-      // applying the target cap). Since addProgress's cap was removed, the two
-      // became the same function and were merged into a single write path —
-      // see goalRepo.addProgress.
       else goalRepo.addProgress(a.targetId, delta);
     }
     cancelTimerDone(a.targetId);
@@ -107,32 +81,19 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const stopActive = useCallback(() => {
     const a = activeRef.current;
     if (!a) return;
-    // If the celebration already happened on a tick (target reached and work
-    // continued), don't fire the success haptic a second time on pause.
+    // Not again if a tick already celebrated.
     const reachedTarget = isFinished(a) && !celebratedRef.current;
     commit(a);
     setActive(null);
     persist(null);
-    if (reachedTarget) notifySuccess(); // success haptic on reaching the target
+    if (reachedTarget) notifySuccess();
     notifyDataChanged();
   }, [commit, notifyDataChanged]);
 
-  // Restore persisted state on launch.
-  //
-  // This effect only runs when the PROCESS restarts (when the app comes from
-  // background to foreground, the component is already mounted and this doesn't
-  // fire). So the session here may represent a stretch of time nobody was
-  // watching — the wall-clock duration can't just be written as-is (see
-  // timerLogic.isStaleSession/restoreCommitDelta).
-  //
-  // STALE session (day changed, or the target filled up while closed): only what's
-  // left up to the target is written and the session is CLOSED. This used to
-  // write the entire elapsed duration and keep the timer running; an app closed
-  // for two days could write 48 hours to the day the session started, and since
-  // that record fell on a past day, it couldn't even be undone with "Reset".
-  //
-  // FRESH session (same day, target not yet reached): continues where it left
-  // off as before — a brief crash/restart shouldn't disrupt the session.
+  // Restore after the PROCESS restarted (a background → foreground switch
+  // doesn't remount). Nobody watched the gap, so a stale session (day changed
+  // or target reached) books only what was left to the target and closes; a
+  // fresh one simply continues (timerLogic.isStaleSession/restoreCommitDelta).
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(ACTIVE_KEY);
@@ -155,11 +116,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Local data is about to be replaced wholesale (account merge regenerates
-  // every id; account replace / erase deletes everything). Commit the running
-  // seconds NOW, while the timer's id still points at a real row, and close the
-  // session — otherwise the next pause/tick would write to an id that no longer
-  // exists (see lib/localDataEvents.ts).
+  // Before local data is replaced (lib/localDataEvents.ts): book the seconds
+  // while the id still exists, and close the session.
   useEffect(
     () =>
       onLocalDataWillChange(() => {
@@ -173,9 +131,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [commit]
   );
 
-  // Every second while active: on first reaching the target, write progress to
-  // the DB + give a success haptic, but do NOT stop the timer — the counter base
-  // is updated and the same session continues (past the target). Later ticks just trigger a render.
+  // Each second: the first time the target is reached, book the progress and
+  // celebrate, then keep running from the new base.
   useEffect(() => {
     if (!active) return;
     const id = setInterval(() => {
@@ -215,9 +172,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         base = goal.current_value;
         title = goal.title;
       }
-      // Note: can be started even if the target is already reached — the user
-      // can keep going past the target (see celebratedRef).
-      // Single active timer rule: if another one is running, commit it first.
+      // May start past the target. Another running timer is committed first.
       if (
         activeRef.current &&
         (activeRef.current.kind !== kind || activeRef.current.targetId !== targetId)
@@ -225,7 +180,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         commit(activeRef.current);
         notifyDataChanged();
       }
-      celebratedRef.current = base >= target; // don't re-celebrate if already completed.
+      celebratedRef.current = base >= target;
       const a: ActiveTimer = {
         kind,
         targetId,
@@ -245,9 +200,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   const reset = useCallback(
     (kind: TimerKind, targetId: string) => {
-      if (kind !== 'habit') return; // see the TimerApi.reset comment — not supported for goals
+      if (kind !== 'habit') return;
       const date = todayDate();
-      // If it's running, stop it without committing (we're about to reset).
+      // Stop without booking anything.
       if (activeRef.current?.kind === 'habit' && activeRef.current.targetId === targetId) {
         cancelTimerDone(targetId);
         setActive(null);
@@ -263,11 +218,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [notifyDataChanged]
   );
 
-  // `now` is deliberately in the dependency array: the live counter reads from
-  // the wall clock, so a new context value per tick is REQUIRED. The gain from
-  // memoization is on renders OUTSIDE the tick (when a provider above changed
-  // state, TimerProvider re-rendered too and used to produce a new object every
-  // time, needlessly redrawing all consumers — HabitTimer, TimerPicker, TimerStrip).
+  // A new value every tick (`now`), but not on unrelated parent re-renders.
   const api = useMemo<TimerApi>(() => {
     const isRunning = (kind: TimerKind, id: string) =>
       active?.kind === kind && active?.targetId === id;

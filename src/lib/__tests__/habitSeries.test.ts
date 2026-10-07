@@ -1,9 +1,5 @@
-// buildSeries (score chart data generation) tests.
-//
-// Locked-in rule (user decision 2026-07-23): the chart shows CONTINUITY ONLY
-// — there's a single question across all three habit types, "was that day
-// completed?". The score starts at 0, climbs step by step, drops step by
-// step; an unscheduled day is neutral.
+// buildSeries: one question for every habit kind ("was the day completed?"),
+// the score climbs from 0, unscheduled days are neutral.
 
 import { buildSeries } from '@/lib/habitSeries';
 import type { Habit, HabitLog } from '@/db';
@@ -138,7 +134,7 @@ describe('buildSeries — plansız gün nötr, çizgi kesintisiz', () => {
     const days = lastDays(60);
     const series = buildSeries(mwf, logsFor(days, new Set(days)))!;
     const son = series.day[series.day.length - 1].score;
-    // Under the old behavior (unscheduled day = missed), this value would stay around 42.7%.
+    // Counting unscheduled days as misses would hold it near 42.7%.
     expect(son).toBeGreaterThan(0.6);
   });
 });

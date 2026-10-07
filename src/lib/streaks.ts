@@ -12,7 +12,7 @@ import { isQuotaSchedule, isScheduledOn, isWithinHabitDates, toYmd, weekStartOf 
 
 export type StreakHabit = Pick<Habit, 'schedule' | 'start_date' | 'end_date' | 'skip_dates'> | null;
 
-export function weekCompletionCounts(dates: Iterable<string>): Map<string, number> {
+function weekCompletionCounts(dates: Iterable<string>): Map<string, number> {
   const counts = new Map<string, number>();
   for (const d of dates) {
     const ws = weekStartOf(d);
@@ -21,7 +21,7 @@ export function weekCompletionCounts(dates: Iterable<string>): Map<string, numbe
   return counts;
 }
 
-export function shiftWeek(weekStart: string, weeks: number): string {
+function shiftWeek(weekStart: string, weeks: number): string {
   const d = new Date(`${weekStart}T00:00:00`);
   d.setDate(d.getDate() + weeks * 7);
   return toYmd(d);

@@ -1,12 +1,4 @@
-// Style factory for the goal DETAIL screen — SPLIT OUT of app/goal/[id].tsx.
-// Rationale: the screen file had grown to 1080 lines and the styles alone
-// were ~240 lines; the tab components also share the same styles. Keeping
-// the style dictionary separate both keeps the screen readable and lets the
-// tabs' shared `styles` prop be typed from a single place.
-//
-// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the
-// `makeGoalStyles(colors)` factory is called during render so it can be
-// regenerated when the theme changes.
+// Styles of the goal detail screen and its tabs, built per render from the theme.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -178,11 +170,10 @@ export const makeGoalStyles = (c: Colors) =>
     statValuePrimary: { color: c.primary },
     statLabel: { fontSize: 11, color: c.muted, marginTop: 4, textAlign: 'center' },
     paceHint: { fontSize: 12, color: c.faint, marginTop: 4, width: '100%' },
-    // Title of the next milestone — sits ABOVE the cards, says which threshold
-    // is being viewed (the cards only show numbers, this line provides the context).
+    // Names the step the cards below are about.
     nextMilestoneTitle: { fontSize: 14, fontWeight: '700', color: c.text, width: '100%', marginBottom: 6 },
 
-    // — Milestones (checklist + intermediate-threshold bars) —
+    // — Steps (checklist items and threshold bars) —
     milestoneRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
     milestoneTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     milestonePct: { fontSize: 13, fontWeight: '800', color: c.primary },

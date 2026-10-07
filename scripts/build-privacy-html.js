@@ -50,7 +50,7 @@ function render(lines, lang) {
     const line = raw.replace(/\s+$/, '');
     if (!line.trim()) {
       flushPara();
-      continue; // a blank line does not end a list: items may be separated by it
+      continue; // blank lines may separate list items
     }
     const h = /^### (\d+)\. (.*)$/.exec(line);
     if (h) {

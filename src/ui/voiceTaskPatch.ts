@@ -32,7 +32,8 @@ export function fitTitle(title: string, max: number = TITLE_MAX_LEN): { title: s
 export function voicePatch(
   parsed: ParsedTask,
   current: { dueDate: string; remindTimes: string[] },
-  today: string
+  today: string,
+  maxReminders: number = MAX_REMINDERS_PER_ENTITY
 ): VoicePatch {
   const patch: VoicePatch = { titleTruncated: false };
   if (parsed.title) {
@@ -48,7 +49,7 @@ export function voicePatch(
     // later day. "Today" without a time is left to the user.
     const day = parsed.date ?? current.dueDate;
     const at = parsed.time ?? (day > today ? DEFAULT_REMIND_TIME : null);
-    if (at && !current.remindTimes.includes(at) && current.remindTimes.length < MAX_REMINDERS_PER_ENTITY) {
+    if (at && !current.remindTimes.includes(at) && current.remindTimes.length < maxReminders) {
       patch.remindTimes = [...current.remindTimes, at].sort();
     }
   }

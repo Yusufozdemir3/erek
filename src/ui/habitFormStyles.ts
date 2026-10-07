@@ -1,8 +1,4 @@
-// HabitForm's style factory — SPLIT OUT of src/ui/HabitForm.tsx (review
-// finding H1: the component was 980 lines, with styles alone taking ~210 of them).
-//
-// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the factory
-// is called at render time so it can be regenerated when the theme changes.
+// HabitForm's styles, built per render from the theme.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -11,10 +7,7 @@ export type HabitFormStyles = ReturnType<typeof makeHabitFormStyles>;
 
 export const makeHabitFormStyles = (c: Colors) =>
   StyleSheet.create({
-    // Section header — during editing (stepped=false), all field groups follow
-    // one another in a single scroll, so this shows where each group ends/starts
-    // (Identity/Frequency/Target/Reminder). In the wizard (stepped), a single
-    // header shows per step — clarifies that step's context, does no harm.
+    // Separates the groups in the single editing scroll; one per wizard step.
     sectionHeader: {
       fontSize: 16,
       fontWeight: '800',
@@ -83,11 +76,7 @@ export const makeHabitFormStyles = (c: Colors) =>
       borderColor: c.border,
     },
     freqNumHint: { flex: 1, fontSize: 12, color: c.faint },
-    // Chips wrap TWO PER ROW (flexBasis ~half a row + flexGrow fills out the row).
-    // Used to be `flex: 1`: the 4 frequency chips crammed into one row at ¼
-    // width each, and "X times a week" wrapped onto two lines, breaking the
-    // row height. With two chips (contribution style), the look stays the
-    // same — both on one row.
+    // Two chips per row (four in one row wrapped "X times a week").
     freqBtn: {
       flexBasis: '47%',
       flexGrow: 1,
@@ -116,18 +105,6 @@ export const makeHabitFormStyles = (c: Colors) =>
     dayChipSel: { borderColor: c.primary, backgroundColor: c.primary },
     dayChipText: { fontSize: 13, fontWeight: '700', color: c.muted },
     dayChipTextSel: { color: c.onAccent },
-    // Ideas under an empty title when creating a habit.
-    suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-    suggestChip: {
-      minHeight: 40,
-      paddingHorizontal: 14,
-      borderRadius: 20,
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.inputBg,
-    },
-    suggestText: { fontSize: 13, fontWeight: '600', color: c.muted },
     targetInput: { flex: 1, marginBottom: 0 },
     hint: { fontSize: 12, color: c.faint, marginTop: 4, marginBottom: 12 },
     goalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },

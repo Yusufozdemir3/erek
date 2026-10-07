@@ -6,16 +6,11 @@ export {
   ensureSignedIn,
   currentUid,
   currentAuthUser,
-  signUpWithEmail,
-  linkEmailToAnonymous,
-  signInWithEmail,
   signInWithGoogle,
   isGoogleSignInConfigured,
   GoogleSignInCancelled,
   signOutAccount,
   deleteAccountAndData,
-  requestPasswordReset,
-  resetPasswordWithCode,
   type AuthUser,
 } from './auth';
 export {

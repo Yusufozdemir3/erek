@@ -51,7 +51,7 @@ export default function SharedGoalScreen() {
     if (!goal || busy) return;
     const parsed = parseFloat(entryText.replace(',', '.'));
     if (!Number.isFinite(parsed) || parsed === 0) return;
-    // Time goals: minutes are entered, seconds are stored (same as the owner's screen).
+    // Duration goals: minutes typed, seconds stored.
     const amount = isTimeUnit(goal.unit) ? Math.round(parsed * 60) : parsed;
     setBusy(true);
     try {

@@ -1,15 +1,7 @@
-// "Local data is about to be replaced wholesale" signal — account merge
-// (every id is regenerated) and clearing local data (account replace / erase
-// from Profile).
-//
-// WHY: in-memory state that holds row ids outlives such a change. The running
-// timer was the concrete case: it kept the OLD habit id, and pausing it after a
-// merge inserted a habit_log for a habit that no longer existed -> FOREIGN KEY
-// failure inside a press handler -> app crash in a release build.
-//
-// Listeners run SYNCHRONOUSLY, BEFORE the change: the timer commits its
-// running seconds while the old ids are still valid (after a merge they then
-// carry over under the new ids along with everything else).
+// "Local data is about to be replaced wholesale" — an account merge (new ids)
+// or clearing local data. In-memory holders of row ids must react first: a
+// running timer kept an old habit id and its next commit crashed on a foreign
+// key. Listeners run SYNCHRONOUSLY, BEFORE the change, while the old ids still exist.
 
 type Listener = () => void;
 

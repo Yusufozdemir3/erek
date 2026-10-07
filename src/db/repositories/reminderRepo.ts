@@ -1,8 +1,5 @@
-// Reminder repository — a habit/task/goal can have ZERO OR MORE reminder
-// times (see models.Reminder). UI never sees SQL.
-// replaceAll: syncs the existing records to the "HH:MM" list coming from the
-// form (the form submits its WHOLE list at once instead of adding/removing
-// one by one like subtask/milestone; see HabitForm/TaskForm/GoalForm).
+// Reminders: any number of "HH:MM" times per habit/task/goal (models.Reminder).
+// Forms submit their whole list at once (replaceAll).
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -21,7 +18,7 @@ function rowToReminder(row: any): Reminder {
 }
 
 export const reminderRepo = {
-  // An entity's active reminders, ascending by time.
+  // Ascending by time.
   listByEntity(entityType: ReminderEntityType, entityId: string): Reminder[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -31,9 +28,7 @@ export const reminderRepo = {
     return rows.map(rowToReminder);
   },
 
-  // The MULTI version of listByEntity: at startup, when rebuilding reminders
-  // for all habits/tasks/goals, a single GROUP query instead of N+1 —
-  // entity_id -> that entity's reminders (ascending by time).
+  // listByEntity for every entity of a type in one query (startup rescheduling).
   mapByType(entityType: ReminderEntityType): Map<string, Reminder[]> {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -72,9 +67,8 @@ export const reminderRepo = {
     );
   },
 
-  // Brings back the reminders a deletion of the ENTITY took with it: only those
-  // deleted at or after `since` (the entity's own deleted_at) — a reminder the
-  // user had removed earlier stays removed. Used by the undo of a deletion.
+  // Undo of an entity's deletion: brings back the reminders deleted with it
+  // (at or after `since`); ones removed earlier stay removed.
   restoreForEntity(entityType: ReminderEntityType, entityId: string, since: string): void {
     const db = getDb();
     const now = nowIso();
@@ -85,14 +79,9 @@ export const reminderRepo = {
     );
   },
 
-  // Makes the entity's active reminders match the time list coming from the
-  // form. DIFF-BASED: a time that stays keeps its row (and id) untouched; only
-  // removed times are deleted and only new times are created.
-  // It used to delete everything and re-create the whole list on EVERY save —
-  // even when the user never touched the reminders. That churned a tombstone +
-  // a new row per time on each edit, and the delete/re-create pair (same time,
-  // same millisecond, different id) is exactly what made the other device drop
-  // the reminder during sync (see syncEngine.applyRemoteRow).
+  // Matches the active rows to the form's times by diff: a kept time keeps its
+  // row and id. Deleting and recreating everything churned tombstones and could
+  // make another device drop the reminder (syncEngine.applyRemoteRow).
   replaceAll(entityType: ReminderEntityType, entityId: string, times: string[]): Reminder[] {
     const db = getDb();
     const wanted = new Set(times);

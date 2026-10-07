@@ -1,10 +1,6 @@
-// RECORD_AUDIO (voice input via expo-speech-recognition) makes Google Play
-// IMPLY that the app requires a microphone (`uses-implied-feature`) and hide
-// it from devices without one. Voice input is optional — every task can still
-// be typed — so the feature is declared as not required.
-//
-// Lives here rather than in AndroidManifest.xml because android/ is generated
-// by prebuild (same reasoning as withoutUnusedPermissions).
+// RECORD_AUDIO makes Play assume a microphone is required and hide the app from
+// devices without one. Voice input is optional, so the feature is declared not
+// required. android/ is generated, hence a plugin.
 
 const { withAndroidManifest } = require('@expo/config-plugins');
 

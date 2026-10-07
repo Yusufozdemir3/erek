@@ -1,18 +1,12 @@
-// Dynamic layer over app.json (Expo reads app.json first and passes it in as
-// `config`). Two things here are dynamic:
-//
-// 1. Firebase's google-services.json, which push notifications (friend
-//    nudges) need on Android. It is NOT committed (see .gitignore): a local
-//    build picks it up from the project root, an EAS build from the
-//    GOOGLE_SERVICES_JSON file variable. Without it the app builds and runs
-//    as before — only friend nudges fall back to the share sheet. Setup:
-//    docs/push-setup.md.
-//
-// 2. R8 code + resource shrinking, OFF unless EREK_R8=1 is set for the build.
-//    It stays opt-in on purpose: minifying can break reflection-based native
-//    modules (notifications, sqlite, widgets) in ways only a real device shows,
-//    so an R8 build is a TEST build until every screen has been walked through
-//    on it. Turning it on for good = drop the condition. See docs/r8-test.md.
+// The dynamic part over app.json:
+// 1. google-services.json (push for friend nudges) — not committed; a local
+//    build takes it from the project root, EAS from the GOOGLE_SERVICES_JSON
+//    file variable. Without it only friend nudges fall back to the share sheet
+//    (docs/push-setup.md).
+// 2. R8 shrinking, only with EREK_R8=1: minifying can break reflection-based
+//    native modules in ways only a device shows, so it stays a test build
+//    until every screen is checked (docs/r8-test.md).
+
 const fs = require('fs');
 const path = require('path');
 

@@ -60,7 +60,6 @@ export function TasksWidget({ snapshot }: { snapshot: WidgetSnapshot | null }) {
             clickActionData={{ taskId: t.id }}
             style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center', marginTop: 4, paddingVertical: 5 }}
           >
-            {/* Priority color dot */}
             <FlexWidget style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: hex(t.color) }} />
             <FlexWidget style={{ flex: 1, marginLeft: 10, marginRight: 8 }}>
               <TextWidget

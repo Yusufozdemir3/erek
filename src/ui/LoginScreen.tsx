@@ -1,16 +1,7 @@
-// Login screen — Google ONLY (a deliberate product decision). The email+password
-// flow wasn't deleted, it's just hidden (see app/account.tsx): can be re-enabled
-// later if needed.
-//
-// Since Google has no password, there's also no "forgot password" class of
-// lockout — that was one of the reasons ACCOUNTS_ENABLED is off (config.ts).
-//
-// Used in TWO places, same component:
-//   - LoginGate: full screen ONCE on first launch (OnboardingGate pattern, manages
-//     its own flag). Can be skipped via "skip for now" — the app works fully
-//     without login too, offline-first isn't broken.
-//   - app/login.tsx: a modal route opened from Profile (a user who skipped signs
-//     in later from here; that's why the "skip" button is hidden there).
+// Login screen — Google only. Used in two places:
+//   - LoginGate: full screen once on first launch, skippable (the app works
+//     fully without an account);
+//   - app/login.tsx: opened from Profile later (no skip button there).
 
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -28,9 +19,9 @@ import type { Colors } from '@/ui/theme';
 const SEEN_KEY = LOGIN_SEEN_KEY;
 
 export interface LoginScreenProps {
-  /** Sign-in succeeded or the user skipped — closing is the caller's responsibility. */
+  /** Signed in or skipped; the caller closes the screen. */
   onDone: () => void;
-  /** Whether "skip for now" is shown (yes on the launch gate, no when opened from Profile). */
+  /** Show "skip for now" (the launch gate only). */
   canSkip?: boolean;
 }
 
@@ -65,9 +56,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
       <View style={styles.footer}>
         {error != null && <Text style={styles.error}>{error}</Text>}
 
-        {/* If configuration is missing, the button is NOT rendered at all: showing
-            the reason is more honest than a button that errors on every tap (only
-            seen in dev builds — .env is always populated in production). */}
+        {/* Unconfigured (dev builds): say why instead of a button that always fails. */}
         {available ? (
           <Pressable
             style={[styles.googleBtn, busy && styles.googleBtnBusy]}
@@ -95,35 +84,23 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
   );
 }
 
-// Gate placed on the root layout: reads the flag, opens the login screen full
-// screen ONCE if not yet seen. Not rendered at all when accounts are disabled
-// (ACCOUNTS_ENABLED=false).
-//
-// AFTER ONBOARDING: both gates used to open independent Modals with NO ordering
-// between them — on a real first launch, both mounted at the same time and the
-// login screen ended up ON TOP of onboarding. The result was the user being
-// greeted with a "sign in with Google" screen before learning what the app even
-// was; and onboarding's last page ("your data stays with you") is exactly what
-// gives that decision context, yet it was left behind. Now this gate never
-// renders until the onboarding-seen flag has been written.
+// Shows the login screen once, full screen, and only AFTER the setup wizard —
+// two full-screen layers must never stack, and the wizard explains why to sign in.
 export function LoginGate() {
-  const [seen, setSeen] = useState<boolean | null>(null); // null = not known yet
+  const [seen, setSeen] = useState<boolean | null>(null); // null = not read yet
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(SEEN_KEY).then((v) => setSeen(v === '1'));
   }, []);
 
-  // Onboarding state: the flag is read once; if onboarding is being shown this
-  // launch, subscribe to its close event (see Onboarding.onOnboardingDone).
+  // If the wizard is showing this launch, wait for it to close.
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(ONBOARDING_SEEN_KEY).then((v) => {
       if (!cancelled) setOnboardingDone(v === '1');
     });
-    // The wizard's account page may already have covered sign-in (and wrote the
-    // flag just before this event): re-read it instead of trusting the value
-    // read at startup.
+    // The wizard's account step may have written the flag meanwhile: re-read it.
     const unsubscribe = onOnboardingDone(() => {
       AsyncStorage.getItem(SEEN_KEY)
         .then((v) => {

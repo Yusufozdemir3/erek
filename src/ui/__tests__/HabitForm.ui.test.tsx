@@ -1,14 +1,8 @@
-// HabitForm component test — this form previously had no UI test at all (the
-// most complex shared form: wizard mode, 4 frequency modes, 3 tracking types,
-// linking to a goal). Most scenarios are tested in EDIT mode (stepped=false,
-// fixed kind) — since all fields show at once, no wizard navigation is needed
-// (the HabitEditModal pattern). Wizard navigation is separately covered by
-// two tests (creation, stepped=true). Since goalRepo.listByUser reads the
-// real DB (the goal-linking field), resetTestDb is used — same pattern as
-// TaskEditModal.ui.test.tsx.
+// HabitForm on the real (in-memory) DB. Most cases use edit mode (every field
+// at once); two cover the creation wizard.
 
 import { fireEvent, act } from '@testing-library/react-native';
-import { goalRepo, habitRepo, userRepo } from '@/db';
+import { goalRepo, userRepo } from '@/db';
 import { HabitForm } from '@/ui/HabitForm';
 import { resetTestDb } from '@/test/dbTestUtils';
 import { renderUI } from '@/test/renderWithProviders';
@@ -26,25 +20,6 @@ let userId: string;
 beforeEach(async () => {
   await resetTestDb();
   userId = userRepo.getOrCreateLocal().id;
-});
-
-describe('HabitForm — fikir düğmeleri', () => {
-  it('oluştururken boş başlıkta görünür; dokununca başlık ve simge dolar, sonra kaybolur', async () => {
-    const onSubmit = jest.fn();
-    const u = await renderUI(<HabitForm userId={userId} kind="binary" submitLabel="Kaydet" onSubmit={onSubmit} />);
-    fireEvent.press(u.getByLabelText('Su iç'));
-    expect(u.getByPlaceholderText('Alışkanlık başlığı').props.value).toBe('Su iç');
-    expect(u.queryByLabelText('Kitap oku')).toBeNull(); // başlık doldu, fikirler gitti
-    fireEvent.press(u.getByText('Kaydet'));
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Su iç', icon: 'water' }));
-  });
-
-  it('düzenlerken (initial var) fikir düğmesi yok', async () => {
-    const u = await renderUI(
-      <HabitForm userId={userId} kind="binary" submitLabel="Kaydet" onSubmit={jest.fn()} initial={{ title: '' }} />
-    );
-    expect(u.queryByLabelText('Su iç')).toBeNull();
-  });
 });
 
 describe('HabitForm — düzenleme modu (stepped=false), ikili (binary)', () => {

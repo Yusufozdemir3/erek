@@ -1,7 +1,5 @@
-// Error contract for the friends/sharing RPCs (see the FRIENDS / SHARING
-// section of supabase/schema.sql). The server reports expected failures as a
-// machine-readable `ERK_*` code, never as prose; this module maps them — plus
-// network failures — to i18n keys so raw Postgres text never reaches the user.
+// The friends/sharing RPCs report expected failures as `ERK_*` codes; these
+// (and network failures) map to i18n keys so raw Postgres text never reaches the user.
 
 export const SHARING_ERROR_CODES = [
   'ERK_AUTH',

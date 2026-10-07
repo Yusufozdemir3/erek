@@ -1,7 +1,5 @@
-// Goal milestone (GoalMilestone) repository — the same basic pattern as subtaskRepo.
-// There are two milestone modes (see models.GoalMilestone): checklist
-// (milestone-type goal) and threshold (numeric goal + amount). UI never sees SQL.
-// Every write refreshes updated_at and sets synced=0 (waiting for sync).
+// Goal milestones, in two modes (models.GoalMilestone): a checklist on a
+// 'milestone' goal, thresholds (amount) on a numeric goal.
 
 import { getDb } from '../database';
 import { newId, nowIso } from '../../lib/helpers';
@@ -26,18 +24,12 @@ function rowToMilestone(row: any): GoalMilestone {
 export interface MilestoneView {
   milestone: GoalMilestone;
   ratio: number;    // 0..1 — the milestone's own fill ratio
-  reached: boolean; // has the cumulative threshold been crossed (equivalent to `completed` in checklist mode)
+  reached: boolean; // threshold crossed (the checklist's `completed`)
 }
 
-// Milestone views for a NUMERIC goal: every milestone that has an amount is
-// its OWN INDEPENDENT target (e.g. "first 5km", "first 20km", "first 50km" —
-// all three are counted FROM ZERO, none shares another's share). The goal's
-// current_value is the single entry point: one entry updates EVERY milestone
-// it crosses/doesn't cross at the same time (entering 5km finishes the first
-// milestone, and also advances the 20km and 50km milestones to 5/20 and
-// 5/50) — there is NO "finish one, move to the next" ordering. Never checked
-// off manually. Amount-less (legacy/checklist) milestones keep their own
-// completed state. A pure function (no SQL) — called directly by both UI and tests.
+// On a numeric goal each milestone with an amount is its own target counted
+// from zero: 5 km fills "first 5 km" and shows 5/20 and 5/50 on the others.
+// They're never ticked by hand; amount-less ones keep their own completed state.
 export function milestoneViews(milestones: GoalMilestone[], currentValue: number): MilestoneView[] {
   return milestones.map((m) => {
     if (m.amount == null || m.amount <= 0) {
@@ -49,8 +41,7 @@ export function milestoneViews(milestones: GoalMilestone[], currentValue: number
 }
 
 export const goalMilestoneRepo = {
-  // New milestone; appended to the end of the list (position = current max + 1).
-  // extra: the threshold amount for a numeric goal and/or an optional due date.
+  // Appended last. extra: a numeric goal's threshold and/or a due date.
   create(
     goalId: string,
     title: string,
@@ -85,7 +76,7 @@ export const goalMilestoneRepo = {
     };
   },
 
-  // A goal's active milestones, in the order they were added.
+  // In the order they were added.
   listByGoal(goalId: string): GoalMilestone[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -95,7 +86,7 @@ export const goalMilestoneRepo = {
     return rows.map(rowToMilestone);
   },
 
-  // For the "2/3" badge on goal cards: completed / total.
+  // The goal card's "2/3".
   countForGoal(goalId: string): { done: number; total: number } {
     const db = getDb();
     const row = db.getFirstSync<{ done: number; total: number }>(

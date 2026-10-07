@@ -123,7 +123,6 @@ export function TimePickerModal({ visible, value, onClose, onConfirm, title, min
               onSelect={setHour}
               format={pad2}
               textColor={colors.text}
-              fadeColor={colors.card}
             />
             <Text style={styles.colon}>:</Text>
             <WheelColumn
@@ -132,7 +131,6 @@ export function TimePickerModal({ visible, value, onClose, onConfirm, title, min
               onSelect={setMinute}
               format={pad2}
               textColor={colors.text}
-              fadeColor={colors.card}
             />
           </View>
         </View>

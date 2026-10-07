@@ -11,6 +11,7 @@ import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
+import { longestStreakFrom } from '../../lib/streaks';
 
 const TODAY = '2026-07-01'; // Wednesday
 
@@ -183,9 +184,7 @@ describe('getDayStates (çoklu gün durumu)', () => {
   });
 });
 
-// The last-7-days strip on the "Habits" screen uses this. It used to fire a
-// separate recentLogs query per habit (an N+1 that grew with the list) —
-// this bulk version replaced it, and the result must be exactly the same.
+// The Habits screen's 7-day strip, in one query for every habit.
 describe('completedDatesBetween (çoklu aralık)', () => {
   it('boş liste için boş nesne döner', () => {
     expect(habitRepo.completedDatesBetween([], '2026-06-01', TODAY)).toEqual({});
@@ -338,10 +337,18 @@ describe('currentStreak — yaşam aralığı (start_date/end_date)', () => {
   });
 });
 
+// The stats screen's longest streak: the pure rule over the repo's logs.
+const longest = (habitId: string) =>
+  longestStreakFrom(
+    habitRepo.getById(habitId),
+    habitRepo.allLogs(habitId).filter((l) => l.completed === 1).map((l) => l.log_date),
+    TODAY
+  );
+
 describe('longestStreak', () => {
   it('hiç log yoksa 0', () => {
     const habit = createHabit();
-    expect(habitRepo.longestStreak(habit.id)).toBe(0);
+    expect(longest(habit.id)).toBe(0);
   });
 
   it('geçmişteki en uzun seriyi bulur, güncel olmasa bile', () => {
@@ -356,7 +363,7 @@ describe('longestStreak', () => {
     habitRepo.toggleLog(habit.id, TODAY, true);
 
     expect(habitRepo.currentStreak(habit.id)).toBe(2);
-    expect(habitRepo.longestStreak(habit.id)).toBe(3);
+    expect(longest(habit.id)).toBe(3);
   });
 
   it('haftalık planda yalnızca planlı günleri sayar', () => {
@@ -366,24 +373,7 @@ describe('longestStreak', () => {
     habitRepo.toggleLog(habit.id, '2026-06-26', true); // Fri
     habitRepo.toggleLog(habit.id, '2026-06-29', true); // Mon
     // Today (Wed) was missed
-    expect(habitRepo.longestStreak(habit.id)).toBe(3);
-  });
-});
-
-describe('logsInRange', () => {
-  it('yalnızca verilen tarihten (dahil) itibaren logları döner', () => {
-    const habit = createHabit();
-    habitRepo.toggleLog(habit.id, '2026-06-29', true);
-    habitRepo.toggleLog(habit.id, '2026-06-30', true);
-    habitRepo.toggleLog(habit.id, TODAY, true);
-
-    const logs = habitRepo.logsInRange(habit.id, '2026-06-30');
-    expect(logs.map((l) => l.log_date)).toEqual(['2026-06-30', TODAY]);
-  });
-
-  it('log yoksa boş dizi döner', () => {
-    const habit = createHabit();
-    expect(habitRepo.logsInRange(habit.id, '2026-06-01')).toEqual([]);
+    expect(longest(habit.id)).toBe(3);
   });
 });
 
@@ -413,42 +403,6 @@ describe('allLogs / logsBetween', () => {
       '2026-06-24',
       '2026-06-29',
       TODAY,
-    ]);
-  });
-});
-
-describe('allStreaks', () => {
-  it('hiç log yoksa boş dizi', () => {
-    const habit = createHabit();
-    expect(habitRepo.allStreaks(habit.id)).toEqual([]);
-  });
-
-  it('geçmişteki tüm serileri büyükten küçüğe listeler', () => {
-    const habit = createHabit();
-    // Old streak of 3: June 24-25-26
-    habitRepo.toggleLog(habit.id, '2026-06-24', true);
-    habitRepo.toggleLog(habit.id, '2026-06-25', true);
-    habitRepo.toggleLog(habit.id, '2026-06-26', true);
-    // Missed: 27
-    // Current streak of 2: June 30 - today
-    habitRepo.toggleLog(habit.id, '2026-06-30', true);
-    habitRepo.toggleLog(habit.id, TODAY, true);
-
-    const streaks = habitRepo.allStreaks(habit.id);
-    expect(streaks).toEqual([
-      { length: 3, start: '2026-06-24', end: '2026-06-26' },
-      { length: 2, start: '2026-06-30', end: TODAY },
-    ]);
-  });
-
-  it('haftalık planda yalnızca planlı günleri seriye katar', () => {
-    const schedule = { freq: 'weekly' as const, weekdays: [1, 3, 5] }; // Mon/Wed/Fri
-    const habit = createHabit({ schedule });
-    habitRepo.toggleLog(habit.id, '2026-06-24', true); // Wed
-    habitRepo.toggleLog(habit.id, '2026-06-26', true); // Fri
-    habitRepo.toggleLog(habit.id, '2026-06-29', true); // Mon
-    expect(habitRepo.allStreaks(habit.id)).toEqual([
-      { length: 3, start: '2026-06-24', end: '2026-06-29' },
     ]);
   });
 });
@@ -489,20 +443,17 @@ describe('kota (haftada X kez) — hafta bazlı seriler', () => {
     habitRepo.toggleLog(habit.id, '2026-06-30', true);
     habitRepo.toggleLog(habit.id, TODAY, true);
     expect(habitRepo.currentStreak(habit.id)).toBe(1);
-    expect(habitRepo.longestStreak(habit.id)).toBe(1);
+    expect(longest(habit.id)).toBe(1);
   });
 
-  it('longestStreak/allStreaks hafta sayar; allStreaks hafta aralığı döner', () => {
+  it('longestStreak hafta sayar', () => {
     const habit = createHabit({ schedule: { freq: 'weekly', timesPerWeek: 2 } });
     // Jun 15-21: 2 ✓, Jun 22-28: 2 ✓ → a 2-week streak.
     habitRepo.toggleLog(habit.id, '2026-06-15', true);
     habitRepo.toggleLog(habit.id, '2026-06-18', true);
     habitRepo.toggleLog(habit.id, '2026-06-22', true);
     habitRepo.toggleLog(habit.id, '2026-06-27', true);
-    expect(habitRepo.longestStreak(habit.id)).toBe(2);
-    const streaks = habitRepo.allStreaks(habit.id);
-    // start = the first week's Monday, end = the last week's Sunday.
-    expect(streaks[0]).toEqual({ length: 2, start: '2026-06-15', end: '2026-06-28' });
+    expect(longest(habit.id)).toBe(2);
   });
 
   it('completionsInWeek verilen günün haftasındaki tamamlanan gün sayısıdır', () => {
@@ -529,9 +480,7 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
   }
   const currentValue = (goalId: string) => goalRepo.getById(goalId)!.current_value;
 
-  // The contribution also lands in the goal's ENTRY HISTORY: previously only
-  // current_value changed and no trace was left in history → the goal's
-  // tempo/projection (computed only from manual "Add" entries) never saw the linked habit.
+  // The contribution lands in the goal's entries, so its pace sees the habit.
   it('tamamlanma katkısı hedefin girdi geçmişine yazılır (+1 / −1)', () => {
     const goal = createNumericGoal();
     const habit = createHabit({ goal_id: goal.id });
@@ -606,10 +555,8 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
     expect(currentValue(goal.id)).toBe(0);
   });
 
-  // A goal is a THRESHOLD, not a CAP (see goalRepo.addProgress): contributions
-  // still count after the goal is filled. With the clamp in place this scenario
-  // was asymmetric — the second habit's +1 got swallowed but its -1 was still
-  // applied, meaning a check→uncheck cycle silently stole progress from the goal.
+  // No ceiling (goalRepo.addProgress): contributions count past the target and
+  // undoing one is exactly symmetric.
   it('hedef dolduktan sonraki katkılar da sayılır ve geri alma simetriktir', () => {
     const goal = createNumericGoal(1); // target value of 1
     const h1 = createHabit({ goal_id: goal.id });
@@ -635,10 +582,8 @@ describe('hedefe bağlı ilerleme (goal_id)', () => {
     expect(currentValue(goal.id)).toBe(0);
   });
 
-  // GoalJustCompleted: the return value the UI uses to ask "unlink this habit
-  // now that the goal is done?" (see src/ui/goalCompletionPrompt.ts). Must fire
-  // ONLY on the false->true transition — not on every contribution afterward,
-  // and not when there's nothing to complete (unlinked, or not yet at target).
+  // GoalJustCompleted drives the "unlink now that the goal is done?" prompt:
+  // only on the not-done -> done transition.
   describe('GoalJustCompleted dönüş değeri', () => {
     it('bağlı olmayan alışkanlıkta null döner', () => {
       const habit = createHabit(); // no goal_id
@@ -813,7 +758,7 @@ describe('mola günü (setSkipped)', () => {
 
     habitRepo.setSkipped(habit.id, '2026-06-30', true);
     expect(habitRepo.currentStreak(habit.id)).toBe(3); // 28, 29, (mola), 1 Tem
-    expect(habitRepo.longestStreak(habit.id)).toBe(3);
+    expect(longest(habit.id)).toBe(3);
   });
 
   it('geri alınır; yinelenmez; kalıcıdır', () => {

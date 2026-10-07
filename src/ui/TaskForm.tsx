@@ -1,12 +1,8 @@
-// Task form FIELDS — shared by both creation (AddSheet) and editing
-// (TaskEditModal) (same pattern as HabitForm). Fields, state, and validation
-// live here; persistence (create/update), the subtask section, and the
-// modal/sheet shell belong to the caller. onSubmit hands the final (converted)
-// values up. Subtasks are NOT part of creation (only added later, in the edit
-// panel) — that's why the edit side passes the subtask section as `children`.
-// Architectural rule: no SQL — only the caller's repo writes.
+// Task form fields, shared by creation (AddSheet) and editing (TaskEditModal),
+// like HabitForm. Saving and the modal belong to the caller. Subtasks: a draft
+// list at creation (enableSubtaskDraft), the caller's live section when editing (children).
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Priority, Recurrence } from '@/db';
@@ -22,12 +18,13 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { makeTaskFormStyles } from '@/ui/taskFormStyles';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, shortDate } from '@/ui/theme';
+import { reminderLimit } from '@/plus/plusLogic';
+import { useFeaturesUnlocked } from '@/plus/plusStore';
 import { useVoiceInput } from '@/ui/useVoiceInput';
 import { VoiceButton } from '@/ui/VoiceButton';
 import { voicePatch } from '@/ui/voiceTaskPatch';
 
-// Day buttons in the recurrence picker (Monday through Sunday; wd = JS getDay).
-// Same pattern as HabitForm's frequency picker — consistent look.
+// Monday to Sunday (wd = JS getDay).
 const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.mon', wd: 1 },
   { labelKey: 'weekday.tue', wd: 2 },
@@ -38,13 +35,9 @@ const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.sun', wd: 0 },
 ];
 
-// Recurrence mode: 'none' = one-time (default), 'daily' = every day,
-// 'weekly' = specific days of the week, 'interval' = every X days,
-// 'monthly' = a specific day of every month, 'yearly' = specific dates every year.
+// 'none' = one-time.
 type RepeatMode = 'none' | 'daily' | 'weekly' | 'interval' | 'monthly' | 'yearly';
 
-// Recurrence options — feeds both the dropdown list and the summary button's
-// label while collapsed (single source of truth).
 const REPEAT_OPTIONS: { mode: RepeatMode; labelKey: string }[] = [
   { mode: 'none', labelKey: 'task.repeatNone' },
   { mode: 'daily', labelKey: 'habit.everyDay' },
@@ -54,20 +47,17 @@ const REPEAT_OPTIONS: { mode: RepeatMode; labelKey: string }[] = [
   { mode: 'yearly', labelKey: 'task.freqYearly' },
 ];
 
-// Mirrors the fields taskRepo.create/update expect (due_date has the time embedded).
+// The fields taskRepo.create/update take (the time lives in due_date).
 export interface TaskFormValues {
   title: string;
   priority: Priority;
   due_date: string | null; // "YYYY-MM-DD" | "YYYY-MM-DDTHH:MM:SS" | null
-  end_time: string | null;  // "HH:MM" | null — only meaningful when a start time is set
-  recurrence: Recurrence | null; // null = one-time; advances forward on completion
-  remind_times: string[]; // reminder times on the due date's day (0 or more)
-  // Creation only (enableSubtaskDraft): subtask titles to be written along with
-  // the task. Not populated during editing (undefined), since subtasks are
-  // written immediately there.
+  end_time: string | null;  // "HH:MM", only with a start time
+  recurrence: Recurrence | null; // null = one-time
+  remind_times: string[]; // on the due day
+  // Creation only: draft subtask titles, written with the task.
   subtasks?: string[];
-  // Friend's cloud uid the task is shared with (they can only check it off).
-  // Always null for a recurring task.
+  // The friend it's shared with (check-off only); never on a recurring task.
   shared_with_id: string | null;
 }
 
@@ -75,19 +65,17 @@ interface Props {
   initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[]; shared_with_id: string | null }>;
   submitLabel: string;                  // "Save" | "Add"
   onSubmit: (values: TaskFormValues) => void;
-  onDelete?: () => void;                // edit mode only: the Delete button
-  autoFocusTitle?: boolean;             // open the keyboard immediately on creation
-  children?: ReactNode;                 // the subtask section in edit mode (above the actions)
-  // Show the draft subtask editor during creation. Since the task doesn't exist
-  // yet, subtasks are collected as strings and handed up via onSubmit (AddSheet
-  // creates them after writing the task).
+  onDelete?: () => void;                // editing only
+  autoFocusTitle?: boolean;
+  children?: ReactNode;                 // editing: the subtask section
+  // Creation: collect subtask titles, handed up via onSubmit.
   enableSubtaskDraft?: boolean;
-  // Connected friends the task can be shared with; the section is hidden when
-  // empty (signed out, or no friends yet). Passed in so this form stays pure.
+  // Empty = no share section.
   shareFriends?: Friend[];
-  // Creation only: a mic next to the title. The spoken sentence fills the
-  // fields it mentions (lib/quickAdd); the user still confirms with submit.
+  // Creation only: a mic whose sentence fills the fields it names (lib/quickAdd).
   enableVoice?: boolean;
+  // With enableVoice: start listening as soon as the form opens.
+  autoStartVoice?: boolean;
 }
 
 // Form values before a voice fill, so one tap can undo it.
@@ -109,27 +97,21 @@ const QUICK_DATES = [
   { days: 7, labelKey: 'date.quickNextWeek' },
 ] as const;
 
-export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children, enableSubtaskDraft, shareFriends = [], enableVoice = false }: Props) {
+export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTitle, children, enableSubtaskDraft, shareFriends = [], enableVoice = false, autoStartVoice = false }: Props) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeTaskFormStyles(colors);
-  // "08:30" -> readable label; "No time" if null.
   const timeLabel = (hm: string | null) => (hm ? hm : t('task.noTime'));
   const [title, setTitle] = useState(initial?.title ?? '');
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'medium');
-  // Due date is now REQUIRED: every task must have a date. Defaults to today on
-  // creation, or the existing date on editing (today if none); there's no way to
-  // remove it (the "Clear" button below was deliberately removed).
+  // Every task has a date (today by default); it can't be cleared.
   const [dueDate, setDueDate] = useState<string>(
     initial?.due_date ? initial.due_date.slice(0, 10) : todayDate()
   );
   const [dueTime, setDueTime] = useState<string | null>(extractTime(initial?.due_date ?? null));
   const [endTime, setEndTime] = useState<string | null>(initial?.end_time ?? null);
-  // Reminder times — notifications at these times ON the due date's day
-  // (independent of due_date's own time; same pattern as habit reminders). Empty
-  // list = no reminder.
+  // On the due day, independent of the due time.
   const [remindTimes, setRemindTimes] = useState<string[]>(initial?.remind_times ?? []);
-  // Recurrence: derive the initial mode from the rule.
   const initRec = initial?.recurrence ?? null;
   const initRepeatMode: RepeatMode = !initRec
     ? 'none'
@@ -143,24 +125,23 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             ? 'weekly'
             : 'daily';
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(initRepeatMode);
-  // The recurrence list starts collapsed; even in edit mode the selected mode is
-  // shown on the button, so the user sees it without expanding.
+  // Collapsed; the button shows the selected mode.
   const [repeatOpen, setRepeatOpen] = useState(false);
   const repeatLabel = t(REPEAT_OPTIONS.find((o) => o.mode === repeatMode)!.labelKey);
   const [weekdays, setWeekdays] = useState<number[]>(
     initRec?.freq === 'weekly' ? initRec.weekdays ?? [] : []
   );
-  // interval: every how many days (text; >=2 is valid).
+  // interval: >= 2
   const [everyNText, setEveryNText] = useState(
     initRec?.freq === 'interval' ? String(initRec.every ?? 2) : '2'
   );
-  // monthly: day of the month (1-31; defaults to the selected due date's day).
+  // monthly: 1–31, defaults to the due day
   const [monthDayText, setMonthDayText] = useState(
     initRec?.freq === 'monthly'
       ? String(initRec.monthDay ?? 1)
       : String(Number((initial?.due_date ?? todayDate()).slice(8, 10)))
   );
-  // yearly: a list of "MM-DD" (no year component).
+  // yearly: "MM-DD" list
   const [yearDates, setYearDates] = useState<string[]>(
     initRec?.freq === 'yearly' ? [...(initRec.dates ?? [])].sort() : []
   );
@@ -168,23 +149,23 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [showYearDatePicker, setShowYearDatePicker] = useState(false);
-  // Draft subtasks during creation (no task exists yet → a list of strings).
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
   const [newSub, setNewSub] = useState('');
   const [sharedWith, setSharedWith] = useState<string | null>(initial?.shared_with_id ?? null);
   // Recurring tasks can't be shared (the server would drop the share anyway).
   const shareBlocked = repeatMode !== 'none';
 
-  // Voice fill: only the fields the sentence mentions change; what was heard
-  // and the previous values stay on screen until the title is edited by hand.
+  // A voice fill changes only what the sentence names; what was heard and the
+  // old values stay until the title is edited by hand.
   const [voiceNote, setVoiceNote] = useState<{
     heard: string;
     truncated: boolean;
     filled: VoiceField[];
     prev: VoiceSnapshot;
   } | null>(null);
+  const unlocked = useFeaturesUnlocked();
   const voice = useVoiceInput((heard) => {
-    const patch = voicePatch(parseTask(heard, lang, new Date()), { dueDate, remindTimes }, todayDate());
+    const patch = voicePatch(parseTask(heard, lang, new Date()), { dueDate, remindTimes }, todayDate(), reminderLimit(unlocked));
     const prev: VoiceSnapshot = { title, priority, dueDate, dueTime, endTime, remindTimes };
     const filled: VoiceField[] = [];
     if (patch.title !== undefined) {
@@ -210,6 +191,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     }
     setVoiceNote({ heard, truncated: patch.titleTruncated, filled, prev });
   }, enableVoice);
+  // One automatic start per opening; the flow's own dialogs handle permissions.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStartVoice && enableVoice && !autoStarted.current) {
+      autoStarted.current = true;
+      voice.toggle();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const undoVoice = () => {
     if (!voiceNote) return;
     const p = voiceNote.prev;
@@ -222,8 +212,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     setVoiceNote(null);
   };
   const voiceMark = (f: VoiceField) => (voiceNote?.filled.includes(f) ? styles.voiceFilled : null);
-  // Keep a current share visible even if that person is no longer in the list,
-  // so it can still be removed.
+  // A current share stays listed (removable) even if that friend is gone.
   const shareOptions: { id: string; name: string }[] = shareFriends.map((f) => ({
     id: f.id,
     name: f.displayName ?? t('friends.unknownName'),
@@ -247,14 +236,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const submit = () => {
     const t = title.trim();
     if (!t) return;
-    // A time is only meaningful when a date is selected; a date now always exists.
     const due_date = dueTime ? `${dueDate}T${dueTime}:00` : dueDate;
-    // The end time is only valid if there's a start time and it's AFTER it.
+    // Only with a start time, and after it.
     const end_time = dueTime && endTime && endTime > dueTime ? endTime : null;
-    // Recurrence rule: 'none' → one-time. Missing/invalid sub-inputs fall back to
-    // a sensible default (so we don't silently drop "they wanted recurrence"):
-    // 'daily' if weekly has no day, 'daily' if the interval count is <2, the due
-    // date's day if the monthly day is outside 1-31, the due date's day if yearly has no date.
+    // Incomplete inputs fall back instead of dropping the recurrence: weekly
+    // without days / interval < 2 → daily; monthly or yearly → the due date's day.
     let recurrence: Recurrence | null = null;
     if (repeatMode === 'daily') {
       recurrence = { freq: 'daily' };
@@ -299,7 +285,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
 
   return (
     <>
-      {/* Title (+ the mic when voice input is on) */}
       <Text style={styles.label}>{t('task.title')}</Text>
       <View style={styles.titleRow}>
         <TextInput
@@ -307,7 +292,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
           value={title}
           onChangeText={(v) => {
             setTitle(v);
-            if (voiceNote) setVoiceNote(null); // edited by hand: no undo of the voice fill
+            if (voiceNote) setVoiceNote(null); // edited by hand: no more undo
           }}
           placeholder={t('task.titlePlaceholder')}
           placeholderTextColor={colors.faint}
@@ -344,7 +329,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Priority */}
       <Text style={styles.label}>{t('task.priority')}</Text>
       <View style={styles.row}>
         {PRIORITY_ORDER.map((p) => {
@@ -364,7 +348,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         })}
       </View>
 
-      {/* Due date — required, cannot be removed */}
       <Text style={styles.label}>{t('task.dueDate')}</Text>
       <View style={styles.row}>
         <Pressable style={[styles.dateBtn, voiceMark('date')]} onPress={() => setShowPicker(true)}>
@@ -398,7 +381,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         onConfirm={onPickDate}
       />
 
-      {/* Time — optional */}
       <Text style={styles.label}>{t('task.timeOptional')}</Text>
       <View style={styles.row}>
         <Pressable style={[styles.dateBtn, voiceMark('time')]} onPress={() => setShowTimePicker(true)}>
@@ -424,7 +406,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         onConfirm={onPickTime}
       />
 
-      {/* End time — only meaningful once a start time is selected */}
       {dueTime && (
         <>
           <Text style={styles.label}>{t('task.endTime')}</Text>
@@ -439,7 +420,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             )}
           </View>
           {endTime && endTime <= dueTime && (
-            <Text style={styles.hint}>{t('task.endAfterStart')}</Text>
+            <Text style={styles.hintError}>{t('task.endAfterStart')}</Text>
           )}
 
           <TimePickerModal
@@ -451,20 +432,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Reminder — notifications at the selected times ON the due date's day
-          (independent of the due date's own time; same pattern as habit
-          reminders). If empty, no notification is scheduled. For a recurring
-          task, it fires on the day of each recurrence. */}
       <ReminderListEditor label={t('task.reminder')} times={remindTimes} onChange={setRemindTimes} />
 
-      {/* Recurrence — one-time (default) / every day / specific days / every X
-          days / every month / every year. When a recurring task is completed,
-          it advances to the next recurrence date (same task; no duplicate).
-          Six options side by side made the form feel cluttered: while
-          collapsed there's a single button showing only the SELECTED mode,
-          tapping it opens the list. It auto-collapses once a mode is picked —
-          the mode-specific detail controls (day chips, "every how many days,"
-          etc.) keep showing below regardless. */}
+      {/* A single button with the selected mode opens the list and closes on a
+          pick; the mode's own controls show below it. */}
       <Text style={styles.label}>{t('task.repeat')}</Text>
       <Pressable
         style={styles.repeatBtn}
@@ -492,9 +463,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
                 style={[styles.freqBtn, sel && styles.freqBtnSel]}
                 onPress={() => {
                   setRepeatMode(mode);
-                  // When "specific days" is picked and it's empty, preselect
-                  // today's weekday as a helpful default (HabitForm pattern).
-                  // For yearly, the due date is likewise preselected as the first date.
+                  // Start weekly with today's weekday, yearly with the due date.
                   if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
                   if (mode === 'yearly' && yearDates.length === 0) setYearDates([dueDate.slice(5, 10)]);
                   setRepeatOpen(false);
@@ -574,14 +543,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             value={new Date(`${dueDate}T00:00:00`)}
             onClose={() => setShowYearDatePicker(false)}
             onConfirm={(picked) => {
-              const md = toYmd(picked).slice(5, 10); // year component is discarded
+              const md = toYmd(picked).slice(5, 10); // no year
               setYearDates((prev) => (prev.includes(md) ? prev : [...prev, md].sort()));
             }}
           />
         </>
       )}
 
-      {/* Share with a friend — they see it in their lists and can only check it off. */}
+      {/* The friend sees it in their lists and can only check it off. */}
       {shareOptions.length > 0 && (
         <>
           <Text style={styles.label}>{t('share.taskSection')}</Text>
@@ -604,14 +573,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
               );
             })}
           </View>
-          <Text style={styles.hint}>{shareBlocked ? t('share.recurringBlocked') : t('share.taskHint')}</Text>
+          {shareBlocked && <Text style={styles.hint}>{t('share.recurringBlocked')}</Text>}
         </>
       )}
 
-      {/* The subtask section goes here in edit mode (written immediately). */}
       {children}
 
-      {/* Draft subtask editor during creation (created together when the task is written) */}
       {enableSubtaskDraft && (
         <>
           <Text style={styles.label}>{t('task.subtasksOptional')}</Text>
@@ -653,7 +620,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Actions — Delete only in edit mode (when onDelete is provided) */}
       <View style={styles.actions}>
         {onDelete && <ConfirmDeleteButton onConfirm={onDelete} />}
         <Pressable style={styles.saveBtn} onPress={submit} accessibilityRole="button" accessibilityLabel={submitLabel}>

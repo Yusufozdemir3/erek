@@ -1,6 +1,4 @@
-// habitFormLogic tests — these transforms had NEVER been tested while
-// embedded inside HabitForm's submit (audit H1+F1). Locked-in contract:
-// invalid input is not an error, it's a safe default.
+// habitFormLogic: invalid input is never an error, it becomes a safe default.
 
 import {
   buildSchedule,

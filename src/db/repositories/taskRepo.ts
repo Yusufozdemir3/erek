@@ -1,6 +1,4 @@
-// Task repository.
-// UI never sees SQL - it only calls these functions.
-// Every write refreshes updated_at and sets synced=0 (waiting for sync).
+// Tasks.
 
 import { getDb } from '../database';
 import { reminderRepo } from './reminderRepo';
@@ -11,19 +9,15 @@ import type { Task, Priority, Recurrence } from '../../types/models';
 // Priority sort key: high->low.
 const PRIORITY_RANK_SQL = `CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END`;
 
-// Tasks with a time (due_date "YYYY-MM-DDTHH:MM:SS", length>10) come entirely
-// first; among themselves they're sorted by TIME (chronologically). Timeless/
-// all-day tasks ("YYYY-MM-DD") come entirely after; among themselves they're
-// sorted ONLY by PRIORITY (even if their dates differ). The CASE expression
-// produces NULL for timeless rows, making them all equal, so the date can't
-// leak in and override priority.
+// Timed tasks (due_date "YYYY-MM-DDTHH:MM:SS") first, chronologically; then
+// all-day ones by priority only. The CASE yields NULL for all-day rows so
+// their dates can't override priority.
 const DUE_ORDER_SQL = `
   (length(due_date) <= 10) ASC,
   CASE WHEN length(due_date) > 10 THEN due_date END ASC,
   ${PRIORITY_RANK_SQL}
 `;
 
-// Converts a raw DB row into the app type (parses the recurrence JSON).
 function rowToTask(row: any): Task {
   return {
     id: row.id,
@@ -54,10 +48,9 @@ export interface CreateTaskInput {
   shared_with_id?: string | null; // friend's cloud uid; ignored for recurring tasks
 }
 
-// A task shared WITH me is someone else's row: it must never be edited
-// locally (it'd be queued for push, the server would reject it and sync would
-// wedge). Mutations on it are dropped with a warning — not thrown, because an
-// uncaught throw in a UI handler closes the app in a release build.
+// A task shared WITH me is someone else's: local edits would be pushed,
+// rejected and wedge sync. They're dropped with a warning, not thrown (an
+// uncaught throw in a handler closes a release build).
 function isSharedWithMe(id: string): boolean {
   const row = getDb().getFirstSync<{ shared_owner_uid: string | null }>(
     `SELECT shared_owner_uid FROM tasks WHERE id = ?`,
@@ -71,7 +64,6 @@ function isSharedWithMe(id: string): boolean {
 }
 
 export const taskRepo = {
-  // Creates a new task.
   create(input: CreateTaskInput): Task {
     const db = getDb();
     const id = newId();
@@ -97,7 +89,6 @@ export const taskRepo = {
     return this.getById(id)!;
   },
 
-  // Fetches a single task by ID (non-deleted).
   getById(id: string): Task | null {
     const db = getDb();
     const row = db.getFirstSync<any>(
@@ -107,7 +98,6 @@ export const taskRepo = {
     return row ? rowToTask(row) : null;
   },
 
-  // All of a user's active tasks (sorted by due date).
   listByUser(userId: string): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -119,16 +109,9 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // For the "Tasks" screen: ALL incomplete tasks + only the ones completed
-  // since `completedSince`. Completed ones are already at the bottom of the list.
-  //
-  // WHY THE LIMIT EXISTS: listByUser returned EVERY task including completed
-  // ones, and the screen drew all of them. Since a completed task never
-  // dropped out, for someone using the app for a year the list reached the
-  // thousands; both the query and the render grew linearly, and the actually
-  // useful part (things to do) got lost in that pile. Active tasks are NOT
-  // LIMITED — that's the user's real working set and it's naturally small.
-  // If completedSince is null, no limit is applied ("show everything").
+  // The Tasks screen: every open task plus those completed since
+  // `completedSince` (null = all), so a year of finished tasks doesn't bury
+  // the open ones. Completed ones sort last.
   listForScreen(userId: string, completedSince: string | null): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -141,9 +124,7 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // The local days (YYYY-MM-DD) the user's OWN tasks were finished on, within
-  // [startYmd, endYmd] — one entry per task (the weekly review counts them).
-  // Tasks shared with me belong to someone else and are left out.
+  // Local days the user's OWN tasks were finished on, one per task (weekly review).
   completedDatesBetween(userId: string, startYmd: string, endYmd: string): string[] {
     const db = getDb();
     return db
@@ -157,8 +138,7 @@ export const taskRepo = {
       .map((r) => r.d);
   },
 
-  // Count of tasks OUTSIDE the limit (completed at an older date) — the
-  // screen's "show all" button only appears when something is genuinely hidden.
+  // Completed tasks hidden by listForScreen's limit (for the "show all" button).
   countCompletedBefore(userId: string, since: string): number {
     const db = getDb();
     const row = db.getFirstSync<{ n: number }>(
@@ -170,25 +150,8 @@ export const taskRepo = {
     return row?.n ?? 0;
   },
 
-  // For the "Today" screen: incomplete tasks due today or earlier.
-  listDueToday(userId: string, today: string): Task[] {
-    const db = getDb();
-    const rows = db.getAllSync<any>(
-      `SELECT * FROM tasks
-       WHERE user_id = ? AND deleted_at IS NULL
-         AND completed_at IS NULL
-         AND due_date IS NOT NULL AND date(due_date) <= ?
-       ORDER BY ${DUE_ORDER_SQL}`,
-      [userId, today]
-    );
-    return rows.map(rowToTask);
-  },
-
-  // The list shown on the "Today" screen: unlike listDueToday, this also
-  // returns tasks completed TODAY, so checking the box doesn't make the task
-  // disappear — it stays in the list, checked/struck-through, for the rest of
-  // the day, then drops off on its own the next day.
-  // Completed ones sort to the bottom, incomplete ones sort to the top by due date.
+  // Open tasks due today or earlier, plus ones completed today (a checked task
+  // stays visible until tomorrow). Completed ones sort last.
   listForToday(userId: string, today: string): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -205,10 +168,7 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // Tasks due on a SPECIFIC day (including completed ones). For clearly
-  // showing that day's tasks when navigating to another day on the "Today" screen.
-  // Difference from listForToday: no cumulative "<=", just that exact day; it
-  // doesn't get mixed up with tasks carried over from a past day.
+  // Tasks due exactly on `date`, completed included (Today on another day; no carry-over).
   listByDueDate(userId: string, date: string): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -221,16 +181,9 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // Marks a task completed (or undoes it).
-  //
-  // A RECURRING task behaves differently on "complete" (completed=true): the
-  // task ISN'T marked completed — it's FAST-FORWARDED to its next occurrence
-  // instead (a deliberate choice: no separate copy/history is kept, the same
-  // row moves forward). This way the task drops off today and reappears on its
-  // next occurrence date; if it has subtasks, they're reset for a fresh
-  // checklist. Undoing (completed=false) always goes through the normal path
-  // (completed_at is cleared). If the rule is broken/unresolvable
-  // (nextTaskOccurrence returns null), it falls back to normal completion.
+  // Completing a RECURRING task moves the same row to its next occurrence
+  // (subtasks unticked) instead of marking it done; an unresolvable rule falls
+  // back to normal completion. Undoing always just clears completed_at.
   setCompleted(id: string, completed: boolean): void {
     const db = getDb();
     if (isSharedWithMe(id)) return;
@@ -255,7 +208,6 @@ export const taskRepo = {
     );
   },
 
-  // Updates task fields.
   update(id: string, fields: Partial<CreateTaskInput>): void {
     const db = getDb();
     if (isSharedWithMe(id)) return;
@@ -277,8 +229,7 @@ export const taskRepo = {
     db.runSync(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`, vals);
   },
 
-  // Soft delete - the record stays, deleted_at is stamped (so it doesn't come back via sync).
-  // The task's reminder rows are cleaned up here too (rationale: habitRepo.softDelete).
+  // Takes its reminder rows along (see habitRepo.softDelete).
   softDelete(id: string): void {
     const db = getDb();
     if (isSharedWithMe(id)) return;
@@ -290,9 +241,8 @@ export const taskRepo = {
     reminderRepo.deleteAllForEntity('task', id);
   },
 
-  // UNDO of softDelete: the row and the reminders its deletion took with it come
-  // back, and the change is queued for sync (a later updated_at wins over the
-  // deletion already sent). Returns false if the row isn't deleted (or isn't the user's own).
+  // Undoes softDelete, reminders included; the newer updated_at wins over the
+  // deletion already synced. false if the row isn't deleted (or isn't the user's).
   restore(id: string): boolean {
     const db = getDb();
     const row = db.getFirstSync<{ deleted_at: string | null }>(`SELECT deleted_at FROM tasks WHERE id = ?`, [id]);
@@ -303,9 +253,8 @@ export const taskRepo = {
     return true;
   },
 
-  // Writes the server's answer to a check-off of a task shared WITH me
-  // (toggle_shared_task RPC). synced stays 1: this mirrors the cloud row, it
-  // isn't a local edit to push. Only ever touches shared-with-me rows.
+  // Mirrors the server's answer for a task shared WITH me; synced stays 1
+  // (it's the cloud row, not a local edit).
   applySharedCompletion(id: string, completedAt: string | null, updatedAt: string): void {
     getDb().runSync(
       `UPDATE tasks SET completed_at = ?, updated_at = ?, synced = 1
@@ -320,10 +269,8 @@ export const taskRepo = {
       .map((r) => r.id);
   },
 
-  // Deletes tasks shared WITH me (all of them, or just `ids`). They're someone
-  // else's data: dropped when the share ends, on sign-out and on account
-  // switch (so they can't be re-pushed as a copy under a new account).
-  // No sync tombstone: these rows were never ours to push.
+  // Hard-deletes tasks shared WITH me (all, or `ids`): when a share ends, on
+  // sign-out and account switch. No tombstone — they were never ours to push.
   purgeSharedWithMe(ids?: string[]): number {
     const db = getDb();
     const targets = ids ?? this.listSharedWithMeIds();
@@ -336,8 +283,7 @@ export const taskRepo = {
     return targets.length;
   },
 
-  // Whether any task is shared in either direction (drives the Today screen's
-  // freshness sync; zero cost for users who never share).
+  // Any task shared either way? (gates the Today screen's freshness sync)
   hasSharedTasks(userId: string): boolean {
     const row = getDb().getFirstSync<{ n: number }>(
       `SELECT EXISTS (

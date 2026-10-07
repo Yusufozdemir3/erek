@@ -1,42 +1,24 @@
-// Style factory for the habit STATS screen — SPLIT OUT of app/habit/[id].tsx
-// (same rationale as goal/goalStyles.ts: the screen file was 750 lines, the
-// styles alone were ~145 lines, and the chart subcomponents share the same dictionary).
-//
-// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the
-// factory is called during render so it can be regenerated when the theme changes.
+// Styles of the habit stats screen and its chart components, built per render
+// from the theme (no module-level StyleSheet).
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
 
-// Missed-day calendar cell: the danger color as a soft TINT (hex alpha) over
-// the card, so a month with many misses doesn't turn into a solid red wall.
-// Exported so the contrast test can hold the day number to WCAG AA on it.
+// Missed calendar days: a soft danger tint, not a red wall (contrast-tested).
 export const MISSED_TINT_ALPHA = '33'; // ≈ 20 %
 
-// — MEASUREMENTS for the 'History' bar chart — used by both the styles and
-// the drawing logic — how many buckets fit on screen AT ONCE. Column width is
-// derived from this: it used to try to fit all buckets (13-14 bars side by
-// side) and the chart got unreadably cramped (user feedback). The remaining
-// buckets are NOT lost — they're reached by horizontal scrolling, and it
-// rests at the most recent end on open.
+// — History bar chart sizes (styles and drawing) — bars visible at once; the
+// rest scroll, opening at the newest.
 export const HISTORY_VISIBLE_COLS = 7;
-// Bar area measurements. The statsHistoryRow/Label styles are also derived
-// from these so bar height can be computed here in PIXELS (not percent) —
-// only then can we decide whether the value text fits inside the bar.
+// In pixels, so the drawing can tell whether the value fits inside a bar.
 export const HISTORY_ROW_H = 190;
 export const HISTORY_LABEL_H = 16;
 export const HISTORY_LABEL_GAP = 6;
 export const HISTORY_TRACK_H = HISTORY_ROW_H - HISTORY_LABEL_H - HISTORY_LABEL_GAP;
-// The value text sits INSIDE the bar and is HORIZONTAL. It was rotated 90°
-// at one point: with a 26px column, the number didn't fit the bar
-// horizontally. With HISTORY_VISIBLE_COLS=7 raising the column to ~50px and
-// the bar to ~33px ("18.3k" ≈ 22px), rotation was no longer needed —
-// horizontal text is both more legible and fully solved the "text taller
-// than the bar" problem from the vertical layout: the fit condition is no
-// longer the text's LENGTH but a single line's height.
-export const HISTORY_VALUE_LINE = 12; // height of the text line
-export const HISTORY_VALUE_INSET = 4; // gap from the top of the bar when writing inside
-// Below this bar height, the line doesn't fit inside, so the text moves ABOVE the bar.
+// The value is written horizontally inside the bar (~50px columns fit "18.3k").
+export const HISTORY_VALUE_LINE = 12;
+export const HISTORY_VALUE_INSET = 4; // from the bar's top
+// Shorter bars get the value above them.
 export const HISTORY_VALUE_MIN_BAR = HISTORY_VALUE_LINE + HISTORY_VALUE_INSET * 2;
 
 export type HabitStatsStyles = ReturnType<typeof makeHabitStatsStyles>;
@@ -70,8 +52,7 @@ export const makeHabitStatsStyles = (c: Colors) =>
     cardLabel: { fontSize: 13, color: c.muted, fontWeight: '600' },
     cardValue: { fontSize: 20, fontWeight: '800', color: c.text, marginTop: 4 },
 
-    // — Streak badges —
-    // Only EARNED badges are shown as medals (the locked showcase was removed).
+    // — Earned streak badges —
     badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     badge: {
       alignItems: 'center',
@@ -93,10 +74,7 @@ export const makeHabitStatsStyles = (c: Colors) =>
     badgeFill: { height: '100%', borderRadius: 3 },
     badgeAllEarned: { fontSize: 13, fontWeight: '700', color: c.text },
 
-    // Missed day (monthly calendar): a soft tint of the danger color. The day
-    // number keeps the normal text color — readable on the tint in every theme.
-    // Not scheduled: a faint gray that stands out from the background (not bg —
-    // bg was the same as the background and stayed invisible).
+    // Missed: the danger tint, normal text. Unscheduled: border gray (bg would vanish).
     cellMissed: { backgroundColor: c.danger + MISSED_TINT_ALPHA },
     calDayTextMissed: { color: c.text, fontWeight: '800' },
     cellUnscheduled: { backgroundColor: c.border },
@@ -134,15 +112,7 @@ export const makeHabitStatsStyles = (c: Colors) =>
     calDayText: { fontSize: 12, fontWeight: '600', color: c.muted },
     calDayTextOn: { color: c.onAccent, fontWeight: '800' },
 
-    // — Goal/Score/History card — a LAYOUT/STRUCTURE port of the Claude
-    // Design mockup (Round 9, card 9a). The COLORS, however, are not copied
-    // as fixed values from the mockup — they come from the app's own theme
-    // tokens (c.*); otherwise this section would stay the same dull black no
-    // matter the light/dark theme, looking like an image pasted onto the
-    // screen (user feedback: "looked like a photo"). In dark theme
-    // (especially the "Pure Black" style, see theme.ts blackColors) it
-    // already looks very close to the mockup — but now it's ACTUALLY coded,
-    // not a frozen asset.
+    // — Goal/Score/History cards, colored from the theme tokens —
     statsCard: {
       backgroundColor: c.card,
       borderRadius: 20,
@@ -163,14 +133,10 @@ export const makeHabitStatsStyles = (c: Colors) =>
     statsPeriodBtn: { paddingHorizontal: 10, paddingVertical: 5 },
     statsTitle: { color: c.text, fontSize: 14, fontWeight: '700', letterSpacing: 1 },
     statsMeta: { color: c.faint, fontSize: 11, fontWeight: '600' },
-    // SCALE: brought to the SAME proportion as the Score chart (ScoreLineChart)
-    // — the old values (120px row, 8/7px text) weren't readable on a phone,
-    // and once Score was enlarged the two cards looked unbalanced side by
-    // side (user feedback). Measurements come from the HISTORY_* constants;
-    // bar height is computed there in pixels.
+    // Same proportions as the score chart; sizes from HISTORY_*.
     statsHistoryRow: { flexDirection: 'row', alignItems: 'flex-end', height: HISTORY_ROW_H, marginTop: 4 },
     statsHistoryCol: { height: '100%', alignItems: 'center' },
-    // Width/position/color are supplied at draw time (depend on column and bar size).
+    // Width/position/color are set while drawing.
     statsHistoryValue: {
       position: 'absolute',
       left: 0,

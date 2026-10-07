@@ -1,8 +1,5 @@
-// notificationPrefs tests — especially the BACKWARD COMPATIBILITY of the
-// 'sound' → 'sound' + 'vibration' split: the single 'notif:sound' key used to
-// control both sound and vibration. If 'notif:vibration' was never written,
-// vibration should inherit the old sound value, so a user who had turned off
-// the combined switch also gets vibration off.
+// notificationPrefs — mainly that an unset 'vibration' inherits the old
+// combined 'sound' switch.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getNotificationPrefs, setCustomSound, setNotificationPref } from '../notificationPrefs';

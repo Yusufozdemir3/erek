@@ -1,13 +1,6 @@
-// The habit icon set — line-vector icons (Feather/Ionicons), from the same
-// icon language used in the bottom tab bar and EntityIcon (see EntityIcon.tsx).
-// A habit's 'icon' field used to be a raw emoji character (colored, can't be
-// tinted, inconsistent across devices); now it stores a SEMANTIC id defined
-// here ('water', 'run'…) and is drawn as a single-color glyph tinted with the
-// selected color.
-//
-// BACKWARD COMPATIBILITY: old records may still have a raw emoji in the
-// 'icon' field (no id match). HabitIconGlyph keeps drawing such a value as
-// Text (like the old emoji) — no data loss or forced migration.
+// The habit icon set: line icons (Feather/Ionicons) stored by id ('water',
+// 'run'…) and tinted with the habit's color. Older rows may hold a raw emoji;
+// HabitIconGlyph still draws that as text.
 
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text } from 'react-native';
@@ -16,7 +9,7 @@ export interface HabitIconEntry {
   id: string;
   family: 'feather' | 'ionicons';
   name: string;
-  labelKey: string; // i18n key — for accessibility + (future) search
+  labelKey: string; // i18n key (accessibility)
 }
 
 export const HABIT_ICON_SET: HabitIconEntry[] = [
@@ -64,9 +57,7 @@ interface GlyphProps {
   color: string;
 }
 
-// Draws a habit's icon: a vector glyph (tinted with the selected color) if
-// it's a known semantic id; raw text/emoji if not (legacy data); nothing if
-// there's no value at all.
+// A known id → tinted glyph; anything else (old emoji) → text; null → nothing.
 export function HabitIconGlyph({ id, size = 18, color }: GlyphProps) {
   const entry = resolveHabitIcon(id);
   if (entry) {

@@ -1,14 +1,7 @@
-// The side that PRODUCES the home-screen widget's snapshot (the app process).
-// Reads today's scheduled habits from the repo, builds a snapshot localized
-// with the active theme/language, writes it to AsyncStorage, and refreshes the native widget (if present).
-//
-// refreshWidget(userId) is FULLY self-sufficient: it reads language and theme
-// from AsyncStorage itself (no React context needed) — so it can be called
-// from anywhere with a single argument (the same pattern as notifications.ts's getStoredLang/translate).
-//
-// EXPO GO SAFETY: react-native-android-widget is only loaded via a lazy
-// require, inside try/catch. Expo Go has no native module; the barrel import
-// could throw there, so the snapshot is always written, but the native update is only attempted in a real (Android) build.
+// Builds the home-screen widgets' snapshot in the app process (today's habits,
+// tasks, goals; the active theme and language), stores it and re-renders the
+// native widgets. Needs only a userId — language and theme are read from
+// storage. The widget library is required lazily: Expo Go has no native module.
 
 import { Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +10,7 @@ import { refreshTaskReminders } from '@/lib/notifications';
 import { isScheduledOn, isWithinHabitDates, todayDate } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
+import { areFeaturesUnlocked } from '@/plus/plusStore';
 import {
   ACCENT_THEMES,
   DEFAULT_ACCENT,
@@ -36,20 +30,18 @@ import { applyAll, readPending, removePending, serialized } from './widgetQueue'
 // More than this wouldn't fit any widget size; the snapshot stays small.
 const MAX_WIDGET_TASKS = 30;
 
-// Same AsyncStorage keys as ThemeProvider — to read the theme preference
-// outside React (see src/ui/ThemeProvider.tsx).
+// ThemeProvider's keys, read outside React.
 const MODE_KEY = 'theme:mode';
 const ACCENT_KEY = 'theme:accent';
 const DARK_STYLE_KEY = 'theme:darkStyle';
 
-// Resolves the active palette outside React: stored mode + accent + dark style + system scheme.
 async function resolveColors(): Promise<WidgetColors> {
   const [mode, accentRaw, darkStyle] = await Promise.all([
     AsyncStorage.getItem(MODE_KEY),
     AsyncStorage.getItem(ACCENT_KEY),
     AsyncStorage.getItem(DARK_STYLE_KEY),
   ]);
-  const system = Appearance.getColorScheme(); // 'light' | 'dark' | null
+  const system = Appearance.getColorScheme();
   const scheme: 'light' | 'dark' =
     mode === 'dark' || mode === 'light' ? mode : system === 'dark' ? 'dark' : 'light';
   const base =
@@ -70,8 +62,7 @@ async function resolveColors(): Promise<WidgetColors> {
   };
 }
 
-// Builds the widget snapshot from today's state of habits scheduled for today
-// (frequency + life range). Same filter logic as useTodayData.
+// Today's state, with the same filters as useTodayData.
 export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot> {
   const lang = await getStoredLang();
   const colors = await resolveColors();
@@ -133,7 +124,23 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     emptyLabel: translate(lang, 'widget.empty'),
     todayEmptyLabel: translate(lang, 'widget.todayEmpty'),
     quickAddLabel: translate(lang, 'widget.quickAdd'),
+    pickable: habitRepo
+      .listByUser(userId)
+      .filter((h) => h.kind === 'binary' || h.kind === 'numeric')
+      .map((h) => ({
+        id: h.id,
+        title: h.title,
+        color: h.color ?? DEFAULT_HABIT_COLOR,
+        kind: h.kind as 'binary' | 'numeric',
+      })),
+    pickTitle: translate(lang, 'widget.pickTitle'),
+    pickEmptyLabel: translate(lang, 'widget.pickEmpty'),
+    pickLabel: translate(lang, 'widget.pickLabel'),
+    notTodayLabel: translate(lang, 'widget.notToday'),
+    cancelLabel: translate(lang, 'common.cancel'),
     summaryTemplate: translate(lang, 'widget.summary'),
+    locked: !areFeaturesUnlocked(),
+    lockedLabel: translate(lang, 'widget.locked'),
     staleLabel: translate(lang, 'widget.stale'),
     counterTitle: translate(lang, 'widget.counterTitle'),
     counterEmptyLabel: translate(lang, 'widget.counterEmpty'),
@@ -150,11 +157,8 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
   };
 }
 
-// Writes the snapshot and (on Android in a real build) re-renders the native
-// widget. An error must never break the app under any circumstance: every step is defensive.
-//
-// Widget taps not yet drained into SQLite are laid over the fresh snapshot, so
-// a refresh never briefly "un-checks" a habit the user just tapped.
+// Never throws. Taps not yet drained into SQLite are laid over the fresh
+// snapshot, so a refresh never "un-checks" what the user just tapped.
 export async function refreshWidget(userId: string): Promise<void> {
   let snap: WidgetSnapshot;
   try {
@@ -164,24 +168,21 @@ export async function refreshWidget(userId: string): Promise<void> {
       return built;
     });
   } catch {
-    return; // couldn't read the data — leave the widget alone
+    return; // leave the widget as it is
   }
 
   if (Platform.OS !== 'android') return;
   try {
-    // Lazy: only load the package when the native module exists (dev/prod build).
     const { updateWidgets } = require('./renderWidgets');
     await updateWidgets(snap);
   } catch {
-    // Expo Go, or no widget support — the snapshot was written, the native update was skipped.
+    // Expo Go / no widget support: the snapshot is still written.
   }
 }
 
-// Writes the widget taps queued by the headless handler into SQLite (see
-// widgetQueue.ts). Returns how many changed the data — the caller then bumps
-// dataVersion so the screens and the widget re-read. A tap for a habit that
-// was deleted meanwhile, or whose kind changed, is dropped.
-// Must NOT be awaited inside serialized() (it takes the same chain).
+// Writes the queued widget taps into SQLite (widgetQueue.ts) and returns how
+// many changed something. Taps for deleted or changed habits are dropped.
+// Never await it inside serialized() — it takes the same chain.
 export async function drainWidgetQueue(): Promise<number> {
   return serialized(async () => {
     const pending = await readPending();
@@ -208,7 +209,7 @@ export async function drainWidgetQueue(): Promise<number> {
           applied++;
         }
       } catch {
-        // one bad entry must not block the rest; it's dropped with them
+        // a bad entry is dropped without blocking the rest
       }
     }
     await removePending(pending.map((a) => a.id));

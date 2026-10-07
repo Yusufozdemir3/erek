@@ -4,7 +4,6 @@ import {
   FONT_CHOICES,
   FONT_NAMES,
   fontFamilyFor,
-  fontFamilyNames,
   isFontChoice,
   weightNameFor,
   type BundledFont,
@@ -72,7 +71,7 @@ describe('adlar @expo-google-fonts paketlerinin dışa aktardıklarıyla aynı',
   for (const choice of Object.keys(PACKAGE) as BundledFont[]) {
     it(`${FONT_NAMES[choice]}: beş kalınlığın hepsi pakette var`, () => {
       const types = fs.readFileSync(require.resolve(`@expo-google-fonts/${PACKAGE[choice]}/index.d.ts`), 'utf8');
-      for (const name of fontFamilyNames(choice)) expect(types).toContain(name);
+      for (const w of ['400', '500', '600', '700', '800']) expect(types).toContain(fontFamilyFor(choice, w));
     });
   }
 });

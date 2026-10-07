@@ -16,8 +16,7 @@ export const makeProfileStyles = (c: Colors) =>
       padding: 16,
     },
     cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 12 },
-    // Arrow row that navigates to another page (e.g. Notifications). We reset
-    // cardTitle's bottom margin inline so the title stays vertically centered.
+    // A row that opens another page (cardTitle's margin is reset inline).
     navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     // Secondary in-card heading (e.g. "Dark theme style" inside the Appearance card).
     subCardTitle: { fontSize: 13, fontWeight: '700', color: c.muted, marginTop: 16, marginBottom: 10 },

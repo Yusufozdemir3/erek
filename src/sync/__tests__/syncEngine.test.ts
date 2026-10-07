@@ -24,7 +24,6 @@ jest.mock('../auth', () => ({
   ensureSignedIn: () => mockEnsureSignedIn(),
 }));
 
-// Must be imported AFTER the jest.mock calls so the mocks take effect.
 import {
   classifySignIn,
   clearLocalData,
@@ -39,9 +38,7 @@ import {
   resolveAccountSwitch,
 } from '../syncEngine';
 
-const LEGACY_KEY = 'sync:lastPulledAt';
-// Must match WATERMARK_SAFETY_MS in syncEngine: the watermark is set this far
-// behind the largest server timestamp seen (so out-of-order commits aren't skipped).
+// Must match syncEngine's WATERMARK_SAFETY_MS.
 const WATERMARK_SAFETY_MS = 5_000;
 const wmKey = (table: string) => `sync:lastPulledAt:${table}`;
 const EPOCH = '1970-01-01T00:00:00.000Z';
@@ -54,22 +51,18 @@ let remoteData: Record<string, Row[]>;
 let upserts: Array<{ table: string; payload: Row[] }>;
 let upsertErrorTable: string | null;
 let upsertErrorMessage: string;
-// Push now goes out in batches (see PUSH_PAGE_SIZE), so a table can get more
-// than one upsert request. null = ALL of that table's requests fail (the old
-// behavior); a number makes only that Nth request (1-based) fail.
+// Push goes out in batches: null = every upsert fails, a number = only that
+// Nth request (1-based) fails.
 let upsertErrorAtCall: number | null;
 let gtCalls: Array<{ table: string; since: string }>;
 let rangeCalls: Array<{ table: string; from: number; to: number }>;
 let reconcileCalls: Array<{ table: string; ids: string[] }>;
 
-// The timestamp the server writes via trigger (see supabase/schema.sql). When
-// fixtures don't supply one, the server is assumed to have received the record at the same time as the client.
+// The trigger-written server timestamp; fixtures without one use updated_at.
 const serverTs = (r: Row): string => String(r.server_updated_at ?? r.updated_at);
 
-// Mimics the real PostgREST chain:
-//   .from(t).upsert(rows)  and  .from(t).select().gt().order().order().range()
-// range() slices like Supabase does: the [from, to] window of the ordered result set.
-// Filtering/sorting is done on the column passed to gt() (the engine uses server_updated_at).
+// Mimics the PostgREST chains the engine uses: .upsert(rows) and
+// .select().gt().order().order().range() (filtered/sorted on the gt() column).
 function fakeFrom(table: string) {
   return {
     upsert: async (payload: Row[]) => {
@@ -216,10 +209,8 @@ describe('runSync — push', () => {
   });
 });
 
-// A long-time user's pending row count can reach into the thousands
-// (prepareFullResync marks EVERYTHING synced=0 on every entry). If a single
-// giant request times out on a mobile network, all-or-nothing behavior would
-// lock sync permanently — batched sending breaks that.
+// A full resync can leave thousands of rows pending; one all-or-nothing
+// request that times out would never make progress.
 describe('runSync — push partileri (büyük birikim)', () => {
   // Writes a log for `count` separate days on a single habit (UNIQUE(habit_id, log_date)).
   function seedLogs(userId: string, count: number): void {
@@ -256,7 +247,7 @@ describe('runSync — push partileri (büyük birikim)', () => {
     expect(result.status).toBe('error');
     expect(result.message).toContain('habit_logs push');
 
-    // CRITICAL: without batching this count would be 0 and every round would restart from scratch.
+    // The first batch stays done; a retry doesn't start from scratch.
     const flags = syncedFlags('habit_logs');
     expect(flags.filter((f) => f === 1)).toHaveLength(250);
     expect(flags.filter((f) => f === 0)).toHaveLength(350);
@@ -322,9 +313,8 @@ describe('runSync — pull', () => {
     remoteData['habits'] = [remoteHabit({ id: 'uzak-1', updated_at: t1 })];
 
     await runSync(user.id);
-    // If it were set to exactly the largest timestamp, a concurrent transaction
-    // that started slightly BEFORE that timestamp but committed AFTER it would
-    // be permanently skipped (server_updated_at = now(), and now() is the transaction's START).
+    // Not exactly the max: a transaction that started earlier but committed
+    // later carries a smaller timestamp and would be skipped forever.
     const stored = (await AsyncStorage.getItem(wmKey('habits')))!;
     expect(new Date(stored).getTime()).toBe(new Date(t1).getTime() - WATERMARK_SAFETY_MS);
 
@@ -338,9 +328,8 @@ describe('runSync — pull', () => {
   });
 
   it('güvenlik payı sayesinde SIRASIZ commit edilen satır bir sonraki turda yakalanır', async () => {
-    // Scenario: two concurrent transactions. The one that started LATE commits
-    // FIRST (large timestamp); the one that started EARLY commits LATER (small
-    // timestamp). The first round only sees the large-timestamp one.
+    // Two transactions: the one started LATE commits first (larger timestamp),
+    // the early one commits later. The first round only sees the late one.
     const user = userRepo.getOrCreateLocal();
     const late = isoShift(0);
     const early = new Date(new Date(late).getTime() - 2000).toISOString(); // within the safety margin
@@ -353,14 +342,12 @@ describe('runSync — pull', () => {
     remoteData['habits'].push(remoteHabit({ id: 'erken-baslayan', updated_at: early }));
     await runSync(user.id);
 
-    // Without the safety margin, this row would never satisfy `> since` and
-    // would be skipped forever (silent data loss).
+    // Without the margin it would never satisfy `> since`.
     expect(habitRepo.getById('erken-baslayan')).not.toBeNull();
   });
 
   it('filigran TABLO BAŞINA tutulur: bir tablonun yeni satırı diğerinin eski satırını atlatmaz', async () => {
-    // Old bug: a single global watermark was set to the max across all tables.
-    // Once tasks advanced to 10:09, goals's row at 10:05 never got pulled again.
+    // With one global watermark, tasks advancing to 10:09 hid goals' 10:05 row forever.
     const user = userRepo.getOrCreateLocal();
     const early = '2026-07-23T10:05:00.000Z';
     const late = '2026-07-23T10:09:00.000Z';
@@ -386,25 +373,13 @@ describe('runSync — pull', () => {
     expect(goalRepo.getById('uzak-hedef')?.title).toBe('Erken damgalı hedef');
   });
 
-  it('eski tek-global filigran temizlenir (geçiş: tablolar bir kez epoch\'tan çekilir)', async () => {
-    const user = userRepo.getOrCreateLocal();
-    await AsyncStorage.setItem(LEGACY_KEY, '2026-07-23T10:00:00.000Z');
-
-    await runSync(user.id);
-
-    expect(await AsyncStorage.getItem(LEGACY_KEY)).toBeNull();
-    // The old value is not inherited: epoch so any rows that were skipped can recover.
-    for (const call of gtCalls) expect(call.since).toBe(EPOCH);
-  });
-
   it('aynı anda ikinci senkron reddedilir (inFlight kilidi)', async () => {
     const user = userRepo.getOrCreateLocal();
     const first = runSync(user.id);
     const second = await runSync(user.id);
-    // 'busy', NOT 'error': a conflict here isn't a failure, it's a state the
-    // caller should silently ignore (see SyncResult).
+    // 'busy', not 'error' (see SyncResult).
     expect(second.status).toBe('busy');
-    expect(second.message).toContain('zaten sürüyor'); // "already running"
+    expect(second.message).toContain('zaten sürüyor');
     expect((await first).status).toBe('ok');
   });
 });
@@ -443,8 +418,7 @@ describe('runSync — sayfalama (1000+ kayıt)', () => {
     );
     expect(count?.n).toBe(1001);
 
-    // The watermark advanced to the last (newest) row — no loss from pagination.
-    // (Behind by the safety margin; see WATERMARK_SAFETY_MS.)
+    // Watermark = newest row minus the safety margin: nothing lost to paging.
     const lastUpdated = new Date(base + 1000 * 1000).toISOString();
     const stored = (await AsyncStorage.getItem(wmKey('habit_logs')))!;
     expect(new Date(stored).getTime()).toBe(new Date(lastUpdated).getTime() - WATERMARK_SAFETY_MS);
@@ -452,10 +426,8 @@ describe('runSync — sayfalama (1000+ kayıt)', () => {
 });
 
 describe('runSync — reminders doğal anahtar birleştirme', () => {
-  // Local ids used to be generated as dashless 32 characters in migration016;
-  // the Postgres uuid column returns them WITH DASHES. When the ids didn't
-  // match, the same reminder got inserted a second time and the notification
-  // fired twice. The natural key (entity_type, entity_id, time) merges this duplicate.
+  // Old dashless local ids come back dashed from Postgres' uuid column; the
+  // natural key (entity_type, entity_id, time) keeps that from doubling a reminder.
   it('id\'si farklı ama aynı varlık+saat uzak hatırlatma kopya satır yaratmaz', async () => {
     const user = userRepo.getOrCreateLocal();
     const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
@@ -478,11 +450,9 @@ describe('runSync — reminders doğal anahtar birleştirme', () => {
     expect(rows[0].id).toBe('11111111-2222-3333-4444-555555555555');
   });
 
-  // The field bug: another device saved the form (delete 08:30 as id-1 +
-  // re-create 08:30 as id-2, both in the same millisecond). Here the tombstone
-  // for id-1 has already landed; the live id-2 then arrives with the SAME
-  // timestamp. The tombstone used to win the tie ("local wins") and id-2 was
-  // skipped for good — the reminder vanished from this device.
+  // Another device saved the form: 08:30 deleted as id-1 and recreated as id-2
+  // in the same millisecond. id-1's tombstone is already here; the live id-2
+  // with the SAME timestamp must not lose the tie to it.
   it('silinmiş (tombstone) yerel rakip, aynı damgalı canlı uzak satırı ezmez', async () => {
     const user = userRepo.getOrCreateLocal();
     const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
@@ -532,9 +502,8 @@ describe('runSync — reminders doğal anahtar birleştirme', () => {
 });
 
 describe('runSync — habit_logs doğal anahtar birleştirme', () => {
-  // Two devices can log the same habit on the same day under different ids.
-  // The old behavior would permanently lock sync with a UNIQUE(habit_id,
-  // log_date) violation in this case; now records must merge into one via last-writer-wins.
+  // Two devices logged the same habit and day under different ids: merge by
+  // last-writer-wins instead of a UNIQUE(habit_id, log_date) violation.
   it('farklı id\'li ama aynı gün+alışkanlık uzak log yeniyse yereldekinin yerine geçer', async () => {
     const user = userRepo.getOrCreateLocal();
     const habit = habitRepo.create({ user_id: user.id, title: 'Su iç' });
@@ -582,13 +551,8 @@ describe('runSync — habit_logs doğal anahtar birleştirme', () => {
   });
 });
 
-// Linked-goal contribution settings (goal_contribution/goal_factor) were
-// MISSING from the sync column list for a long time: "4 cups = 1 liter" worked
-// correctly on the device that created the habit, but the row landed on a
-// second device of the same account with the defaults (per_completion, factor
-// 1) — every check on that device wrote +1 to the goal instead of 0.25.
-// Structural protection lives in __tests__/syncColumnParity.test.ts; the ones
-// here verify the BEHAVIOR (that it actually round-trips).
+// goal_contribution/goal_factor must round-trip ("4 cups = 1 liter" on a second
+// device). syncColumnParity.test.ts guards the column list; these the behavior.
 describe('runSync — bağlı hedef katkı ayarları', () => {
   it('push: katkı biçimi ve çarpan payload\'a girer', async () => {
     const user = userRepo.getOrCreateLocal();
@@ -631,9 +595,7 @@ describe('runSync — bağlı hedef katkı ayarları', () => {
   });
 
   it('pull: çarpan uzaktan BOŞ gelirse varsayılana düşer, senkronu kilitlemez', async () => {
-    // goal_factor is NOT NULL locally — writing a raw null would make the pull
-    // throw, and that user's sync would PERMANENTLY lock up, failing on the
-    // same row every round (see TableCfg.defaults).
+    // goal_factor is NOT NULL locally: a raw null would fail every pull (TableCfg.defaults).
     const user = userRepo.getOrCreateLocal();
     remoteData['habits'] = [
       remoteHabit({ id: 'uzak-1', updated_at: isoShift(0), goal_factor: null, kind: null }),
@@ -648,13 +610,9 @@ describe('runSync — bağlı hedef katkı ayarları', () => {
   });
 });
 
-// P1: goal progress was SILENTLY disappearing across devices. current_value
-// was a plain column carried by last-writer-wins; goal_entries was
-// append-only and synced row by row. When +5 was entered on A and +3 on B,
-// both ENTRIES reached every device, but current_value only ever took whoever
-// synced last — the user saw "5 / 100" alongside a "+5, +3" history on the
-// same screen. Fix: current_value = value_baseline + the sum of entries,
-// recomputed after every pull (see migration019 + goalRepo.recomputeAllFromEntries).
+// +5 on device A and +3 on B must total 8 everywhere: current_value is
+// value_baseline + the entries, recomputed after every pull — never the
+// last-written cached value.
 describe('runSync — hedef ilerlemesi çok cihazda birleşir', () => {
   // Remote goal row: with the stale cached value the OTHER device sees
   // (not including this device's contribution).
@@ -693,7 +651,7 @@ describe('runSync — hedef ilerlemesi çok cihazda birleşir', () => {
     const result = await runSync(user.id);
 
     expect(result.status).toBe('ok');
-    // It used to come out as 3 (the remote cache overwrote the local contribution). Now it's 5 + 3.
+    // 5 + 3, not the remote cache's 3.
     expect(goalRepo.getById(goal.id)!.current_value).toBe(8);
     // History and the value now confirm each other.
     const sum = goalEntryRepo.listByGoal(goal.id).reduce((s, e) => s + e.amount, 0);
@@ -1182,9 +1140,8 @@ describe('paylaşılan görevin alt görevleri', () => {
   });
 });
 
-// DATA BELONGS TO THE ACCOUNT (2026-10-01): sign-out forgets the account's data
-// on the device; the only thing that may stop it is a real data-loss warning
-// based on pendingChangeCount().
+// Data belongs to the account: sign-out forgets it on the device; only
+// pendingChangeCount() (a real data-loss warning) may hold it up.
 describe('çıkış — veri hesaba ait', () => {
   const OWNER_KEY = 'sync:ownerUid';
 

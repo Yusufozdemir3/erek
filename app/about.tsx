@@ -1,5 +1,4 @@
-// "About and support" sub-screen of Profile: version, a feedback mail draft,
-// the privacy policy. The header title comes from the root layout.
+// Profile › About and support: version, a feedback mail draft, the privacy policy.
 
 import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';

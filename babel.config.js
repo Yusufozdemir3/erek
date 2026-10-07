@@ -1,6 +1,5 @@
-// Default Expo Babel configuration.
-// react-native-reanimated's Babel plugin is bundled into babel-preset-expo as
-// of SDK 52 — it's not added separately (adding it twice makes reanimated warn).
+// Expo's Babel preset. It already includes reanimated's plugin (adding it again warns).
+
 module.exports = function (api) {
   api.cache(true);
   return {

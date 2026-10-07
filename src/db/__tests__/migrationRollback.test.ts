@@ -1,10 +1,6 @@
-// Migration transaction behavior: if a multi-statement migration fails partway,
-// ALL of it must be rolled back and user_version must not advance. (Otherwise
-// startup gets stuck with a half-applied schema + a "duplicate/already exists"
-// error on the next attempt.)
-//
-// A deliberately broken list is injected in place of the real migration list;
-// this file has its own module registry, so it doesn't affect other tests.
+// A migration failing halfway must roll back entirely without advancing
+// user_version (a half-applied schema fails its retry forever). A broken list
+// replaces the real one; this file has its own module registry.
 
 jest.mock('../migrations/001_initial', () => ({
   migrations: [
@@ -42,8 +38,7 @@ describe('yarıda kalan migration', () => {
 
   it('sonraki deneme temiz durumdan tekrar başlar', async () => {
     await expect(runMigrations()).rejects.toThrow();
-    // No half-applied schema is left behind, so it retries with the same error —
-    // it isn't dragged into a secondary error like "yarim already exists", and state stays clean.
+    // The retry fails the same way, not on a leftover half-applied table.
     await expect(runMigrations()).rejects.toThrow(/already exists|exists/i);
     expect(userVersion()).toBe(1);
     expect(tableNames()).not.toContain('yarim');

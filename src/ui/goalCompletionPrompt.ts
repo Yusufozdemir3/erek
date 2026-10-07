@@ -1,8 +1,5 @@
-// Shared by the "Today" and "Habits" screens: after a habit check-off/amount
-// change pushes its linked goal to completion (see habitRepo.toggleLog /
-// incrementAmount's GoalJustCompleted return), asks whether to unlink the
-// habit from that goal — the user chose "ask, don't decide for me" over
-// auto-unlinking silently.
+// When a habit check-off completes its linked goal (GoalJustCompleted), ask
+// whether to unlink the habit rather than deciding silently. Today and Habits.
 
 import { Alert } from 'react-native';
 import { habitRepo, type GoalJustCompleted } from '@/db';

@@ -1,9 +1,5 @@
-// notifications.ts tests — the multi-reminder logic rewritten from scratch in
-// this session had no tests at all. expo-notifications is a real native
-// module, so it's mocked (scoped to this file only); reminderRepo/goalRepo are
-// REAL (in-memory SQLite) — the Reminder/Goal/Habit/Task objects the schedule
-// functions receive are plain test fixtures that don't need to be written to
-// the DB (only the reschedule-all tests read real rows via reminderRepo).
+// notifications.ts. expo-notifications is mocked here; the repos run on real
+// in-memory SQLite, though most schedule calls get plain fixtures.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -43,8 +39,6 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { DEFAULT: 3 },
 }));
 
-// getStoredLang can fall back to expo-localization (device language) — not
-// needed in tests; replaced with a stub that returns a fixed 'tr'.
 jest.mock('@/i18n/I18nProvider', () => ({ getStoredLang: jest.fn(async () => 'tr') }));
 
 const mockSchedule = Notifications.scheduleNotificationAsync as jest.Mock;
@@ -123,7 +117,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   mockGetAll.mockResolvedValue([]);
   mockGetPerms.mockResolvedValue({ granted: true, canAskAgain: true });
-  // Since AsyncStorage is clean, getNotificationPrefs returns everything on (the default).
+  // Clean AsyncStorage: every preference at its default.
 });
 
 describe('cancelByPrefix (cancelHabitReminders/cancelTaskReminders/cancelGoalReminders)', () => {
@@ -191,11 +185,8 @@ describe('scheduleHabitReminders', () => {
     expect(mockSchedule).not.toHaveBeenCalled();
   });
 
-  // Lifetime range: OS triggers (DAILY/WEEKLY) don't know about dates, they
-  // repeat forever. That's why the range is checked here on every scheduling pass.
+  // OS triggers repeat forever, so the lifespan is checked on every pass.
   it('HENÜZ BAŞLAMAMIŞ alışkanlıkta kurulmaz (başlangıç tarihi gelecekte)', async () => {
-    // A user who said "start on Sept 1" shouldn't get notifications starting
-    // today; the habit also doesn't show up in lists (useTodayData filters the same range).
     const habit = makeHabit({ start_date: '2999-01-01' });
 
     const ok = await scheduleHabitReminders(habit, [makeReminder('08:00')]);
@@ -310,11 +301,7 @@ describe('rescheduleAllReminders / rescheduleAllTaskReminders / rescheduleAllGoa
     expect(mockSchedule).not.toHaveBeenCalled();
   });
 
-  // Every scheduleX call first does a cancelX, which pulls ALL currently
-  // scheduled notifications from the native bridge. If this scan repeats per
-  // entity, the startup cost grows linearly with the entity count (80
-  // entities = 80 full scans, all sequential). There should be ONE scan per
-  // pass — this test locks in that gain.
+  // One scan of the scheduled list per pass, not one per entity.
   it('varlık sayısından bağımsız olarak kurulu bildirimleri TEK kez tarar', async () => {
     for (const id of ['h1', 'h2', 'h3', 'h4', 'h5']) reminderRepo.create('habit', id, '08:00');
     const habits = ['h1', 'h2', 'h3', 'h4', 'h5'].map((id) => makeHabit({ id }));
@@ -374,11 +361,7 @@ describe('migrateToMultiReminderIfNeeded', () => {
 });
 
 describe('sweepOrphanReminders', () => {
-  // A habit deleted on ANOTHER device (arrives via pull), a reminder removed
-  // there, local data cleared: none of these go through a local delete handler,
-  // and the rescheduleAll* passes only visit LIVE entities — so the old
-  // trigger stayed in the OS queue and fired every day. The sweep reconciles
-  // the queue against the DB.
+  // Deleted on another device or wiped locally: no handler cancelled these.
   it('DB\'de karşılığı olmayan tetikleyicileri iptal eder, canlıları ve zamanlayıcıyı bırakır', async () => {
     const userId = userRepo.getOrCreateLocal().id;
     const habit = habitRepo.create({ user_id: userId, title: 'Su iç' });

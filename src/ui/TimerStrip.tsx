@@ -1,8 +1,5 @@
-// Mini status strip for the active timer — right above the tab bar, visible
-// ONLY while a timer is running (takes up no space when idle). Both a status
-// indicator and quick access to pause. Since TimerProvider refreshes its own
-// context value every second (see the TimerProvider comment), there's no need
-// to set up a separate interval here — useTimer() already ticks live.
+// A slim strip above the tab bar while a timer runs, with quick pause. It
+// re-renders with the timer context, which ticks every second.
 
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -26,20 +23,13 @@ export function TimerStrip() {
   const kind = activeTarget?.kind ?? null;
   const id = activeTarget?.id ?? null;
 
-  // Title/icon/color/target DON'T CHANGE for the duration of the timer, but this
-  // component re-renders every second (the context ticks live). If the lookup
-  // weren't tied to the target's identity, a 45-minute session would mean 2700
-  // unnecessary synchronous SQLite queries — all on the JS thread, all for the
-  // same unchanging row. useMemo brings it down to ONE query per session.
-  // (Deliberate limitation: if the habit's name is changed while the timer is
-  // running, the strip shows the old name until the session ends. The
-  // alternative — copying the name into ActiveTimer and writing it to
-  // AsyncStorage — would decouple the data from its single source of truth.)
+  // One lookup per session, not one SQLite query per second. A rename during
+  // the session shows after it ends.
   const meta = useMemo(() => {
     if (!kind || !id) return null;
     if (kind === 'habit') {
       const habit = habitRepo.getById(id);
-      if (!habit) return null; // may have been deleted (a rare race); the strip silently disappears
+      if (!habit) return null; // deleted meanwhile
       return {
         title: habit.title,
         target: habit.target_amount ?? 0,
@@ -103,8 +93,6 @@ export function TimerStrip() {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    // A slim strip centered right above the tab bar (same reference height as
-    // AddFab's spring-out options — see AddFab.fan).
     wrap: {
       position: 'absolute',
       left: 12,

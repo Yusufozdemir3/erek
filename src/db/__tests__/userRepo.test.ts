@@ -1,4 +1,4 @@
-// userRepo tests: anonymous startup + account upgrade/downgrade flow.
+// userRepo: the anonymous local user and its account upgrade/downgrade.
 
 import { getDb } from '../database';
 import { userRepo } from '../repositories/userRepo';

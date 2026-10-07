@@ -1,5 +1,5 @@
-// helpers.ts tests — isScheduledOn is the foundation of the streak and the "Today" filter.
-// Fixed dates are used: 2026-06-29 Monday, 2026-07-01 Wednesday.
+// helpers.ts — isScheduledOn underlies streaks and the Today filter.
+// Fixed dates: 2026-06-29 Monday, 2026-07-01 Wednesday.
 
 import {
   chunk,
@@ -20,11 +20,7 @@ import {
 } from '../helpers';
 import type { Recurrence } from '../../types/models';
 
-// Batch queries split the list with this function to avoid exceeding
-// SQLite's `IN (?, ?, …)` bound-parameter limit (see habitRepo.getDayStates
-// and similar). The limit itself is large (32766), but avoiding hitting it is
-// better than a query blowing up with a cryptic SQLite error for a user with
-// thousands of habits/tasks.
+// Bulk queries stay under SQLite's bound-parameter limit with this.
 describe('chunk', () => {
   it('boş listede boş dizi döner (tek boş parça değil)', () => {
     expect(chunk([], 10)).toEqual([]);
@@ -109,10 +105,7 @@ describe('isScheduledOn', () => {
     expect(isScheduledOn(s, '2026-07-14')).toBe(false);
   });
 
-  // A user who picked "the 31st" used to get NO scheduled day at all in
-  // 30-day months and in February: the habit would disappear for 5 months a
-  // year, silently losing the "every end of month" intent. The selection is
-  // now clamped to that month's last day.
+  // "The 31st" falls back to a shorter month's last day.
   it('monthly: ayın son gününü aşan seçim SON GÜNE kırpılır', () => {
     const s: Recurrence = { freq: 'monthly', monthDay: 31 };
     expect(isScheduledOn(s, '2026-07-31')).toBe(true); // 31-day month: its own day
@@ -251,8 +244,7 @@ describe('nextTaskOccurrence', () => {
     expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 15 }, '2026-07-15', '2026-07-15')).toBe(
       '2026-08-15'
     );
-    // Months without a 31st used to be skipped entirely (Aug 31 → Oct 31,
-    // September was ignored). Now it's clamped to the short month's last day: Aug 31 → Sep 30.
+    // Aug 31 → Sep 30, not Oct 31.
     expect(nextTaskOccurrence({ freq: 'monthly', monthDay: 31 }, '2026-08-31', '2026-08-31')).toBe(
       '2026-09-30'
     );
@@ -266,8 +258,7 @@ describe('nextTaskOccurrence', () => {
 });
 
 describe('scheduleLabel', () => {
-  // The function holds no language-dependent text; the label set comes from
-  // the caller (see buildScheduleLabels — a plain fake set is used here).
+  // A plain fake label set (the real one comes from buildScheduleLabels).
   const LABELS: ScheduleLabels = {
     everyDay: 'Her gün',
     dayNames: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'], // 0=Sunday...6=Saturday

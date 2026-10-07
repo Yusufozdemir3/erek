@@ -1,9 +1,12 @@
-// "Appearance" sub-screen of Profile — theme, accent color, language, the
-// Today-screen preference, in-app haptics and the voice-input consent. Split
-// out of the Profile page, which grew too long as one flat list.
+// Profile › Appearance: theme, accent, language, typeface, in-app haptics and
+// the voice-input consent.
 
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { isAccentFree } from '@/plus/plusLogic';
+import { openPlus } from '@/plus/openPlus';
+import { useFeaturesUnlocked } from '@/plus/plusStore';
 import { isHapticsEnabled, setHapticsEnabled, tapLight } from '@/lib/haptics';
 import { getVoiceSupport } from '@/lib/voice';
 import { speechLocale } from '@/lib/voiceLogic';
@@ -25,20 +28,17 @@ export default function AppearanceScreen() {
   const { colors, scheme, mode, setMode, accent, setAccent, darkStyle, setDarkStyle } = useTheme();
   const { t, lang, setLang } = useI18n();
   const styles = makeProfileStyles(colors);
-  // Haptics preference; the cache is loaded at startup (see _layout), so the
-  // initial value here is correct right away.
+  const unlocked = useFeaturesUnlocked();
+  // Already cached at startup (see _layout).
   const [haptics, setHaptics] = useState(isHapticsEnabled);
 
-  // Toggle haptics on/off — turning it off silences touches immediately (cache
-  // is written first).
   const toggleHaptics = (value: boolean) => {
     setHaptics(value);
     setHapticsEnabled(value).catch(() => {});
-    if (value) tapLight(); // one sample buzz when turning it on so the user feels what they just enabled
+    if (value) tapLight(); // a sample buzz
   };
 
-  // Voice input: where the consent to Google's online recognition can be
-  // taken back. The card only exists on phones that have a recognizer.
+  // Where the online-recognition consent is taken back (phones with a recognizer only).
   const [voiceShown, setVoiceShown] = useState(false);
   const [voiceOnline, setVoiceOnline] = useState(false);
   useEffect(() => {
@@ -59,7 +59,6 @@ export default function AppearanceScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {/* Appearance (theme) */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t('profile.appearance')}</Text>
         <View style={styles.segRow}>
@@ -80,8 +79,7 @@ export default function AppearanceScreen() {
         </View>
         <Text style={styles.hint}>{t('profile.systemHint')}</Text>
 
-        {/* Dark theme style — warm ink / true black (AMOLED). Stays selectable
-            in light theme too; it takes effect once dark theme is active. */}
+        {/* Selectable in light theme too; applies when dark. */}
         <Text style={styles.subCardTitle}>{t('profile.darkStyle')}</Text>
         <View style={styles.segRow}>
           {(
@@ -106,26 +104,29 @@ export default function AppearanceScreen() {
         </View>
       </View>
 
-      {/* Accent (brand) color */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('profile.accentColor')}</Text>
         <View style={styles.accentRow}>
           {ACCENT_ORDER.map((key) => {
             const on = accent === key;
             const swatch = ACCENT_THEMES[key][scheme].primary;
+            const locked = !unlocked && !isAccentFree(key);
             return (
               <Pressable
                 key={key}
                 style={styles.accentItem}
-                onPress={() => setAccent(key)}
+                onPress={() => (locked ? openPlus() : setAccent(key))}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: on }}
-                accessibilityLabel={t(`profile.accent.${key}`)}
+                accessibilityLabel={
+                  locked ? `${t(`profile.accent.${key}`)}. ${t('plus.lockedA11y')}` : t(`profile.accent.${key}`)
+                }
               >
                 <View
                   style={[styles.accentSwatch, { backgroundColor: swatch }, on && styles.accentSwatchOn]}
                 >
                   {on && <Text style={styles.accentCheck}>✓</Text>}
+                  {locked && <Feather name="lock" size={15} color="#ffffff" />}
                 </View>
                 <Text style={styles.accentLabel}>{t(`profile.accent.${key}`)}</Text>
               </Pressable>
@@ -134,7 +135,6 @@ export default function AppearanceScreen() {
         </View>
       </View>
 
-      {/* Language */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('profile.language')}</Text>
         <View style={styles.segRow}>
@@ -155,11 +155,9 @@ export default function AppearanceScreen() {
         </View>
       </View>
 
-      {/* Typeface: every option shown in its own font; applies at once */}
       <FontPicker />
 
-      {/* Haptics (in-app tactile feedback) — SEPARATE from notification vibration:
-          this is the feedback you feel on touches like checking off/+−/timer. */}
+      {/* In-app haptics, separate from notification vibration. */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.cardTitle}>{t('profile.haptics')}</Text>
         <View style={styles.switchRow}>

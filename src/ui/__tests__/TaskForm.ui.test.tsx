@@ -1,10 +1,6 @@
-// TaskForm component test — covers two features from this session:
-//  (1) The deadline is REQUIRED: defaults to today at creation, can't be
-//      removed via "Clear".
-//  (2) The time is optional: once picked it's embedded into due_date; the end
-//      time is valid only if it's AFTER the start time. The date/time picker
-//      (DatePickerModal/TimePickerModal) is doubled in setup-ui; selection is
-//      simulated via `global.__pickers.date/time(date)`.
+// TaskForm: the date is required (today by default), the time optional and
+// embedded in due_date, an end time only after the start, reminders, recurrence.
+// Pickers are doubled in setup-ui (global.__pickers).
 
 import { fireEvent, act } from '@testing-library/react-native';
 import { TaskForm } from '@/ui/TaskForm';
@@ -50,8 +46,7 @@ describe('TaskForm', () => {
     const { queryByText, getByPlaceholderText } = await renderUI(
       <TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />
     );
-    // Since no time has been picked yet, "Clear" shouldn't appear anywhere on
-    // screen — this indirectly confirms the date (default today) can't be removed.
+    // No "Clear" anywhere: the date can't be removed.
     expect(getByPlaceholderText('Görev başlığı')).toBeTruthy();
     expect(queryByText('Temizle')).toBeNull();
   });
@@ -103,8 +98,7 @@ describe('TaskForm', () => {
     );
   });
 
-  // Reminder times are SEPARATE from the deadline's own time: multiple can be
-  // added via ReminderListEditor's "+ Add time" button, sent as the remind_times list.
+  // Reminders are separate from the due time.
   it('hatırlatma saati eklenince remind_times listesine girer', async () => {
     const onSubmit = jest.fn();
     const { getByText, getByPlaceholderText } = await renderUI(
@@ -127,9 +121,7 @@ describe('TaskForm', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ remind_times: [] }));
   });
 
-  // The six recurrence options are collapsed since they'd clutter the form:
-  // the button shows only the selected mode, tapping it opens the list, and
-  // selecting one closes it again.
+  // The recurrence list opens from its button and closes on a pick.
   describe('tekrar seçici', () => {
     it('seçenekler kapalı başlar, düğme seçili kipi gösterir', async () => {
       const { getByText, queryByText } = await renderUI(

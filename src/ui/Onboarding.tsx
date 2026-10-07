@@ -1,11 +1,6 @@
-// First-launch gate for the setup wizard (ui/setupWizard). The wizard replaced
-// the old 4-slide intro; this file keeps the gate and the two things other
-// modules depend on: the "seen" flag and the "onboarding finished" event.
-//
-// OnboardingGate sits next to the Stack in the root layout: renders nothing until
-// the flag loads (doesn't delay startup), and opens the wizard full screen if
-// unseen. Finishing OR skipping it (any page, or all of it) writes the flag; it
-// can be run again from Profile › Setup wizard.
+// The first-launch gate of the setup wizard (ui/setupWizard), plus what other
+// modules need from it: the "seen" flag and the "finished" event. Finishing or
+// skipping writes the flag; Profile › Setup wizard runs it again.
 
 import { useEffect, useState } from 'react';
 import { Modal } from 'react-native';
@@ -15,38 +10,29 @@ import { SetupWizard, type WizardResult } from '@/ui/setupWizard/SetupWizard';
 
 const SEEN_KEY = 'onboarding:done';
 
-// The login screen's own "seen" flag lives here (not in LoginScreen) because the
-// wizard has to set it, and LoginScreen already imports this file.
+// Lives here because the wizard sets it and LoginScreen already imports this file.
 export const LOGIN_SEEN_KEY = 'login:seen';
 
-// — ORDER: ONBOARDING FIRST, LOGIN SECOND —
-// The login gate (LoginGate) also opens an independent Modal in the root layout.
-// There used to be no ordering between the two, and on a real first launch both
-// mounted at the same time, with the login screen ending up on top of onboarding.
-// LoginGate now watches this flag; there's a small notification so it hears about
-// it the instant onboarding closes (instead of polling AsyncStorage — the flag is
-// already being written in this same process).
-// The wizard has its own account page, so when the user got that far the login
-// screen is marked seen BEFORE this notification goes out (LoginGate re-reads it).
+// The wizard comes first, the login screen second: LoginGate waits for this
+// flag and hears the moment the wizard closes. A wizard that reached its
+// account step marks the login screen seen before announcing it.
 export const ONBOARDING_SEEN_KEY = SEEN_KEY;
 
 type Listener = () => void;
 const doneListeners = new Set<Listener>();
 
-/** Notifies when onboarding completes (or is skipped); returns an unsubscribe function. */
+/** Fires when the wizard finishes or is skipped; returns an unsubscribe. */
 export function onOnboardingDone(fn: Listener): () => void {
   doneListeners.add(fn);
   return () => doneListeners.delete(fn);
 }
 
-// Gate placed on the root layout: reads the flag, shows the wizard if unseen.
 export function OnboardingGate() {
-  const [seen, setSeen] = useState<boolean | null>(null); // null = not known yet
+  const [seen, setSeen] = useState<boolean | null>(null); // null = not read yet
 
   useEffect(() => {
     AsyncStorage.getItem(SEEN_KEY).then((v) => {
-      // The wizard opens for the first time: this is a new install, so the
-      // feature guides may open by themselves later (lib/guides.ts).
+      // A new install: feature guides may open by themselves later (lib/guides.ts).
       if (v !== '1') markNewInstall();
       setSeen(v === '1');
     });

@@ -85,7 +85,7 @@ describe('OnboardingGate + LoginGate', () => {
   it('hesap adımını görüp atlayan kullanıcıya giriş ekranı İKİNCİ kez çıkmaz', async () => {
     const u = await renderUI(<Gates />);
     fireEvent.press(await u.findByLabelText('Kuruluma başla'));
-    for (let i = 0; i < 7; i++) fireEvent.press(u.getByLabelText('Devam')); // hesap adımı dahil
+    for (let i = 0; i < 7; i++) fireEvent.press(u.queryByText('Bu adımı atla') ?? u.getByLabelText('Devam')); // hesap adımı dahil
     fireEvent.press(u.getByLabelText('Erek’i aç'));
 
     await waitFor(async () => expect(await AsyncStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1'));

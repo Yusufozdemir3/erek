@@ -1,6 +1,4 @@
-// HabitTimer component test — especially the "enter duration manually (in
-// minutes)" behavior added in this session. TimerProvider (the live timer
-// engine) is mocked; only the component's own input/interaction logic is tested.
+// HabitTimer's own interaction, typing minutes included; TimerProvider is mocked.
 
 import { fireEvent } from '@testing-library/react-native';
 import { HabitTimer } from '@/ui/HabitTimer';

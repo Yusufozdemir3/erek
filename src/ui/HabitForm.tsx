@@ -1,17 +1,11 @@
-// Habit form FIELDS — shared by both creation (AddSheet) and editing
-// (HabitEditModal). A single source: fields, state and validation live here;
-// persistence (create/update), notification scheduling, and the modal/sheet
-// shell belong to the caller. onSubmit hands the final (converted) values up.
-// The parent remounts via `key` for a fresh start when the goal/habit changes.
-// Architecture rule: no SQL — only goalRepo (read-only, for the goal-linking list).
+// Habit form fields, shared by creation (AddSheet) and editing (HabitEditModal).
+// Fields, state and validation live here; saving, notifications and the modal
+// belong to the caller (onSubmit receives the converted values). Remount with
+// `key` for a fresh start.
 //
-// STEPPED (wizard) MODE: when `stepped` is true (creation only, AddSheet),
-// fields are split into 3-4 steps shown one at a time — Identity
-// (title+icon+color) → Frequency → Tracking (if any) → Reminder. When
-// `stepped` is false/omitted (editing, HabitEditModal), ALL fields are shown
-// in one long scroll as before — the same JSX pieces, only the visibility
-// condition changes; field ORDER or logic doesn't change, the edit flow's
-// behavior is preserved exactly.
+// `stepped` (creation only) shows the fields as a wizard — kind → identity →
+// schedule → tracking (if any) → reminder. Without it (editing) everything is
+// one scroll, in the same order.
 
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -27,7 +21,6 @@ import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { makeHabitFormStyles } from '@/ui/habitFormStyles';
-import { HABIT_SUGGESTIONS } from '@/ui/setupWizard/wizardLogic';
 import { HabitAppearancePicker } from '@/ui/habit/HabitAppearancePicker';
 import {
   buildSchedule,
@@ -38,8 +31,7 @@ import {
 } from '@/lib/habitFormLogic';
 import { DEFAULT_HABIT_COLOR, shortDate } from '@/ui/theme';
 
-// Day buttons in the frequency picker (Monday to Sunday; wd = JS getDay).
-// Labels are i18n keys, translated with t() at render time.
+// Monday to Sunday (wd = JS getDay).
 const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.mon', wd: 1 },
   { labelKey: 'weekday.tue', wd: 2 },
@@ -50,7 +42,7 @@ const WEEKDAY_OPTIONS = [
   { labelKey: 'weekday.sun', wd: 0 },
 ];
 
-// Maps 1:1 to the fields habitRepo.create/update expect.
+// Exactly the fields habitRepo.create/update take.
 export interface HabitFormValues {
   title: string;
   kind: HabitKind;
@@ -58,37 +50,32 @@ export interface HabitFormValues {
   icon: string | null;
   color: string | null;
   schedule: Recurrence | null;
-  target_amount: number | null; // numeric: amount · timer: target in SECONDS · binary: null
+  target_amount: number | null; // numeric: amount · timer: SECONDS · binary: null
   unit: string | null;
   start_date: string | null;
   end_date: string | null;
   goal_id: string | null;
-  goal_contribution: GoalContribution | null; // only meaningful if goal_id is set; NULL = per_completion
-  goal_factor: number;                        // only meaningful in 'amount' mode
+  goal_contribution: GoalContribution | null; // with goal_id only; NULL = per_completion
+  goal_factor: number;                        // 'amount' mode only
 }
 
 interface Props {
-  userId: string;                       // the goal-linking list comes from this user
-  // Tracking type. If provided, it's FIXED (editing — the type never changes
-  // after creation). If omitted (creation), the wizard's first step ('kind')
-  // lets the user pick it.
+  userId: string;                       // whose goals can be linked
+  // Fixed when editing (a kind never changes); omitted at creation, where the
+  // wizard's first step picks it.
   kind?: HabitKind;
-  initial?: Partial<HabitFormValues>;   // editing: current values; creation: none (defaults)
+  initial?: Partial<HabitFormValues>;   // editing only
   submitLabel: string;                  // "Save" | "Add"
   onSubmit: (values: HabitFormValues) => void;
-  onDelete?: () => void;                // editing only: the Delete button
-  autoFocusTitle?: boolean;             // open the keyboard immediately at creation
-  stepped?: boolean;                    // wizard mode (creation only — see the header comment)
+  onDelete?: () => void;                // editing only
+  autoFocusTitle?: boolean;
+  stepped?: boolean;                    // wizard mode (creation only)
 }
 
 type WizardStep = 'kind' | 'identity' | 'schedule' | 'tracking' | 'reminder';
-// Frequency mode (UI state; converted to Recurrence on submit — see submit).
-// The four frequency modes are defined in lib/habitFormLogic.ts (which does the conversion).
 type FreqMode = HabitFreqMode;
 
-// Tracking type selection — the wizard's first step (creation only, when the
-// type isn't fixed). Uses the same line-vector language as the icon set
-// (Feather) instead of emoji.
+// The wizard's first step (creation only).
 const KIND_OPTIONS: { kind: HabitKind; name: keyof typeof Feather.glyphMap; titleKey: string; descKey: string }[] = [
   { kind: 'binary', name: 'check-circle', titleKey: 'add.kindBinary', descKey: 'add.kindBinaryDesc' },
   { kind: 'numeric', name: 'hash', titleKey: 'add.kindNumeric', descKey: 'add.kindNumericDesc' },
@@ -109,13 +96,11 @@ export function HabitForm({
   const { t, lang } = useI18n();
   const styles = makeHabitFormStyles(colors);
   const initSchedule = initial?.schedule ?? null;
-  // Type: from the fixed value if provided (editing); otherwise (creation) the
-  // user picks it in the wizard's first step (null = not chosen yet).
+  // null = not picked yet (creation).
   const [kind, setKind] = useState<HabitKind | null>(fixedKind ?? initial?.kind ?? null);
   const initWeekly =
     !!initSchedule && initSchedule.freq === 'weekly' && (initSchedule.weekdays?.length ?? 0) > 0;
-  // Four frequency modes: every day / specific days of the week / every X days /
-  // X times a week (a flexible quota — no days picked, just hit a weekly count).
+  // every day / weekdays / every X days / X times a week
   const initFreqMode: FreqMode = !initSchedule
     ? 'daily'
     : initSchedule.freq === 'interval'
@@ -132,15 +117,15 @@ export function HabitForm({
   const [color, setColor] = useState<string | null>(initial?.color ?? null);
   const [freqMode, setFreqMode] = useState<FreqMode>(initFreqMode);
   const [weekdays, setWeekdays] = useState<number[]>(initWeekly ? initSchedule!.weekdays! : []);
-  // interval: every how many days (text; >=2 is valid, otherwise falls back to "every day").
+  // interval: >= 2, otherwise every day.
   const [everyNText, setEveryNText] = useState(
     initSchedule?.freq === 'interval' ? String(initSchedule.every ?? 2) : '2'
   );
-  // quota: how many times a week (1-7).
+  // quota: 1–7 a week.
   const [quotaText, setQuotaText] = useState(
     isQuotaSchedule(initSchedule) ? String(initSchedule!.timesPerWeek) : '3'
   );
-  // Numeric: amount (e.g. 8). Timer: target in MINUTES (converted to seconds). Kept as text.
+  // numeric: amount; timer: MINUTES (stored as seconds).
   const [targetText, setTargetText] = useState(
     initial?.target_amount == null
       ? ''
@@ -149,35 +134,24 @@ export function HabitForm({
         : String(initial.target_amount)
   );
   const [unit, setUnit] = useState(initial?.unit ?? '');
-  // At CREATION (no initial), defaults to TODAY — the most common scenario is
-  // tracking "starting today". At EDITING, the existing value is kept (null =
-  // a deliberate "since the beginning" choice, not converted to today). Can be
-  // removed with "Clear".
+  // Today when creating; when editing, a null start stays null ("from the beginning").
   const [startDate, setStartDate] = useState<string | null>(
     initial === undefined ? todayDate() : initial.start_date ?? null
   );
   const [endDate, setEndDate] = useState<string | null>(initial?.end_date ?? null);
   const [goalId, setGoalId] = useState<string | null>(initial?.goal_id ?? null);
-  // Contribution style for the linked goal: 'per_completion' (default, +1 per
-  // day) or 'amount' (that day's amount × a multiplier). Only meaningful for
-  // numeric/timer (a binary habit has no concept of "amount").
   const [goalContribution, setGoalContribution] = useState<GoalContribution>(
     initial?.goal_contribution ?? 'per_completion'
   );
-  // Instead of a multiplier, the user is ASKED "how many {habit unit} make one
-  // {goal unit}?" — thinking in whole numbers instead of decimals feels
-  // natural (e.g. "4 cups make 1 liter"). This is the mathematical INVERSE of
-  // goal_factor (liter/cup), so the initial value is also shown inverted.
-  // Default "1": if the units are already the same (e.g. page=page), the user
-  // gets the right result without touching anything.
+  // Asked as "how many {habit unit} make one {goal unit}?" (4 cups = 1 liter),
+  // the inverse of goal_factor. 1 fits matching units.
   const [goalRatioText, setGoalRatioText] = useState(
     initial?.goal_factor && initial.goal_factor > 0 ? String(1 / initial.goal_factor) : '1'
   );
   const [goals, setGoals] = useState<Goal[]>([]);
-  // Which date picker is open: start or end (null = closed).
   const [datePicker, setDatePicker] = useState<'start' | 'end' | null>(null);
 
-  // Can only link to numeric (progress-counter) goals.
+  // Only numeric goals can be linked.
   useEffect(() => {
     setGoals(goalRepo.listByUser(userId).filter((g) => g.goal_type === 'numeric'));
   }, [userId]);
@@ -186,11 +160,8 @@ export function HabitForm({
     setWeekdays((prev) => (prev.includes(wd) ? prev.filter((x) => x !== wd) : [...prev, wd]));
   };
 
-  // Wizard steps: 'kind' is the very first step only when the type isn't fixed
-  // (creation). 'tracking' only enters the list if it has something to show
-  // (numeric/timer HAS a target field, or there's at least one goal to link
-  // to); if the type hasn't been picked yet (kind is null), this step doesn't
-  // exist yet either — it kicks in once the type is chosen, if needed.
+  // 'kind' only when the kind isn't fixed; 'tracking' only once a kind is
+  // picked and it has something to show (a target or a goal to link).
   const needsKindStep = stepped && fixedKind == null;
   const hasTrackingStep = kind != null && (kind !== 'binary' || goals.length > 0);
   const steps: WizardStep[] = stepped
@@ -204,21 +175,12 @@ export function HabitForm({
     : [];
   const [stepIndex, setStepIndex] = useState(0);
   const currentStep: WizardStep | null = stepped ? steps[Math.min(stepIndex, steps.length - 1)] : null;
-  // Should a field group be shown? Always true while the wizard is off
-  // (editing) — all fields appear at once as before, order/behavior unchanged.
-  // 'kind' is the EXCEPTION: the tracking type is only picked in the creation
-  // wizard (while needsKindStep applies). During editing, kind is always fixed
-  // (fixedKind) and the type can never change afterward — it would leave
-  // fields inconsistent (e.g. turning a timer whose target is already stored
-  // in minutes into a binary habit). So this section never shows during
-  // editing (stepped=false).
+  // Editing shows every group except 'kind' (a kind never changes: a timer's
+  // stored seconds wouldn't fit another kind).
   const show = (s: WizardStep) => (s === 'kind' ? stepped === true && currentStep === s : !stepped || currentStep === s);
 
-  // A numeric/timer habit can't proceed without entering a target — otherwise
-  // target_amount/unit would stay null, producing a meaningless "numeric"
-  // habit indistinguishable from a binary one. For numeric, unit is also
-  // required (to show what the target actually is); for timer, the unit is
-  // always minutes, so it isn't asked for.
+  // Numeric needs a target and a unit, timer a target (always minutes) —
+  // otherwise it would just be a binary habit.
   const trackingTargetValid = (() => {
     if (kind !== 'numeric' && kind !== 'timer') return true;
     const parsed = parseFloat(targetText.replace(',', '.'));
@@ -239,14 +201,11 @@ export function HabitForm({
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
   const submit = () => {
-    if (!kind) return; // can't submit without a type chosen (canProceed already blocks this in the wizard)
+    if (!kind) return;
     const t = title.trim();
     if (!t) return;
-    // In editing mode (stepped=false) the wizard's canProceed guard isn't
-    // active — the save button calls straight here, so the same rule is
-    // enforced here too (see trackingTargetValid).
+    // Editing has no wizard guard, so check again.
     if (!trackingTargetValid) return;
-    // Pure conversions live in lib/habitFormLogic.ts (so they're testable).
     const schedule = buildSchedule({
       freqMode,
       weekdays,
@@ -257,8 +216,7 @@ export function HabitForm({
     });
     const { target_amount, unit: unitVal } = buildTarget(kind, targetText, unit);
     const end_date = clampEndDate(startDate, endDate);
-    // Contribution style is only meaningful for a numeric/timer habit linked to
-    // a goal; otherwise NULL (= per_completion) is sent.
+    // Only a linked numeric/timer habit has a contribution style.
     const goal_contribution: GoalContribution | null =
       goalId && kind !== 'binary' ? goalContribution : null;
     const goal_factor = ratioToGoalFactor(goalRatioText);
@@ -285,20 +243,14 @@ export function HabitForm({
     else if (datePicker === 'end') setEndDate(ymd);
   };
 
-  // The two labels used in the "how many {unit} make one {goal unit}?"
-  // question. For timer, the unit is always minutes (the target is entered in
-  // minutes); for numeric, it's whatever unit the user typed, falling back to
-  // a generic word when empty.
+  // Units in the "how many … make one …?" question (timer: minutes).
   const habitUnitLabel = kind === 'timer' ? t('habit.minuteUnit') : unit.trim() || t('habit.genericUnit');
   const selectedGoal = goals.find((g) => g.id === goalId);
   const goalUnitLabel = selectedGoal?.unit?.trim() || t('habit.genericUnit');
 
-  // Don't show decimals for whole numbers (same pattern as AmountStepper.fmt).
   const fmtPreviewNum = (n: number) => (n % 1 === 0 ? String(n) : String(Math.round(n * 100) / 100));
 
-  // Live preview: raw numbers for the "if you do X per day, Y gets added to
-  // the goal" sentence, provided the entered daily target and ratio are both
-  // valid. Hidden if even one of them is invalid.
+  // "X a day adds Y to the goal" preview; hidden while either input is invalid.
   const parsedDailyTarget = parseFloat(targetText.replace(',', '.'));
   const parsedRatioPreview = parseFloat(goalRatioText.replace(',', '.'));
   const contributionPreview =
@@ -309,15 +261,11 @@ export function HabitForm({
       ? { target: parsedDailyTarget, result: parsedDailyTarget / parsedRatioPreview }
       : null;
 
-  // The default habit color when none is selected — used both by the icon
-  // grid's "shown in this color when selected" preview and by the wizard's
-  // top identity badge.
   const previewColor = color ?? DEFAULT_HABIT_COLOR;
 
   return (
     <>
-      {/* In the wizard (steps other than type selection and identity), a small
-          identity badge at the top — reminds which habit is being configured. */}
+      {/* Later wizard steps: a badge showing which habit this is. */}
       {stepped && currentStep !== 'kind' && currentStep !== 'identity' && (
         <View style={styles.previewRow}>
           <View
@@ -334,7 +282,6 @@ export function HabitForm({
         </View>
       )}
 
-      {/* Tracking type — only the wizard's first step (when the type isn't fixed) */}
       {show('kind') && (
         <>
           <Text style={styles.label}>{t('habit.kindLabel')}</Text>
@@ -362,7 +309,6 @@ export function HabitForm({
         </>
       )}
 
-      {/* Title */}
       {show('identity') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionIdentity')}</Text>
@@ -379,30 +325,10 @@ export function HabitForm({
           <Text style={styles.counter}>
             {title.length}/{TITLE_MAX_LEN}
           </Text>
-          {/* Ideas — only when creating, and only while the title is still empty. */}
-          {initial === undefined && title.length === 0 && (
-            <View style={styles.suggestRow}>
-              {HABIT_SUGGESTIONS.slice(0, 6).map((s) => (
-                <Pressable
-                  key={s.id}
-                  style={styles.suggestChip}
-                  onPress={() => {
-                    setTitle(t(s.labelKey));
-                    if (!icon) setIcon(s.icon);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={t(s.labelKey)}
-                >
-                  <Text style={styles.suggestText}>{t(s.labelKey)}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
         </>
       )}
 
-      {/* Icon + color — the line-vector icon is tinted with the selected color;
-          tapping the selected one again removes it. */}
+      {/* Tapping the selected icon/color again clears it. */}
       {show('identity') && (
         <HabitAppearancePicker
           icon={icon}
@@ -416,8 +342,6 @@ export function HabitForm({
         />
       )}
 
-      {/* Frequency — every day / specific days / every X days / X times a week,
-          + date range */}
       {show('schedule') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionSchedule')}</Text>
@@ -438,7 +362,7 @@ export function HabitForm({
                   style={[styles.freqBtn, sel && styles.freqBtnSel]}
                   onPress={() => {
                     setFreqMode(mode);
-                    // If empty, pre-select today's day as a helpful default.
+                    // Start with today's weekday.
                     if (mode === 'days' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
                   }}
                 >
@@ -495,8 +419,7 @@ export function HabitForm({
             </View>
           )}
 
-          {/* Date range: before the start / after the end, the habit doesn't
-              appear and doesn't affect the streak. Empty = unlimited. */}
+          {/* Outside the range the habit is hidden and the streak untouched. */}
           <Text style={styles.label}>{t('habit.startDate')}</Text>
           <View style={styles.row}>
             <Pressable style={styles.dateBtn} onPress={() => setDatePicker('start')}>
@@ -532,7 +455,6 @@ export function HabitForm({
                 ? new Date(`${datePicker === 'start' ? startDate : endDate}T00:00:00`)
                 : new Date()
             }
-            // Don't allow picking an end date before the start (there's also a safeguard on submit).
             minimumDate={datePicker === 'end' && startDate ? new Date(`${startDate}T00:00:00`) : undefined}
             onClose={() => setDatePicker(null)}
             onConfirm={(picked) => {
@@ -543,8 +465,6 @@ export function HabitForm({
         </>
       )}
 
-      {/* Tracking: a target field depending on type (numeric = daily amount +
-          unit, timer = duration in minutes; binary has no target field) + linking to a goal. */}
       {show('tracking') && (
         <>
       <Text style={styles.sectionHeader}>{t('habit.sectionTracking')}</Text>
@@ -591,8 +511,6 @@ export function HabitForm({
         </>
       )}
 
-      {/* Link to a goal — every day you complete this habit, the selected
-          goal's progress increases by +1 (−1 when undone). Numeric goals only. */}
       {goals.length > 0 && (
         <>
           <Text style={styles.label}>{t('habit.linkGoal')}</Text>
@@ -624,8 +542,7 @@ export function HabitForm({
         </>
       )}
 
-      {/* Contribution style — only meaningful when numeric/timer AND linked to
-          a goal. A binary habit has no concept of "amount", it's always +1 per day. */}
+      {/* Contribution style: linked numeric/timer habits only. */}
       {goalId && kind !== 'binary' && (
         <>
           <Text style={styles.label}>{t('habit.goalContribution')}</Text>
@@ -685,11 +602,6 @@ export function HabitForm({
       )}
         </>
       )}
-      {/* ↑ closes the 'tracking' step (numeric/timer target + goal link + contribution style) */}
-
-      {/* Reminder times — multiple can be added. Shown here after Tracking to
-          keep the same logical order as the wizard's last step (during editing
-          all sections flow in the same order in a single scroll). */}
       {show('reminder') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionReminder')}</Text>
@@ -697,8 +609,7 @@ export function HabitForm({
         </>
       )}
 
-      {/* Actions: bottom navigation in the wizard (dot indicator + Back/Next),
-          Delete + Save as before during editing. */}
+      {/* Wizard: dots + Back/Next. Editing: Delete + Save. */}
       {stepped ? (
         <View style={styles.wizardNav}>
           <View style={styles.dots} accessibilityLabel={t('common.stepOfA11y', { n: stepIndex + 1, total: steps.length })}>

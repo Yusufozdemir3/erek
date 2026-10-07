@@ -40,33 +40,29 @@ export const SKIPPABLE: ReadonlySet<StepId> = new Set<StepId>([
 export type StepOutcome = 'done' | 'skipped';
 export type Outcomes = Partial<Record<StepId, StepOutcome>>;
 
+// The open form on a habit/task/goal page, as the shell sees it. "Continue"
+// saves a ready form; a half-filled one would be lost, so it blocks.
+export interface FormStatus {
+  ready: boolean; // enough to save (a title; for a goal also a target)
+  dirty: boolean; // anything typed at all
+}
+
+// An empty form blocks only until something was added on the page; leaving
+// without adding anything is what "Skip this step" is for.
+export function continueBlocked(form: FormStatus | null, completed: boolean): boolean {
+  if (!form) return false;
+  return form.dirty ? !form.ready : !completed;
+}
+
 // "Step 3 of 8" counts only the real steps (not welcome / closing page).
 export function progress(steps: StepId[], index: number): { current: number; total: number } | null {
-  const real = steps.filter((s) => s !== 'welcome' && s !== 'done');
+  const real: StepId[] = steps.filter((s) => s !== 'welcome' && s !== 'done');
   const id = steps[index];
   const at = real.indexOf(id);
   return at < 0 ? null : { current: at + 1, total: real.length };
 }
 
 // ---- Habit step -------------------------------------------------------------
-
-export interface HabitSuggestion {
-  id: string;
-  icon: string; // habitIcons id
-  labelKey: string; // i18n key of the title
-  schedule: Recurrence | null; // null = every day
-}
-
-export const HABIT_SUGGESTIONS: HabitSuggestion[] = [
-  { id: 'water', icon: 'water', labelKey: 'wizard.habit.s.water', schedule: null },
-  { id: 'read', icon: 'book', labelKey: 'wizard.habit.s.read', schedule: null },
-  { id: 'walk', icon: 'run', labelKey: 'wizard.habit.s.walk', schedule: null },
-  { id: 'meditate', icon: 'meditate', labelKey: 'wizard.habit.s.meditate', schedule: null },
-  { id: 'sleep', icon: 'sleep', labelKey: 'wizard.habit.s.sleep', schedule: null },
-  { id: 'workout', icon: 'strength', labelKey: 'wizard.habit.s.workout', schedule: { freq: 'weekly', weekdays: [], timesPerWeek: 3 } },
-  { id: 'journal', icon: 'journal', labelKey: 'wizard.habit.s.journal', schedule: null },
-  { id: 'vitamin', icon: 'medication', labelKey: 'wizard.habit.s.vitamin', schedule: null },
-];
 
 export type HabitFrequency = 'daily' | 'weekdays' | 'threePerWeek';
 
@@ -85,20 +81,6 @@ export function scheduleFor(freq: HabitFrequency): Recurrence | null {
 export const REMINDER_PRESETS: (string | null)[] = [null, '08:00', '12:00', '18:00', '21:00'];
 
 // ---- Goal step --------------------------------------------------------------
-
-export interface GoalSuggestion {
-  id: string;
-  labelKey: string; // title
-  target: number;
-  unitKey: string; // i18n key of the unit text
-}
-
-export const GOAL_SUGGESTIONS: GoalSuggestion[] = [
-  { id: 'books', labelKey: 'wizard.goal.s.books', target: 12, unitKey: 'wizard.goal.u.books' },
-  { id: 'run', labelKey: 'wizard.goal.s.run', target: 100, unitKey: 'wizard.goal.u.km' },
-  { id: 'save', labelKey: 'wizard.goal.s.save', target: 5000, unitKey: 'wizard.goal.u.currency' },
-  { id: 'course', labelKey: 'wizard.goal.s.course', target: 30, unitKey: 'wizard.goal.u.hours' },
-];
 
 export const DEADLINE_PRESET_DAYS = [30, 90, 180, 365] as const;
 

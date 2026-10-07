@@ -1,11 +1,6 @@
-// SCALE TESTS — the real-world sizes of a user who's been active for over a year.
-//
-// WHY THIS EXISTS: two changes in the P2/P3 rounds added behavior specific to
-// large data — the Tasks screen's query limit (taskRepo.listForScreen) and
-// keeping bulk habit queries from exceeding SQLite's `IN (…)` bound-parameter
-// limit (helpers.chunk, SQL_PARAM_CHUNK). Both are the kind of bug that looks
-// silently correct on small data and only breaks BEYOND the limit — that's
-// why these tests deliberately run at sizes that EXCEED the limit.
+// A year-plus user's real sizes. The Tasks screen's limit
+// (taskRepo.listForScreen) and chunked IN (…) queries (helpers.chunk) only
+// break past their limits, so these tests deliberately exceed them.
 
 import { habitRepo } from '../repositories/habitRepo';
 import { subtaskRepo } from '../repositories/subtaskRepo';
@@ -42,8 +37,7 @@ describe('taskRepo.listForScreen — büyük görev listesi', () => {
 
     const list = taskRepo.listForScreen(userId, '2026-06-01');
 
-    // What the screen actually renders: 800 + 50, NOT ~2000 — this is the part
-    // that has to stay smooth without needing virtualization.
+    // 800 + 50 rendered, not ~2000.
     expect(list.length).toBe(ACTIVE + RECENT_COMPLETED);
     expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(OLD_COMPLETED);
 
@@ -77,8 +71,7 @@ describe('habitRepo — SQL_PARAM_CHUNK sınırını aşan alışkanlık sayıs�
       if (i % 3 === 0) {
         expect(states[habits[i].id]).toEqual({ amount: 0, completed: true });
       } else {
-        // An unmarked habit is absent from the result entirely (the contract
-        // the repo documents) — chunking must not break that.
+        // Unmarked habits stay absent across chunks.
         expect(states[habits[i].id]).toBeUndefined();
       }
     }
@@ -89,8 +82,7 @@ describe('habitRepo — SQL_PARAM_CHUNK sınırını aşan alışkanlık sayıs�
     const habits = Array.from({ length: COUNT }, (_, i) =>
       habitRepo.create({ user_id: userId, title: `A${i}` })
     );
-    // Specifically mark the habits RIGHT AROUND the chunk boundary — an
-    // off-by-one bug would drop a day into the wrong chunk exactly here.
+    // Right at the chunk boundary, where an off-by-one would show.
     const boundary = [SQL_PARAM_CHUNK - 1, SQL_PARAM_CHUNK, SQL_PARAM_CHUNK + 1];
     for (const i of boundary) habitRepo.toggleLog(habits[i].id, '2026-07-05', true);
 

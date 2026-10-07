@@ -309,7 +309,7 @@ describe('widgetTaskHandler', () => {
     expect((await readSnapshot())?.tasks?.map((t) => [t.id, t.completed])).toEqual([['market', true], ['mail', true]]);
     expect((render.mock.calls[0][0] as El).type).toBe(TasksWidget);
     const refreshed = mockRequestUpdate.mock.calls.map((c) => (c[0] as { widgetName: string }).widgetName).sort();
-    expect(refreshed).toEqual(['ErekCounter', 'ErekGoals', 'ErekQuickAdd', 'ErekToday']);
+    expect(refreshed).toEqual(['ErekCounter', 'ErekGoals', 'ErekHabitCheck', 'ErekHabitCount', 'ErekQuickAdd', 'ErekToday']);
   });
 
   it('ekleme/güncelleme olayında doğru widget çizilir', async () => {

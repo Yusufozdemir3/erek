@@ -1,8 +1,4 @@
-// Style factory for TaskForm — SPLIT OUT from src/ui/TaskForm.tsx (review
-// finding H1: form components were 600+ lines, most of it a style dictionary).
-//
-// PATTERN (see ThemeProvider): NO module-level StyleSheet.create — the factory
-// is called at render time so it can be regenerated when the theme changes.
+// TaskForm's styles, built per render from the theme.
 
 import { StyleSheet } from 'react-native';
 import type { Colors } from '@/ui/theme';
@@ -23,8 +19,6 @@ export const makeTaskFormStyles = (c: Colors) =>
       marginBottom: 12,
     },
     row: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-    // Title + mic. The input keeps its own bottom margin, so the counter
-    // below sits where it always did.
     titleRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
     titleInput: { flex: 1 },
     // Fields just filled by voice — same border weight, accent tint.
@@ -68,10 +62,10 @@ export const makeTaskFormStyles = (c: Colors) =>
     dateBtnText: { fontSize: 15, color: c.text },
     clearBtn: { paddingVertical: 12, paddingHorizontal: 14 },
     clearBtnText: { fontSize: 14, color: c.muted, fontWeight: '600' },
-    hint: { fontSize: 12, color: c.danger, marginTop: -6, marginBottom: 10 },
-    // Recurrence picker (same look as HabitForm's frequency picker). Wraps
-    // across lines since there are 6 options; flexBasis fits them in rows of three.
-    // Summary button showing the selected mode while collapsed; in the accent color when recurring.
+    hint: { fontSize: 12, color: c.faint, marginTop: -6, marginBottom: 10 },
+    // A real input problem (end time not after the start).
+    hintError: { fontSize: 12, color: c.danger, marginTop: -6, marginBottom: 10 },
+    // The collapsed recurrence button (accent-colored when recurring).
     repeatBtn: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -1,6 +1,5 @@
-// reassignLocalIds tests — the safety net for the "merge" flow.
-// A broken reference not caught here turns into bugs that are very hard to
-// diagnose in the field (e.g. a habit's logs become invisible, a reminder is orphaned).
+// reassignLocalIds — the safety net of the account merge: a reference left
+// pointing at an old id would hide a habit's logs or orphan a reminder.
 
 import { getDb } from '@/db/database';
 import { goalRepo } from '@/db/repositories/goalRepo';

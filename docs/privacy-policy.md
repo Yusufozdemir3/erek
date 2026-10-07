@@ -1,7 +1,7 @@
 # Gizlilik Politikası / Privacy Policy
 
 **Erek** ("Uygulama")
-Yürürlük tarihi / Effective date: **4 Ekim 2026 / October 4, 2026**
+Yürürlük tarihi / Effective date: **7 Ekim 2026 / October 7, 2026**
 
 ---
 
@@ -146,6 +146,8 @@ düğmesine bastığında telefonunuza bir bildirim gelir. Bunun için:
   sessize alma tercihleriniz de silinir.
 
 ### 4. Reklamlar
+
+**Reklamlar:**
 
 Uygulamada **Google AdMob** aracılığıyla tam ekran reklamlar gösterilir.
 Reklamlar yalnızca uygulama öne geldiğinde (açılış dahil) ve en fazla belirli
@@ -389,6 +391,8 @@ notification. For this:
   reminder records and mute settings.
 
 ### 4. Advertising
+
+**Advertising:**
 
 The app shows full-screen ads through **Google AdMob**. Ads are shown only
 when the app comes to the foreground (including app launch), and at most at a

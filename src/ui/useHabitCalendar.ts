@@ -1,16 +1,10 @@
-// Data/navigation logic for the "full calendar" section on the habit stats
-// screen. Can navigate month by month, forward/backward (backward only; can't
-// go to a future month). Produces a 7-column, Monday-first week grid for each
-// month; out-of-month cells are null (padding).
-
-// KNOWN LIMITATION: the Habit table has no real "creation date" field
-// (an empty start_date means "since the beginning," but when that beginning
-// was is unknown). So for a habit with no start_date, navigating far enough
-// back can show days before the habit even existed as "scheduled but missed"
-// (red) — the existing 90-day heatmap has the same limitation, this just makes
-// it more visible. Fully preventing it would require a new created_at field
-// (a schema migration); for now, navigation is limited to the last 24 months
-// to reduce the impact.
+// The habit stats screen's month calendar: Monday-first 7-column weeks
+// (out-of-month cells are null), browsable back up to 24 months — never into
+// the future.
+//
+// A habit without start_date has no known creation day, so old months can show
+// days before it existed as missed; the 24-month limit keeps that small (a fix
+// would need a created_at column).
 
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -24,14 +18,14 @@ export interface CalendarDay {
   date: string;
   scheduled: boolean;
   completed: boolean;
-  future: boolean; // after today — not "missed," just not yet lived
+  future: boolean; // not lived yet, so not missed
 }
 
 export interface HabitCalendar {
   habit: Habit | null;
   year: number;
-  month: number; // 0-11 (JS Date month)
-  weeks: (CalendarDay | null)[][]; // 7 cells per week (Mon..Sun); out-of-month = null
+  month: number; // 0-11
+  weeks: (CalendarDay | null)[][]; // Mon..Sun; out-of-month = null
   canGoPrev: boolean;
   canGoNext: boolean;
   goPrev: () => void;
@@ -46,7 +40,7 @@ function ymd(y: number, m: number, d: number): string {
   return `${y}-${pad2(m + 1)}-${pad2(d)}`;
 }
 
-// JS getDay() (0=Sunday..6=Saturday) -> Monday-first column (0..6).
+// JS getDay() -> Monday-first column.
 function mondayFirstIndex(jsDay: number): number {
   return (jsDay + 6) % 7;
 }
@@ -60,10 +54,8 @@ export function buildMonthWeeks(
   today: string
 ): (CalendarDay | null)[][] {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  // Under a QUOTA (X times a week) rule, no single day is individually due:
-  // an incomplete day must NOT be colored "missed" (red). So for quota habits,
-  // scheduled is only true on COMPLETED days — done days show up colored on
-  // the calendar, the rest appear neutral.
+  // A quota habit has no due days, so an undone day isn't "missed": only done
+  // days count as scheduled.
   const quota = isQuotaSchedule(h.schedule);
   const cells: CalendarDay[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
@@ -75,8 +67,7 @@ export function buildMonthWeeks(
     cells.push({ date, scheduled, completed, future: date > today });
   }
 
-  // Add leading padding (null) based on where the 1st of the month falls in
-  // the week; also pad the end until the length is a multiple of 7.
+  // Pad to whole weeks.
   const leadPad = mondayFirstIndex(new Date(year, month, 1).getDay());
   const grid: (CalendarDay | null)[] = [...Array(leadPad).fill(null), ...cells];
   while (grid.length % 7 !== 0) grid.push(null);
@@ -87,7 +78,7 @@ export function buildMonthWeeks(
 }
 
 function useMonthCursor() {
-  const [monthOffset, setMonthOffset] = useState(0); // 0 = the current month
+  const [monthOffset, setMonthOffset] = useState(0); // 0 = this month
   const today = todayDate();
   const now = new Date(`${today}T00:00:00`);
   const base = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);

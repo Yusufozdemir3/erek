@@ -21,7 +21,7 @@ Erek is an offline-first habit, task and goal tracker built with Expo and React 
 - **Tasks** — priority, due date and time, subtasks, and recurring tasks that automatically roll to their next due date on completion.
 - **Goals** — numeric goals (e.g. read 200 pages) or milestone lists, with pace/ETA projections. A habit can be linked to a goal so completing it advances the goal automatically.
 - **Reminders** — local notifications for habits, tasks and goals, with configurable sound and vibration.
-- **Voice** — add a task by voice ("tomorrow at 7 pm call mom"; on-device recognition when the phone has it, online only after a one-time consent), and check habits off by voice on Today ("I drank water") with Undo. Sentences are parsed on the phone by fixed rules; no audio is stored.
+- **Voice** — add a task by voice ("tomorrow at 7 pm call mom"; on-device recognition when the phone has it, online only after a one-time consent). Sentences are parsed on the phone by fixed rules; no audio is stored.
 - **Home screen widgets** — three Android widgets: Today (tap a habit to check it off), Counter (+1 for numeric habits) and Tasks (tap to complete). Taps work with the app closed: the widget queues them and the app writes them to SQLite.
 - **Weekly review** — completion rate for the last 7 days against the week before, a bar per day, best and neglected habit; a card on Sunday/Monday.
 - **Friends & sharing** — with an account, share a habit, a task (with its subtasks) or a goal with a friend; friend nudges arrive as push notifications.

@@ -1,8 +1,6 @@
-// "Privacy and offline" sub-screen of Profile: what is kept where RIGHT NOW,
-// and which features need a connection. Every sentence comes from the phone's
-// real state (account, mic/notification permission, voice consent) through
-// lib/privacySummary.ts — nothing here is a fixed marketing line. The header
-// title comes from the root layout's native header.
+// Profile › Privacy and offline: what is kept where right now and what needs a
+// connection, every sentence derived from the phone's real state
+// (lib/privacySummary.ts) — no fixed marketing lines.
 
 import { useCallback, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';

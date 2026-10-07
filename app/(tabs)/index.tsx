@@ -1,9 +1,6 @@
-// "Today" tab — the daily summary screen.
-// Two sections stacked: (1) tasks due that day, (2) daily habits + streak.
-// No adding here; task/habit adding lives on their own tabs. This screen is
-// only for viewing/checking off.
-// Tapping the date opens the calendar; you can jump to another day and check it off.
-// Architecture rule: no SQL; only taskRepo / habitRepo are called.
+// Today tab: the day's tasks and scheduled habits in one list, to check off.
+// The week strip and the date (→ calendar) move to other days; adding happens
+// from the ＋ menu.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -11,29 +8,23 @@ import { requestAdd } from '@/lib/addRequest';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { goalRepo, habitRepo, reminderRepo, subtaskRepo, taskRepo } from '@/db';
+import { habitRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
-import { buildScheduleLabels, extractTime, isTimeUnit, scheduleLabel, shiftYmd, toYmd, todayDate } from '@/lib/helpers';
-import { notifySuccess, tapLight, tapMedium } from '@/lib/haptics';
+import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
+import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
-import { cancelTaskReminders, refreshTaskReminders, scheduleGoalReminders } from '@/lib/notifications';
+import { refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
-import { useTimer } from '@/ui/TimerProvider';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView, type SkippedHabitView } from '@/ui/useTodayData';
-import { VoiceCommandBar, type CommandNotice } from '@/ui/VoiceCommandBar';
 import { ReviewCard } from '@/ui/ReviewCard';
 import { loadReview } from '@/ui/reviewData';
-import { parseVoiceCommand, type Target } from '@/lib/voiceCommand';
 import { isReviewDay } from '@/lib/weeklyReview';
-import { parseTask } from '@/lib/quickAdd/parseTask';
-import { voicePatch } from '@/ui/voiceTaskPatch';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { WeekStrip } from '@/ui/WeekStrip';
 import { promptUnlinkGoalIfCompleted } from '@/ui/goalCompletionPrompt';
-import { fmtGoalValue } from '@/ui/goal/goalFormat';
 import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { DailySummary } from '@/ui/DailySummary';
 import { EmptyState } from '@/ui/EmptyState';
@@ -54,12 +45,11 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { Lang } from '@/i18n/translations';
 import { DATE_LOCALE, fullDateLabel, PRIORITY_COLOR, shortDate, type Colors } from '@/ui/theme';
 
-// List cards re-sort once completed (completed items sink to the bottom); each
-// card is wrapped in this layout transition so the position change animates smoothly.
+// Cards re-sort as they complete; this animates the move.
 const LIST_LAYOUT = LinearTransition.duration(260);
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-// Title: "Today" (translated) if it's today, otherwise that day's name (e.g. "Monday").
+// "Today", or the weekday's name.
 function titleFor(ymd: string, today: string, lang: Lang, todayLabel: string): string {
   if (ymd === today) return todayLabel;
   const locale = DATE_LOCALE[lang];
@@ -71,22 +61,19 @@ type TypeFilter = 'all' | 'task' | 'habit';
 
 export default function TodayScreen() {
   const { colors, shared } = useTheme();
-  // Note: i18n's `t` is aliased to `tr` so it doesn't clash with the `t` (task) map variable.
+  // `tr`, since `t` names tasks below.
   const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
-  // selectedDate is shared (AppData): the central ＋ menu reads it from here to
-  // add a new task with the viewed day as its default date.
+  // Shared so the ＋ menu can default a new task to the viewed day.
   const { user, selectedDate, setSelectedDate } = useAppData();
-  const timer = useTimer();
   const guide = useFeatureGuide('today');
   const today = todayDate();
 
   const [showPicker, setShowPicker] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  // A task shared WITH me that has subtasks: opens a window to tick them.
+  // A task shared WITH me with subtasks opens this to tick them.
   const [viewingShared, setViewingShared] = useState<Task | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  // Finished items sit in a collapsed "Completed (N)" section (like the Tasks tab).
   const [completedOpen, setCompletedOpen] = useState(false);
   // Confetti: bumping the id plays one burst.
   const [burstId, setBurstId] = useState(0);
@@ -96,14 +83,12 @@ export default function TodayScreen() {
   useSharedTasksFreshness(reload);
   const { refreshing, onRefresh } = usePullRefresh(reload);
 
-  // Filters only narrow the view — the summary (DailySummary) and the real
-  // "is the day empty" state are always computed against the full list.
+  // The filter narrows only the list; the summary and "empty day" use everything.
   const showTasks = typeFilter !== 'habit';
   const showHabits = typeFilter !== 'task';
   const filteredTasks = showTasks ? tasks : [];
   const filteredHabits = showHabits ? habits : [];
-  // Only plain check-off habits fold away once done; counter/timer habits stay
-  // put (a timer keeps running past its target, a stepper can keep counting).
+  // Only plain habits fold away when done; counters and timers can go on.
   const isFoldable = (h: HabitView) => h.completed && h.kind !== 'timer' && h.target == null;
   const openTasks = filteredTasks.filter((t) => t.completed_at === null);
   const doneTasks = filteredTasks.filter((t) => t.completed_at !== null);
@@ -115,17 +100,14 @@ export default function TodayScreen() {
     !dayIsEmpty && filteredTasks.length === 0 && filteredHabits.length === 0;
 
   const isToday = selectedDate === today;
-  // Habits can't be checked off while viewing a future day — counting an
-  // unlived day as "done" would make streaks and history meaningless.
+  // A future day can't be checked off.
   const isFuture = selectedDate > today;
 
-  // Completion counts for today's top summary.
   const habitsDone = habits.filter((h) => h.completed).length;
   const tasksDone = tasks.filter((t) => t.completed_at !== null).length;
 
-  // CELEBRATION — confetti when the day becomes fully done, or a habit earns a
-  // streak medal. Armed by the user's own check-off (so merely opening an
-  // already-complete day never fires), judged once the reloaded data arrives.
+  // Confetti when the day becomes complete or a habit earns a badge — armed by
+  // the user's own check-off, judged when the reloaded data arrives.
   const medalDays = (h: HabitView) => (h.weekQuota ? h.streak * 7 : h.streak);
   const dayFullyDone = () =>
     tasks.length + habits.length > 0 &&
@@ -151,12 +133,8 @@ export default function TodayScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, habits]);
 
-  // Label set for the recurring-task card's "🔁 Every day / Mon·Wed·Fri /
-  // every 3 days ..." badge — see helpers.buildScheduleLabels.
   const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
-  // Someone else's task shared with me: the check-off goes to the server (my
-  // only write path); editing stays with the owner.
   const sharedLabel = (t: Task): string | null => {
     const uid = t.shared_owner_uid ?? t.shared_with_id;
     return uid ? (friendNames.get(uid) ?? tr('friends.unknownName')) : null;
@@ -183,9 +161,7 @@ export default function TodayScreen() {
     if (completing) armCelebration();
     taskRepo.setCompleted(t.id, completing);
     completing ? notifySuccess() : tapLight();
-    // Completing a recurring task may fast-forward it to its next date instead
-    // of being marked done — in that case the task is still not completed but
-    // has a new date; the decision is based on the current DB state (see refreshTaskReminders).
+    // A recurring task may have moved instead of completing.
     refreshTaskReminders(t.id);
     reload();
   };
@@ -197,8 +173,7 @@ export default function TodayScreen() {
     const goalDone = habitRepo.toggleLog(h.id, selectedDate, completing);
     completing ? notifySuccess() : tapLight();
     reload();
-    // Checking off uses a local reload (dataVersion doesn't bump); also refresh
-    // the home screen widget. refreshWidget always computes for TODAY (not selectedDate).
+    // A local reload doesn't bump dataVersion, so refresh the widget here.
     refreshWidget(user.id);
     promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
   };
@@ -213,8 +188,7 @@ export default function TodayScreen() {
     promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
   };
 
-  // An absolute value typed on the keyboard — handed off to the existing
-  // delta-based incrementAmount by computing the difference; no separate repo function needed.
+  // A typed total, applied as the difference.
   const setHabitAmount = (h: HabitView, value: number) => {
     if (isFuture) return;
     if (value > h.amount) armCelebration(h);
@@ -226,263 +200,16 @@ export default function TodayScreen() {
 
   const onPickDate = (picked: Date) => setSelectedDate(toYmd(picked));
 
-  // The review card needs the rate (and the change from the week before) to
-  // preview; it's computed on review days only (a handful of queries once per
-  // data change). null = nothing to show.
+  // The review card's preview, computed on review days only; null = nothing to show.
   const reviewPreview = useMemo(
     () => {
       if (!isToday || !isReviewDay(today)) return null;
       const r = loadReview(user.id, today);
       return r.rate === null ? null : { rate: r.rate, delta: r.delta };
     },
-    // habits/tasks change whenever the underlying data does (reload sets them)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isToday, today, user.id, habits, tasks]
   );
-
-  // — Voice commands ("su içtim") — only offered on today's screen.
-  // Runs a command the parser matched to one of today's items and describes
-  // what happened; the Undo reverses exactly that write.
-  const applyVoiceTarget = (target: Target): CommandNotice => {
-    if (target.kind === 'reopen') {
-      const t = tasks.find((x) => x.id === target.task.id);
-      if (!t || t.completed_at === null) return { text: tr('voiceCmd.notDoneYet', { title: target.task.title }) };
-      taskRepo.setCompleted(t.id, false);
-      tapLight();
-      refreshTaskReminders(t.id);
-      reload();
-      return {
-        text: tr('voiceCmd.taskReopened', { title: t.title }),
-        undo: () => {
-          taskRepo.setCompleted(t.id, true);
-          refreshTaskReminders(t.id);
-          reload();
-        },
-      };
-    }
-    if (target.kind === 'reschedule') {
-      const t = tasks.find((x) => x.id === target.task.id);
-      if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };
-      if (t.recurrence) return { text: tr('voiceCmd.postponeRecurring', { title: t.title }) };
-      // A spoken time wins; otherwise keep the task's own time of day.
-      const time = target.time ?? extractTime(t.due_date);
-      const before = t.due_date;
-      taskRepo.update(t.id, { due_date: time ? `${target.date}T${time}:00` : target.date });
-      notifySuccess();
-      refreshTaskReminders(t.id);
-      reload();
-      return {
-        text: tr('voiceCmd.taskRescheduled', { title: t.title, date: shortDate(target.date, lang) }),
-        undo: () => {
-          taskRepo.update(t.id, { due_date: before });
-          refreshTaskReminders(t.id);
-          reload();
-        },
-      };
-    }
-    if (target.kind === 'timer') {
-      const h = habits.find((x) => x.id === target.habit.id);
-      if (!h || h.kind !== 'timer' || !h.target) return { text: tr('voiceCmd.notUnderstood') };
-      if (timer.isRunning('habit', h.id)) return { text: tr('voiceCmd.timerAlready', { title: h.title }) };
-      timer.start('habit', h.id);
-      tapMedium();
-      return { text: tr('voiceCmd.timerStarted', { title: h.title }) };
-    }
-    if (target.kind === 'goal') {
-      const g = goalRepo.getById(target.goal.id);
-      if (!g || g.goal_type !== 'numeric') return { text: tr('voiceCmd.notUnderstood') };
-      // A time goal stores seconds; people say minutes.
-      const delta = isTimeUnit(g.unit) ? target.amount * 60 : target.amount;
-      const applied = goalRepo.addProgress(g.id, delta);
-      if (applied === 0) return { text: tr('voiceCmd.notUnderstood') };
-      const after = goalRepo.getById(g.id);
-      after && goalRepo.progressRatio(after) >= 1 ? notifySuccess() : tapLight();
-      const refreshReminder = () => {
-        const cur = goalRepo.getById(g.id);
-        if (cur) scheduleGoalReminders(cur, reminderRepo.listByEntity('goal', g.id)).catch(() => {});
-      };
-      refreshReminder();
-      reload();
-      return {
-        text: tr('voiceCmd.goalAdded', { title: g.title, n: fmtGoalValue(applied, g.unit) }),
-        undo: () => {
-          goalRepo.addProgress(g.id, -applied);
-          refreshReminder();
-          reload();
-        },
-      };
-    }
-    if (target.kind === 'postpone') {
-      const t = tasks.find((x) => x.id === target.task.id);
-      if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };
-      if (t.recurrence) return { text: tr('voiceCmd.postponeRecurring', { title: t.title }) };
-      // Keep the time of day, move only the date.
-      const time = extractTime(t.due_date);
-      const next = (d: string) => (time ? `${d}T${time}:00` : d);
-      taskRepo.update(t.id, { due_date: next(shiftYmd(today, 1)) });
-      notifySuccess();
-      refreshTaskReminders(t.id);
-      reload();
-      const before = t.due_date;
-      return {
-        text: tr('voiceCmd.taskPostponed', { title: t.title }),
-        undo: () => {
-          taskRepo.update(t.id, { due_date: before });
-          refreshTaskReminders(t.id);
-          reload();
-        },
-      };
-    }
-    if (target.kind === 'task') {
-      const t = tasks.find((x) => x.id === target.task.id);
-      if (!t || t.completed_at !== null) return { text: tr('voiceCmd.alreadyDone', { title: target.task.title }) };
-      armCelebration();
-      taskRepo.setCompleted(t.id, true);
-      notifySuccess();
-      refreshTaskReminders(t.id);
-      reload();
-      // A recurring task jumps to its next date instead of staying completed;
-      // reopening it would not move the date back, so no Undo is offered.
-      const undo = t.recurrence
-        ? undefined
-        : () => {
-            taskRepo.setCompleted(t.id, false);
-            refreshTaskReminders(t.id);
-            reload();
-          };
-      return { text: tr('voiceCmd.taskDone', { title: t.title }), undo };
-    }
-    const h = habits.find((x) => x.id === target.habit.id);
-    if (!h) return { text: tr('voiceCmd.notUnderstood') };
-    if (h.target != null && h.kind !== 'timer') {
-      armCelebration(h);
-      const goalDone = habitRepo.incrementAmount(h.id, today, target.amount, h.target);
-      notifySuccess();
-      reload();
-      refreshWidget(user.id);
-      promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
-      return {
-        text: tr('voiceCmd.habitAmount', { title: h.title, n: target.amount }),
-        undo: () => {
-          habitRepo.incrementAmount(h.id, today, -target.amount, h.target);
-          reload();
-          refreshWidget(user.id);
-        },
-      };
-    }
-    if (h.completed) return { text: tr('voiceCmd.alreadyDone', { title: h.title }) };
-    armCelebration(h);
-    const goalDone = habitRepo.toggleLog(h.id, today, true);
-    notifySuccess();
-    reload();
-    refreshWidget(user.id);
-    promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
-    return {
-      text: tr('voiceCmd.habitDone', { title: h.title }),
-      undo: () => {
-        habitRepo.toggleLog(h.id, today, false);
-        reload();
-        refreshWidget(user.id);
-      },
-    };
-  };
-
-  // A spoken sentence that wasn't a command becomes a task, parsed with the same
-  // rules as the task form's mic (date, time, priority, "remind me").
-  const addSpokenTask = (text: string): CommandNotice => {
-    const patch = voicePatch(parseTask(text, lang, new Date()), { dueDate: today, remindTimes: [] }, today);
-    const title = (patch.title ?? text).trim() || text.trim();
-    const date = patch.dueDate ?? today;
-    const created = taskRepo.create({
-      user_id: user.id,
-      title,
-      priority: patch.priority ?? 'medium',
-      due_date: patch.dueTime ? `${date}T${patch.dueTime}:00` : date,
-    });
-    if (patch.remindTimes?.length) reminderRepo.replaceAll('task', created.id, patch.remindTimes);
-    refreshTaskReminders(created.id);
-    notifySuccess();
-    reload();
-    return {
-      text: tr('voiceCmd.taskAdded', { title }),
-      undo: () => {
-        taskRepo.softDelete(created.id);
-        cancelTaskReminders(created.id).catch(() => {});
-        reload();
-      },
-    };
-  };
-
-  // "Stop the timer": whatever runs now, or the named habit's timer.
-  const stopVoiceTimer = (habitId?: string): CommandNotice => {
-    const running = timer.active();
-    if (!running || running.kind !== 'habit' || (habitId && running.id !== habitId)) {
-      return { text: tr('voiceCmd.timerNone') };
-    }
-    const title = habits.find((h) => h.id === running.id)?.title ?? '';
-    timer.pause();
-    tapMedium();
-    return { text: tr('voiceCmd.timerStopped', { title }) };
-  };
-
-  // "What's left today?": counts plus the first few names. Reads only.
-  const todaySummary = (): CommandNotice => {
-    const openTasks = tasks.filter((t) => t.completed_at === null);
-    const openHabits = habits.filter((h) => !h.completed);
-    if (openTasks.length === 0 && openHabits.length === 0) return { text: tr('voiceCmd.queryNothing') };
-    const names = [...openTasks.map((t) => t.title), ...openHabits.map((h) => h.title)].slice(0, 3).join(', ');
-    return { text: tr('voiceCmd.querySummary', { tasks: openTasks.length, habits: openHabits.length, names }) };
-  };
-
-  const handleVoiceCommand = (text: string, show: (n: CommandNotice) => void) => {
-    const cmd = parseVoiceCommand(text, lang, {
-      habits: habits.map((h) => ({ id: h.id, title: h.title, kind: h.kind })),
-      // Someone else's shared task is checked off through the server, never by voice.
-      tasks: tasks.filter((t) => t.completed_at === null && !t.shared_owner_uid).map((t) => ({ id: t.id, title: t.title })),
-      doneTasks: tasks
-        .filter((t) => t.completed_at !== null && !t.shared_owner_uid && !t.recurrence)
-        .map((t) => ({ id: t.id, title: t.title })),
-      goals: goalRepo
-        .listByUser(user.id)
-        .filter((g) => g.goal_type === 'numeric')
-        .map((g) => ({ id: g.id, title: g.title })),
-    });
-    if (cmd.kind === 'none') {
-      // Not a command: it's probably a new to-do. Ask before creating anything.
-      Alert.alert(
-        tr('voiceCmd.addAsTaskTitle'),
-        `“${text}”`,
-        [
-          { text: tr('common.cancel'), style: 'cancel' },
-          { text: tr('voiceCmd.addAsTask'), onPress: () => show(addSpokenTask(text)) },
-        ],
-        { cancelable: true }
-      );
-      return;
-    }
-    if (cmd.kind === 'query') {
-      show(todaySummary());
-      return;
-    }
-    if (cmd.kind === 'stopTimer') {
-      show(stopVoiceTimer(cmd.habitId));
-      return;
-    }
-    if (cmd.kind === 'one') {
-      show(applyVoiceTarget(cmd.target));
-      return;
-    }
-    // Android shows at most three buttons: tapping outside cancels.
-    Alert.alert(
-      tr('voiceCmd.chooseTitle'),
-      undefined,
-      cmd.options.map((o) => ({
-        text: o.kind === 'habit' || o.kind === 'timer' ? o.habit.title : o.kind === 'goal' ? o.goal.title : o.task.title,
-        onPress: () => show(applyVoiceTarget(o)),
-      })),
-      { cancelable: true }
-    );
-  };
 
   const renderTask = (t: Task) => {
     const done = t.completed_at !== null;
@@ -516,7 +243,7 @@ export default function TodayScreen() {
         items={[
           sharedLabel(t) ? { text: sharedLabel(t)!, icon: 'users' } : null,
           t.recurrence ? { text: scheduleLabel(t.recurrence, schedLabels), icon: 'repeat' } : null,
-          // Carried over from an earlier day and still open: say since when, in the danger color.
+          // Carried over and still open: since when, in red.
           !done && t.due_date && t.due_date.slice(0, 10) < today
             ? { text: shortDate(t.due_date, lang), icon: 'calendar', danger: true }
             : null,
@@ -534,7 +261,6 @@ export default function TodayScreen() {
     );
   };
 
-  // A rested habit: dimmed, with a way to take the rest day back.
   const renderSkipped = (h: SkippedHabitView) => (
     <Animated.View key={`skip-${h.id}`} layout={LIST_LAYOUT} style={[shared.card, styles.doneCard]}>
       <HabitToggle icon={h.icon} color={h.color} completed={false} />
@@ -560,7 +286,6 @@ export default function TodayScreen() {
 
   const renderHabit = (h: HabitView) =>
     h.kind === 'timer' ? (
-      // Timer habit: read-only progress (control is in Phase B).
       <Animated.View
         key={h.id}
         layout={LIST_LAYOUT}
@@ -579,7 +304,6 @@ export default function TodayScreen() {
         />
       </Animated.View>
     ) : h.target != null ? (
-      // Numeric habit: enter an amount with the stepper (disabled on a future day).
       <Animated.View
         key={h.id}
         layout={LIST_LAYOUT}
@@ -600,7 +324,6 @@ export default function TodayScreen() {
         />
       </Animated.View>
     ) : (
-      // Binary habit: tap the card to check it off (disabled on a future day).
       <AnimatedPressable
         key={h.id}
         layout={LIST_LAYOUT}
@@ -615,8 +338,7 @@ export default function TodayScreen() {
         <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
           {h.title}
         </Text>
-        {/* Quota habit: weekly progress ("2/3"). Since the streak is
-            weekly, the badge threshold is scaled by week×7. */}
+        {/* Quota habits: the week's "2/3"; their streak is in weeks. */}
         {h.weekQuota && (
           <Text style={styles.quotaChip}>
             {h.weekQuota.done}/{h.weekQuota.target}
@@ -654,7 +376,6 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* Tap the date -> calendar opens (no icon, just text) */}
         <Pressable onPress={() => setShowPicker(true)} hitSlop={6}>
           <Text style={[shared.subtitle, styles.dateLink, { textTransform: 'capitalize' }]}>
             {fullDateLabel(selectedDate, lang)}
@@ -677,7 +398,6 @@ export default function TodayScreen() {
           onConfirm={onPickDate}
         />
 
-        {/* Progress summary for the day — only meaningful for today. */}
         {isToday && (
           <DailySummary
             habitsDone={habitsDone}
@@ -687,14 +407,8 @@ export default function TodayScreen() {
           />
         )}
 
-        {/* Sunday/Monday: the weekly review is ready (hidden once opened or dismissed). */}
         {isToday && <ReviewCard today={today} preview={reviewPreview} />}
 
-        {/* Check off by voice — hidden when the device has no speech recognition. */}
-        {isToday && !dayIsEmpty && <VoiceCommandBar onHeard={handleVoiceCommand} />}
-
-        {/* Type filter — only narrows the list view. "Hide completed" is now
-            set as a persistent preference on Profile. */}
         {!dayIsEmpty && (
           <View style={styles.filterRow}>
             {(['all', 'task', 'habit'] as const).map((f) => {
@@ -718,15 +432,27 @@ export default function TodayScreen() {
           </View>
         )}
 
-        {/* Tasks and habits in a single list, no separate heading. A priority
-            dot marks a task, a 🔥 streak marks a habit. */}
         <View style={styles.list}>
           {dayIsEmpty ? (
-            <EmptyState
-              icon={isToday ? 'celebrate' : 'moon'}
-              title={isToday ? tr('empty.todayTitle') : tr('empty.otherDayTitle')}
-              subtitle={isToday ? tr('empty.todayBody') : undefined}
-            />
+            <>
+              <EmptyState
+                icon={isToday ? 'celebrate' : 'moon'}
+                title={isToday ? tr('empty.todayTitle') : tr('empty.otherDayTitle')}
+                subtitle={isToday ? tr('empty.todayBody') : undefined}
+              />
+              {/* Only on an empty day; otherwise the ＋ button is always at hand. */}
+              {isToday && (
+                <Pressable
+                  style={styles.addRow}
+                  onPress={() => requestAdd('menu')}
+                  accessibilityRole="button"
+                  accessibilityLabel={tr('today.addRow')}
+                >
+                  <Feather name="plus" size={18} color={colors.primary} />
+                  <Text style={styles.addRowText}>{tr('today.addRow')}</Text>
+                </Pressable>
+              )}
+            </>
           ) : filterHidesEverything ? (
             <EmptyState icon="search" title={tr('today.filterEmpty')} />
           ) : (
@@ -754,19 +480,6 @@ export default function TodayScreen() {
               {completedOpen && doneTasks.map(renderTask)}
               {completedOpen && doneHabits.map(renderHabit)}
               {skippedHabits.map(renderSkipped)}
-              {/* The list rarely fills the screen; this closes it with the obvious next step
-                  and opens the same add menu as the ＋ button. */}
-              {isToday && (
-                <Pressable
-                  style={styles.addRow}
-                  onPress={() => requestAdd('menu')}
-                  accessibilityRole="button"
-                  accessibilityLabel={tr('today.addRow')}
-                >
-                  <Feather name="plus" size={18} color={colors.primary} />
-                  <Text style={styles.addRowText}>{tr('today.addRow')}</Text>
-                </Pressable>
-              )}
             </>
           )}
         </View>
@@ -807,7 +520,6 @@ const makeStyles = (c: Colors) =>
     addRowText: { fontSize: 14, fontWeight: '600', color: c.primary },
     skipNote: { fontSize: 12, color: c.muted, marginTop: 2 },
     skipUndo: { fontSize: 13, fontWeight: '700', color: c.primary, paddingVertical: 8 },
-    // A finished habit recedes so what's still to do stands out.
     doneCard: { opacity: 0.6 },
     dateLink: { color: c.primary, fontWeight: '600' },
     filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 },
@@ -832,7 +544,6 @@ const makeStyles = (c: Colors) =>
       marginBottom: 4,
     },
     sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.muted },
-    // The quota habit's "2/3" weekly progress indicator (on the right side of the card).
     quotaChip: {
       fontSize: 13,
       fontWeight: '800',

@@ -3,7 +3,7 @@
 
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, waitFor } from '@testing-library/react-native';
 import DataScreen from '../../../app/data';
 import { renderUI } from '@/test/renderWithProviders';
 import { exportFileName, shareDataExport } from '@/lib/shareExport';
@@ -69,6 +69,7 @@ describe('Verilerim ekranı: dışa aktar', () => {
     const u = await renderUI(<DataScreen />);
     expect(await u.findByText('Henüz dışa aktarmadın.')).toBeTruthy();
     fireEvent.press(u.getByLabelText('Verilerimi dışa aktar'));
+    await act(async () => {});
     await waitFor(() => expect(u.queryByText('Henüz dışa aktarmadın.')).toBeNull());
     expect(u.getByText(/Son dışa aktarma:/)).toBeTruthy();
   });
