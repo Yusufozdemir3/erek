@@ -374,6 +374,12 @@ export const en: Dict = {
   'timer.stripPauseA11y': 'Pause the running timer',
   'timer.longPressHint': 'Tip: long-press the ＋ button to start a timer.',
   'habit.decreaseA11y': 'Decrease amount',
+  'timer.notifChannel': 'Running timer',
+  'timer.notifRunning': 'Running',
+  'timer.notifPaused': 'Paused · {time}',
+  'timer.notifPause': 'Pause',
+  'timer.notifFinish': 'Finish',
+  'timer.notifResume': 'Resume',
   'habit.increaseA11y': 'Increase amount',
 
 

@@ -390,6 +390,12 @@ export const tr: Dict = {
   'timer.stripPauseA11y': 'Çalışan zamanlayıcıyı duraklat',
   'timer.longPressHint': 'İpucu: ＋ butonuna uzun basarak zamanlayıcı başlatabilirsin.',
   'habit.decreaseA11y': 'Miktarı azalt',
+  'timer.notifChannel': 'Çalışan zamanlayıcı',
+  'timer.notifRunning': 'Çalışıyor',
+  'timer.notifPaused': 'Duraklatıldı · {time}',
+  'timer.notifPause': 'Duraklat',
+  'timer.notifFinish': 'Bitir',
+  'timer.notifResume': 'Devam',
   'habit.increaseA11y': 'Miktarı artır',
 
   // — Login screen (Google only) —

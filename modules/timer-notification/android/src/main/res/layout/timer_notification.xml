@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors the in-app TimerStrip: colored border, round icon, title, clock, round pause button. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/timer_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="52dp">
+
+  <ImageView
+      android:id="@+id/timer_border"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:scaleType="fitXY"
+      android:src="@drawable/timer_card" />
+
+  <ImageView
+      android:id="@+id/timer_fill"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:layout_margin="1dp"
+      android:scaleType="fitXY"
+      android:src="@drawable/timer_card" />
+
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:gravity="center_vertical"
+      android:minHeight="52dp"
+      android:orientation="horizontal"
+      android:paddingStart="10dp"
+      android:paddingEnd="10dp"
+      android:paddingTop="8dp"
+      android:paddingBottom="8dp">
+
+    <FrameLayout
+        android:layout_width="28dp"
+        android:layout_height="28dp">
+      <ImageView
+          android:id="@+id/timer_icon_fill"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:src="@drawable/timer_oval" />
+      <ImageView
+          android:id="@+id/timer_icon_ring"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:src="@drawable/timer_ring" />
+      <ImageView
+          android:id="@+id/timer_icon_glyph"
+          android:layout_width="14dp"
+          android:layout_height="14dp"
+          android:layout_gravity="center"
+          android:src="@drawable/ic_timer_notification" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/timer_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <Chronometer
+        android:id="@+id/timer_chrono"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/timer_clock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <FrameLayout
+        android:id="@+id/timer_stop"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="8dp">
+      <ImageView
+          android:id="@+id/timer_stop_bg"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:src="@drawable/timer_oval" />
+      <TextView
+          android:id="@+id/timer_stop_text"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:gravity="center"
+          android:text="■"
+          android:textSize="12sp"
+          android:textStyle="bold" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/timer_button"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="10dp">
+      <ImageView
+          android:id="@+id/timer_button_bg"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:src="@drawable/timer_oval" />
+      <TextView
+          android:id="@+id/timer_button_text"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:gravity="center"
+          android:textSize="11sp"
+          android:textStyle="bold" />
+    </FrameLayout>
+  </LinearLayout>
+</FrameLayout>

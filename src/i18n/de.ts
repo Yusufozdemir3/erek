@@ -374,6 +374,12 @@ export const de: Dict = {
   'timer.stripPauseA11y': 'Laufenden Timer pausieren',
   'timer.longPressHint': 'Tipp: Lange auf den ＋ Button drücken, um einen Timer zu starten.',
   'habit.decreaseA11y': 'Menge verringern',
+  'timer.notifChannel': 'Laufender Timer',
+  'timer.notifRunning': 'Läuft',
+  'timer.notifPaused': 'Pausiert · {time}',
+  'timer.notifPause': 'Pause',
+  'timer.notifFinish': 'Beenden',
+  'timer.notifResume': 'Fortsetzen',
   'habit.increaseA11y': 'Menge erhöhen',
 
 
