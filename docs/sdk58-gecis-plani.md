@@ -20,12 +20,22 @@ giden tek yol SDK 58.**
 
 ## 2. Zamanlama
 
-SDK 58 şu an **beta**: 15 Eylül 2026'da duyuruldu, beta 3–4 hafta sürecek;
-kararlı sürüm RN 0.88 çıkınca, hemen ardından gelecek. `npm`'de `latest` hâlâ
-SDK 57. Tam değişiklik notu da kararlıyla birlikte yayınlanacak (SDK 58
-changelog sayfası şu an 404). → **SDK 58 kararlı olunca (tahminen Ekim sonu –
-Kasım) 53'ten doğrudan 58'e geçmek mantıklı.** Ara sürümleri (54–57) tek tek
-uygulamaya gerek yok; ama her birinin kırıcı değişiklikleri birikir (bölüm 4).
+SDK 58 şu an **beta**: 15 Eylül 2026'da duyuruldu. Expo'nun yazdığı: beta "üç ila
+dört hafta sürecek"; kararlıya "React Native 0.88 çıkınca" geçilecek, SDK 58
+"hemen ardından" yayınlanacak. **Tarih verilmiş değil**; hafta sayısı yalnız
+bir öngörü, asıl koşul RN 0.88'in kararlı çıkması.
+
+RN 0.88 durumu (npm, 2026-10-08): rc.0 8 Eyl, rc.1 15 Eyl, rc.2 21 Eyl, rc.3 28
+Eyl, rc.4 6 Eki; hâlâ RC. Önceki sürümler rc.0'dan kararlıya ~5 hafta sürdü
+(0.85: 4 Mar→7 Nis, 0.86: 6 May→9 Haz, 0.87: 8 Tem→11 Ağu) → 0.88 kararlı
+tahmini **12–20 Ekim**; ek bir RC bunu öteleyebilir. `npm`'de `latest` hâlâ SDK 57;
+SDK 58 tam changelog sayfası kararlıyla birlikte gelecek (şu an 404).
+
+→ **Ekim sonu / Kasım başı, kararlı çıkınca netleşir.** Kararlı çıkınca da
+hemen değil, ilk düzeltme sürümlerini (58.0.x) ve üçüncü taraf paketlerin
+(widget, reklam, satın alma) uyumunu birkaç hafta bekleyip 53'ten doğrudan
+58'e geçmek mantıklı. Ara sürümleri (54–57) tek tek uygulamaya gerek yok; ama
+her birinin kırıcı değişiklikleri birikir (bölüm 4).
 
 ## 3. Paket karşılaştırması (SDK 58'in `bundledNativeModules.json`'ı)
 
@@ -153,7 +163,7 @@ kenardan kenara düzen.
 
 ## 8. Riskler
 
-- SDK 58 beta + RN 0.88 RC: kararlıyı beklemek bu yüzden şart.
+- SDK 58 beta + RN 0.88 RC: kararlıyı (ve ilk düzeltme sürümlerini) beklemek şart.
 - Reanimated 4, Sentry 8, mobile-ads 17, purchases 10: her biri major.
 - Widget yaması ve üç yerel Kotlin modülümüz (`timer-notification`,
   `custom-notification-channel`) Kotlin 2.2 / AGP 9 ile derlenmeli.
