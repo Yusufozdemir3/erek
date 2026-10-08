@@ -15,7 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isAdsRemoved } from '@/plus/plusStore';
-import { INTERSTITIAL_MIN_GAP_MS, shouldShowInterstitial } from './adsLogic';
+import { INTERSTITIAL_MIN_GAP_MS, isAdTransition, shouldShowInterstitial } from './adsLogic';
 
 const LAST_SHOWN_KEY = 'ads:lastInterstitialShownAt';
 
@@ -37,6 +37,14 @@ function loadNative(): NativeAdsModule | null {
 }
 
 let initPromise: Promise<void> | null = null;
+
+// True while an ad is on screen and briefly after it closes (adsLogic.isAdTransition):
+// AppData skips its foreground work for the app's own "return" from the ad.
+let adShowing = false;
+let adClosedAt: number | null = null;
+export function isAdTransitioning(): boolean {
+  return isAdTransition(adShowing, adClosedAt, Date.now());
+}
 
 // Consent first, then the SDK. Concurrent calls share one promise.
 function ensureInitialized(native: NativeAdsModule): Promise<void> {
@@ -71,25 +79,37 @@ export async function maybeShowInterstitial(): Promise<void> {
 
     await new Promise<void>((resolve) => {
       let settled = false;
+      let loaded = false;
       const finish = () => {
         if (settled) return;
         settled = true;
         resolve();
       };
+      const adEnded = () => {
+        adShowing = false;
+        adClosedAt = Date.now();
+      };
 
       const ad = native.InterstitialAd.createForAdRequest(INTERSTITIAL_UNIT_ID);
       const unsubLoaded = ad.addAdEventListener(native.AdEventType.LOADED, () => {
         // Stamped at load time, so the next foreground doesn't start a second load.
+        loaded = true;
         AsyncStorage.setItem(LAST_SHOWN_KEY, String(Date.now())).catch(() => {});
-        ad.show().catch(() => finish());
+        adShowing = true;
+        ad.show().catch(() => {
+          adEnded();
+          finish();
+        });
       });
       const unsubClosed = ad.addAdEventListener(native.AdEventType.CLOSED, () => {
+        adEnded();
         unsubLoaded();
         unsubClosed();
         unsubError();
         finish();
       });
       const unsubError = ad.addAdEventListener(native.AdEventType.ERROR, () => {
+        adEnded();
         unsubLoaded();
         unsubClosed();
         unsubError();
@@ -97,8 +117,15 @@ export async function maybeShowInterstitial(): Promise<void> {
       });
 
       ad.load();
-      // An ad that never loads must not hold up the caller.
-      setTimeout(finish, 10_000);
+      // An ad that never loads must not hold up the caller, nor pop up late over
+      // whatever the user is doing by then.
+      setTimeout(() => {
+        if (loaded) return;
+        unsubLoaded();
+        unsubClosed();
+        unsubError();
+        finish();
+      }, 10_000);
     });
   } catch (e) {
     console.warn('[Reklam] Gösterilemedi:', e);

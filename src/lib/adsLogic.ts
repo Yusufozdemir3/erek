@@ -14,3 +14,15 @@ export function shouldShowInterstitial(
   if (lastShownAt === null) return false;
   return now - lastShownAt >= minGapMs;
 }
+
+// Closing a full-screen ad brings the app to the foreground again. The
+// foreground work (widget repaint, sync, reminders) ran for that "return" too,
+// on the JS thread, right as the ad's close animation played: the freeze on
+// close. It ran just before the ad anyway, so it is skipped while an ad is up
+// and for a moment after.
+export const AD_RETURN_GRACE_MS = 4000;
+
+export function isAdTransition(showing: boolean, closedAt: number | null, now: number): boolean {
+  if (showing) return true;
+  return closedAt !== null && now - closedAt < AD_RETURN_GRACE_MS;
+}

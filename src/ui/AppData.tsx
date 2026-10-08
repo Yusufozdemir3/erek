@@ -11,7 +11,7 @@ import type { AuthUser, SyncResult } from '@/sync';
 import { currentAuthUser } from '@/sync';
 import { todayDate } from '@/lib/helpers';
 import { migrateToMultiReminderIfNeeded, rescheduleEverything } from '@/lib/notifications';
-import { maybeShowInterstitial } from '@/lib/ads';
+import { isAdTransitioning, maybeShowInterstitial } from '@/lib/ads';
 import { runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -195,6 +195,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s !== 'active' || !user) return;
+      // Coming back from an ad we showed ourselves: nothing changed (lib/adsLogic.ts).
+      if (isAdTransitioning()) return;
       refreshWidget(user.id);
       if (Date.now() - lastSyncAttemptRef.current >= FOREGROUND_SYNC_MIN_GAP_MS) {
         syncUser(user.id);

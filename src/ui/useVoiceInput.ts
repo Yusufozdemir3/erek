@@ -47,6 +47,10 @@ export function useVoiceInput(onFinal: (text: string) => void, enabled = true): 
   const active = useRef(false);
   const busy = useRef(false); // a start() is walking through its dialogs
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The last live transcript. Some recognizers end with an empty final result,
+  // "no match" or "no speech" even after the user was heard; what was already
+  // shown is used then instead of discarding it.
+  const lastPartial = useRef('');
   // The form can close while a dialog (consent, permission) is open; the mic
   // must never open after that, with no UI left to show it.
   const mounted = useRef(true);
@@ -68,7 +72,16 @@ export function useVoiceInput(onFinal: (text: string) => void, enabled = true): 
     timer.current = null;
     setListening(false);
     setPartial('');
+    lastPartial.current = '';
   }, []);
+
+  // Ends the session with `text`, or with the last live transcript if that is empty.
+  const endWith = (text: string) => {
+    const result = text || lastPartial.current;
+    finish();
+    if (result) onFinalRef.current(result);
+    else setError(t('voice.err.noSpeech'));
+  };
 
   // Leaving the app or the form ends the session at once, result dropped —
   // without waiting for the recognizer to confirm.
@@ -98,26 +111,30 @@ export function useVoiceInput(onFinal: (text: string) => void, enabled = true): 
     if (!active.current) return;
     const text = e.results[0]?.transcript?.trim() ?? '';
     if (!e.isFinal) {
+      if (text) lastPartial.current = text;
       setPartial(text);
       return;
     }
-    finish();
-    if (text) onFinalRef.current(text);
-    else setError(t('voice.err.noSpeech'));
+    endWith(text);
   });
   useSpeechRecognitionEvent('nomatch', () => {
     if (!active.current) return;
-    finish();
-    setError(t('voice.err.noSpeech'));
+    endWith('');
   });
   useSpeechRecognitionEvent('error', (e) => {
     if (!active.current) return;
-    finish();
     const kind = voiceErrorKind(e.error);
+    // "No speech" after something was heard is still a result.
+    if (kind === 'noSpeech' && lastPartial.current) {
+      endWith('');
+      return;
+    }
+    finish();
     if (kind !== 'silent') setError(t(`voice.err.${kind}`));
   });
   useSpeechRecognitionEvent('end', () => {
-    if (active.current) finish();
+    // Ended without a final result: keep what was heard, if anything.
+    if (active.current) endWith('');
   });
 
   const confirm = (title: string, body: string, ok: string) =>
@@ -194,6 +211,7 @@ export function useVoiceInput(onFinal: (text: string) => void, enabled = true): 
     if (!mounted.current) return; // the form closed during a dialog
 
     active.current = true;
+    lastPartial.current = '';
     setPartial('');
     setListening(true); // don't wait for the recognizer's 'start' to show it
     timer.current = setTimeout(() => {

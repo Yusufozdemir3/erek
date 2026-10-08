@@ -91,7 +91,11 @@ export function SwipeableRow({
 
   return (
     <View style={styles.container}>
-      <View style={styles.actions}>
+      {/* Invisible until the card starts sliding, so a translucent or
+          rounded-corner card never shows the buttons behind it. */}
+      <Animated.View
+        style={[styles.actions, { opacity: translateX.interpolate({ inputRange: [-12, 0], outputRange: [1, 0], extrapolate: 'clamp' }) }]}
+      >
         <Pressable
           style={styles.actionBtn}
           onPress={() => {
@@ -111,7 +115,7 @@ export function SwipeableRow({
         >
           <Feather name="trash-2" size={20} color={colors.onAccent} />
         </Pressable>
-      </View>
+      </Animated.View>
       <Animated.View
         style={[styles.sliding, { transform: [{ translateX }] }]}
         {...panResponder.panHandlers}
