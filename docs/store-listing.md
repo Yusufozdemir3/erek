@@ -34,79 +34,67 @@ Alternatif (arama görünürlüğü için, sınırın altında kalıyor):
 ### Kısa açıklama (80)
 
 ```
-Alışkanlık, görev ve hedeflerini takip et. Çevrimdışı çalışır, verin satılmaz.
+Alışkanlık, görev ve hedeflerin tek yerde. Çevrimdışı çalışır, verin satılmaz.
 ```
 (78)
 
 ### Tam açıklama (4000)
 
 ```
-Erek; alışkanlıklarını, görevlerini ve hedeflerini tek bir yerde takip etmen için tasarlandı. Hesap açmadan, internete bağlanmadan çalışır — verilerin cihazında kalır.
+Erek; alışkanlıklarını, görevlerini ve hedeflerini tek bir yerde toplayan, sade ve gizlilik odaklı bir planlama uygulamasıdır. Hesap açmadan ve internete bağlanmadan tam çalışır; verilerin önce telefonunda durur.
 
-▸ ALIŞKANLIKLAR — üç farklı tip
-
-• Basit: yaptın / yapmadın (kitap oku, erken kalk)
+ALIŞKANLIKLAR
+Üç farklı alışkanlık türüyle ilerlemeni ölçersin:
+• Basit: yaptın ya da yapmadın (kitap oku, erken kalk)
 • Sayısal: günlük miktar hedefi (8 bardak su, 30 sayfa)
-• Zamanlayıcı: geri sayımlı süre hedefi (20 dakika meditasyon)
+• Zamanlayıcı: süre hedefi (20 dakika meditasyon)
+Sıklığı sen belirlersin: her gün, haftanın belirli günleri, her X günde bir ya da haftada X kez. Başlangıç ve bitiş tarihi verebilir, her alışkanlığa simge ve renk seçebilirsin.
 
-Sıklığı sen belirlersin: her gün, haftanın belirli günleri, her X günde bir ya da haftada X kez. Başlangıç ve bitiş tarihi verebilirsin. Her alışkanlığa simge ve renk seçerek listeni bir bakışta okunur hale getirirsin.
-
-▸ SERİLER VE ROZETLER
-
-Kesintisiz devam ettiğin gün sayısı takip edilir. 7, 30, 100 ve 365 günde rozet kazanırsın. Alışkanlığın planlı olmadığı günler seriyi bozmaz — kural senin belirlediğin sıklıktır. Hastaysan ya da yoldaysan karta uzun basıp günü mola yap; serin bozulmaz.
-
-▸ İSTATİSTİKLER
-
+SERİLER VE İSTATİSTİKLER
+Kesintisiz devam ettiğin günler seri olarak izlenir; 7, 30, 100 ve 365. günlerde rozet kazanırsın. Planlı olmadığın günler seriyi bozmaz. Hastaysan ya da yoldaysan karta uzun basıp günü mola verebilirsin; serin korunur.
 Her alışkanlığın kendi detay ekranı vardır:
-• Puan grafiği — sıfırdan başlar, her tamamlanan günle yükselir, kaçırdıkça düşer. Gün, hafta ve ay görünümleri.
-• Dönem hedefleri — bugün, bu hafta, bu ay, 3 ay ve yıl için ne kadar yaptığın.
-• Aylık takvim — hangi günü yaptın, hangi günü kaçırdın.
-• Geçmiş grafiği — nicel ve zamanlayıcılı alışkanlıklarda toplam miktar/süre.
+• Puan grafiği: gün, hafta ve ay görünümleriyle gidişatın
+• Dönem hedefleri: bugün, bu hafta, bu ay, 3 ay ve yıl
+• Aylık takvim: yaptığın ve kaçırdığın günler
+• Geçmiş grafiği: sayısal ve zamanlayıcılı alışkanlıklarda toplam miktar ve süre
+Haftalık özet, son 7 günün tamamlama oranını bir önceki haftayla karşılaştırır.
 
-▸ GÖREVLER
+ZAMANLAYICI
+Zamanlayıcı çalışırken kilit ekranında da görünen bir bildirim kartı olarak kalır. Duraklat, devam et ve bitir düğmeleri uygulamayı açmadan çalışır (bildirim izni gerekir).
 
-Öncelik, son tarih ve saat verebilir, alt görevlere bölebilirsin. Tekrarlayan görevler tamamlandığında bir sonraki tarihe kendiliğinden taşınır. Kendi renkli etiketlerini (İş, Ev…) ve bir ikon ekle, listeyi etikete göre süz.
+GÖREVLER
+Öncelik, son tarih ve saat belirle; görevi alt görevlere böl. Tekrarlayan görevler tamamlandığında kendiliğinden bir sonraki tarihe geçer. Kendi renkli etiketlerini (İş, Ev…) ve ikonlarını ekle, listeni etikete göre süz.
+Sesle görev ekle: mikrofona dokunup "yarın akşam 7'de annemi ara" de; başlık, tarih ve saat kendiliğinden dolar, sen onaylarsın. Ses mümkünse telefonunda yazıya çevrilir ve kaydedilmez.
 
-Görevi sesle de ekleyebilirsin: mikrofona dokun, "yarın akşam 7'de annemi ara" de — başlık, tarih ve saat kendiliğinden dolar, sen onaylarsın. Ses mümkünse telefonunda yazıya çevrilir; kaydedilmez.
+HEDEFLER
+Sayısal (200 sayfa oku, 100 km koş) ya da adım listeli hedefler kur, ilerlemeni girdi girdi kaydet. Hedef ekranı şunları gösterir:
+• günlük temponu
+• bu hızla hangi tarihte biteceğini
+• son tarihte ne kadarını yapmış olacağını ve açığı
+• son tarihe yetişmek için günlük gereken miktarı
+• sıradaki adımın durumunu
+Bir alışkanlığı hedefe bağlarsan, alışkanlığı her tamamladığında hedefin kendiliğinden ilerler.
 
-▸ HEDEFLER
+ARKADAŞLARLA
+Google hesabınla giriş yaparsan davet koduyla arkadaşlarına bağlanabilirsin. Bir alışkanlığı, görevi (alt görevleriyle) ya da hedefi paylaşıp birlikte ilerleyebilirsin. Neyi kiminle paylaşacağına sen karar verirsin; e-posta adresin gösterilmez.
 
-İki tip hedef kurabilirsin: sayısal (200 sayfa oku, 100 km koş) ya da adım listesi. Hedefine ara adımlar ekleyebilir, ilerlemeni tek tek girebilirsin.
+HATIRLATMALAR VE WIDGET'LAR
+• Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma ekle. Bildirimler cihazında planlanır; ses ve titreşimi ayarlayabilirsin.
+• Ana ekran widget'larıyla bugünün alışkanlık ve görevlerini tek dokunuşla işaretle; sayaç widget'ıyla bardak, sayfa gibi miktarları +1 ile say.
 
-Hedef ekranı sana şunları söyler:
-• Günde ne kadar yapıyorsun
-• Bu hızla hangi tarihte bitirirsin
-• Bu hızla son tarihte ne kadar olur, ne kadar açık kalır
-• Son tarihe yetişmek için günde ne kadar gerekir
-• Sıradaki adımın ne kadarını tamamladın, ne kadar kaldı
+GÖRÜNÜM VE DİL
+Açık, koyu ve sistem teması; iki koyu ton ve seçebileceğin vurgu rengi. Türkçe, İngilizce ve Almanca.
 
-Bir alışkanlığı hedefe bağlayabilirsin: alışkanlığı her tamamladığında hedefin kendiliğinden ilerler.
+GİZLİLİK VE VERİ KONTROLÜ
+• Hesapsız ve internetsiz tam çalışır; verilerin telefonunda kalır.
+• Giriş isteğe bağlıdır; yapıldığında yedekleme, cihazlar arası eşitleme ve arkadaş özellikleri için kullanılır.
+• Verilerini dışa ve içe aktarabilir, uygulamayı ekran kilidinle koruyabilir, hesabını ve buluttaki tüm verini uygulama içinden silebilirsin.
+• Uygulama içi analitik yok; verilerin satılmaz.
 
-▸ ARKADAŞLARLA
-
-Google hesabınla giriş yaptıysan bir davet koduyla arkadaşlarına bağlanabilirsin. Bir alışkanlığını paylaş, serilerini ve takvimini görsünler. Bir görevi paylaş, alt görevleriyle birlikte kendi listelerinde görüp tamamlasınlar. Bir hedefi paylaş, birlikte ilerleme ekleyin. Neyin kiminle paylaşılacağına sen karar verirsin; e-posta adresin hiç gösterilmez.
-
-▸ HATIRLATMALAR
-
-Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma saati ekleyebilirsin. Bildirimler cihazında yerel olarak planlanır. Bildirim sesini ve titreşimi ayarlayabilir, kendi ses dosyanı seçebilirsin.
-
-▸ ANA EKRAN WIDGET'LARI
-
-Bugünün alışkanlıklarını ve görevlerini ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar; küçük düğme widget’larıyla seçtiğin alışkanlığı tek dokunuşla tamamlar ya da artırırsın.
-
-▸ REKLAMLAR
-
-Uygulamayı ön plana getirdiğinde ara sıra (en fazla 30 dakikada bir) tam ekran bir reklam görebilirsin. İlk açılışta ya da bir alışkanlık/görev tamamladığında asla reklam gösterilmez.
-
-▸ GÖRÜNÜM
-
-Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi seçimi. Uygulama Türkçe, İngilizce ve Almanca kullanılabilir.
-
-▸ VERİLERİN SENDE
-
-Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin. Verilerini dışa ve içe aktarabilir, uygulamayı ekran kilidinle koruyabilirsin. Uygulama içi analitik yok; verilerin satılmaz.
+REKLAMLAR
+Erek reklam içerir: uygulamayı ön plana getirdiğinde en fazla 30 dakikada bir tam ekran reklam görebilirsin. İlk açılışta ya da bir alışkanlık veya görevi tamamladığında asla reklam gösterilmez.
 ```
-(3944)
+(3540)
 
 ---
 
@@ -115,83 +103,67 @@ Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedefler
 ### Short description (80)
 
 ```
-Track habits, tasks and goals. Works offline. Your data is never sold.
+Habits, tasks and goals in one place. Works offline; your data is never sold.
 ```
-(70)
+(77)
 
 ### Full description (4000)
 
 ```
-Erek helps you track your habits, tasks and goals in one place. It works without an account and without an internet connection — your data stays on your device.
+Erek is a clean, privacy-focused planner that brings your habits, tasks and goals together in one place. It works fully without an account or an internet connection; your data lives on your phone first.
 
-▸ HABITS — three types
+HABITS
+Measure your progress with three kinds of habit:
+• Simple: done or not done (read a book, wake up early)
+• Numeric: a daily amount (8 glasses of water, 30 pages)
+• Timer: a duration target (20 minutes of meditation)
+You choose the frequency: every day, specific weekdays, every X days or X times a week. Set a start and end date and give each habit an icon and a colour.
 
-• Simple: done / not done (read a book, wake up early)
-• Numeric: a daily amount target (8 glasses of water, 30 pages)
-• Timer: a countdown duration target (20 minutes of meditation)
-
-You choose the frequency: every day, specific days of the week, every X days, or X times a week. You can set a start and end date. Give each habit an icon and a colour to make your list readable at a glance.
-
-▸ STREAKS AND BADGES
-
-Erek tracks how many days you have kept going. You earn badges at 7, 30, 100 and 365 days. Days when a habit is not scheduled do not break your streak — the rule is the frequency you chose. Sick or travelling? Long-press the card to take the day off; your streak stays.
-
-▸ STATISTICS
-
+STREAKS AND STATISTICS
+Days you keep going in a row build a streak, with badges at 7, 30, 100 and 365 days. Days a habit isn't scheduled never break it. Sick or travelling? Long-press the card to take the day off and keep your streak.
 Every habit has its own detail screen:
-• Score chart — starts at zero, rises with every completed day and falls when you miss. Day, week and month views.
-• Period targets — how much you have done today, this week, this month, this quarter and this year.
-• Monthly calendar — which days you did it and which you missed.
-• History chart — total amount or duration for numeric and timer habits.
+• Score chart: your trend in day, week and month views
+• Period targets: today, this week, this month, 3 months and this year
+• Monthly calendar: the days you did it and the days you missed
+• History chart: total amount or time for numeric and timer habits
+A weekly review compares the completion rate of the last 7 days with the week before.
 
-▸ TASKS
+TIMER
+While a timer runs it stays visible as a notification card, also on the lock screen. Pause, resume and finish work without opening the app (notification permission required).
 
-Set a priority, a due date and a time, and break a task into subtasks. Recurring tasks move to their next date automatically when you complete them. Add your own colored tags (Work, Home…) and an icon, and filter the list by tag.
+TASKS
+Set a priority, a due date and a time, and break a task into subtasks. Recurring tasks move to their next date automatically when you complete them. Add your own colored tags (Work, Home…) and an icon, and filter your list by tag.
+Add tasks by voice: tap the mic and say "call mom tomorrow at 7pm". The title, date and time fill in and you confirm. Speech is transcribed on your phone whenever possible and is never recorded.
 
-You can also add a task by voice: tap the mic and say "call mom tomorrow at 7pm" — the title, date and time fill in, and you confirm. Speech is transcribed on your phone whenever possible and never recorded.
+GOALS
+Create numeric goals (read 200 pages, run 100 km) or goals made of milestones, and log your progress entry by entry. The goal screen shows:
+• how much you do per day
+• the date you will finish at this pace
+• how much you will have by the deadline, and the gap
+• the daily amount needed to make the deadline
+• where you stand on the next milestone
+Link a habit to a goal and the goal advances every time you complete the habit.
 
-▸ GOALS
+WITH FRIENDS
+Sign in with Google and connect with friends using an invite code. Share a habit, a task (with its subtasks) or a goal and make progress together. You decide what is shared with whom; your email address is never shown.
 
-Create two kinds of goals: numeric (read 200 pages, run 100 km) or a list of milestones. Add intermediate milestones and log your progress entry by entry.
+REMINDERS AND WIDGETS
+• Add as many reminders as you like to habits, tasks and goals. Notifications are scheduled on your device, and you can adjust sound and vibration.
+• Check off today's habits and tasks from home-screen widgets, and use the Counter widget to add +1 to glasses, pages and the like.
 
-The goal screen tells you:
-• How much you are doing per day
-• The date you will finish at this pace
-• How much you will have by the deadline, and how much will be missing
-• How much per day you need to make the deadline
-• How far along the next milestone is and how much is left
+APPEARANCE AND LANGUAGE
+Light, dark and system themes, two dark tones and an accent colour of your choice. Available in Turkish, English and German.
 
-You can link a habit to a goal: every time you complete the habit, the goal advances by itself.
+PRIVACY AND CONTROL OF YOUR DATA
+• Works fully without an account or internet; your data stays on your phone.
+• Signing in is optional. When you do, it is used for backup, syncing across devices and friend features.
+• Export and import your data, lock the app with your screen lock, and delete your account and cloud data from within the app.
+• No in-app analytics, and your data is never sold.
 
-▸ WITH FRIENDS
-
-If you sign in with Google, you can connect with friends using an invite code. Share a habit so they can follow your streaks and calendar. Share a task so it shows up in their list, subtasks included, and they can check it off. Share a goal and add progress to it together. You decide what is shared with whom; your email address is never shown.
-
-▸ REMINDERS
-
-Add as many reminder times as you like to habits, tasks and goals. Notifications are scheduled locally on your device. You can configure sound and vibration, including your own sound file.
-
-▸ WEEKLY REVIEW
-
-Your completion rate for the last 7 days, compared with the week before, plus a bar per day.
-
-▸ HOME SCREEN WIDGETS
-
-Check off today's habits and tasks right from your home screen; the Counter widget adds +1 to glasses, pages and the like with one tap.
-
-▸ ADS
-
-When you bring the app to the foreground, you may occasionally see a full-screen ad (no more than once every 30 minutes). No ad is ever shown on first launch or right after completing a habit or task.
-
-▸ APPEARANCE
-
-Light, dark and system themes. Two different dark tones, plus an accent colour of your choice. Available in Turkish, English and German.
-
-▸ YOUR DATA IS YOURS
-
-Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app. Export and import your data, or lock the app with your screen lock. No in-app analytics; your data is never sold.
+ADS
+Erek contains ads: when you bring the app to the foreground you may see a full-screen ad, at most once every 30 minutes. No ad is ever shown on first launch or right after you complete a habit or task.
 ```
-(3954)
+(3537)
 
 ---
 
@@ -200,83 +172,67 @@ Erek works fully without an account or internet: your habits, tasks, goals, remi
 ### Kurzbeschreibung (80)
 
 ```
-Gewohnheiten, Aufgaben und Ziele verfolgen. Offline nutzbar, Daten nie verkauft.
+Gewohnheiten, Aufgaben und Ziele an einem Ort. Auch offline, Daten nie verkauft.
 ```
 (80)
 
 ### Vollständige Beschreibung (4000)
 
 ```
-Erek hilft dir, Gewohnheiten, Aufgaben und Ziele an einem Ort zu verfolgen. Die App funktioniert ohne Konto und ohne Internetverbindung — deine Daten bleiben auf deinem Gerät.
+Erek ist ein schlichter, datenschutzorientierter Planer, der Gewohnheiten, Aufgaben und Ziele an einem Ort bündelt. Die App funktioniert vollständig ohne Konto und ohne Internetverbindung; deine Daten liegen zuerst auf deinem Handy.
 
-▸ GEWOHNHEITEN — drei Arten
+GEWOHNHEITEN
+Drei Arten von Gewohnheiten messen deinen Fortschritt:
+• Einfach: erledigt oder nicht erledigt (lesen, früh aufstehen)
+• Numerisch: eine Tagesmenge (8 Gläser Wasser, 30 Seiten)
+• Timer: ein Zeitziel (20 Minuten Meditation)
+Die Häufigkeit bestimmst du selbst: täglich, an bestimmten Wochentagen, alle X Tage oder X-mal pro Woche. Start- und Enddatum sowie Symbol und Farbe sind frei wählbar.
 
-• Einfach: erledigt / nicht erledigt (lesen, früh aufstehen)
-• Numerisch: ein tägliches Mengenziel (8 Gläser Wasser, 30 Seiten)
-• Timer: ein Zeitziel mit Countdown (20 Minuten Meditation)
+SERIEN UND STATISTIKEN
+Tage in Folge ergeben eine Serie, mit Abzeichen bei 7, 30, 100 und 365 Tagen. Tage, an denen eine Gewohnheit nicht geplant ist, unterbrechen sie nie. Krank oder unterwegs? Karte lange drücken, den Tag pausieren und die Serie behalten.
+Jede Gewohnheit hat einen eigenen Detailbildschirm:
+• Punktediagramm: dein Verlauf in Tages-, Wochen- und Monatsansicht
+• Zeitraumziele: heute, diese Woche, dieser Monat, 3 Monate und dieses Jahr
+• Monatskalender: die Tage, an denen es geklappt hat, und die verpassten
+• Verlaufsdiagramm: Gesamtmenge oder -dauer bei numerischen und Timer-Gewohnheiten
+Der Wochenrückblick vergleicht die Quote der letzten 7 Tage mit der Vorwoche.
 
-Du bestimmst die Häufigkeit: täglich, an bestimmten Wochentagen, alle X Tage oder X-mal pro Woche. Start- und Enddatum sind möglich. Symbol und Farbe pro Gewohnheit machen die Liste übersichtlich.
+TIMER
+Läuft ein Timer, bleibt er als Benachrichtigungskarte sichtbar, auch auf dem Sperrbildschirm. Pausieren, fortsetzen und beenden funktionieren, ohne die App zu öffnen (Benachrichtigungsberechtigung erforderlich).
 
-▸ SERIEN UND ABZEICHEN
+AUFGABEN
+Lege Priorität, Fälligkeitsdatum und Uhrzeit fest und teile Aufgaben in Teilaufgaben auf. Wiederkehrende Aufgaben rücken nach dem Erledigen automatisch auf ihren nächsten Termin. Erstelle eigene farbige Tags (Arbeit, Zuhause …) und Symbole und filtere deine Liste nach Tag.
+Aufgaben per Sprache: Tippe aufs Mikrofon und sag „Morgen um 19 Uhr Mama anrufen“. Titel, Datum und Uhrzeit füllen sich, du bestätigst. Sprache wird nach Möglichkeit auf dem Handy umgewandelt und nie aufgenommen.
 
-Erek zählt, wie viele Tage du durchhältst. Bei 7, 30, 100 und 365 Tagen erhältst du ein Abzeichen. Tage, an denen eine Gewohnheit nicht geplant ist, unterbrechen die Serie nicht — es gilt die von dir gewählte Häufigkeit. Krank? Karte lange drücken und pausieren.
+ZIELE
+Erstelle numerische Ziele (200 Seiten lesen, 100 km laufen) oder Ziele aus Etappen und trage deinen Fortschritt Eintrag für Eintrag ein. Der Zielbildschirm zeigt:
+• wie viel du pro Tag schaffst
+• an welchem Datum du in diesem Tempo fertig bist
+• wie viel du bis zum Stichtag haben wirst und wie groß die Lücke ist
+• wie viel pro Tag nötig ist, um den Stichtag zu halten
+• wie weit die nächste Etappe ist
+Verknüpfe eine Gewohnheit mit einem Ziel, und das Ziel rückt jedes Mal vor, wenn du die Gewohnheit erledigst.
 
-▸ STATISTIKEN
+MIT FREUNDEN
+Melde dich mit Google an und verbinde dich per Einladungscode mit Freunden. Teile eine Gewohnheit, eine Aufgabe (samt Teilaufgaben) oder ein Ziel und kommt gemeinsam voran. Du entscheidest, was du mit wem teilst; deine E-Mail-Adresse wird nie angezeigt.
 
-Jede Gewohnheit hat ihren eigenen Detailbildschirm:
-• Punktediagramm — beginnt bei null, steigt mit jedem erledigten Tag und fällt, wenn du aussetzt. Ansichten für Tag, Woche und Monat.
-• Zeitraumziele — wie viel du heute, diese Woche, diesen Monat, im Quartal und im Jahr geschafft hast.
-• Monatskalender — an welchen Tagen es geklappt hat und an welchen nicht.
-• Verlaufsdiagramm — Gesamtmenge oder -dauer bei numerischen und Timer-Gewohnheiten.
+ERINNERUNGEN UND WIDGETS
+• Füge Gewohnheiten, Aufgaben und Zielen beliebig viele Erinnerungen hinzu. Benachrichtigungen werden auf deinem Gerät geplant; Ton und Vibration sind einstellbar.
+• Hake Gewohnheiten und Aufgaben des Tages über Widgets auf dem Startbildschirm ab; das Zähler-Widget zählt Gläser, Seiten und Ähnliches mit +1.
 
-▸ AUFGABEN
+DARSTELLUNG UND SPRACHE
+Helles, dunkles und Systemdesign, zwei dunkle Töne und eine frei wählbare Akzentfarbe. Verfügbar auf Türkisch, Englisch und Deutsch.
 
-Lege Priorität, Fälligkeitsdatum und Uhrzeit fest und teile eine Aufgabe in Teilaufgaben auf. Wiederkehrende Aufgaben rücken nach dem Erledigen automatisch auf ihren nächsten Termin. Eigene farbige Tags und ein Symbol; filtere die Liste nach Tag.
+DATENSCHUTZ UND KONTROLLE ÜBER DEINE DATEN
+• Funktioniert vollständig ohne Konto und Internet; deine Daten bleiben auf deinem Handy.
+• Die Anmeldung ist optional. Sie dient der Sicherung, der Synchronisierung zwischen Geräten und den Freundesfunktionen.
+• Exportiere und importiere deine Daten, sperre die App mit deiner Bildschirmsperre und lösche Konto und Cloud-Daten direkt in der App.
+• Keine In-App-Analyse, und deine Daten werden nie verkauft.
 
-Aufgaben gehen auch per Sprache: Tippe aufs Mikrofon und sag „morgen um 19 Uhr Mama anrufen" – Titel, Datum und Uhrzeit füllen sich, du bestätigst. Sprache wird nach Möglichkeit auf dem Handy umgewandelt und nie aufgenommen.
-
-▸ ZIELE
-
-Erstelle zwei Arten von Zielen: numerisch (200 Seiten lesen, 100 km laufen) oder eine Liste von Etappen. Füge Zwischenetappen hinzu und trage deinen Fortschritt einzeln ein.
-
-Der Zielbildschirm zeigt dir:
-• Wie viel du pro Tag schaffst
-• An welchem Datum du in diesem Tempo fertig bist
-• Wie viel du zum Stichtag haben wirst und wie viel fehlen wird
-• Wie viel pro Tag nötig ist, um den Stichtag zu halten
-• Wie weit die nächste Etappe ist und wie viel noch fehlt
-
-Du kannst eine Gewohnheit mit einem Ziel verknüpfen: Jedes Mal, wenn du die Gewohnheit erledigst, rückt das Ziel von selbst vor.
-
-▸ MIT FREUNDEN
-
-Wenn du dich mit Google anmeldest, kannst du dich per Einladungscode mit Freunden verbinden. Teile eine Gewohnheit, damit sie deine Serien und deinen Kalender sehen. Teile eine Aufgabe samt Teilaufgaben; Freunde können sie abhaken. Teile ein Ziel und tragt gemeinsam Fortschritt ein. Du entscheidest, was du mit wem teilst; deine E-Mail-Adresse wird nie angezeigt.
-
-▸ ERINNERUNGEN
-
-Füge Gewohnheiten, Aufgaben und Zielen beliebig viele Erinnerungszeiten hinzu. Benachrichtigungen werden lokal auf deinem Gerät geplant. Ton und Vibration sind einstellbar, auch mit eigener Audiodatei.
-
-▸ WOCHENRÜCKBLICK
-
-Quote der letzten 7 Tage, Vergleich zur Vorwoche.
-
-▸ HOMESCREEN-WIDGETS
-
-Hake Gewohnheiten und Aufgaben direkt auf dem Startbildschirm ab; das Zähler-Widget zählt Gläser oder Seiten mit einem Tipp.
-
-▸ WERBUNG
-
-Wenn du die App in den Vordergrund holst, siehst du gelegentlich (höchstens alle 30 Minuten) eine Vollbildanzeige. Nie beim ersten Start und nie direkt nach dem Erledigen.
-
-▸ DARSTELLUNG
-
-Helles, dunkles und Systemdesign, zwei dunkle Töne, frei wählbare Akzentfarbe. Verfügbar auf Türkisch, Englisch und Deutsch.
-
-▸ DEINE DATEN GEHÖREN DIR
-
-Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App. Export, Import und App-Sperre. Keine In-App-Analyse; deine Daten werden nie verkauft.
+WERBUNG
+Erek enthält Werbung: Beim Öffnen der App siehst du gelegentlich eine Vollbildanzeige, höchstens alle 30 Minuten. Nie beim ersten Start und nie direkt nach dem Erledigen einer Gewohnheit oder Aufgabe.
 ```
-(3983)
+(3986)
 
 ---
 
