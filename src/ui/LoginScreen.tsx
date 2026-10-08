@@ -12,6 +12,7 @@ import { LineIcon } from '@/ui/LineIcon';
 import { announceGatesClosed } from '@/lib/guides';
 import { LOGIN_SEEN_KEY, onOnboardingDone, ONBOARDING_SEEN_KEY } from '@/ui/Onboarding';
 import { useGoogleSignIn } from '@/ui/useGoogleSignIn';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
@@ -27,6 +28,7 @@ export interface LoginScreenProps {
 
 export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { t } = useI18n();
   const styles = makeStyles(colors);
   const { available, busy, error, signIn: onGoogle } = useGoogleSignIn(onDone);
@@ -53,7 +55,7 @@ export function LoginScreen({ onDone, canSkip = false }: LoginScreenProps) {
         <Text style={styles.subtitle}>{t('login.subtitle')}</Text>
       </View>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(48, insets.bottom + 16) }]}>
         {error != null && <Text style={styles.error}>{error}</Text>}
 
         {/* Unconfigured (dev builds): say why instead of a button that always fails. */}

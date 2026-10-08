@@ -23,6 +23,8 @@ jest.mock('@/ui/TimePickerModal', () => ({
   },
 }));
 
+// useSafeAreaInsets throws outside a SafeAreaProvider; the package's own mock gives zero insets.
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@/lib/haptics', () => ({
   tapLight: jest.fn(),
   tapMedium: jest.fn(),

@@ -12,12 +12,18 @@ import { DEFAULT_HABIT_COLOR, type Colors } from '@/ui/theme';
 import { HabitIconGlyph } from '@/ui/habitIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimer } from '@/ui/TimerProvider';
+
+// Above the tab bar when there is no system bar to add.
+const STRIP_BOTTOM = 58;
 
 export function TimerStrip() {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
+  // Edge-to-edge (forced on Android 16): the tab bar grows by the system bar, and so must the offset.
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const timer = useTimer();
   const activeTarget = timer.active();
   const kind = activeTarget?.kind ?? null;
@@ -58,7 +64,7 @@ export function TimerStrip() {
   };
 
   return (
-    <View style={styles.wrap} pointerEvents="box-none">
+    <View style={[styles.wrap, { bottom: STRIP_BOTTOM + bottomInset }]} pointerEvents="box-none">
       <Pressable style={[styles.bar, { borderColor: color }]} onPress={openTarget}>
         <View style={[styles.iconWrap, { borderColor: color, backgroundColor: color + '22' }]}>
           {kind === 'habit' ? (
@@ -97,7 +103,6 @@ const makeStyles = (c: Colors) =>
       position: 'absolute',
       left: 12,
       right: 12,
-      bottom: 58,
       alignItems: 'center',
     },
     bar: {

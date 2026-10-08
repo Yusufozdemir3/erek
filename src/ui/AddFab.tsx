@@ -5,6 +5,7 @@
 // sibling of Tabs in _layout. Both follow the same `open` state.
 
 import { useEffect, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Step } from '@/ui/AddSheet';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -79,6 +80,9 @@ export function AddFabButton({
   );
 }
 
+// The option fan's distance above the screen bottom when there is no system bar to add.
+const FAN_BOTTOM = 96;
+
 export function AddFab({
   open,
   onClose,
@@ -93,6 +97,8 @@ export function AddFab({
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
+  // The menu fans out above the tab bar, which is taller by the system bar when edge-to-edge.
+  const { bottom: bottomInset } = useSafeAreaInsets();
   // One value per option, for the staggered entrance.
   const anims = useRef(OPTIONS.map(() => new Animated.Value(0))).current;
   const backdrop = useRef(new Animated.Value(0)).current;
@@ -133,7 +139,7 @@ export function AddFab({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
 
-      <View style={styles.fan} pointerEvents="box-none">
+      <View style={[styles.fan, { bottom: FAN_BOTTOM + bottomInset }]} pointerEvents="box-none">
         {OPTIONS.map((opt, i) => {
           if (opt.voice && !voiceAvailable) return null;
           const a = anims[i];
@@ -195,7 +201,6 @@ const makeStyles = (c: Colors) =>
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 96,
       alignItems: 'center',
     },
     optionRow: {

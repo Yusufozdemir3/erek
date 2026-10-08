@@ -11,6 +11,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { notificationPermission, rescheduleEverything } from '@/lib/notifications';
 import { isGoogleSignInConfigured, isSyncConfigured } from '@/sync';
 import { useAppData } from '@/ui/AppData';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/ui/ThemeProvider';
 import {
   AccountStep,
@@ -57,6 +58,8 @@ export function wizardCapabilities(): WizardCapabilities {
 
 export function SetupWizard({ onDone }: Props) {
   const { colors } = useTheme();
+  // Edge-to-edge (forced on Android 16): keep the fixed margins, but never less than the system bars + a gap.
+  const insets = useSafeAreaInsets();
   const { t } = useI18n();
   const styles = makeWizardStyles(colors);
   const { user, authUser, notifyDataChanged } = useAppData();
@@ -160,7 +163,7 @@ export function SetupWizard({ onDone }: Props) {
 
   return (
     <LinearGradient colors={[colors.primarySoft, colors.bg]} locations={[0, 0.5]} style={styles.screen}>
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: Math.max(52, insets.top + 16) }]}>
         <View style={styles.progressWrap}>
           {step && (
             <>
@@ -198,7 +201,7 @@ export function SetupWizard({ onDone }: Props) {
           {page}
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(36, insets.bottom + 16) }]}>
           {!isFirst && (
             <Pressable
               style={styles.backBtn}
