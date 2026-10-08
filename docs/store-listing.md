@@ -53,7 +53,7 @@ Sıklığı sen belirlersin: her gün, haftanın belirli günleri, her X günde 
 
 ▸ SERİLER VE ROZETLER
 
-Kesintisiz devam ettiğin gün sayısı takip edilir. 7, 30, 100 ve 365 günde rozet kazanırsın. Alışkanlığın planlı olmadığı günler seriyi bozmaz — kural senin belirlediğin sıklıktır.
+Kesintisiz devam ettiğin gün sayısı takip edilir. 7, 30, 100 ve 365 günde rozet kazanırsın. Alışkanlığın planlı olmadığı günler seriyi bozmaz — kural senin belirlediğin sıklıktır. Hastaysan ya da yoldaysan karta uzun basıp günü mola yap; serin bozulmaz.
 
 ▸ İSTATİSTİKLER
 
@@ -65,7 +65,7 @@ Her alışkanlığın kendi detay ekranı vardır:
 
 ▸ GÖREVLER
 
-Öncelik, son tarih ve saat verebilir, alt görevlere bölebilirsin. Tekrarlayan görevler tamamlandığında bir sonraki tarihe kendiliğinden taşınır.
+Öncelik, son tarih ve saat verebilir, alt görevlere bölebilirsin. Tekrarlayan görevler tamamlandığında bir sonraki tarihe kendiliğinden taşınır. Kendi renkli etiketlerini (İş, Ev…) ve bir ikon ekle, listeyi etikete göre süz.
 
 Görevi sesle de ekleyebilirsin: mikrofona dokun, "yarın akşam 7'de annemi ara" de — başlık, tarih ve saat kendiliğinden dolar, sen onaylarsın. Ses mümkünse telefonunda yazıya çevrilir; kaydedilmez.
 
@@ -90,10 +90,6 @@ Google hesabınla giriş yaptıysan bir davet koduyla arkadaşlarına bağlanabi
 
 Alışkanlık, görev ve hedeflerine istediğin kadar hatırlatma saati ekleyebilirsin. Bildirimler cihazında yerel olarak planlanır. Bildirim sesini ve titreşimi ayarlayabilir, kendi ses dosyanı seçebilirsin.
 
-▸ HAFTALIK ÖZET
-
-Son 7 günün tamamlama oranı, önceki haftayla karşılaştırma, günlük çubuklar.
-
 ▸ ANA EKRAN WIDGET'LARI
 
 Bugünün alışkanlıklarını ve görevlerini ana ekrandan tek dokunuşla işaretle; Sayaç widget’ı bardak, sayfa gibi miktarları +1 ile sayar; küçük düğme widget’larıyla seçtiğin alışkanlığı tek dokunuşla tamamlar ya da artırırsın.
@@ -108,11 +104,9 @@ Açık, koyu ve sistem teması. Koyu temada iki farklı ton, ayrıca vurgu rengi
 
 ▸ VERİLERİN SENDE
 
-Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin. Verilerini dışa ve içe aktarabilir, uygulamayı ekran kilidinle koruyabilirsin.
-
-Profil › Gizlilik ve çevrimdışı, neyin nerede durduğunu telefonunun gerçek durumuna göre gösterir. Uygulama içi analitik yok, verilerin satılmaz.
+Erek hesapsız ve internetsiz tam çalışır: alışkanlık, görev ve hedeflerin, hatırlatmalar ve widget telefonunda. İstersen Google hesabınla giriş yapıp verilerini yedekleyebilir ve cihazların arasında eşitleyebilirsin; bu tamamen isteğe bağlı. Yalnızca giriş, arkadaşlar ve reklamlar internet ister. Hesabını ve buluttaki tüm verini uygulama içinden kalıcı olarak silebilirsin. Verilerini dışa ve içe aktarabilir, uygulamayı ekran kilidinle koruyabilirsin. Uygulama içi analitik yok; verilerin satılmaz.
 ```
-(3896)
+(3944)
 
 ---
 
@@ -140,7 +134,7 @@ You choose the frequency: every day, specific days of the week, every X days, or
 
 ▸ STREAKS AND BADGES
 
-Erek tracks how many days you have kept going. You earn badges at 7, 30, 100 and 365 days. Days when a habit is not scheduled do not break your streak — the rule is the frequency you chose.
+Erek tracks how many days you have kept going. You earn badges at 7, 30, 100 and 365 days. Days when a habit is not scheduled do not break your streak — the rule is the frequency you chose. Sick or travelling? Long-press the card to take the day off; your streak stays.
 
 ▸ STATISTICS
 
@@ -152,7 +146,7 @@ Every habit has its own detail screen:
 
 ▸ TASKS
 
-Set a priority, a due date and a time, and break a task into subtasks. Recurring tasks move to their next date automatically when you complete them.
+Set a priority, a due date and a time, and break a task into subtasks. Recurring tasks move to their next date automatically when you complete them. Add your own colored tags (Work, Home…) and an icon, and filter the list by tag.
 
 You can also add a task by voice: tap the mic and say "call mom tomorrow at 7pm" — the title, date and time fill in, and you confirm. Speech is transcribed on your phone whenever possible and never recorded.
 
@@ -195,11 +189,9 @@ Light, dark and system themes. Two different dark tones, plus an accent colour o
 
 ▸ YOUR DATA IS YOURS
 
-Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app. Export and import your data, or lock the app with your screen lock.
-
-Profile › Privacy and offline shows what is kept where, based on your phone’s actual state. No in-app analytics; your data is never sold.
+Erek works fully without an account or internet: your habits, tasks, goals, reminders and widget live on your phone. If you want, sign in with Google to back up your data and sync it across devices; this is entirely optional. Only sign-in, friends and ads need internet. You can permanently delete your account and all cloud data from within the app. Export and import your data, or lock the app with your screen lock. No in-app analytics; your data is never sold.
 ```
-(3886)
+(3954)
 
 ---
 
@@ -227,7 +219,7 @@ Du bestimmst die Häufigkeit: täglich, an bestimmten Wochentagen, alle X Tage o
 
 ▸ SERIEN UND ABZEICHEN
 
-Erek zählt, wie viele Tage du durchhältst. Bei 7, 30, 100 und 365 Tagen erhältst du ein Abzeichen. Tage, an denen eine Gewohnheit nicht geplant ist, unterbrechen die Serie nicht — es gilt die von dir gewählte Häufigkeit.
+Erek zählt, wie viele Tage du durchhältst. Bei 7, 30, 100 und 365 Tagen erhältst du ein Abzeichen. Tage, an denen eine Gewohnheit nicht geplant ist, unterbrechen die Serie nicht — es gilt die von dir gewählte Häufigkeit. Krank? Karte lange drücken und pausieren.
 
 ▸ STATISTIKEN
 
@@ -239,7 +231,7 @@ Jede Gewohnheit hat ihren eigenen Detailbildschirm:
 
 ▸ AUFGABEN
 
-Lege Priorität, Fälligkeitsdatum und Uhrzeit fest und teile eine Aufgabe in Teilaufgaben auf. Wiederkehrende Aufgaben rücken nach dem Erledigen automatisch auf ihren nächsten Termin.
+Lege Priorität, Fälligkeitsdatum und Uhrzeit fest und teile eine Aufgabe in Teilaufgaben auf. Wiederkehrende Aufgaben rücken nach dem Erledigen automatisch auf ihren nächsten Termin. Eigene farbige Tags und ein Symbol; filtere die Liste nach Tag.
 
 Aufgaben gehen auch per Sprache: Tippe aufs Mikrofon und sag „morgen um 19 Uhr Mama anrufen" – Titel, Datum und Uhrzeit füllen sich, du bestätigst. Sprache wird nach Möglichkeit auf dem Handy umgewandelt und nie aufgenommen.
 
@@ -282,11 +274,9 @@ Helles, dunkles und Systemdesign, zwei dunkle Töne, frei wählbare Akzentfarbe.
 
 ▸ DEINE DATEN GEHÖREN DIR
 
-Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App. Export, Import und App-Sperre.
-
-Profil › Datenschutz und Offline zeigt, was wo liegt. Keine In-App-Analyse; deine Daten werden nie verkauft.
+Erek funktioniert ohne Konto und Internet: Gewohnheiten, Aufgaben, Ziele, Erinnerungen und Widget bleiben auf deinem Handy. Optional sicherst und synchronisierst du alles per Google-Anmeldung. Nur Anmeldung, Freunde und Werbung brauchen Internet. Konto und Cloud-Daten löschst du in der App. Export, Import und App-Sperre. Keine In-App-Analyse; deine Daten werden nie verkauft.
 ```
-(3932)
+(3983)
 
 ---
 
@@ -405,33 +395,37 @@ tanıma durumunda; cihazda tanımada hiç toplanmaz.)
 
 ## Yenilikler (bu sürüm — en fazla 500 karakter)
 
-Son Play yüklemesi: versionCode 10 (2026-09-24). Bu sürüm: 1.1.0, incelemede. Erek Plus bu sürümde YOK (Plus/RevenueCat 1.1'e ertelendi); notlarda geçmez.
+Bu sürüm: **1.2.0, versionCode 15** (Expo SDK 53 — 16 KB sayfa boyutuna uygun).
+Aşağıdaki notlar yalnız 1.2'deki yenilikler. **1.1.0 (vc13/vc14) Play'de
+yayına HİÇ çıkmadıysa** kullanıcılar 1.1'in yeniliklerini de ilk kez görecek:
+o durumda 1.1 notlarından (git geçmişinde, commit 8c1ee33) en önemli 2 maddeyi
+başa ekle, 500 karakteri aşma.
 
 **TR**
 ```
-• Yeni widget'lar: Görevler, Hedefler, Sayaç ve tek alışkanlık için küçük Evet/Hayır ve Sayaç düğmeleri — uygulamayı açmadan dokunup işaretle.
-• Bugün'de hafta şeridini kaydırarak günler arasında gez; sekme geçişleri ve şerit animasyonlu.
-• Uygulama kilidi, verilerini dışa/içe aktarma ve silince "Geri al".
-• Haftalık özet, arama, yazı tipi seçimi.
-• Sesli görev eklerken duraklamada artık hemen kapanmıyor.
+• Görevlere kendi renkli etiketlerini ve bir ikon ekle; Görevler'de etikete göre süz. Etiketleri Profil › Etiketler'den yönet.
+• Mola günü artık Bugün'de: alışkanlık kartına uzun bas, "Bugünü mola yap".
+• Görev formu daha derli toplu: ikon ve etiketler, saat ve bitiş, hatırlatma ve tekrar yan yana.
+• Kurulum sihirbazında yazdığın kaybolmaz: Devam önce kaydeder.
+• Android 15+ için yeni bellek düzeni desteği.
 ```
 
 **EN**
 ```
-• New widgets: Tasks, Goals, Counter, plus small one-habit Yes/No and Counter buttons — tap to check off without opening the app.
-• Swipe the week strip on Today to move between days; tab switches and the strip are animated.
-• App lock, export/import your data, and Undo after deleting.
-• Weekly review, search, font choice.
-• Voice tasks no longer stop the moment you pause.
+• Add your own colored tags and an icon to tasks; filter Tasks by tag. Manage tags under Profile › Tags.
+• Rest days are on Today now: long-press a habit card and choose "Take today off".
+• A tidier task form: icon and tags, time and end, reminder and repeat side by side.
+• The setup wizard no longer drops what you typed: Continue saves it first.
+• Support for the newer Android 15+ memory layout.
 ```
 
 **DE**
 ```
-• Neue Widgets: Aufgaben, Ziele, Zähler sowie kleine Ja/Nein- und Zähler-Buttons für eine Gewohnheit – antippen, ohne die App zu öffnen.
-• Wochenleiste auf Heute wischen, um Tage zu wechseln; Tab-Wechsel und Leiste sind animiert.
-• App-Sperre, Daten exportieren/importieren und „Rückgängig“ nach dem Löschen.
-• Wochenrückblick, Suche, Schriftauswahl.
-• Sprachaufgaben stoppen nicht mehr bei jeder Pause.
+• Eigene farbige Tags und ein Symbol für Aufgaben; filtere Aufgaben nach Tag. Tags verwaltest du unter Profil › Tags.
+• Pausentage jetzt auf Heute: Karte lange drücken, „Heute pausieren“.
+• Aufgabenformular kompakter: Symbol und Tags, Uhrzeit und Ende, Erinnerung und Wiederholung nebeneinander.
+• Der Einrichtungsassistent verliert nichts mehr: Weiter speichert zuerst.
+• Unterstützung für das neuere Speicherlayout ab Android 15.
 ```
 
 ---
@@ -439,6 +433,9 @@ Son Play yüklemesi: versionCode 10 (2026-09-24). Bu sürüm: 1.1.0, incelemede.
 ## Yayın öncesi son kontrol
 
 **Sunucu**
+- [ ] **1.2 için ŞART, yayından ÖNCE:** güncel `supabase/schema.sql` çalıştırıldı
+      (tasks.icon/tag_ids + public.tags). Çalışmazsa 1.2'ye geçen girişli
+      kullanıcıların eşitlemesi "column not found" ile durur.
 - [x] `supabase/schema.sql` son hâli çalıştırıldı (paylaşım faz 1–4, `added_by`
       dahil). Şema her değiştiğinde istemciden ÖNCE tekrar çalıştırılmalı.
 - [ ] `supabase/tests/sharing_checks.sql` çalıştırıldı → "ALL SHARING CHECKS PASSED"

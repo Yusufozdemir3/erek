@@ -3,7 +3,7 @@
     "name": "Erek",
     "slug": "habit-app",
     "owner": "yusufozdemir",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "habitapp",
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.erek",
-      "versionCode": 11,
+      "versionCode": 15,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F4F1EA"
