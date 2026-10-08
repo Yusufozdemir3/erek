@@ -173,3 +173,33 @@ describe('reassignLocalIds — sınır durumlar', () => {
     expect(on?.foreign_keys).toBe(1);
   });
 });
+
+describe('reassignLocalIds — etiketler', () => {
+  it('etiketin id’si değişir ve görevlerin tag_ids listesi yeni id’ye döner', () => {
+    const { tagRepo } = require('@/db/repositories/tagRepo') as typeof import('@/db/repositories/tagRepo');
+    const user = userRepo.getOrCreateLocal();
+    const work = tagRepo.create(user.id, 'İş', '#3b82f6')!;
+    const home = tagRepo.create(user.id, 'Ev', null)!;
+    const t1 = taskRepo.create({ user_id: user.id, title: 'Rapor', tag_ids: [work.id, home.id] });
+    const t2 = taskRepo.create({ user_id: user.id, title: 'Market', tag_ids: [home.id] });
+    // A friend's tag id (not in my tags table) is left alone.
+    const t3 = taskRepo.create({ user_id: user.id, title: 'Yabancı', tag_ids: ['00000000-aaaa-bbbb-cccc-000000000000'] });
+
+    const { counts } = reassignLocalIds();
+    expect(counts.tags).toBe(2);
+
+    const tags = tagRepo.listByUser(user.id);
+    const byName = Object.fromEntries(tags.map((t) => [t.name, t.id]));
+    expect(byName['İş']).not.toBe(work.id);
+    expect(byName.Ev).not.toBe(home.id);
+
+    const tasks = taskRepo.listByUser(user.id);
+    const tagsOf = (title: string) => tasks.find((t) => t.title === title)!.tag_ids;
+    expect(tagsOf('Rapor')).toEqual([byName['İş'], byName.Ev]);
+    expect(tagsOf('Market')).toEqual([byName.Ev]);
+    expect(tagsOf('Yabancı')).toEqual(['00000000-aaaa-bbbb-cccc-000000000000']);
+    void t1;
+    void t2;
+    void t3;
+  });
+});

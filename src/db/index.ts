@@ -10,13 +10,15 @@ import { goalRepo } from './repositories/goalRepo';
 import { goalMilestoneRepo, milestoneViews } from './repositories/goalMilestoneRepo';
 import { goalEntryRepo } from './repositories/goalEntryRepo';
 import { reminderRepo } from './repositories/reminderRepo';
+import { tagRepo } from './repositories/tagRepo';
 
-export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews, reminderRepo };
+export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews, reminderRepo, tagRepo };
 export type { MilestoneView } from './repositories/goalMilestoneRepo';
 export type { GoalJustCompleted } from './repositories/habitRepo';
 export type {
   User,
   Task,
+  Tag,
   Subtask,
   Habit,
   Goal,

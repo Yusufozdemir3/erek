@@ -67,15 +67,16 @@ describe('TaskForm', () => {
 
   it('bitiş saati başlangıçtan sonraysa geçerli, değilse yok sayılır', async () => {
     const onSubmit = jest.fn();
-    const { getByText, getByPlaceholderText } = await renderUI(
+    const { getByText, getByPlaceholderText, getByLabelText, queryByLabelText } = await renderUI(
       <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
     );
     fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Spor');
+    expect(queryByLabelText('Bitiş: Saat yok')).toBeNull(); // no end without a start
     // Start time 09:30
     fireEvent.press(getByText('Saat yok'));
     await pick('time', new Date(2026, 0, 1, 9, 30));
-    // The end-time field is now visible (once a start exists). The remaining "Saat yok" is the end.
-    fireEvent.press(getByText('Saat yok'));
+    // The end-time field is now visible, beside the start.
+    fireEvent.press(getByLabelText('Bitiş: Saat yok'));
     await pick('time', new Date(2026, 0, 1, 10, 0)); // 10:00 > 09:30 → valid
     fireEvent.press(getByText('Ekle'));
     expect(onSubmit).toHaveBeenCalledWith(
@@ -123,29 +124,72 @@ describe('TaskForm', () => {
 
   // The recurrence list opens from its button and closes on a pick.
   describe('tekrar seçici', () => {
-    it('seçenekler kapalı başlar, düğme seçili kipi gösterir', async () => {
-      const { getByText, queryByText } = await renderUI(
-        <TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />
-      );
-      expect(getByText('Tekrar yok')).toBeTruthy(); // summary button
-      expect(queryByText('Her gün')).toBeNull(); // list is closed
+    // The picker is a window; the form shows a one-line summary.
+    const open = (u: Awaited<ReturnType<typeof renderUI>>, summary: string) =>
+      fireEvent.press(u.getByLabelText(`Tekrar: ${summary}`));
+    const pickMode = (u: Awaited<ReturnType<typeof renderUI>>, label: string) =>
+      fireEvent.press(u.getAllByRole('radio').find((r) => r.props.accessibilityLabel === label)!);
+
+    it('pencere kapalı başlar; özet "Tekrar yok" der', async () => {
+      const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />);
+      expect(u.getByLabelText('Tekrar: Tekrar yok')).toBeTruthy();
+      expect(u.queryByText('Birkaç günde bir')).toBeNull();
     });
 
-    it('düğmeye basınca açılır, kip seçilince kapanır ve özet güncellenir', async () => {
+    it('kip seçilince pencere açık kalır; Tamam kapatır, özet ve kayıt güncellenir', async () => {
       const onSubmit = jest.fn();
-      const { getByText, queryByText, getByPlaceholderText } = await renderUI(
-        <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
-      );
-      fireEvent.press(getByText('Tekrar yok'));
-      fireEvent.press(getByText('Her gün')); // now visible → select it
-      expect(queryByText('Tekrar yok')).toBeNull(); // list closed, summary changed
-      expect(getByText('Her gün')).toBeTruthy(); // summary button
+      const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={onSubmit} />);
+      open(u, 'Tekrar yok');
+      expect(u.getAllByRole('radio')).toHaveLength(6); // eşit satırlı tek liste
+      pickMode(u, 'Her gün');
+      expect(u.getByText('Birkaç günde bir')).toBeTruthy(); // hâlâ açık
+      fireEvent.press(u.getByText('Tamam'));
+      expect(u.queryByText('Birkaç günde bir')).toBeNull();
+      expect(u.getByLabelText('Tekrar: Her gün')).toBeTruthy();
 
-      fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Su iç');
-      fireEvent.press(getByText('Ekle'));
+      fireEvent.changeText(u.getByPlaceholderText('Görev başlığı'), 'Su iç');
+      fireEvent.press(u.getByText('Ekle'));
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ recurrence: { freq: 'daily' } }));
+    });
+
+    it('belirli günler: bugünle başlar, gün eklenir; özet günleri sayar', async () => {
+      const today = new Date().getDay();
+      const extra = today === 1 ? 3 : 1; // bugün Pazartesiyse Çarşamba ekle
+      const extraLabel = extra === 1 ? 'Pzt' : 'Çar';
+      const onSubmit = jest.fn();
+      const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={onSubmit} />);
+      open(u, 'Tekrar yok');
+      pickMode(u, 'Belirli günler');
+      fireEvent.press(u.getByLabelText(extraLabel));
+      fireEvent.press(u.getByText('Tamam'));
+      expect(u.getByLabelText(new RegExp(`^Tekrar: .*${extraLabel}`))).toBeTruthy();
+
+      fireEvent.changeText(u.getByPlaceholderText('Görev başlığı'), 'Spor');
+      fireEvent.press(u.getByText('Ekle'));
       expect(onSubmit).toHaveBeenCalledWith(
-        expect.objectContaining({ recurrence: expect.objectContaining({ freq: 'daily' }) })
+        expect.objectContaining({ recurrence: { freq: 'weekly', weekdays: [today, extra].sort((a, b) => a - b) } })
       );
+    });
+
+    it('birkaç günde bir ve ayın günü: sayı alanı seçilen satırın altında', async () => {
+      const onSubmit = jest.fn();
+      const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={onSubmit} />);
+      open(u, 'Tekrar yok');
+      pickMode(u, 'Birkaç günde bir');
+      fireEvent.changeText(u.getByLabelText('Kaç günde bir?'), '3');
+      fireEvent.press(u.getByText('Tamam'));
+      expect(u.getByLabelText('Tekrar: 3 günde bir')).toBeTruthy();
+
+      open(u, '3 günde bir');
+      pickMode(u, 'Her ay');
+      expect(u.queryByLabelText('Kaç günde bir?')).toBeNull(); // yalnız seçili kipin ayarı
+      fireEvent.changeText(u.getByLabelText('Ayın günü:'), '15');
+      fireEvent.press(u.getByText('Tamam'));
+      expect(u.getByLabelText('Tekrar: Her ayın 15. günü')).toBeTruthy();
+
+      fireEvent.changeText(u.getByPlaceholderText('Görev başlığı'), 'Kira');
+      fireEvent.press(u.getByText('Ekle'));
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ recurrence: { freq: 'monthly', monthDay: 15 } }));
     });
   });
 });

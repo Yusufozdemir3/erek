@@ -68,6 +68,8 @@ export function AddSheet({ visible, onClose, initialStep = 'menu', autoVoice = f
       end_time: values.end_time,
       recurrence: values.recurrence,
       shared_with_id: values.shared_with_id,
+      icon: values.icon,
+      tag_ids: values.tag_ids,
     });
     values.subtasks?.forEach((sub) => subtaskRepo.create(created.id, sub));
     const reminders = reminderRepo.replaceAll('task', created.id, values.remind_times);

@@ -9,6 +9,7 @@ import { goalRepo } from '../repositories/goalRepo';
 import { habitRepo } from '../repositories/habitRepo';
 import { reminderRepo } from '../repositories/reminderRepo';
 import { subtaskRepo } from '../repositories/subtaskRepo';
+import { tagRepo } from '../repositories/tagRepo';
 import { taskRepo } from '../repositories/taskRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
@@ -33,7 +34,9 @@ describe('buildExport', () => {
     const h = habitRepo.create({ user_id: uid, title: 'Su', kind: 'numeric', target_amount: 8, unit: 'bardak' });
     habitRepo.incrementAmount(h.id, '2026-10-01', 3, 8);
     habitRepo.toggleLog(habitRepo.create({ user_id: uid, title: 'Kitap' }).id, '2026-10-01', true);
-    const t = taskRepo.create({ user_id: uid, title: 'Alışveriş', due_date: '2026-10-05' });
+    const tag = tagRepo.create(uid, 'Ev', '#10b981')!;
+    tagRepo.softDelete(tagRepo.create(uid, 'Eski', null)!.id); // silinen etiket dışarıda
+    const t = taskRepo.create({ user_id: uid, title: 'Alışveriş', due_date: '2026-10-05', icon: 'cart', tag_ids: [tag.id] });
     subtaskRepo.create(t.id, 'Süt');
     const g = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 100, unit: 'km' });
     goalMilestoneRepo.create(g.id, '50 km', { amount: 50 });
@@ -42,10 +45,11 @@ describe('buildExport', () => {
 
     const doc = buildExport(uid);
     expect(doc.counts).toEqual({
-      habits: 2, habitLogs: 2, tasks: 1, subtasks: 1, goals: 1, goalMilestones: 1, goalEntries: 1, reminders: 1,
+      habits: 2, habitLogs: 2, tasks: 1, subtasks: 1, tags: 1, goals: 1, goalMilestones: 1, goalEntries: 1, reminders: 1,
     });
+    expect(doc.tags[0]).toMatchObject({ id: tag.id, name: 'Ev', color: '#10b981' });
     expect(doc.habitLogs.find((l) => l.habit_id === h.id)).toMatchObject({ amount: 3, log_date: '2026-10-01' });
-    expect(doc.tasks[0]).toMatchObject({ title: 'Alışveriş', due_date: '2026-10-05' });
+    expect(doc.tasks[0]).toMatchObject({ title: 'Alışveriş', due_date: '2026-10-05', icon: 'cart', tag_ids: JSON.stringify([tag.id]) });
   });
 
   it('silinmiş kayıtlar ve silinmiş alışkanlığın günlükleri dışarıda', () => {

@@ -151,7 +151,7 @@ describe('Alışkanlıklar ekranında rehber', () => {
 });
 
 describe('Görevler ekranında rehber', () => {
-  it('yeni kurulumda ilk girişte açılır; hesapsızken paylaşım sayfası yok (7 sayfa)', async () => {
+  it('yeni kurulumda ilk girişte açılır; hesapsızken paylaşım sayfası yok (8 sayfa)', async () => {
     await AsyncStorage.setItem('guide:newInstall', '1');
     await AsyncStorage.setItem('onboarding:done', '1');
     const u = await renderUI(<TasksScreen />);
@@ -160,6 +160,8 @@ describe('Görevler ekranında rehber', () => {
     expect(await u.findByText('Hatırlatma ve sesle ekleme')).toBeTruthy();
     fireEvent.press(await u.findByText('İleri'));
     expect(await u.findByText('Sesle hızlı ekleme')).toBeTruthy();
+    fireEvent.press(await u.findByText('İleri'));
+    expect(await u.findByText('Etiket ve ikon')).toBeTruthy(); // paylaşım sayfası atlandı
     expect(u.getByText('Tamam')).toBeTruthy();
   });
 

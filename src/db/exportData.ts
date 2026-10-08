@@ -25,6 +25,7 @@ export interface ExportDocument {
   habitLogs: Row[];
   tasks: Row[];
   subtasks: Row[];
+  tags: Row[];
   goals: Row[];
   goalMilestones: Row[];
   goalEntries: Row[];
@@ -50,6 +51,7 @@ export function buildExport(userId: string, now: Date = new Date()): ExportDocum
     userId
   );
   const goals = q(`SELECT * FROM goals WHERE user_id = ? AND deleted_at IS NULL ORDER BY title`, userId);
+  const tags = q(`SELECT * FROM tags WHERE user_id = ? AND deleted_at IS NULL ORDER BY position`, userId);
 
   const habitLogs = q(
     `SELECT l.* FROM habit_logs l JOIN habits h ON h.id = l.habit_id
@@ -92,6 +94,7 @@ export function buildExport(userId: string, now: Date = new Date()): ExportDocum
       habitLogs: habitLogs.length,
       tasks: tasks.length,
       subtasks: subtasks.length,
+      tags: tags.length,
       goals: goals.length,
       goalMilestones: goalMilestones.length,
       goalEntries: goalEntries.length,
@@ -101,6 +104,7 @@ export function buildExport(userId: string, now: Date = new Date()): ExportDocum
     habitLogs,
     tasks,
     subtasks,
+    tags,
     goals,
     goalMilestones,
     goalEntries,

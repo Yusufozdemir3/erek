@@ -7,45 +7,25 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Priority, Recurrence } from '@/db';
 import type { Friend } from '@/sync/friends';
-import { extractTime, hmToDate, shiftYmd, toHm, todayDate, toYmd } from '@/lib/helpers';
+import { buildScheduleLabels, extractTime, hmToDate, scheduleLabel, shiftYmd, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { parseTask } from '@/lib/quickAdd/parseTask';
 import { ConfirmDeleteButton } from '@/ui/ConfirmDeleteButton';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { TimePickerModal } from '@/ui/TimePickerModal';
-import { SHORT_NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
+import { TITLE_MAX_LEN } from '@/ui/formLimits';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { makeTaskFormStyles } from '@/ui/taskFormStyles';
 import { longDateLabel, PRIORITY_COLOR, PRIORITY_ORDER, shortDate } from '@/ui/theme';
 import { reminderLimit } from '@/plus/plusLogic';
 import { useFeaturesUnlocked } from '@/plus/plusStore';
+import { TagPicker } from '@/ui/tags';
+import { TASK_ICON_SET, TaskIconGlyph, resolveTaskIcon } from '@/ui/taskIcons';
 import { useVoiceInput } from '@/ui/useVoiceInput';
 import { VoiceButton } from '@/ui/VoiceButton';
 import { voicePatch } from '@/ui/voiceTaskPatch';
-
-// Monday to Sunday (wd = JS getDay).
-const WEEKDAY_OPTIONS = [
-  { labelKey: 'weekday.mon', wd: 1 },
-  { labelKey: 'weekday.tue', wd: 2 },
-  { labelKey: 'weekday.wed', wd: 3 },
-  { labelKey: 'weekday.thu', wd: 4 },
-  { labelKey: 'weekday.fri', wd: 5 },
-  { labelKey: 'weekday.sat', wd: 6 },
-  { labelKey: 'weekday.sun', wd: 0 },
-];
-
-// 'none' = one-time.
-type RepeatMode = 'none' | 'daily' | 'weekly' | 'interval' | 'monthly' | 'yearly';
-
-const REPEAT_OPTIONS: { mode: RepeatMode; labelKey: string }[] = [
-  { mode: 'none', labelKey: 'task.repeatNone' },
-  { mode: 'daily', labelKey: 'habit.everyDay' },
-  { mode: 'weekly', labelKey: 'habit.specificDays' },
-  { mode: 'interval', labelKey: 'habit.freqInterval' },
-  { mode: 'monthly', labelKey: 'task.freqMonthly' },
-  { mode: 'yearly', labelKey: 'task.freqYearly' },
-];
+import { RepeatSheet, type RepeatMode } from '@/ui/RepeatSheet';
 
 // The fields taskRepo.create/update take (the time lives in due_date).
 export interface TaskFormValues {
@@ -59,10 +39,12 @@ export interface TaskFormValues {
   subtasks?: string[];
   // The friend it's shared with (check-off only); never on a recurring task.
   shared_with_id: string | null;
+  icon: string | null;
+  tag_ids: string[];
 }
 
 interface Props {
-  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[]; shared_with_id: string | null }>;
+  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[]; shared_with_id: string | null; icon: string | null; tag_ids: string[] }>;
   submitLabel: string;                  // "Save" | "Add"
   onSubmit: (values: TaskFormValues) => void;
   onDelete?: () => void;                // editing only
@@ -127,7 +109,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(initRepeatMode);
   // Collapsed; the button shows the selected mode.
   const [repeatOpen, setRepeatOpen] = useState(false);
-  const repeatLabel = t(REPEAT_OPTIONS.find((o) => o.mode === repeatMode)!.labelKey);
   const [weekdays, setWeekdays] = useState<number[]>(
     initRec?.freq === 'weekly' ? initRec.weekdays ?? [] : []
   );
@@ -148,10 +129,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [showPicker, setShowPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
-  const [showYearDatePicker, setShowYearDatePicker] = useState(false);
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
   const [newSub, setNewSub] = useState('');
   const [sharedWith, setSharedWith] = useState<string | null>(initial?.shared_with_id ?? null);
+  const [icon, setIcon] = useState<string | null>(initial?.icon ?? null);
+  const [iconOpen, setIconOpen] = useState(false);
+  const [tagIds, setTagIds] = useState<string[]>(initial?.tag_ids ?? []);
   // Recurring tasks can't be shared (the server would drop the share anyway).
   const shareBlocked = repeatMode !== 'none';
 
@@ -229,8 +212,46 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   };
   const removeDraftSub = (i: number) => setDraftSubs((prev) => prev.filter((_, idx) => idx !== i));
 
+  const repeatSummary = (): string =>
+    repeatMode === 'none'
+      ? t('task.repeatNone')
+      : scheduleLabel(buildRecurrence(), buildScheduleLabels(t, (md) => shortDate(`2000-${md}`, lang)));
+
+  // A new mode starts from something sensible: weekly from today, yearly from the due date.
+  const pickRepeatMode = (mode: RepeatMode) => {
+    setRepeatMode(mode);
+    if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
+    if (mode === 'yearly' && yearDates.length === 0) setYearDates([dueDate.slice(5, 10)]);
+  };
+
   const toggleWeekday = (wd: number) => {
     setWeekdays((prev) => (prev.includes(wd) ? prev.filter((x) => x !== wd) : [...prev, wd]));
+  };
+
+  // Incomplete inputs fall back instead of dropping the recurrence: weekly
+  // without days / interval < 2 → daily; monthly or yearly → the due date's day.
+  const buildRecurrence = (): Recurrence | null => {
+    if (repeatMode === 'daily') return { freq: 'daily' };
+    if (repeatMode === 'weekly') {
+      return weekdays.length > 0
+        ? { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) }
+        : { freq: 'daily' };
+    }
+    if (repeatMode === 'interval') {
+      const n = parseInt(everyNText, 10);
+      return Number.isFinite(n) && n >= 2 ? { freq: 'interval', every: n, anchor: dueDate } : { freq: 'daily' };
+    }
+    if (repeatMode === 'monthly') {
+      const d = parseInt(monthDayText, 10);
+      return {
+        freq: 'monthly',
+        monthDay: Number.isFinite(d) && d >= 1 && d <= 31 ? d : Number(dueDate.slice(8, 10)),
+      };
+    }
+    if (repeatMode === 'yearly') {
+      return { freq: 'yearly', dates: yearDates.length > 0 ? yearDates : [dueDate.slice(5, 10)] };
+    }
+    return null;
   };
 
   const submit = () => {
@@ -239,34 +260,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     const due_date = dueTime ? `${dueDate}T${dueTime}:00` : dueDate;
     // Only with a start time, and after it.
     const end_time = dueTime && endTime && endTime > dueTime ? endTime : null;
-    // Incomplete inputs fall back instead of dropping the recurrence: weekly
-    // without days / interval < 2 → daily; monthly or yearly → the due date's day.
-    let recurrence: Recurrence | null = null;
-    if (repeatMode === 'daily') {
-      recurrence = { freq: 'daily' };
-    } else if (repeatMode === 'weekly') {
-      recurrence =
-        weekdays.length > 0
-          ? { freq: 'weekly', weekdays: [...weekdays].sort((a, b) => a - b) }
-          : { freq: 'daily' };
-    } else if (repeatMode === 'interval') {
-      const n = parseInt(everyNText, 10);
-      recurrence =
-        Number.isFinite(n) && n >= 2
-          ? { freq: 'interval', every: n, anchor: dueDate }
-          : { freq: 'daily' };
-    } else if (repeatMode === 'monthly') {
-      const d = parseInt(monthDayText, 10);
-      recurrence = {
-        freq: 'monthly',
-        monthDay: Number.isFinite(d) && d >= 1 && d <= 31 ? d : Number(dueDate.slice(8, 10)),
-      };
-    } else if (repeatMode === 'yearly') {
-      recurrence = {
-        freq: 'yearly',
-        dates: yearDates.length > 0 ? yearDates : [dueDate.slice(5, 10)],
-      };
-    }
+    const recurrence = buildRecurrence();
     onSubmit({
       title: t,
       priority,
@@ -276,6 +270,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       remind_times: remindTimes,
       subtasks: enableSubtaskDraft ? draftSubs : undefined,
       shared_with_id: recurrence ? null : sharedWith,
+      icon,
+      tag_ids: tagIds,
     });
   };
 
@@ -327,6 +323,54 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             </View>
           )}
         </>
+      )}
+
+      {/* Icon and tags share a row: a small square for the icon, the tag chips beside it. */}
+      <View style={styles.pairRow}>
+        <View>
+          <Text style={styles.label}>{t('task.icon')}</Text>
+          <Pressable
+            style={[styles.iconBtn, (icon && resolveTaskIcon(icon)) || iconOpen ? styles.iconBtnOn : styles.iconBtnEmpty]}
+            onPress={() => setIconOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: iconOpen }}
+            accessibilityLabel={t('task.iconA11y', {
+              name: icon && resolveTaskIcon(icon) ? t(resolveTaskIcon(icon)!.labelKey) : t('task.iconNone'),
+            })}
+          >
+            {icon && resolveTaskIcon(icon) ? (
+              <TaskIconGlyph id={icon} size={22} color={colors.primary} />
+            ) : (
+              <Feather name="plus" size={18} color={colors.faint} />
+            )}
+          </Pressable>
+        </View>
+        <View style={styles.pairCol}>
+          <Text style={styles.label}>{t('task.tags')}</Text>
+          <TagPicker selected={tagIds} onChange={setTagIds} />
+        </View>
+      </View>
+      {iconOpen && (
+        <View style={styles.iconGrid}>
+          {TASK_ICON_SET.map((entry) => {
+            const sel = icon === entry.id;
+            return (
+              <Pressable
+                key={entry.id}
+                style={[styles.iconCell, sel && styles.iconCellSel]}
+                onPress={() => {
+                  setIcon(sel ? null : entry.id);
+                  setIconOpen(false);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sel }}
+                accessibilityLabel={t(entry.labelKey)}
+              >
+                <TaskIconGlyph id={entry.id} size={20} color={sel ? colors.primary : colors.muted} />
+              </Pressable>
+            );
+          })}
+        </View>
       )}
 
       <Text style={styles.label}>{t('task.priority')}</Text>
@@ -381,23 +425,57 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         onConfirm={onPickDate}
       />
 
-      <Text style={styles.label}>{t('task.timeOptional')}</Text>
-      <View style={styles.row}>
-        <Pressable style={[styles.dateBtn, voiceMark('time')]} onPress={() => setShowTimePicker(true)}>
-          <Text style={styles.dateBtnText}>{timeLabel(dueTime)}</Text>
-        </Pressable>
+      <View style={styles.pairRow}>
+        <View style={styles.pairCol}>
+          <Text style={styles.label}>{t('task.time')}</Text>
+          <View style={styles.row}>
+            <Pressable style={[styles.dateBtn, voiceMark('time')]} onPress={() => setShowTimePicker(true)}>
+              <Text style={styles.dateBtnText}>{timeLabel(dueTime)}</Text>
+            </Pressable>
+            {dueTime && (
+              <Pressable
+                style={styles.clearIcon}
+                onPress={() => {
+                  setDueTime(null);
+                  setEndTime(null);
+                }}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('task.time')}: ${t('common.clear')}`}
+              >
+                <Feather name="x" size={16} color={colors.muted} />
+              </Pressable>
+            )}
+          </View>
+        </View>
         {dueTime && (
-          <Pressable
-            style={styles.clearBtn}
-            onPress={() => {
-              setDueTime(null);
-              setEndTime(null);
-            }}
-          >
-            <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-          </Pressable>
+          <View style={styles.pairCol}>
+            <Text style={styles.label}>{t('task.end')}</Text>
+            <View style={styles.row}>
+              <Pressable
+                style={styles.dateBtn}
+                onPress={() => setShowEndPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('task.end')}: ${timeLabel(endTime)}`}
+              >
+                <Text style={styles.dateBtnText}>{endTime ?? '—'}</Text>
+              </Pressable>
+              {endTime && (
+                <Pressable
+                  style={styles.clearIcon}
+                  onPress={() => setEndTime(null)}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('task.end')}: ${t('common.clear')}`}
+                >
+                  <Feather name="x" size={16} color={colors.muted} />
+                </Pressable>
+              )}
+            </View>
+          </View>
         )}
       </View>
+      {dueTime && endTime && endTime <= dueTime && <Text style={styles.hintError}>{t('task.endAfterStart')}</Text>}
 
       <TimePickerModal
         visible={showTimePicker}
@@ -407,148 +485,53 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       />
 
       {dueTime && (
-        <>
-          <Text style={styles.label}>{t('task.endTime')}</Text>
-          <View style={styles.row}>
-            <Pressable style={styles.dateBtn} onPress={() => setShowEndPicker(true)}>
-              <Text style={styles.dateBtnText}>{timeLabel(endTime)}</Text>
-            </Pressable>
-            {endTime && (
-              <Pressable style={styles.clearBtn} onPress={() => setEndTime(null)}>
-                <Text style={styles.clearBtnText}>{t('common.clear')}</Text>
-              </Pressable>
-            )}
-          </View>
-          {endTime && endTime <= dueTime && (
-            <Text style={styles.hintError}>{t('task.endAfterStart')}</Text>
-          )}
-
-          <TimePickerModal
-            visible={showEndPicker}
-            value={hmToDate(endTime ?? dueTime)}
-            onClose={() => setShowEndPicker(false)}
-            onConfirm={onPickEndTime}
-          />
-        </>
-      )}
-
-      <ReminderListEditor label={t('task.reminder')} times={remindTimes} onChange={setRemindTimes} />
-
-      {/* A single button with the selected mode opens the list and closes on a
-          pick; the mode's own controls show below it. */}
-      <Text style={styles.label}>{t('task.repeat')}</Text>
-      <Pressable
-        style={styles.repeatBtn}
-        onPress={() => setRepeatOpen((o) => !o)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: repeatOpen }}
-        accessibilityLabel={`${t('task.repeat')}: ${repeatLabel}`}
-      >
-        <Text style={[styles.repeatBtnText, repeatMode !== 'none' && styles.repeatBtnTextOn]}>
-          {repeatLabel}
-        </Text>
-        <Feather
-          name={repeatOpen ? 'chevron-up' : 'chevron-down'}
-          size={18}
-          color={repeatMode !== 'none' ? colors.primary : colors.muted}
+        <TimePickerModal
+          visible={showEndPicker}
+          value={hmToDate(endTime ?? dueTime)}
+          onClose={() => setShowEndPicker(false)}
+          onConfirm={onPickEndTime}
         />
-      </Pressable>
-      {repeatOpen && (
-        <View style={styles.repeatRow}>
-          {REPEAT_OPTIONS.map(({ mode, labelKey }) => {
-            const sel = repeatMode === mode;
-            return (
-              <Pressable
-                key={mode}
-                style={[styles.freqBtn, sel && styles.freqBtnSel]}
-                onPress={() => {
-                  setRepeatMode(mode);
-                  // Start weekly with today's weekday, yearly with the due date.
-                  if (mode === 'weekly' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
-                  if (mode === 'yearly' && yearDates.length === 0) setYearDates([dueDate.slice(5, 10)]);
-                  setRepeatOpen(false);
-                }}
-              >
-                <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>{t(labelKey)}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
       )}
 
-      {repeatMode === 'weekly' && (
-        <View style={styles.dayRow}>
-          {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
-            const sel = weekdays.includes(wd);
-            return (
-              <Pressable
-                key={wd}
-                style={[styles.dayChip, sel && styles.dayChipSel]}
-                onPress={() => toggleWeekday(wd)}
-              >
-                <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{t(labelKey)}</Text>
-              </Pressable>
-            );
-          })}
+      {/* Reminders and repeat share a row; the repeat list and its per-mode
+          controls open full width below it. */}
+      <View style={styles.pairRow}>
+        <View style={styles.pairCol}>
+          <ReminderListEditor label={t('task.reminderShort')} times={remindTimes} onChange={setRemindTimes} compact />
         </View>
-      )}
-
-      {repeatMode === 'interval' && (
-        <View style={styles.freqNumRow}>
-          <Text style={styles.freqNumLabel}>{t('habit.everyNPrompt')}</Text>
-          <TextInput
-            style={styles.freqNumInput}
-            value={everyNText}
-            onChangeText={setEveryNText}
-            keyboardType="number-pad"
-            maxLength={SHORT_NUMBER_MAX_LEN}
-          />
-          <Text style={styles.freqNumHint}>{t('habit.everyNHint')}</Text>
+        <View style={styles.pairCol}>
+          <Text style={styles.label}>{t('task.repeat')}</Text>
+          <Pressable
+            style={styles.repeatBtn}
+            onPress={() => setRepeatOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('task.repeat')}: ${repeatSummary()}`}
+          >
+            <Feather name="repeat" size={15} color={repeatMode !== 'none' ? colors.primary : colors.muted} />
+            <Text
+              style={[styles.repeatBtnText, styles.repeatBtnTextShrink, repeatMode !== 'none' && styles.repeatBtnTextOn]}
+              numberOfLines={2}
+            >
+              {repeatSummary()}
+            </Text>
+          </Pressable>
         </View>
-      )}
-
-      {repeatMode === 'monthly' && (
-        <View style={styles.freqNumRow}>
-          <Text style={styles.freqNumLabel}>{t('task.monthDayPrompt')}</Text>
-          <TextInput
-            style={styles.freqNumInput}
-            value={monthDayText}
-            onChangeText={setMonthDayText}
-            keyboardType="number-pad"
-            maxLength={2}
-          />
-          <Text style={styles.freqNumHint}>{t('task.monthDayHint')}</Text>
-        </View>
-      )}
-
-      {repeatMode === 'yearly' && (
-        <>
-          <View style={styles.dayRow}>
-            {yearDates.map((md) => (
-              <Pressable
-                key={md}
-                style={[styles.dayChip, styles.yearDateChip]}
-                onPress={() => setYearDates((prev) => prev.filter((x) => x !== md))}
-                accessibilityLabel={t('task.removeDateA11y', { date: shortDate(`2000-${md}`, lang) })}
-              >
-                <Text style={styles.yearDateChipText}>{shortDate(`2000-${md}`, lang)} ×</Text>
-              </Pressable>
-            ))}
-            <Pressable style={styles.dayChip} onPress={() => setShowYearDatePicker(true)}>
-              <Text style={styles.dayChipText}>{t('task.addDate')}</Text>
-            </Pressable>
-          </View>
-          <DatePickerModal
-            visible={showYearDatePicker}
-            value={new Date(`${dueDate}T00:00:00`)}
-            onClose={() => setShowYearDatePicker(false)}
-            onConfirm={(picked) => {
-              const md = toYmd(picked).slice(5, 10); // no year
-              setYearDates((prev) => (prev.includes(md) ? prev : [...prev, md].sort()));
-            }}
-          />
-        </>
-      )}
+      </View>
+      <RepeatSheet
+        visible={repeatOpen}
+        onClose={() => setRepeatOpen(false)}
+        mode={repeatMode}
+        onMode={pickRepeatMode}
+        weekdays={weekdays}
+        onToggleWeekday={toggleWeekday}
+        everyN={everyNText}
+        onEveryN={setEveryNText}
+        monthDay={monthDayText}
+        onMonthDay={setMonthDayText}
+        yearDates={yearDates}
+        onYearDates={setYearDates}
+        dueDate={dueDate}
+      />
 
       {/* The friend sees it in their lists and can only check it off. */}
       {shareOptions.length > 0 && (

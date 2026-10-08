@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { requestAdd } from '@/lib/addRequest';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
+import { restDayOffered } from '@/lib/restDay';
 import { refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
@@ -30,6 +32,7 @@ import { DailySummary } from '@/ui/DailySummary';
 import { EmptyState } from '@/ui/EmptyState';
 import { HabitToggle } from '@/ui/HabitToggle';
 import { HabitTimer } from '@/ui/HabitTimer';
+import { useTimer } from '@/ui/TimerProvider';
 import { AmountStepper } from '@/ui/AmountStepper';
 import { PriorityMark } from '@/ui/PriorityMark';
 import { HeaderActions } from '@/ui/HeaderActions';
@@ -40,6 +43,8 @@ import { MetaLine } from '@/ui/MetaLine';
 import { StreakBadge } from '@/ui/StreakBadge';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { TimeBadge } from '@/ui/TimeBadge';
+import { TagPills, tagsOf, useTags } from '@/ui/tags';
+import { TaskIconGlyph } from '@/ui/taskIcons';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Lang } from '@/i18n/translations';
@@ -67,6 +72,8 @@ export default function TodayScreen() {
   // Shared so the ＋ menu can default a new task to the viewed day.
   const { user, selectedDate, setSelectedDate } = useAppData();
   const guide = useFeatureGuide('today');
+  const { tags } = useTags();
+  const timer = useTimer();
   const today = todayDate();
 
   const [showPicker, setShowPicker] = useState(false);
@@ -88,6 +95,8 @@ export default function TodayScreen() {
   const showHabits = typeFilter !== 'task';
   const filteredTasks = showTasks ? tasks : [];
   const filteredHabits = showHabits ? habits : [];
+  // Rest days are habits too; they're listed (with their Undo) under the habit filter.
+  const filteredSkipped = showHabits ? skippedHabits : [];
   // Only plain habits fold away when done; counters and timers can go on.
   const isFoldable = (h: HabitView) => h.completed && h.kind !== 'timer' && h.target == null;
   const openTasks = filteredTasks.filter((t) => t.completed_at === null);
@@ -97,7 +106,7 @@ export default function TodayScreen() {
   const doneCount = doneTasks.length + doneHabits.length;
   const dayIsEmpty = tasks.length === 0 && habits.length === 0 && skippedHabits.length === 0;
   const filterHidesEverything =
-    !dayIsEmpty && filteredTasks.length === 0 && filteredHabits.length === 0;
+    !dayIsEmpty && filteredTasks.length === 0 && filteredHabits.length === 0 && filteredSkipped.length === 0;
 
   const isToday = selectedDate === today;
   // A future day can't be checked off.
@@ -188,6 +197,38 @@ export default function TodayScreen() {
     promptUnlinkGoalIfCompleted(h.id, goalDone, tr, reload);
   };
 
+  // Long press on a habit card: take today off (when it still can be), or open its stats.
+  const openHabitMenu = (h: HabitView) => {
+    tapLight();
+    const canRest = restDayOffered({
+      viewingToday: isToday,
+      completed: h.completed,
+      amount: h.amount,
+      timerRunning: h.kind === 'timer' && timer.isRunning('habit', h.id),
+    });
+    Alert.alert(
+      h.title,
+      canRest ? tr('habit.restDayMenuBody') : undefined,
+      [
+        ...(canRest
+          ? [
+              {
+                text: tr('habit.restDayTake'),
+                onPress: () => {
+                  habitRepo.setSkipped(h.id, selectedDate, true);
+                  reload();
+                  refreshWidget(user.id);
+                },
+              },
+            ]
+          : []),
+        { text: tr('habit.openStats'), onPress: () => router.push({ pathname: '/habit/[id]', params: { id: h.id } }) },
+        { text: tr('common.cancel'), style: 'cancel' as const },
+      ],
+      { cancelable: true }
+    );
+  };
+
   // A typed total, applied as the difference.
   const setHabitAmount = (h: HabitView, value: number) => {
     if (isFuture) return;
@@ -238,7 +279,10 @@ export default function TodayScreen() {
           accessibilityRole="button"
           accessibilityLabel={tr('common.editA11y', { title: t.title })}
         >
-          <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
+          <View style={styles.titleLine}>
+            {t.icon && <TaskIconGlyph id={t.icon} size={17} color={done ? colors.faint : colors.muted} />}
+            <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
+          </View>
           <MetaLine
         items={[
           sharedLabel(t) ? { text: sharedLabel(t)!, icon: 'users' } : null,
@@ -254,6 +298,7 @@ export default function TodayScreen() {
             : null,
         ]}
       />
+          {!t.shared_owner_uid && <TagPills tags={tagsOf(t.tag_ids, tags)} />}
     </Pressable>
         {time && <TimeBadge time={time} endTime={t.end_time} />}
         {!done && <PriorityMark priority={t.priority} />}
@@ -286,10 +331,12 @@ export default function TodayScreen() {
 
   const renderHabit = (h: HabitView) =>
     h.kind === 'timer' ? (
-      <Animated.View
+      <AnimatedPressable
         key={h.id}
         layout={LIST_LAYOUT}
         style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+        onLongPress={() => openHabitMenu(h)}
+        accessibilityHint={tr('habit.cardMenuHint')}
       >
         <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
         <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
@@ -302,12 +349,14 @@ export default function TodayScreen() {
           editable={isToday}
           onSet={(v) => setHabitAmount(h, v)}
         />
-      </Animated.View>
+      </AnimatedPressable>
     ) : h.target != null ? (
-      <Animated.View
+      <AnimatedPressable
         key={h.id}
         layout={LIST_LAYOUT}
         style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+        onLongPress={() => openHabitMenu(h)}
+        accessibilityHint={tr('habit.cardMenuHint')}
       >
         <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
         <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
@@ -322,14 +371,16 @@ export default function TodayScreen() {
           onSet={(v) => setHabitAmount(h, v)}
           disabled={isFuture}
         />
-      </Animated.View>
+      </AnimatedPressable>
     ) : (
       <AnimatedPressable
         key={h.id}
         layout={LIST_LAYOUT}
         style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
         onPress={() => toggleHabit(h)}
+        onLongPress={() => openHabitMenu(h)}
         disabled={isFuture}
+        accessibilityHint={tr('habit.cardMenuHint')}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: h.completed, disabled: isFuture }}
         accessibilityLabel={tr('habit.checkboxA11y', { title: h.title })}
@@ -479,7 +530,7 @@ export default function TodayScreen() {
               )}
               {completedOpen && doneTasks.map(renderTask)}
               {completedOpen && doneHabits.map(renderHabit)}
-              {skippedHabits.map(renderSkipped)}
+              {filteredSkipped.map(renderSkipped)}
             </>
           )}
         </View>
@@ -501,6 +552,7 @@ export default function TodayScreen() {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
+    titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     backToday: { fontSize: 14, fontWeight: '700', color: c.primary },

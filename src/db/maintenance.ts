@@ -17,7 +17,8 @@ import { getDb } from './database';
 export const TOMBSTONE_TTL_DAYS = 90;
 
 // Leaf tables: no other table points at them.
-const LEAF_TABLES = ['subtasks', 'goal_milestones', 'goal_entries', 'reminders'];
+// tags too: tasks point at them only inside a JSON list, which skips unknown ids.
+const LEAF_TABLES = ['subtasks', 'goal_milestones', 'goal_entries', 'reminders', 'tags'];
 
 // Parent tables and their "nothing points at me" guards.
 const PARENT_TABLES: { table: string; guards: string[] }[] = [

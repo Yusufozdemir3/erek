@@ -16,9 +16,11 @@ interface Props {
   label: string;
   times: string[];
   onChange: (times: string[]) => void;
+  // In a narrow column: no "no reminders yet" line under an empty list.
+  compact?: boolean;
 }
 
-export function ReminderListEditor({ label, times, onChange }: Props) {
+export function ReminderListEditor({ label, times, onChange, compact = false }: Props) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
@@ -67,7 +69,7 @@ export function ReminderListEditor({ label, times, onChange }: Props) {
           </Pressable>
         )}
       </View>
-      {times.length === 0 && <Text style={styles.hint}>{t('reminders.none')}</Text>}
+      {times.length === 0 && !compact && <Text style={styles.hint}>{t('reminders.none')}</Text>}
       {atMax && unlocked && <Text style={styles.hint}>{t('reminders.max', { n: limit })}</Text>}
 
       <TimePickerModal

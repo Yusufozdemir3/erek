@@ -87,6 +87,23 @@ create table if not exists public.tasks (
 -- Mevcut kurulumlar için idempotent kolon eklemesi (bitiş saati + hatırlatma saati).
 alter table public.tasks add column if not exists end_time text;
 alter table public.tasks add column if not exists remind_at text;
+-- Görev ikonu + etiketler (yerel migration023). tag_ids = etiket id'lerinin JSON
+-- dizisi; etiketler görev satırıyla birlikte eşitlenir (ayrı bağlantı tablosu yok).
+alter table public.tasks add column if not exists icon    text;
+alter table public.tasks add column if not exists tag_ids text;
+
+-- Kullanıcının kendi oluşturduğu görev etiketleri. Kişisel: görev bir arkadaşla
+-- paylaşılsa bile etiketler paylaşılmaz (arkadaşın cihazı bilinmeyen id'leri atlar).
+create table if not exists public.tags (
+  id         uuid primary key,
+  user_id    uuid not null,
+  name       text not null,
+  color      text,
+  position   integer not null default 0,
+  updated_at timestamptz not null,
+  deleted_at timestamptz
+);
+create index if not exists idx_tags_user on public.tags(user_id);
 
 create table if not exists public.habit_logs (
   id         uuid primary key,
@@ -161,6 +178,7 @@ create index if not exists idx_subtasks_updated on public.subtasks(updated_at);
 create index if not exists idx_goal_milestones_updated on public.goal_milestones(updated_at);
 create index if not exists idx_goal_entries_updated on public.goal_entries(updated_at);
 create index if not exists idx_reminders_updated on public.reminders(updated_at);
+create index if not exists idx_tags_updated on public.tags(updated_at);
 
 -- SUNUCU ZAMAN DAMGASI -----------------------------------------------------
 -- updated_at istemci saatidir; ileri kaymış bir saat pull filigranını bozar.
@@ -180,7 +198,7 @@ declare t text;
 begin
   foreach t in array array[
     'goals','goal_milestones','goal_entries','habits',
-    'tasks','reminders','habit_logs','subtasks'
+    'tasks','reminders','habit_logs','subtasks','tags'
   ] loop
     execute format(
       'alter table public.%I add column if not exists server_updated_at timestamptz not null default now()', t);
@@ -203,6 +221,7 @@ alter table public.subtasks   enable row level security;
 alter table public.goal_milestones enable row level security;
 alter table public.goal_entries enable row level security;
 alter table public.reminders   enable row level security;
+alter table public.tags        enable row level security;
 
 -- Policy'ler idempotent: önce varsa düşür, sonra yeniden kur. Böylece bu dosya
 -- güvenle yeniden çalıştırılabilir ("already exists" hatası vermez, yarım kalmaz).
@@ -210,6 +229,10 @@ alter table public.reminders   enable row level security;
 -- user_id taşıyan tablolar: yalnızca sahibinin satırları.
 drop policy if exists "own goals"  on public.goals;
 create policy "own goals"  on public.goals
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "own tags" on public.tags;
+create policy "own tags" on public.tags
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "own habits" on public.habits;
@@ -314,6 +337,7 @@ begin
   delete from public.goal_milestones where goal_id in (select id from public.goals where user_id = uid);
   delete from public.goal_entries    where goal_id in (select id from public.goals where user_id = uid);
   delete from public.tasks  where user_id = uid;
+  delete from public.tags   where user_id = uid;
   delete from public.habits where user_id = uid;
   delete from public.goals  where user_id = uid;
   delete from auth.users where id = uid;

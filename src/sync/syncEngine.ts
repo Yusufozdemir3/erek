@@ -75,9 +75,16 @@ export const TABLES: TableCfg[] = [
     defaults: { kind: 'binary', goal_factor: 1 },
   },
   {
+    // Before tasks: a pulled task's tag_ids should find its tags already here.
+    table: 'tags',
+    cols: ['id', 'user_id', 'name', 'color', 'position', 'updated_at', 'deleted_at'],
+    hasUserId: true,
+    defaults: { position: 0 },
+  },
+  {
     table: 'tasks',
     // shared_with_id: the friend's RAW cloud uid (they have no identity on this device).
-    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at', 'shared_with_id'],
+    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at', 'shared_with_id', 'icon', 'tag_ids'],
     hasUserId: true,
     defaults: { priority: 'medium' },
     pushWhere: 'shared_owner_uid IS NULL',

@@ -3,6 +3,7 @@
 import { getDb } from '../database';
 import { reminderRepo } from './reminderRepo';
 import { subtaskRepo } from './subtaskRepo';
+import { parseTagIds, tagIdsToJson } from './tagRepo';
 import { chunk, newId, nextTaskOccurrence, nowIso, parseJson, toJson, todayDate } from '../../lib/helpers';
 import type { Task, Priority, Recurrence } from '../../types/models';
 
@@ -34,6 +35,8 @@ function rowToTask(row: any): Task {
     synced: row.synced,
     shared_with_id: row.shared_with_id ?? null,
     shared_owner_uid: row.shared_owner_uid ?? null,
+    icon: row.icon ?? null,
+    tag_ids: parseTagIds(row.tag_ids),
   };
 }
 
@@ -46,6 +49,8 @@ export interface CreateTaskInput {
   recurrence?: Recurrence | null;
   remind_at?: string | null;
   shared_with_id?: string | null; // friend's cloud uid; ignored for recurring tasks
+  icon?: string | null;
+  tag_ids?: string[];
 }
 
 // A task shared WITH me is someone else's: local edits would be pushed,
@@ -70,8 +75,8 @@ export const taskRepo = {
     const now = nowIso();
     db.runSync(
       `INSERT INTO tasks
-       (id, user_id, title, due_date, end_time, priority, recurrence, remind_at, completed_at, updated_at, deleted_at, synced, shared_with_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0, ?)`,
+       (id, user_id, title, due_date, end_time, priority, recurrence, remind_at, completed_at, updated_at, deleted_at, synced, shared_with_id, icon, tag_ids)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0, ?, ?, ?)`,
       [
         id,
         input.user_id,
@@ -84,6 +89,8 @@ export const taskRepo = {
         now,
         // Mirrors the server guard: recurring tasks can't be shared.
         input.recurrence ? null : input.shared_with_id ?? null,
+        input.icon ?? null,
+        tagIdsToJson(input.tag_ids),
       ]
     );
     return this.getById(id)!;
@@ -219,6 +226,8 @@ export const taskRepo = {
     if (fields.priority !== undefined) { sets.push('priority = ?'); vals.push(fields.priority); }
     if (fields.recurrence !== undefined) { sets.push('recurrence = ?'); vals.push(toJson(fields.recurrence)); }
     if (fields.remind_at !== undefined) { sets.push('remind_at = ?'); vals.push(fields.remind_at); }
+    if (fields.icon !== undefined) { sets.push('icon = ?'); vals.push(fields.icon); }
+    if (fields.tag_ids !== undefined) { sets.push('tag_ids = ?'); vals.push(tagIdsToJson(fields.tag_ids)); }
     // Recurring tasks can't be shared (mirrors the server guard).
     if (fields.recurrence) { sets.push('shared_with_id = NULL'); }
     else if (fields.shared_with_id !== undefined) { sets.push('shared_with_id = ?'); vals.push(fields.shared_with_id); }

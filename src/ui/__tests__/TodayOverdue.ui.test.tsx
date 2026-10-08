@@ -15,15 +15,16 @@ jest.mock('expo-router', () => {
   const React = require('react');
   return { useFocusEffect: (cb: () => void | (() => void)) => React.useEffect(cb, [cb]) };
 });
-jest.mock('@/ui/AppData', () => ({
-  useAppData: () => ({
+jest.mock('@/ui/AppData', () => {
+  const app = () => ({
     user: { id: mockUserId },
     selectedDate: mockSelectedDate,
     setSelectedDate: jest.fn(),
     dataVersion: 0,
     notifyDataChanged: jest.fn(),
-  }),
-}));
+  });
+  return { useAppData: app, useOptionalAppData: app };
+});
 jest.mock('@/ui/TimerProvider', () => ({
   useTimer: () => ({ isRunning: () => false }),
 }));

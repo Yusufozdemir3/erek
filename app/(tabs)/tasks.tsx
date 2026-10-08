@@ -32,6 +32,8 @@ import { bulkComplete, bulkDelete, bulkPostpone, type BulkResult } from '@/ui/ta
 import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { TaskEditModal } from '@/ui/TaskEditModal';
+import { TagFilterBar, TagPills, tagsOf, useTags } from '@/ui/tags';
+import { TaskIconGlyph } from '@/ui/taskIcons';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -75,6 +77,9 @@ export default function TasksScreen() {
   const [query, setQuery] = useState('');
   // Selection mode (long press); null = off.
   const [selected, setSelected] = useState<Set<string> | null>(null);
+  const { tags } = useTags();
+  // One tag at a time; null = all tasks.
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     const since = showAllCompleted ? null : shiftDays(todayDate(), -COMPLETED_WINDOW_DAYS);
@@ -96,8 +101,15 @@ export default function TasksScreen() {
   // A typed search stays visible even if the list shrinks.
   const showSearch = tasks.length >= SEARCH_MIN_TASKS || query.length > 0;
 
+  // Only tags some listed task carries; a filter whose tag vanished falls back to all.
+  const usedTags = useMemo(() => tags.filter((tag) => tasks.some((t) => t.tag_ids.includes(tag.id))), [tags, tasks]);
+  const activeTag = tagFilter && usedTags.some((tag) => tag.id === tagFilter) ? tagFilter : null;
+
   const rows = useMemo<Row[]>(() => {
-    const visible = searching ? tasks.filter((t) => matchesWords(t.title, words, lang)) : tasks;
+    // A search also matches the task's tag names.
+    const searchText = (t: Task) => [t.title, ...tagsOf(t.tag_ids, tags).map((tag) => tag.name)].join(' ');
+    const byTag = activeTag ? tasks.filter((t) => t.tag_ids.includes(activeTag)) : tasks;
+    const visible = searching ? byTag.filter((t) => matchesWords(searchText(t), words, lang)) : byTag;
     const pending = visible.filter((t) => t.completed_at === null);
     const completed = visible.filter((t) => t.completed_at !== null);
     const out: Row[] = pending.map((task) => ({ kind: 'task', task }));
@@ -105,13 +117,14 @@ export default function TasksScreen() {
       completed.forEach((task) => out.push({ kind: 'task', task }));
       return out;
     }
-    const completedCount = completed.length + olderCompletedCount;
+    // Older finished tasks aren't loaded, so they can't be counted per tag.
+    const completedCount = completed.length + (activeTag ? 0 : olderCompletedCount);
     if (completedCount > 0) {
       out.push({ kind: 'divider', count: completedCount });
       if (completedOpen) completed.forEach((task) => out.push({ kind: 'task', task }));
     }
     return out;
-  }, [tasks, olderCompletedCount, completedOpen, searching, words, lang]);
+  }, [tasks, olderCompletedCount, completedOpen, searching, words, lang, activeTag, tags]);
 
   const schedLabels = buildScheduleLabels(tr, (md) => shortDate(`2000-${md}`, lang));
 
@@ -288,7 +301,10 @@ export default function TasksScreen() {
                 accessibilityState={selecting ? { selected: !!selected?.has(t.id) } : undefined}
                 accessibilityLabel={selecting ? tr('tasks.bulkSelectA11y', { title: t.title }) : tr('common.editA11y', { title: t.title })}
               >
-                <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
+                <View style={styles.titleLine}>
+                  {t.icon && <TaskIconGlyph id={t.icon} size={17} color={done ? colors.faint : colors.muted} />}
+                  <Text style={[shared.cardTitle, done && shared.cardTitleDone]}>{t.title}</Text>
+                </View>
                 <MetaLine
                   items={[
                     sharedLabel(t) ? { text: sharedLabel(t)!, icon: 'users' } : null,
@@ -305,6 +321,7 @@ export default function TasksScreen() {
                       : null,
                   ]}
                 />
+                {!t.shared_owner_uid && <TagPills tags={tagsOf(t.tag_ids, tags)} />}
               </Pressable>
               {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
               {!done && <PriorityMark priority={t.priority} />}
@@ -313,7 +330,7 @@ export default function TasksScreen() {
         </Animated.View>
       );
     },
-    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors, selected, tasks]
+    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors, selected, tasks, tags]
   );
 
   return (
@@ -323,7 +340,7 @@ export default function TasksScreen() {
         renderItem={renderItem}
         keyExtractor={(r) => (r.kind === 'divider' ? 'completed-divider' : r.task.id)}
         // Rows also depend on state FlatList can't see.
-        extraData={`${openRowId}|${tasks.length}|${completedOpen}|${query}|${selected ? [...selected].join(',') : ''}`}
+        extraData={`${openRowId}|${tasks.length}|${completedOpen}|${query}|${selected ? [...selected].join(',') : ''}|${activeTag}|${tags.length}`}
         contentContainerStyle={shared.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -350,18 +367,21 @@ export default function TasksScreen() {
                 clearLabel={tr('tasks.searchClear')}
               />
             )}
+            <TagFilterBar tags={usedTags} value={activeTag} onChange={setTagFilter} />
           </>
         }
         ListEmptyComponent={
           searching ? (
             <EmptyState icon="search" title={tr('tasks.searchEmpty')} />
+          ) : activeTag ? (
+            <EmptyState icon="tag" title={tr('tags.filterEmpty')} />
           ) : (
             <EmptyState icon="edit" title={tr('empty.tasksTitle')} subtitle={tr('empty.tasksBody')} />
           )
         }
         ListFooterComponent={
           // Only when older finished tasks are really hidden.
-          !searching && completedOpen && olderCompletedCount > 0 ? (
+          !searching && !activeTag && completedOpen && olderCompletedCount > 0 ? (
             <Pressable
               style={styles.showOlderBtn}
               onPress={() => setShowAllCompleted(true)}
@@ -418,6 +438,8 @@ export default function TasksScreen() {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
+    // The optional task icon sits before the title (cardTitle is flex: 1).
+    titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',

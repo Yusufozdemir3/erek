@@ -287,6 +287,28 @@ export const migration022 = `
 ALTER TABLE habits ADD COLUMN skip_dates TEXT;
 `;
 
+// Migration 023: task icons and user-made tags. tasks.icon = an icon id
+// (ui/taskIcons); tasks.tag_ids = a JSON array of tag ids. The tags travel
+// inside the task row (no join table) so they sync with it, last writer wins.
+// A deleted tag's id may linger in tag_ids; readers skip unknown ids.
+export const migration023 = `
+ALTER TABLE tasks ADD COLUMN icon TEXT;
+ALTER TABLE tasks ADD COLUMN tag_ids TEXT;
+
+CREATE TABLE IF NOT EXISTS tags (
+  id         TEXT PRIMARY KEY NOT NULL,
+  user_id    TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  color      TEXT,
+  position   INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  synced     INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_tags_user ON tags(user_id);
+`;
+
 // Applied in order; a schema change = a new element.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -311,4 +333,5 @@ export const migrations = [
   { version: 20, sql: migration020 },
   { version: 21, sql: migration021 },
   { version: 22, sql: migration022 },
+  { version: 23, sql: migration023 },
 ];

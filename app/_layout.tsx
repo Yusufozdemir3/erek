@@ -88,6 +88,7 @@ function ThemedStack() {
         <Stack.Screen name="privacy" options={{ headerShown: true, title: t('profile.privacy'), presentation: 'modal' }} />
         <Stack.Screen name="review" options={{ headerShown: true, title: t('profile.review'), presentation: 'modal' }} />
         <Stack.Screen name="data" options={{ headerShown: true, title: t('profile.data'), presentation: 'modal' }} />
+        <Stack.Screen name="tags" options={{ headerShown: true, title: t('tags.manage'), presentation: 'modal' }} />
         <Stack.Screen name="guides" options={{ headerShown: true, title: t('guides.title'), presentation: 'modal' }} />
         <Stack.Screen name="plus" options={{ headerShown: true, title: t('plus.title'), presentation: 'modal' }} />
         <Stack.Screen name="about" options={{ headerShown: true, title: t('profile.about'), presentation: 'modal' }} />

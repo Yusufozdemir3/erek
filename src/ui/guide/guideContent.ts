@@ -48,6 +48,7 @@ export const GUIDES: Record<GuideId, GuidePage[]> = {
     { icon: 'bell' },
     { icon: 'mic' },
     { icon: 'people', needsAccount: true },
+    { icon: 'tag' },
   ],
   today: [
     { icon: 'home' },
@@ -56,6 +57,7 @@ export const GUIDES: Record<GuideId, GuidePage[]> = {
     { icon: 'search' },
     { icon: 'chart' },
     { icon: 'moon' },
+    { icon: 'clock' },
   ],
   widgets: [
     { icon: 'puzzle' },

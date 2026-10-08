@@ -33,6 +33,7 @@ const PLAN = [
   { key: 'goalEntries', table: 'goal_entries', owned: false },
   { key: 'habits', table: 'habits', owned: true },
   { key: 'habitLogs', table: 'habit_logs', owned: false },
+  { key: 'tags', table: 'tags', owned: true },
   { key: 'tasks', table: 'tasks', owned: true },
   { key: 'subtasks', table: 'subtasks', owned: false },
   { key: 'reminders', table: 'reminders', owned: false },
@@ -41,8 +42,8 @@ type Key = (typeof PLAN)[number]['key'];
 
 // Columns the file never controls.
 const NEVER_FROM_FILE = new Set(['user_id', 'synced', 'deleted_at', 'shared_with_id', 'shared_owner_uid', 'added_by']);
-// Columns that hold JSON text (a recurrence or schedule rule).
-const JSON_COLUMNS = new Set(['schedule', 'recurrence']);
+// Columns that hold JSON text (a recurrence or schedule rule, a tag id list).
+const JSON_COLUMNS = new Set(['schedule', 'recurrence', 'tag_ids']);
 
 export type ParseResult = { ok: true; doc: ExportDocument } | { ok: false; reason: 'tooLarge' | 'notJson' | 'notErek' | 'newerVersion' | 'empty' };
 

@@ -91,6 +91,8 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       end_time: values.end_time,
       recurrence: values.recurrence,
       shared_with_id: values.shared_with_id,
+      icon: values.icon,
+      tag_ids: values.tag_ids,
     });
     const reminders = reminderRepo.replaceAll('task', task.id, values.remind_times);
     const updated = taskRepo.getById(task.id);
@@ -126,6 +128,8 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
           recurrence: task.recurrence,
           remind_times: reminderRepo.listByEntity('task', task.id).map((r) => r.time),
           shared_with_id: task.shared_with_id,
+          icon: task.icon,
+          tag_ids: task.tag_ids,
         }}
         shareFriends={friends}
         submitLabel={tr('common.save')}

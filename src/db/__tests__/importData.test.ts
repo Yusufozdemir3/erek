@@ -10,6 +10,7 @@ import { goalRepo } from '../repositories/goalRepo';
 import { habitRepo } from '../repositories/habitRepo';
 import { reminderRepo } from '../repositories/reminderRepo';
 import { subtaskRepo } from '../repositories/subtaskRepo';
+import { tagRepo } from '../repositories/tagRepo';
 import { taskRepo } from '../repositories/taskRepo';
 import { userRepo } from '../repositories/userRepo';
 import { resetTestDb } from '../../test/dbTestUtils';
@@ -30,7 +31,8 @@ function seedAndExport(): string {
     schedule: { freq: 'weekly', weekdays: [1, 3] } as never,
   });
   habitRepo.toggleLog(read.id, '2026-10-02', true);
-  const t = taskRepo.create({ user_id: uid, title: 'Alışveriş', due_date: '2026-10-05', recurrence: { freq: 'daily' } as never });
+  const tag = tagRepo.create(uid, 'Ev', '#10b981')!;
+  const t = taskRepo.create({ user_id: uid, title: 'Alışveriş', due_date: '2026-10-05', recurrence: { freq: 'daily' } as never, icon: 'cart', tag_ids: [tag.id] });
   subtaskRepo.create(t.id, 'Süt');
   const g = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 100, unit: 'km' });
   goalMilestoneRepo.create(g.id, '50 km', { amount: 50 });
@@ -67,7 +69,7 @@ describe('gidiş-dönüş', () => {
     const after = buildExport(newUid);
     expect(after.counts).toEqual(before.counts);
     // Aynı içerik (updated_at dahil): alanlar bire bir.
-    for (const k of ['habits', 'habitLogs', 'tasks', 'subtasks', 'goals', 'goalMilestones', 'goalEntries', 'reminders'] as const) {
+    for (const k of ['habits', 'habitLogs', 'tasks', 'subtasks', 'tags', 'goals', 'goalMilestones', 'goalEntries', 'reminders'] as const) {
       expect(after[k]).toEqual(before[k].map((r) => ({ ...r, ...('user_id' in r ? { user_id: newUid } : {}) })));
     }
     // Eşitleme için işaretlenir.
@@ -83,7 +85,7 @@ describe('gidiş-dönüş', () => {
     const second = importData(newUid, parsed(text));
 
     expect(Object.values(second.imported).every((n) => n === 0)).toBe(true);
-    expect(second.existing).toBe(once.counts.habits + once.counts.habitLogs + once.counts.tasks + once.counts.subtasks + once.counts.goals + once.counts.goalMilestones + once.counts.goalEntries + once.counts.reminders);
+    expect(second.existing).toBe(once.counts.habits + once.counts.habitLogs + once.counts.tasks + once.counts.subtasks + once.counts.tags + once.counts.goals + once.counts.goalMilestones + once.counts.goalEntries + once.counts.reminders);
     expect(buildExport(newUid).counts).toEqual(once.counts);
   });
 
@@ -264,5 +266,39 @@ describe('kötü niyetli ya da bozuk satırlar', () => {
       (db as unknown as { execSync: unknown }).execSync = execReal;
     }
     expect(habitRepo.getById('habit-0000007')).toBeNull();
+  });
+});
+
+describe('etiketler', () => {
+  it('etiketler görevlerden önce gelir; görevin ikon ve etiketleri korunur', async () => {
+    const text = seedAndExport();
+    const newUid = await newPhone();
+    importData(newUid, parsed(text));
+    const [tag] = tagRepo.listByUser(newUid);
+    expect(tag).toMatchObject({ name: 'Ev', color: '#10b981', user_id: newUid, synced: 0 });
+    expect(taskRepo.listByUser(newUid)[0]).toMatchObject({ icon: 'cart', tag_ids: [tag.id] });
+  });
+
+  it('JSON olmayan tag_ids taşıyan görev atlanır, gerisi gelir', async () => {
+    const doc = JSON.parse(seedAndExport());
+    doc.tasks[0].tag_ids = 'bozuk[';
+    const newUid = await newPhone();
+    const report = importData(newUid, parsed(JSON.stringify(doc)));
+    expect(report.skipped).toBeGreaterThan(0);
+    expect(taskRepo.listByUser(newUid)).toHaveLength(0);
+    expect(tagRepo.listByUser(newUid)).toHaveLength(1);
+  });
+
+  it('etiketsiz eski dışa aktarma dosyası sorunsuz içe aktarılır', async () => {
+    const doc = JSON.parse(seedAndExport());
+    delete doc.tags;
+    for (const t of doc.tasks) {
+      delete t.icon;
+      delete t.tag_ids;
+    }
+    const newUid = await newPhone();
+    const report = importData(newUid, parsed(JSON.stringify(doc)));
+    expect(report.skipped).toBe(0);
+    expect(taskRepo.listByUser(newUid)[0]).toMatchObject({ icon: null, tag_ids: [] });
   });
 });

@@ -12,9 +12,11 @@ import { newId } from '@/lib/helpers';
 
 // Tables whose ids are regenerated, and the columns pointing at them
 // (reminders.entity_id has three possible parents, told apart by entity_type).
+// `inJson`: the column is a JSON id list (tasks.tag_ids); the quoted id is
+// swapped inside it — ids are UUIDs, so the quoted form can't match anything else.
 interface IdTable {
   table: string;
-  refs: { table: string; column: string; where?: string }[];
+  refs: { table: string; column: string; where?: string; inJson?: boolean }[];
 }
 
 const ID_TABLES: IdTable[] = [
@@ -33,6 +35,10 @@ const ID_TABLES: IdTable[] = [
       { table: 'habit_logs', column: 'habit_id' },
       { table: 'reminders', column: 'entity_id', where: "entity_type = 'habit'" },
     ],
+  },
+  {
+    table: 'tags',
+    refs: [{ table: 'tasks', column: 'tag_ids', inJson: true }],
   },
   {
     table: 'tasks',
@@ -74,6 +80,13 @@ export function reassignLocalIds(): ReassignResult {
         if (cfg.table === 'habits') habitIdMap.set(row.id, next);
         db.runSync(`UPDATE ${cfg.table} SET id = ? WHERE id = ?`, [next, row.id]);
         for (const ref of cfg.refs) {
+          if (ref.inJson) {
+            db.runSync(
+              `UPDATE ${ref.table} SET ${ref.column} = replace(${ref.column}, ?, ?) WHERE instr(${ref.column}, ?) > 0`,
+              [JSON.stringify(row.id), JSON.stringify(next), JSON.stringify(row.id)]
+            );
+            continue;
+          }
           const filter = ref.where ? ` AND ${ref.where}` : '';
           db.runSync(
             `UPDATE ${ref.table} SET ${ref.column} = ? WHERE ${ref.column} = ?${filter}`,

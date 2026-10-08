@@ -15,9 +15,10 @@ jest.mock('expo-router', () => {
   const React = require('react');
   return { useFocusEffect: (cb: () => void | (() => void)) => React.useEffect(cb, [cb]) };
 });
-jest.mock('@/ui/AppData', () => ({
-  useAppData: () => ({ user: { id: mockUserId }, dataVersion: 0, notifyDataChanged: jest.fn() }),
-}));
+jest.mock('@/ui/AppData', () => {
+  const app = () => ({ user: { id: mockUserId }, dataVersion: 0, notifyDataChanged: jest.fn() });
+  return { useAppData: app, useOptionalAppData: app };
+});
 jest.mock('@/lib/notifications', () => ({
   refreshTaskReminders: jest.fn(),
   cancelTaskReminders: jest.fn(async () => {}),

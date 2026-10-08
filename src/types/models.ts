@@ -55,6 +55,16 @@ export interface Task extends SyncFields {
   completed_at: string | null;   // null = not completed
   shared_with_id: string | null;   // owner side: the friend's cloud uid
   shared_owner_uid: string | null; // local only: set = someone's task shared with me (check-off only)
+  icon: string | null;             // ui/taskIcons id; null = none
+  tag_ids: string[];               // the user's tags; may hold ids of deleted tags (skip them)
+}
+
+// A user-made task label.
+export interface Tag extends SyncFields {
+  user_id: string;
+  name: string;
+  color: string | null; // a HABIT_COLORS value; null = the neutral default
+  position: number;     // creation order
 }
 
 export interface Goal extends SyncFields {

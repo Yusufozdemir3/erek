@@ -37,6 +37,7 @@ export default function ProfileScreen() {
       : []),
     { icon: 'sliders', label: t('profile.appearance'), href: '/appearance' },
     { icon: 'bell', label: t('profile.notifications'), href: '/notifications' },
+    { icon: 'tag', label: t('tags.manage'), href: '/tags' },
     // Signed out: a locked row that leads to sign-in, so the feature is discoverable.
     ...(signedIn
       ? [{ icon: 'users', label: t('friends.title'), href: '/friends' } as MenuRow]

@@ -48,6 +48,7 @@ export const LINE_ICONS = {
   refresh: f('refresh-cw'),
   sound: f('volume-2'),
   clock: f('clock'),
+  tag: f('tag'),
 } as const;
 
 export type LineIconId = keyof typeof LINE_ICONS;
