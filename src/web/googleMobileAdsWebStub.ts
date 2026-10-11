@@ -36,6 +36,7 @@ export const AdsConsent = {
   showForm: async () => ({}),
   loadAndShowConsentFormIfRequired: async () => ({}),
   getConsentInfo: async () => ({}),
+  showPrivacyOptionsForm: async () => ({}),
   reset: () => {},
 };
 

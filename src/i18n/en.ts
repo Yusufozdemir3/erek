@@ -930,6 +930,7 @@ export const en: Dict = {
   'plus.benefitFriends': 'Unlimited friends',
   'plus.benefitWidgets': 'All widgets',
   'plus.benefitLooks': 'All colors and typefaces',
+  'privacy.adChoices': 'Ad privacy choices',
   'plus.freeNote': 'Adding habits, tasks and goals, streaks, badges, export and app lock stay free, always.',
   'plus.monthly': 'Monthly',
   'plus.annual': 'Yearly',

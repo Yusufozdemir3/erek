@@ -953,6 +953,7 @@ export const tr: Dict = {
   'plus.benefitFriends': 'Sınırsız arkadaş',
   'plus.benefitWidgets': 'Tüm widget’lar',
   'plus.benefitLooks': 'Tüm renkler ve yazı tipleri',
+  'privacy.adChoices': 'Reklam gizlilik tercihleri',
   'plus.freeNote': 'Alışkanlık, görev ve hedef ekleme; seriler, rozetler, dışa aktarma ve uygulama kilidi hep ücretsiz kalır.',
   'plus.monthly': 'Aylık',
   'plus.annual': 'Yıllık',
