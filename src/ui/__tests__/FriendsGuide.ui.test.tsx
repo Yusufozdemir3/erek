@@ -39,6 +39,7 @@ jest.mock('@/sync', () => ({
 beforeEach(async () => {
   await AsyncStorage.clear();
   await AsyncStorage.setItem('login:seen', '1'); // giriş ekranı çoktan geçilmiş
+  await AsyncStorage.setItem('guide:seen:tour', '1'); // tur ekran rehberlerinden önce gelir; burada görülmüş sayılır
   mockAuth = { id: 'a', isAnonymous: false };
 });
 

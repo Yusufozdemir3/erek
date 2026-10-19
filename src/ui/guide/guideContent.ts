@@ -14,6 +14,16 @@ export interface GuidePage {
 }
 
 export const GUIDES: Record<GuideId, GuidePage[]> = {
+  // The quick tour: one short idea per page (guide.tour.*).
+  tour: [
+    { icon: 'add' },
+    { icon: 'clock' },
+    { icon: 'mic' },
+    { icon: 'tap' },
+    { icon: 'calendar' },
+    { icon: 'bell' },
+    { icon: 'home' },
+  ],
   goals: [
     { icon: 'goal' },
     { icon: 'number' },

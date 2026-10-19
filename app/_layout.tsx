@@ -20,6 +20,7 @@ import {
 import { AppDataProvider } from '@/ui/AppData';
 import { LoginGate } from '@/ui/LoginScreen';
 import { OnboardingGate } from '@/ui/Onboarding';
+import { TourGate } from '@/ui/guide/TourGate';
 import { AppLockGate } from '@/ui/AppLockGate';
 import { PushBridge } from '@/ui/PushBridge';
 import { TimerProvider } from '@/ui/TimerProvider';
@@ -105,6 +106,7 @@ function ThemedStack() {
       <OnboardingGate />
       <LoginGate />
       <PushBridge />
+      <TourGate />
       {/* Covers everything, open sheets included, while locked. */}
       <AppLockGate />
     </NavThemeProvider>

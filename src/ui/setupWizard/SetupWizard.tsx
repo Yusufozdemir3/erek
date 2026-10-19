@@ -17,6 +17,8 @@ import {
   AccountStep,
   DoneStep,
   GoalStep,
+  GuidesStep,
+  TipsStep,
   HabitStep,
   LookStep,
   NotificationsStep,
@@ -30,8 +32,9 @@ import { makeWizardStyles } from './wizardStyles';
 import {
   buildSteps,
   continueBlocked,
+  isSkippable,
   progress,
-  SKIPPABLE,
+  REQUIRED_STEPS,
   type Created,
   type Outcomes,
   type StepId,
@@ -46,6 +49,8 @@ export interface WizardResult {
 
 interface Props {
   onDone: (result: WizardResult) => void;
+  // First launch: no "skip all", and the first habit, task and goal must be made.
+  required?: boolean;
 }
 
 // What this build/device can do (decides which pages exist).
@@ -56,7 +61,7 @@ export function wizardCapabilities(): WizardCapabilities {
   };
 }
 
-export function SetupWizard({ onDone }: Props) {
+export function SetupWizard({ onDone, required = false }: Props) {
   const { colors } = useTheme();
   // Edge-to-edge (forced on Android 16): keep the fixed margins, but never less than the system bars + a gap.
   const insets = useSafeAreaInsets();
@@ -77,7 +82,8 @@ export function SetupWizard({ onDone }: Props) {
   const isLast = index === steps.length - 1;
   const step = progress(steps, index);
   const completed = outcomes[id] === 'done';
-  const blocked = continueBlocked(form, completed);
+  const skippable = isSkippable(id, required);
+  const blocked = continueBlocked(form, completed, required && REQUIRED_STEPS.has(id));
 
   const markDone = useCallback((s: StepId) => setOutcomes((o) => (o[s] === 'done' ? o : { ...o, [s]: 'done' })), []);
   const onCompleted = useCallback(() => markDone(id), [id, markDone]);
@@ -101,10 +107,11 @@ export function SetupWizard({ onDone }: Props) {
   const next = () => {
     if (blocked) return;
     if (form?.ready) form.submit();
-    else if (SKIPPABLE.has(id) && outcomes[id] === undefined) setOutcomes((o) => ({ ...o, [id]: 'skipped' }));
+    else if (skippable && outcomes[id] === undefined) setOutcomes((o) => ({ ...o, [id]: 'skipped' }));
     go(index + 1);
   };
   const skipStep = () => {
+    if (!skippable) return;
     setOutcomes((o) => ({ ...o, [id]: 'skipped' }));
     go(index + 1);
   };
@@ -150,6 +157,12 @@ export function SetupWizard({ onDone }: Props) {
     case 'account':
       page = <AccountStep {...props} />;
       break;
+    case 'tips':
+      page = <TipsStep {...props} />;
+      break;
+    case 'guides':
+      page = <GuidesStep {...props} />;
+      break;
     default:
       page = (
         <DoneStep
@@ -179,7 +192,7 @@ export function SetupWizard({ onDone }: Props) {
             </>
           )}
         </View>
-        {!isLast && (
+        {!isLast && !required && (
           <Pressable
             onPress={() => finish(true)}
             hitSlop={10}
@@ -199,6 +212,9 @@ export function SetupWizard({ onDone }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           {page}
+          {required && REQUIRED_STEPS.has(id) && !completed && (
+            <Text style={styles.note}>{t('wizard.required')}</Text>
+          )}
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(36, insets.bottom + 16) }]}>
@@ -212,7 +228,7 @@ export function SetupWizard({ onDone }: Props) {
               <Text style={styles.backText}>{t('wizard.back')}</Text>
             </Pressable>
           )}
-          {SKIPPABLE.has(id) && !completed && (
+          {skippable && !completed && (
             <Pressable style={styles.skipStep} onPress={skipStep} accessibilityRole="button">
               <Text style={styles.skipStepText}>{t('wizard.skipStep')}</Text>
             </Pressable>

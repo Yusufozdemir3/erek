@@ -74,18 +74,45 @@ describe('OnboardingGate + LoginGate', () => {
     expect(u.queryByText(loginTitle())).toBeNull();
   });
 
-  it('"Hepsini atla": bayrak yazılır, hesap adımı görülmediği için giriş ekranı arkadan gelir', async () => {
+  it('ilk açılışta "Hepsini atla" yoktur; alışkanlık/görev/hedef atlanamaz', async () => {
     const u = await renderUI(<Gates />);
-    fireEvent.press(await u.findByLabelText('Kurulum sihirbazının tamamını atla'));
-    expect(await u.findByText(loginTitle())).toBeTruthy();
-    expect(await AsyncStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1');
-    expect(await AsyncStorage.getItem(LOGIN_SEEN_KEY)).toBeNull();
+    expect(u.queryByLabelText('Kurulum sihirbazının tamamını atla')).toBeNull();
+    fireEvent.press(await u.findByLabelText('Kuruluma başla'));
+    fireEvent.press(u.getByLabelText('Devam')); // görünüm (atlanabilir)
+    for (const step of ['habit', 'task', 'goal']) {
+      expect(u.queryByText('Bu adımı atla')).toBeNull();
+      expect(u.getByLabelText('Devam').props.accessibilityState?.disabled).toBe(true);
+      fireEvent.press(u.getByLabelText('Devam')); // basılsa da geçmez
+      expect(u.queryByText('Hazırsın!')).toBeNull();
+      if (step === 'habit') {
+        fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
+        fireEvent.press(u.getByText('Alışkanlığı ekle'));
+      } else if (step === 'task') {
+        fireEvent.changeText(u.getByPlaceholderText(/./), 'Annemi ara');
+        fireEvent.press(u.getByText('Görevi ekle'));
+      } else {
+        const inputs = u.UNSAFE_getAllByType(require('react-native').TextInput);
+        fireEvent.changeText(inputs[0], 'Koş');
+        fireEvent.changeText(inputs[1], '100');
+        fireEvent.press(u.getByText('Hedefi ekle'));
+      }
+      fireEvent.press(u.getByLabelText('Devam'));
+    }
   });
 
   it('hesap adımını görüp atlayan kullanıcıya giriş ekranı İKİNCİ kez çıkmaz', async () => {
     const u = await renderUI(<Gates />);
     fireEvent.press(await u.findByLabelText('Kuruluma başla'));
-    for (let i = 0; i < 7; i++) fireEvent.press(u.queryByText('Bu adımı atla') ?? u.getByLabelText('Devam')); // hesap adımı dahil
+    fireEvent.press(u.getByLabelText('Devam')); // görünüm
+    fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
+    fireEvent.press(u.getByLabelText('Devam')); // "Devam" dolu formu kaydeder
+    fireEvent.changeText(u.getByPlaceholderText(/./), 'Annemi ara');
+    fireEvent.press(u.getByLabelText('Devam'));
+    const inputs = u.UNSAFE_getAllByType(require('react-native').TextInput);
+    fireEvent.changeText(inputs[0], 'Koş');
+    fireEvent.changeText(inputs[1], '100');
+    fireEvent.press(u.getByLabelText('Devam'));
+    for (let i = 0; i < 5; i++) fireEvent.press(u.queryByText('Bu adımı atla') ?? u.getByLabelText('Devam')); // bildirim, widget, hesap, ipuçları, rehberler
     fireEvent.press(u.getByLabelText('Erek’i aç'));
 
     await waitFor(async () => expect(await AsyncStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1'));

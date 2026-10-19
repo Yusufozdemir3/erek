@@ -14,6 +14,8 @@ export type StepId =
   | 'notifications'
   | 'widget'
   | 'account'
+  | 'tips'
+  | 'guides'
   | 'done';
 
 // What the device/build can do decides which steps exist. A step that can't
@@ -27,15 +29,24 @@ export function buildSteps(cap: WizardCapabilities): StepId[] {
   const steps: StepId[] = ['welcome', 'look', 'habit', 'task', 'goal', 'notifications'];
   if (cap.widget) steps.push('widget');
   if (cap.accounts) steps.push('account');
-  steps.push('done');
+  steps.push('tips', 'guides', 'done');
   return steps;
 }
 
 // Steps that can be skipped one by one. Welcome and the closing page can't:
 // they're the frame, and "skip everything" is its own button.
 export const SKIPPABLE: ReadonlySet<StepId> = new Set<StepId>([
-  'look', 'habit', 'task', 'goal', 'notifications', 'widget', 'account',
+  'look', 'habit', 'task', 'goal', 'notifications', 'widget', 'account', 'tips', 'guides',
 ]);
+
+// On the very first launch (`required` mode) the first habit, task and goal can't
+// be skipped: the app should open with something in it. Re-running from Profile
+// keeps every step skippable.
+export const REQUIRED_STEPS: ReadonlySet<StepId> = new Set<StepId>(['habit', 'task', 'goal']);
+
+export function isSkippable(id: StepId, required: boolean): boolean {
+  return SKIPPABLE.has(id) && !(required && REQUIRED_STEPS.has(id));
+}
 
 export type StepOutcome = 'done' | 'skipped';
 export type Outcomes = Partial<Record<StepId, StepOutcome>>;
@@ -49,7 +60,8 @@ export interface FormStatus {
 
 // An empty form blocks only until something was added on the page; leaving
 // without adding anything is what "Skip this step" is for.
-export function continueBlocked(form: FormStatus | null, completed: boolean): boolean {
+export function continueBlocked(form: FormStatus | null, completed: boolean, mustComplete = false): boolean {
+  if (mustComplete && !completed && !form?.ready) return true;
   if (!form) return false;
   return form.dirty ? !form.ready : !completed;
 }
