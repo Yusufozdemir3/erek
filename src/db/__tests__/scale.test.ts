@@ -11,6 +11,10 @@ import { resetTestDb } from '../../test/dbTestUtils';
 
 let userId: string;
 
+// A "today" before every completion keeps the automatic archive (db/archive.ts)
+// out of these completed-window tests; archive.test.ts covers it.
+const NO_ARCHIVE = '2000-01-01';
+
 beforeEach(async () => {
   await resetTestDb();
   userId = userRepo.getOrCreateLocal().id;
@@ -35,18 +39,18 @@ describe('taskRepo.listForScreen — büyük görev listesi', () => {
       db.runSync(`UPDATE tasks SET completed_at = ? WHERE id = ?`, ['2026-06-15T00:00:00.000Z', t.id]);
     }
 
-    const list = taskRepo.listForScreen(userId, '2026-06-01');
+    const list = taskRepo.listForScreen(userId, '2026-06-01', NO_ARCHIVE);
 
     // 800 + 50 rendered, not ~2000.
     expect(list.length).toBe(ACTIVE + RECENT_COMPLETED);
-    expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(OLD_COMPLETED);
+    expect(taskRepo.countCompletedBefore(userId, '2026-06-01', NO_ARCHIVE)).toBe(OLD_COMPLETED);
 
     // Ordering is preserved: incomplete ones stay on top.
     const firstCompletedIdx = list.findIndex((t) => t.completed_at !== null);
     expect(list.slice(0, firstCompletedIdx).every((t) => t.completed_at === null)).toBe(true);
 
     // "Show all" (since=null) really does return everything.
-    expect(taskRepo.listForScreen(userId, null).length).toBe(ACTIVE + OLD_COMPLETED + RECENT_COMPLETED);
+    expect(taskRepo.listForScreen(userId, null, NO_ARCHIVE).length).toBe(ACTIVE + OLD_COMPLETED + RECENT_COMPLETED);
   }, 30_000);
 });
 

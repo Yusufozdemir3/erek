@@ -26,6 +26,7 @@ export {
   type Invite,
 } from './friends';
 export { SharingError, sharingErrorKey, toSharingError, type SharingErrorCode } from './sharingErrors';
+export { sendCongrats, announceFinishedShares, hasPendingFinished } from './celebrations';
 export { sendNudge, getNudgePrefs, setNudgeMute, setNudgesEnabled, type NudgePrefs } from './nudges';
 export {
   shareHabit,
@@ -50,6 +51,8 @@ export {
   type SharedGoalDetail,
 } from './sharedGoals';
 export { toggleSharedTask } from './sharedTasks';
+export { setNickname, nicknameOf, NICKNAME_MAX } from './nicknames';
+export { getMyUsername, setMyUsername, type SetUsernameResult } from './username';
 export {
   runSync,
   prepareFullResync,

@@ -44,7 +44,7 @@ export function TimerPicker({ visible, onClose }: Props) {
   const rows = useMemo<Row[]>(() => {
     if (!visible) return [];
     const habitRows: Row[] = habitRepo
-      .listByUser(user.id)
+      .listActive(user.id)
       .filter((h) => h.kind === 'timer' && h.target_amount)
       .map((h) => ({
         kind: 'habit' as const,
@@ -56,7 +56,7 @@ export function TimerPicker({ visible, onClose }: Props) {
         target: h.target_amount!,
       }));
     const goalRows: Row[] = goalRepo
-      .listByUser(user.id)
+      .listActive(user.id)
       .filter((g) => g.goal_type === 'numeric' && isTimeUnit(g.unit) && g.target_value)
       .map((g) => ({
         kind: 'goal' as const,

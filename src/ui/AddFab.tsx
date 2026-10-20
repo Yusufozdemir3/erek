@@ -26,6 +26,12 @@ const OPTIONS: { key: string; step: AddStep; type: EntityType; labelKey: string;
 ];
 
 // A long press opens the standalone timer picker (TimerPicker) when given.
+// The square already rises 18px over the list, so the hit slop adds nothing
+// upward, and the long press needs a deliberate hold: a thumb resting on the
+// bottom row (reaching for a checkbox, about to scroll) shouldn't open it.
+const LONG_PRESS_MS = 700;
+const HIT_SLOP = { top: 0, bottom: 8, left: 8, right: 8 };
+
 export function AddFabButton({
   open,
   onPress,
@@ -63,7 +69,8 @@ export function AddFabButton({
             }
           : undefined
       }
-      hitSlop={8}
+      delayLongPress={LONG_PRESS_MS}
+      hitSlop={HIT_SLOP}
       accessibilityRole="button"
       accessibilityLabel={open ? t('add.collapse') : t('add.expand')}
       accessibilityHint={onLongPress ? t('timer.longPressHint') : undefined}

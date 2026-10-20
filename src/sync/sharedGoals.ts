@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Goal, GoalEntry, GoalMilestone, GoalType } from '../types/models';
 import { supabase } from './supabase';
 import { SharingError, toSharingError } from './sharingErrors';
+import { ensureNicknames, nameFor, named } from './nicknames';
 import type { Friend } from './friends';
 
 export interface SharedGoal {
@@ -49,6 +50,7 @@ function toGoal(row: any): Goal {
     target_value: row.target_value ?? null,
     current_value: row.current_value ?? 0,
     value_baseline: 0,
+    unarchived_at: null,
     unit: row.unit ?? null,
     deadline: row.deadline ?? null,
     completed_at: row.completed_at ?? null,
@@ -119,9 +121,21 @@ export async function listGoalShares(goalId: string): Promise<string[]> {
 
 // ------------------------------------------------------------ recipient side
 
+// Nicknames are applied on the way out; the caches keep the friend's real name.
+function listWithNicknames(list: SharedGoal[]): SharedGoal[] {
+  return list.map((s) => ({ ...s, owner: named(s.owner) }));
+}
+
+function detailWithNicknames(d: SharedGoalDetail): SharedGoalDetail {
+  const names: Record<string, string | null> = {};
+  for (const [uid, name] of Object.entries(d.names ?? {})) names[uid] = nameFor(uid, name);
+  return { ...d, owner: named(d.owner), names };
+}
+
 export async function getCachedSharedGoals(): Promise<SharedGoal[]> {
   const list = await readJson<SharedGoal[]>(LIST_KEY);
-  return Array.isArray(list) ? list : [];
+  await ensureNicknames();
+  return Array.isArray(list) ? listWithNicknames(list) : [];
 }
 
 export async function getSharedGoals(): Promise<SharedGoal[]> {
@@ -144,7 +158,8 @@ export async function getSharedGoals(): Promise<SharedGoal[]> {
   } catch {
     // Housekeeping only.
   }
-  return list;
+  await ensureNicknames();
+  return listWithNicknames(list);
 }
 
 // Exported for tests: the RPC's jsonb -> SharedGoalDetail.
@@ -180,7 +195,9 @@ export function parseGoalDetail(goalId: string, data: any): SharedGoalDetail {
 }
 
 export async function getCachedSharedGoalDetail(goalId: string): Promise<SharedGoalDetail | null> {
-  return readJson<SharedGoalDetail>(detailKey(goalId));
+  const cached = await readJson<SharedGoalDetail>(detailKey(goalId));
+  await ensureNicknames();
+  return cached ? detailWithNicknames(cached) : null;
 }
 
 export async function getSharedGoalDetail(goalId: string): Promise<SharedGoalDetail> {
@@ -193,7 +210,8 @@ export async function getSharedGoalDetail(goalId: string): Promise<SharedGoalDet
     throw toSharingError(e);
   }
   await writeJson(detailKey(goalId), detail);
-  return detail;
+  await ensureNicknames();
+  return detailWithNicknames(detail);
 }
 
 // Adds progress to a goal shared with me. A negative amount is a correction

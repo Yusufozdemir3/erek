@@ -12,6 +12,7 @@ import type { Habit, HabitKind, HabitLog, Recurrence } from '../types/models';
 import { parseJson } from '../lib/helpers';
 import { supabase } from './supabase';
 import { SharingError, toSharingError } from './sharingErrors';
+import { ensureNicknames, named } from './nicknames';
 import type { Friend } from './friends';
 
 export interface SharedHabit {
@@ -60,6 +61,7 @@ function toSharedHabit(row: any): SharedHabit {
       end_date: row.end_date ?? null,
       goal_contribution: null,
       goal_factor: 1,
+      unarchived_at: null,
       updated_at: row.shared_at,
       deleted_at: null,
       synced: 1,
@@ -124,9 +126,15 @@ export async function listHabitShares(habitId: string): Promise<string[]> {
 
 // ------------------------------------------------------------ recipient side
 
+// Nicknames are applied on the way out; the cache keeps the friend's real name.
+function withNicknames(list: SharedHabit[]): SharedHabit[] {
+  return list.map((s) => ({ ...s, owner: named(s.owner) }));
+}
+
 export async function getCachedSharedHabits(): Promise<SharedHabit[]> {
   const list = await readJson<SharedHabit[]>(LIST_KEY);
-  return Array.isArray(list) ? list : [];
+  await ensureNicknames();
+  return Array.isArray(list) ? withNicknames(list) : [];
 }
 
 export async function getSharedHabits(): Promise<SharedHabit[]> {
@@ -147,7 +155,8 @@ export async function getSharedHabits(): Promise<SharedHabit[]> {
     await AsyncStorage.multiRemove(stale.map(logsKey)).catch(() => {});
     await writeJson(LRU_KEY, lru.filter((id) => live.has(id)));
   }
-  return list;
+  await ensureNicknames();
+  return withNicknames(list);
 }
 
 function rowsToLogs(habitId: string, rows: CachedRow[]): HabitLog[] {

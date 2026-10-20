@@ -2,6 +2,7 @@
 // either may have a deadline.
 
 import { getDb } from '../database';
+import { archiveSql } from '../archive';
 import { newId, nowIso, todayDate } from '../../lib/helpers';
 import { goalEntryRepo } from './goalEntryRepo';
 import { reminderRepo } from './reminderRepo';
@@ -24,6 +25,7 @@ function rowToGoal(row: any): Goal {
     deleted_at: row.deleted_at,
     synced: row.synced,
     value_baseline: row.value_baseline ?? 0,
+    unarchived_at: row.unarchived_at ?? null,
   };
 }
 
@@ -42,6 +44,22 @@ function recompute(id: string, bumpSync: boolean): void {
         WHERE goal_entries.goal_id = goals.id AND goal_entries.deleted_at IS NULL
      ), 0))${sums} WHERE id = ?`,
     vals
+  );
+  syncNumericCompletion(id);
+}
+
+// A numeric goal's completed_at follows current_value >= target_value: set
+// the first time it's reached (kept while it stays there), cleared below it.
+// The archive needs that completion day (db/archive.ts). Never touches
+// updated_at/synced: the caller's own write already queued the row (or, after
+// a pull, every device derives the same).
+function syncNumericCompletion(id: string | null): void {
+  getDb().runSync(
+    `UPDATE goals SET completed_at = CASE
+       WHEN target_value > 0 AND current_value >= target_value THEN COALESCE(completed_at, ?)
+       ELSE NULL END
+     WHERE goal_type = 'numeric' ${id ? 'AND id = ?' : ''}`,
+    id ? [nowIso(), id] : [nowIso()]
   );
 }
 
@@ -80,6 +98,7 @@ export const goalRepo = {
     return row ? rowToGoal(row) : null;
   },
 
+  // Every goal, archived ones too (stats, reminders, export).
   listByUser(userId: string): Goal[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -87,6 +106,31 @@ export const goalRepo = {
       [userId]
     );
     return rows.map(rowToGoal);
+  },
+
+  // The Goals screen and pickers: archived goals left out.
+  listActive(userId: string, today: string = todayDate()): Goal[] {
+    const rows = getDb().getAllSync<any>(
+      `SELECT * FROM goals WHERE user_id = ? AND deleted_at IS NULL AND ${archiveSql.goal.active}
+       ORDER BY updated_at DESC`,
+      [userId, today]
+    );
+    return rows.map(rowToGoal);
+  },
+
+  listArchived(userId: string, today: string = todayDate()): Goal[] {
+    const rows = getDb().getAllSync<any>(
+      `SELECT * FROM goals WHERE user_id = ? AND deleted_at IS NULL AND ${archiveSql.goal.archived}
+       ORDER BY completed_at DESC`,
+      [userId, today]
+    );
+    return rows.map(rowToGoal);
+  },
+
+  // "Restore": back as it is, kept out until it's completed again.
+  unarchive(id: string): void {
+    const now = nowIso();
+    getDb().runSync(`UPDATE goals SET unarchived_at = ?, updated_at = ?, synced = 0 WHERE id = ?`, [now, now, id]);
   },
 
   // goal_type never changes (the fields would no longer fit). current_value is
@@ -127,6 +171,8 @@ export const goalRepo = {
       sets.push('synced = 0');
       vals.push(id);
       db.runSync(`UPDATE goals SET ${sets.join(', ')} WHERE id = ?`, vals);
+      // A new target can complete (or reopen) a numeric goal by itself.
+      if (fields.target_value !== undefined && requested === null) syncNumericCompletion(id);
     }
     if (requested !== null) {
       const delta = requested - before;
@@ -203,6 +249,7 @@ export const goalRepo = {
           WHERE goal_entries.goal_id = goals.id AND goal_entries.deleted_at IS NULL
        ), 0))`
     );
+    syncNumericCompletion(null);
   },
 
   // Takes its reminder rows along (see habitRepo.softDelete).

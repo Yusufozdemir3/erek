@@ -6,7 +6,7 @@
 import { Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { goalMilestoneRepo, goalRepo, habitRepo, milestoneViews, taskRepo } from '@/db';
-import { refreshTaskReminders } from '@/lib/notifications';
+import { refreshTaskReminders, scheduleGeneralReminders } from '@/lib/notifications';
 import { isScheduledOn, isWithinHabitDates, todayDate } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
@@ -106,7 +106,7 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
   // Open goals for the Goals widget: numeric goals by current/target, milestone
   // goals by how many of their milestones are reached.
   const goals = pickGoals(
-    goalRepo.listByUser(userId).map((g) => {
+    goalRepo.listActive(userId, today).map((g) => {
       let ratio = goalRepo.progressRatio(g);
       if (g.goal_type !== 'numeric') {
         const views = milestoneViews(goalMilestoneRepo.listByGoal(g.id), g.current_value);
@@ -125,7 +125,7 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     todayEmptyLabel: translate(lang, 'widget.todayEmpty'),
     quickAddLabel: translate(lang, 'widget.quickAdd'),
     pickable: habitRepo
-      .listByUser(userId)
+      .listActive(userId, today)
       .filter((h) => h.kind === 'binary' || h.kind === 'numeric')
       .map((h) => ({
         id: h.id,
@@ -160,6 +160,9 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
 // Never throws. Taps not yet drained into SQLite are laid over the fresh
 // snapshot, so a refresh never "un-checks" what the user just tapped.
 export async function refreshWidget(userId: string): Promise<void> {
+  // Called after every check-off and data change, which is also when the
+  // general reminder's "anything left today?" answer can change.
+  scheduleGeneralReminders(userId).catch(() => {});
   let snap: WidgetSnapshot;
   try {
     snap = await serialized(async () => {

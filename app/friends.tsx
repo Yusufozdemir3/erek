@@ -29,7 +29,9 @@ import {
   listConnections,
   normalizeInviteCode,
   redeemInvite,
+  NICKNAME_MAX,
   removeConnection,
+  setNickname,
   setNudgeMute,
   sharingErrorKey,
   type Friend,
@@ -76,6 +78,9 @@ export default function FriendsScreen() {
   const [invite, setInvite] = useState<Invite | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [code, setCode] = useState('');
+  // Rename (nickname) editor: which friend, and the text being typed.
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [nickDraft, setNickDraft] = useState('');
   const [redeemBusy, setRedeemBusy] = useState(false);
   // Friend nudges: whom the user muted, and whether this phone can show
   // notifications at all (without it, friends' reminders can't reach them).
@@ -194,6 +199,15 @@ export default function FriendsScreen() {
     }
   };
 
+  const saveNickname = async (friend: Friend) => {
+    if (await setNickname(friend.id, nickDraft)) {
+      setRenaming(null);
+      refresh();
+    } else {
+      Alert.alert(t('friends.renameFailed'));
+    }
+  };
+
   const confirmRemove = (friend: Friend) => {
     const name = friend.displayName ?? t('friends.unknownName');
     Alert.alert(t('friends.removeTitle'), t('friends.removeBody', { name }), [
@@ -251,11 +265,23 @@ export default function FriendsScreen() {
           friends.map((f) => {
             const name = f.displayName ?? t('friends.unknownName');
             return (
-              <View key={f.id} style={styles.friendRow}>
+              <View key={f.id}>
+              <View style={styles.friendRow}>
                 <FriendAvatar friend={f} styles={styles} />
                 <Text style={styles.friendName} numberOfLines={1}>
                   {name}
                 </Text>
+                <Pressable
+                  onPress={() => {
+                    setRenaming(renaming === f.id ? null : f.id);
+                    setNickDraft(f.originalName ? f.displayName ?? '' : '');
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('friends.renameA11y', { name })}
+                >
+                  <Feather name="edit-2" size={17} color={colors.muted} />
+                </Pressable>
                 <Pressable
                   onPress={() => toggleMute(f)}
                   hitSlop={8}
@@ -277,6 +303,34 @@ export default function FriendsScreen() {
                 >
                   <Text style={styles.removeText}>{t('friends.remove')}</Text>
                 </Pressable>
+              </View>
+              {renaming === f.id && (
+                <View style={styles.renameBox}>
+                  <Text style={styles.subTitle}>{t('friends.renameTitle')}</Text>
+                  <TextInput
+                    value={nickDraft}
+                    onChangeText={setNickDraft}
+                    placeholder={t('friends.renamePlaceholder')}
+                    placeholderTextColor={colors.faint}
+                    maxLength={NICKNAME_MAX}
+                    autoFocus
+                    autoCorrect={false}
+                    onSubmitEditing={() => saveNickname(f)}
+                    style={styles.renameInput}
+                  />
+                  <Text style={styles.hint}>
+                    {t('friends.renameHint', { name: f.originalName ?? f.displayName ?? t('friends.unknownName') })}
+                  </Text>
+                  <View style={styles.row}>
+                    <Pressable style={[styles.primaryBtn, styles.flex]} onPress={() => saveNickname(f)} accessibilityRole="button">
+                      <Text style={styles.primaryBtnText}>{t('common.save')}</Text>
+                    </Pressable>
+                    <Pressable style={[styles.outlineBtn, styles.flex]} onPress={() => setRenaming(null)} accessibilityRole="button">
+                      <Text style={styles.outlineBtnText}>{t('common.cancel')}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
               </View>
             );
           })
@@ -430,6 +484,18 @@ const makeStyles = (c: Colors) =>
     avatar: { width: 36, height: 36, borderRadius: 18 },
     avatarFallback: { backgroundColor: c.primarySoft, alignItems: 'center', justifyContent: 'center' },
     avatarInitial: { color: c.primary, fontWeight: '800', fontSize: 15 },
+    renameBox: { paddingBottom: 12 },
+    renameInput: {
+      backgroundColor: c.inputBg,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      fontSize: 16,
+      color: c.text,
+      marginBottom: 6,
+    },
     friendName: { flex: 1, fontSize: 15, fontWeight: '600', color: c.text },
     removeText: { color: c.danger, fontSize: 13, fontWeight: '700' },
     nudgeHint: { backgroundColor: c.primarySoft, borderRadius: 10, padding: 12, gap: 6, marginBottom: 8 },

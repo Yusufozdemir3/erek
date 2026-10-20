@@ -6,6 +6,8 @@ import { Pressable, ScrollView, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSharedHabit } from '@/ui/useSharedHabit';
+import { todayDate } from '@/lib/helpers';
+import { CongratsButton } from '@/ui/CongratsButton';
 import { NudgeButton } from '@/ui/NudgeButton';
 import { HabitStatsBody } from '@/ui/habit/HabitStatsBody';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -44,17 +46,25 @@ export default function SharedHabitScreen() {
           </Text>
         ) : (
           <>
-            {shared && (
-              <NudgeButton
-                kind="habit"
-                itemId={id}
-                ownerName={shared.owner.displayName ?? t('friends.unknownName')}
-                message={t('friends.nudgeHabitMessage', {
-                  name: shared.owner.displayName ?? t('friends.unknownName'),
-                  title: habit.title,
-                })}
-              />
-            )}
+            {shared &&
+              (habit.end_date && habit.end_date < todayDate() ? (
+                <CongratsButton
+                  kind="habit"
+                  itemId={id}
+                  ownerName={shared.owner.displayName ?? t('friends.unknownName')}
+                  title={habit.title}
+                />
+              ) : (
+                <NudgeButton
+                  kind="habit"
+                  itemId={id}
+                  ownerName={shared.owner.displayName ?? t('friends.unknownName')}
+                  message={t('friends.nudgeHabitMessage', {
+                    name: shared.owner.displayName ?? t('friends.unknownName'),
+                    title: habit.title,
+                  })}
+                />
+              ))}
             <HabitStatsBody stats={{ ...stats, habit }} calendar={calendar} subtitle={subtitle} />
           </>
         )}

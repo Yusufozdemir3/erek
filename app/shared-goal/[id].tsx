@@ -15,6 +15,7 @@ import { notifySuccess, tapLight } from '@/lib/haptics';
 import { sharingErrorKey } from '@/sync';
 import { useAppData } from '@/ui/AppData';
 import { useSharedGoal } from '@/ui/useSharedGoal';
+import { CongratsButton } from '@/ui/CongratsButton';
 import { NudgeButton } from '@/ui/NudgeButton';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -99,12 +100,16 @@ export default function SharedGoalScreen() {
               {t('friends.sharedBy', { name: ownerName })}
               {status === 'offline' ? ` · ${t('sharedHabit.offline')}` : ''}
             </Text>
-            <NudgeButton
-              kind="goal"
-              itemId={id}
-              ownerName={ownerName}
-              message={t('friends.nudgeGoalMessage', { name: ownerName, title: goal.title })}
-            />
+            {goal.completed_at ? (
+              <CongratsButton kind="goal" itemId={id} ownerName={ownerName} title={goal.title} />
+            ) : (
+              <NudgeButton
+                kind="goal"
+                itemId={id}
+                ownerName={ownerName}
+                message={t('friends.nudgeGoalMessage', { name: ownerName, title: goal.title })}
+              />
+            )}
 
             <View style={styles.tabBar}>
               {TABS.map((tb) => {

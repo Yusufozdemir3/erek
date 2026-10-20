@@ -309,6 +309,24 @@ CREATE TABLE IF NOT EXISTS tags (
 CREATE INDEX IF NOT EXISTS idx_tags_user ON tags(user_id);
 `;
 
+// Migration 024: automatic archive. Being archived is DERIVED from the data
+// (db/archive.ts), never stored, so every device agrees without a sweep:
+//   task  — one-off, completed at least 7 days ago;
+//   goal  — completed on an earlier day;
+//   habit — its end_date has passed.
+// unarchived_at (synced) is the one stored part: "Restore" stamps it, and an
+// item stays out of the archive until it is completed / ends again after it.
+// Numeric goals now record completed_at too (goalRepo.recompute), so they have
+// a completion day; already-complete ones take their last edit as that day.
+export const migration024 = `
+ALTER TABLE tasks ADD COLUMN unarchived_at TEXT;
+ALTER TABLE goals ADD COLUMN unarchived_at TEXT;
+ALTER TABLE habits ADD COLUMN unarchived_at TEXT;
+UPDATE goals SET completed_at = updated_at
+  WHERE goal_type = 'numeric' AND completed_at IS NULL
+    AND target_value > 0 AND current_value >= target_value;
+`;
+
 // Applied in order; a schema change = a new element.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -334,4 +352,5 @@ export const migrations = [
   { version: 21, sql: migration021 },
   { version: 22, sql: migration022 },
   { version: 23, sql: migration023 },
+  { version: 24, sql: migration024 },
 ];

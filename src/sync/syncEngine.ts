@@ -13,6 +13,7 @@
 // Identity: local rows keep the device's user_id; it's swapped for the uid on
 // push and back on pull, so RLS (auth.uid() = user_id) holds without rewriting local data.
 
+import { announceFinishedShares } from './celebrations';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDb } from '../db/database';
 import { goalRepo } from '../db/repositories/goalRepo';
@@ -52,7 +53,7 @@ export const TABLES: TableCfg[] = [
     table: 'goals',
     // current_value is a derived cache (value_baseline + entries), recomputed
     // after every pull; synced only for older clients.
-    cols: ['id', 'user_id', 'title', 'goal_type', 'target_value', 'current_value', 'value_baseline', 'unit', 'deadline', 'completed_at', 'remind_at', 'start_date', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'title', 'goal_type', 'target_value', 'current_value', 'value_baseline', 'unit', 'deadline', 'completed_at', 'remind_at', 'start_date', 'updated_at', 'deleted_at', 'unarchived_at'],
     hasUserId: true,
     defaults: { current_value: 0, value_baseline: 0 },
   },
@@ -70,7 +71,7 @@ export const TABLES: TableCfg[] = [
   },
   {
     table: 'habits',
-    cols: ['id', 'user_id', 'goal_id', 'title', 'kind', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'start_date', 'end_date', 'skip_dates', 'goal_contribution', 'goal_factor', 'updated_at', 'deleted_at'],
+    cols: ['id', 'user_id', 'goal_id', 'title', 'kind', 'remind_at', 'icon', 'color', 'schedule', 'target_amount', 'unit', 'start_date', 'end_date', 'skip_dates', 'goal_contribution', 'goal_factor', 'updated_at', 'deleted_at', 'unarchived_at'],
     hasUserId: true,
     defaults: { kind: 'binary', goal_factor: 1 },
   },
@@ -84,7 +85,7 @@ export const TABLES: TableCfg[] = [
   {
     table: 'tasks',
     // shared_with_id: the friend's RAW cloud uid (they have no identity on this device).
-    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at', 'shared_with_id', 'icon', 'tag_ids'],
+    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at', 'shared_with_id', 'icon', 'tag_ids', 'unarchived_at'],
     hasUserId: true,
     defaults: { priority: 'medium' },
     pushWhere: 'shared_owner_uid IS NULL',
@@ -488,6 +489,9 @@ export async function runSync(localUserId: string): Promise<SyncResult> {
     goalRepo.recomputeAllFromEntries();
 
     await setSyncOwner(uid);
+    // Finished shared goals/habits: tell the people they are shared with. Not
+    // awaited — a slow push service must never hold up the sync.
+    announceFinishedShares(localUserId).catch(() => {});
     return { status: 'ok', pushed, pulled, at: Date.now() };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

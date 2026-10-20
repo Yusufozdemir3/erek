@@ -12,7 +12,7 @@ import { currentAuthUser } from '@/sync';
 import { todayDate } from '@/lib/helpers';
 import { migrateToMultiReminderIfNeeded, rescheduleEverything } from '@/lib/notifications';
 import { isAdTransitioning, maybeShowInterstitial } from '@/lib/ads';
-import { runSync } from '@/sync';
+import { hasPendingFinished, runSync } from '@/sync';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -53,6 +53,10 @@ const LAST_SYNC_KEY = 'sync:lastSuccessAt';
 // Foreground sync at most this often: not on every app switch, but a session
 // left open for hours still gets backed up.
 const FOREGROUND_SYNC_MIN_GAP_MS = 5 * 60 * 1000;
+// A goal/habit just finished: sync soon (after the edits settle) so the people it
+// is shared with hear about it, instead of at the next launch/foreground.
+const FINISHED_SYNC_DELAY_MS = 4000;
+const FINISHED_SYNC_MIN_GAP_MS = 15 * 1000;
 
 const AppDataContext = createContext<AppData | null>(null);
 
@@ -190,8 +194,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [user, notifyDataChanged]);
 
   // On every foreground: widget, sync (Android keeps the process alive for
-  // days, so launch alone isn't enough), the ad gate, and reminders after a
-  // day rollover.
+  // days, so launch alone isn't enough), the ad gate, and after a day
+  // rollover reminders plus a reload: the archive is date-derived
+  // (db/archive.ts), so a screen left open overnight must drop what moved there.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
       if (s !== 'active' || !user) return;
@@ -206,10 +211,23 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       if (lastRescheduleDayRef.current !== today) {
         lastRescheduleDayRef.current = today;
         rescheduleEverything(user.id);
+        notifyDataChanged();
       }
     });
     return () => sub.remove();
-  }, [user, syncUser]);
+  }, [user, syncUser, notifyDataChanged]);
+
+  useEffect(() => {
+    if (!user || !authUser || authUser.isAnonymous) return;
+    const timer = setTimeout(() => {
+      hasPendingFinished(user.id)
+        .then((pending) => {
+          if (pending && Date.now() - lastSyncAttemptRef.current >= FINISHED_SYNC_MIN_GAP_MS) syncUser(user.id);
+        })
+        .catch(() => {});
+    }, FINISHED_SYNC_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [dataVersion, user, authUser, syncUser]);
 
   // Memoized so consumers only re-render when a field actually changes.
   const value = useMemo<AppData | null>(

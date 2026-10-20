@@ -1,7 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <application>
     <receiver
         android:name="expo.modules.timernotification.TimerActionReceiver"
         android:exported="false" />
+    <!-- Çalışan zamanlayıcı kartını sürece bağlar: uygulama son uygulamalardan
+         silinse ya da arka planda temizlense bile kart kalır. -->
+    <service
+        android:name="expo.modules.timernotification.TimerForegroundService"
+        android:exported="false"
+        android:foregroundServiceType="specialUse">
+      <property
+          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="Kullanıcının başlattığı alışkanlık/hedef zamanlayıcısını bildirim kartında canlı tutar" />
+    </service>
   </application>
 </manifest>

@@ -20,9 +20,10 @@ import {
 import { AppDataProvider } from '@/ui/AppData';
 import { LoginGate } from '@/ui/LoginScreen';
 import { OnboardingGate } from '@/ui/Onboarding';
-import { TourGate } from '@/ui/guide/TourGate';
 import { AppLockGate } from '@/ui/AppLockGate';
 import { PushBridge } from '@/ui/PushBridge';
+import { TourGate } from '@/ui/guide/TourGate';
+import { UsernamePrompt } from '@/ui/UsernamePrompt';
 import { TimerProvider } from '@/ui/TimerProvider';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
 import { I18nProvider, useI18n } from '@/i18n/I18nProvider';
@@ -90,6 +91,8 @@ function ThemedStack() {
         <Stack.Screen name="review" options={{ headerShown: true, title: t('profile.review'), presentation: 'modal' }} />
         <Stack.Screen name="data" options={{ headerShown: true, title: t('profile.data'), presentation: 'modal' }} />
         <Stack.Screen name="tags" options={{ headerShown: true, title: t('tags.manage'), presentation: 'modal' }} />
+        <Stack.Screen name="username" options={{ headerShown: true, title: t('username.title'), presentation: 'modal' }} />
+        <Stack.Screen name="archive" options={{ headerShown: true, title: t('archive.title'), presentation: 'modal' }} />
         <Stack.Screen name="guides" options={{ headerShown: true, title: t('guides.title'), presentation: 'modal' }} />
         <Stack.Screen name="plus" options={{ headerShown: true, title: t('plus.title'), presentation: 'modal' }} />
         <Stack.Screen name="about" options={{ headerShown: true, title: t('profile.about'), presentation: 'modal' }} />
@@ -106,6 +109,7 @@ function ThemedStack() {
       <OnboardingGate />
       <LoginGate />
       <PushBridge />
+      <UsernamePrompt />
       <TourGate />
       {/* Covers everything, open sheets included, while locked. */}
       <AppLockGate />

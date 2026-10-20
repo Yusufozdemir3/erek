@@ -18,6 +18,7 @@ describe('getNotificationPrefs', () => {
       goalReminders: true,
       timerDone: true,
       weeklyReview: false, // isteğe bağlı: kullanıcı açar
+      generalReminders: true,
       sound: true,
       vibration: true,
       customSoundUri: null,

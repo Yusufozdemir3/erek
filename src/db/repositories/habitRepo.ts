@@ -2,6 +2,7 @@
 // derived data would drift during sync.
 
 import { getDb } from '../database';
+import { archiveSql } from '../archive';
 import {
   chunk,
   newId,
@@ -58,6 +59,7 @@ function rowToHabit(row: any): Habit {
     synced: row.synced,
     goal_contribution: row.goal_contribution ?? null,
     goal_factor: row.goal_factor ?? 1,
+    unarchived_at: row.unarchived_at ?? null,
   };
 }
 
@@ -118,6 +120,7 @@ export const habitRepo = {
     return row ? rowToHabit(row) : null;
   },
 
+  // Every habit, archived (ended) ones too: stats, history, reminders.
   listByUser(userId: string): Habit[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
@@ -125,6 +128,32 @@ export const habitRepo = {
       [userId]
     );
     return rows.map(rowToHabit);
+  },
+
+  // The Habits screen and pickers: archived habits left out.
+  listActive(userId: string, today: string = todayDate()): Habit[] {
+    const rows = getDb().getAllSync<any>(
+      `SELECT * FROM habits WHERE user_id = ? AND deleted_at IS NULL AND ${archiveSql.habit.active}
+       ORDER BY updated_at DESC`,
+      [userId, today]
+    );
+    return rows.map(rowToHabit);
+  },
+
+  listArchived(userId: string, today: string = todayDate()): Habit[] {
+    const rows = getDb().getAllSync<any>(
+      `SELECT * FROM habits WHERE user_id = ? AND deleted_at IS NULL AND ${archiveSql.habit.archived}
+       ORDER BY end_date DESC`,
+      [userId, today]
+    );
+    return rows.map(rowToHabit);
+  },
+
+  // "Restore": back on the Habits screen as it is (still ended), until its end
+  // date is moved later and passes again.
+  unarchive(id: string): void {
+    const now = nowIso();
+    getDb().runSync(`UPDATE habits SET unarchived_at = ?, updated_at = ?, synced = 0 WHERE id = ?`, [now, now, id]);
   },
 
   update(id: string, fields: Partial<CreateHabitInput>): void {

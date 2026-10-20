@@ -9,12 +9,16 @@ import {
   rescheduleAllGoalReminders,
   rescheduleAllReminders,
   rescheduleAllTaskReminders,
+  scheduleGeneralReminders,
   scheduleWeeklyReview,
 } from '@/lib/notifications';
 import {
   DEFAULT_NOTIFICATION_PREFS,
+  getGeneralTimes,
   getNotificationPrefs,
+  MAX_GENERAL_TIMES,
   setCustomSound,
+  setGeneralTimes,
   setNotificationPref,
   type BoolPrefKey,
   type NotificationPrefs,
@@ -23,7 +27,9 @@ import { getCustomSoundTitle } from '@/lib/customNotificationChannel';
 import { pickNotificationSound } from '@/lib/ringtonePicker';
 import { syncPushRegistration } from '@/lib/pushRegistration';
 import { getNudgePrefs, setNudgesEnabled } from '@/sync';
+import { hmToDate, toHm } from '@/lib/helpers';
 import { useAppData } from '@/ui/AppData';
+import { TimePickerModal } from '@/ui/TimePickerModal';
 import { FeatureGuide } from '@/ui/guide/FeatureGuide';
 import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -35,6 +41,7 @@ const TYPE_ROWS: { key: BoolPrefKey; labelKey: string }[] = [
   { key: 'habitReminders', labelKey: 'profile.notifHabitReminders' },
   { key: 'taskReminders', labelKey: 'profile.notifTaskReminders' },
   { key: 'goalReminders', labelKey: 'profile.notifGoalReminders' },
+  { key: 'generalReminders', labelKey: 'profile.notifGeneral' },
   { key: 'timerDone', labelKey: 'profile.notifTimerDone' },
   { key: 'weeklyReview', labelKey: 'profile.notifWeeklyReview' },
 ];
@@ -50,10 +57,21 @@ export default function NotificationsScreen() {
   // Friend nudges: an ACCOUNT preference kept on the server (it decides
   // whether a friend's nudge is delivered), unlike the device prefs above.
   const [nudgesOn, setNudgesOn] = useState<boolean | null>(null);
+  const [generalTimes, setGeneralTimesState] = useState<string[]>([]);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   useEffect(() => {
     getNotificationPrefs().then(setPrefs);
+    getGeneralTimes().then(setGeneralTimesState);
   }, []);
+
+  const changeGeneralTimes = (times: string[]) => {
+    const next = [...new Set(times)].sort().slice(0, MAX_GENERAL_TIMES);
+    setGeneralTimesState(next);
+    setGeneralTimes(next)
+      .then(() => scheduleGeneralReminders(user.id, true))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (!uid) return;
@@ -87,6 +105,8 @@ export default function NotificationsScreen() {
     if (key === 'enabled') saved.then(() => syncPushRegistration(uid, lang));
     // The weekly review has no entity, so it's applied separately.
     if (key === 'enabled' || key === 'weeklyReview') saved.then(() => scheduleWeeklyReview());
+    // Asks for notification permission the moment the user turns it on.
+    if (key === 'enabled' || key === 'generalReminders') saved.then(() => scheduleGeneralReminders(user.id, value));
   };
 
   // A pick (Silent included) is saved and applied; cancel changes nothing.
@@ -138,6 +158,41 @@ export default function NotificationsScreen() {
           </View>
         ))}
       </View>
+
+      {prefs.generalReminders && (
+        <View style={[styles.card, { marginTop: 16 }, off && styles.rowDisabled]}>
+          <Text style={styles.cardTitle}>{t('notifications.generalTitle')}</Text>
+          <View style={styles.chipRow}>
+            {generalTimes.map((hm) => (
+              <Pressable
+                key={hm}
+                disabled={off}
+                style={styles.chip}
+                onPress={() => changeGeneralTimes(generalTimes.filter((x) => x !== hm))}
+                accessibilityRole="button"
+                accessibilityLabel={t('reminders.removeA11y', { time: hm })}
+              >
+                <Text style={styles.chipText}>{hm} ×</Text>
+              </Pressable>
+            ))}
+            {generalTimes.length < MAX_GENERAL_TIMES && (
+              <Pressable disabled={off} style={styles.addBtn} onPress={() => setShowTimePicker(true)}>
+                <Text style={styles.addBtnText}>＋ {t('reminders.add')}</Text>
+              </Pressable>
+            )}
+          </View>
+          <Text style={styles.hint}>{t('notifications.generalHint')}</Text>
+          <TimePickerModal
+            visible={showTimePicker}
+            value={hmToDate(null)}
+            onClose={() => setShowTimePicker(false)}
+            onConfirm={(picked) => {
+              changeGeneralTimes([...generalTimes, toHm(picked)]);
+              setShowTimePicker(false);
+            }}
+          />
+        </View>
+      )}
 
       {/* Each sound × vibration combination is its own Android channel. */}
       <View style={[styles.card, { marginTop: 16 }]}>
@@ -239,4 +294,23 @@ const makeStyles = (c: Colors) =>
     switchLabel: { fontSize: 14, color: c.text, flex: 1, marginRight: 12 },
     rowDisabled: { opacity: 0.4 },
     linkBtn: { fontSize: 13, fontWeight: '700', color: c.primary },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+    chip: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.primary,
+      backgroundColor: c.primarySoft,
+    },
+    chipText: { fontSize: 13, fontWeight: '700', color: c.primary },
+    addBtn: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.inputBg,
+    },
+    addBtnText: { fontSize: 13, fontWeight: '600', color: c.muted },
   });

@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONArray
@@ -24,7 +25,7 @@ import org.json.JSONObject
 object TimerNotifier {
   const val ACTION = "expo.modules.timernotification.ACTION"
   private const val CHANNEL_ID = "timer-running"
-  private const val NOTIFICATION_ID = 7421
+  const val NOTIFICATION_ID = 7421
   private const val PAUSED_TIMEOUT_MS = 30L * 60 * 1000
   private const val PREFS = "timer_notification"
   private const val KEY_STATE = "state"
@@ -79,9 +80,34 @@ object TimerNotifier {
     }
   }
 
+  fun loadState(ctx: Context): JSONObject? = synchronized(lock) {
+    val raw = prefs(ctx).getString(KEY_STATE, null) ?: return null
+    try { JSONObject(raw) } catch (e: Exception) { null }
+  }
+
+  // Çalışırken kart foreground service'in; duraklatılmış kart sıradan bildirim.
   private fun render(ctx: Context, o: JSONObject) {
-    ensureChannel(ctx, o.optString("channelName", ""))
     val manager = ctx.getSystemService(NotificationManager::class.java) ?: return
+    val service = TimerForegroundService.instance
+    if (o.optBoolean("running", false)) {
+      var started = false
+      try {
+        ensureChannel(ctx, o.optString("channelName", ""))
+        ContextCompat.startForegroundService(ctx, Intent(ctx, TimerForegroundService::class.java))
+        started = true
+      } catch (e: Exception) {
+        // Arka plandan başlatma reddedildi: sıradan kart.
+      }
+      if (!started) manager.notify(NOTIFICATION_ID, build(ctx, o))
+      else if (service != null) manager.notify(NOTIFICATION_ID, build(ctx, o)) // zaten foreground: yalnız yenile
+    } else {
+      service?.release(true)
+      manager.notify(NOTIFICATION_ID, build(ctx, o))
+    }
+  }
+
+  fun build(ctx: Context, o: JSONObject): Notification {
+    ensureChannel(ctx, o.optString("channelName", ""))
     val running = o.optBoolean("running", false)
 
     val card = color(o, "card", Color.WHITE)
@@ -112,7 +138,9 @@ object TimerNotifier {
     views.setContentDescription(R.id.timer_stop, o.optString("finishLabel", ""))
     views.setOnClickPendingIntent(R.id.timer_stop, button(ctx, "finish", 3))
 
-    val elapsedMs = o.optDouble("elapsedMs", 0.0).toLong()
+    // Servis yeniden başlatılınca kart, kaydedildiği andan beri geçen süreyle kurulur.
+    val sinceShown = if (running) (System.currentTimeMillis() - o.optLong("shownAt", System.currentTimeMillis())).coerceAtLeast(0) else 0L
+    val elapsedMs = o.optDouble("elapsedMs", 0.0).toLong() + sinceShown
     val target = o.optString("targetText", "")
     val clockText = clock(elapsedMs / 1000) + if (target.isEmpty()) "" else " / $target"
     val text: String
@@ -151,12 +179,13 @@ object TimerNotifier {
       .setShowWhen(false)
     // A paused timer should not linger for hours.
     if (!running && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) builder.setTimeoutAfter(PAUSED_TIMEOUT_MS)
-    manager.notify(NOTIFICATION_ID, builder.build())
+    return builder.build()
   }
 
   fun cancel(ctx: Context) {
     synchronized(lock) {
       prefs(ctx).edit().remove(KEY_STATE).apply()
+      TimerForegroundService.instance?.release(false)
       ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
     }
   }
@@ -182,6 +211,7 @@ object TimerNotifier {
         }
         op == "finish" -> {
           prefs(ctx).edit().remove(KEY_STATE).apply()
+          TimerForegroundService.instance?.release(false)
           ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
         }
         else -> return // stale button (e.g. a second tap)

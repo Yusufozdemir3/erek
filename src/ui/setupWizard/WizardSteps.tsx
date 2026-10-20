@@ -106,12 +106,12 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
 
 // ---------------------------------------------------------------- welcome
 
-export function WelcomeStep() {
+export function WelcomeStep({ required = false }: { required?: boolean }) {
   const { t } = useI18n();
   const { styles } = useWizardStyles();
   return (
     <>
-      <Header icon="welcome" title={t('wizard.welcome.title')} body={t('wizard.welcome.body')} />
+      <Header icon="welcome" title={t('wizard.welcome.title')} body={t(required ? 'wizard.welcome.bodyRequired' : 'wizard.welcome.body')} />
       <Text style={styles.note}>{t('wizard.welcome.note')}</Text>
     </>
   );

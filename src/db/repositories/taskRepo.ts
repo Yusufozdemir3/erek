@@ -1,6 +1,7 @@
 // Tasks.
 
 import { getDb } from '../database';
+import { archiveSql } from '../archive';
 import { reminderRepo } from './reminderRepo';
 import { subtaskRepo } from './subtaskRepo';
 import { parseTagIds, tagIdsToJson } from './tagRepo';
@@ -37,6 +38,7 @@ function rowToTask(row: any): Task {
     shared_owner_uid: row.shared_owner_uid ?? null,
     icon: row.icon ?? null,
     tag_ids: parseTagIds(row.tag_ids),
+    unarchived_at: row.unarchived_at ?? null,
   };
 }
 
@@ -118,15 +120,16 @@ export const taskRepo = {
 
   // The Tasks screen: every open task plus those completed since
   // `completedSince` (null = all), so a year of finished tasks doesn't bury
-  // the open ones. Completed ones sort last.
-  listForScreen(userId: string, completedSince: string | null): Task[] {
+  // the open ones. Completed ones sort last; archived ones are left out.
+  listForScreen(userId: string, completedSince: string | null, today: string = todayDate()): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
       `SELECT * FROM tasks
-       WHERE user_id = ? AND deleted_at IS NULL
+       WHERE user_id = ?1 AND deleted_at IS NULL
          AND (completed_at IS NULL OR ?2 IS NULL OR date(completed_at, 'localtime') >= ?2)
+         AND ${archiveSql.task.active.replace('?', '?3')}
        ORDER BY (completed_at IS NOT NULL), (due_date IS NULL), ${DUE_ORDER_SQL}`,
-      [userId, completedSince]
+      [userId, completedSince, today]
     );
     return rows.map(rowToTask);
   },
@@ -146,13 +149,14 @@ export const taskRepo = {
   },
 
   // Completed tasks hidden by listForScreen's limit (for the "show all" button).
-  countCompletedBefore(userId: string, since: string): number {
+  countCompletedBefore(userId: string, since: string, today: string = todayDate()): number {
     const db = getDb();
     const row = db.getFirstSync<{ n: number }>(
       `SELECT COUNT(*) AS n FROM tasks
        WHERE user_id = ? AND deleted_at IS NULL
-         AND completed_at IS NOT NULL AND date(completed_at, 'localtime') < ?`,
-      [userId, since]
+         AND completed_at IS NOT NULL AND date(completed_at, 'localtime') < ?
+         AND ${archiveSql.task.active}`,
+      [userId, since, today]
     );
     return row?.n ?? 0;
   },
@@ -175,17 +179,50 @@ export const taskRepo = {
     return rows.map(rowToTask);
   },
 
-  // Tasks due exactly on `date`, completed included (Today on another day; no carry-over).
-  listByDueDate(userId: string, date: string): Task[] {
+  // Tasks due exactly on `date`, completed included (Today on another day; no
+  // carry-over). Archived ones only with includeArchived (past days and the
+  // week strip are history).
+  listByDueDate(userId: string, date: string, includeArchived = false, today: string = todayDate()): Task[] {
     const db = getDb();
     const rows = db.getAllSync<any>(
       `SELECT * FROM tasks
        WHERE user_id = ? AND deleted_at IS NULL
          AND due_date IS NOT NULL AND date(due_date) = ?
+         AND (? OR ${archiveSql.task.active})
        ORDER BY (completed_at IS NOT NULL), ${DUE_ORDER_SQL}`,
-      [userId, date]
+      [userId, date, includeArchived ? 1 : 0, today]
     );
     return rows.map(rowToTask);
+  },
+
+  // The archive screen: newest completion first.
+  listArchived(userId: string, today: string = todayDate()): Task[] {
+    const rows = getDb().getAllSync<any>(
+      `SELECT * FROM tasks
+       WHERE user_id = ? AND deleted_at IS NULL AND ${archiveSql.task.archived}
+       ORDER BY completed_at DESC`,
+      [userId, today]
+    );
+    return rows.map(rowToTask);
+  },
+
+  // "Restore" from the archive: back as it is (still completed), kept out of
+  // the archive until it's completed again. A task shared WITH me can't be
+  // pushed, so there it is a local-only mark (synced/updated_at untouched; a
+  // newer owner edit may archive it again).
+  unarchive(id: string): void {
+    const db = getDb();
+    const now = nowIso();
+    const row = db.getFirstSync<{ shared_owner_uid: string | null }>(
+      `SELECT shared_owner_uid FROM tasks WHERE id = ?`,
+      [id]
+    );
+    if (!row) return;
+    if (row.shared_owner_uid) {
+      db.runSync(`UPDATE tasks SET unarchived_at = ? WHERE id = ?`, [now, id]);
+    } else {
+      db.runSync(`UPDATE tasks SET unarchived_at = ?, updated_at = ?, synced = 0 WHERE id = ?`, [now, now, id]);
+    }
   },
 
   // Completing a RECURRING task moves the same row to its next occurrence

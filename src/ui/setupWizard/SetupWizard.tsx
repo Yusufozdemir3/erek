@@ -134,7 +134,7 @@ export function SetupWizard({ onDone, required = false }: Props) {
   let page: React.JSX.Element;
   switch (id) {
     case 'welcome':
-      page = <WelcomeStep />;
+      page = <WelcomeStep required={required} />;
       break;
     case 'look':
       page = <LookStep {...props} />;
