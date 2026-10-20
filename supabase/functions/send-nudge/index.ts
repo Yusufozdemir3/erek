@@ -1,4 +1,6 @@
-// send-nudge — the ONLY place a friend-nudge push is sent from.
+// send-nudge — the ONLY place a friend push is sent from: reminders to an
+// item's owner (action "nudge", the default), "finished" notices from an owner
+// to the people an item is shared with, and congratulations back to the owner.
 //
 // 1. The caller's JWT is verified (the gateway does it too: verify_jwt).
 // 2. prepare_nudge() (service role; see schema.sql PHASE 5) checks the share,
@@ -14,12 +16,16 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
+  buildCongratsMessages,
+  buildFinishedMessages,
   buildMessages,
   deadTokens,
   outcome,
   parseRequest,
   pickServiceKey,
   type ExpoTicket,
+  type ExpoMessage,
+  type PreparedFinished,
   type PreparedNudge,
 } from './logic.ts';
 
@@ -55,20 +61,40 @@ Deno.serve(async (req) => {
   const parsed = parseRequest(await req.json().catch(() => null));
   if (!parsed) return reply('bad_request', 400);
 
-  const { data, error } = await admin.rpc('prepare_nudge', {
-    p_sender: user.id,
-    p_kind: parsed.kind,
-    p_item_id: parsed.itemId,
-  });
-  if (error || !data) {
-    console.error('send-nudge: prepare_nudge failed', error?.code, error?.message);
-    return reply('error', 500);
+  let messages: ExpoMessage[];
+  if (parsed.action === 'finished') {
+    // The caller is the item's OWNER telling the people it is shared with.
+    const { data, error } = await admin.rpc('prepare_finished', {
+      p_owner: user.id,
+      p_kind: parsed.kind,
+      p_item_id: parsed.itemId,
+    });
+    if (error || !data) {
+      console.error('send-nudge: prepare_finished failed', error?.code, error?.message);
+      return reply('error', 500);
+    }
+    const prep = data as PreparedFinished;
+    // 'nobody' = shared with no one who can be told (or already announced).
+    if (prep.status !== 'ok') return reply(prep.status);
+    messages = buildFinishedMessages(prep, parsed.kind as 'habit' | 'goal', parsed.itemId);
+  } else {
+    const congrats = parsed.action === 'congrats';
+    const { data, error } = await admin.rpc(congrats ? 'prepare_congrats' : 'prepare_nudge', {
+      p_sender: user.id,
+      p_kind: parsed.kind,
+      p_item_id: parsed.itemId,
+    });
+    if (error || !data) {
+      console.error('send-nudge: prepare failed', parsed.action, error?.code, error?.message);
+      return reply('error', 500);
+    }
+    const prep = data as PreparedNudge;
+    if (prep.status === 'muted') return reply('sent');
+    if (prep.status !== 'ok') return reply(prep.status);
+    messages = congrats
+      ? buildCongratsMessages(prep, parsed.kind, parsed.itemId)
+      : buildMessages(prep, parsed.kind as 'habit' | 'goal', parsed.itemId);
   }
-  const prep = data as PreparedNudge;
-  if (prep.status === 'muted') return reply('sent');
-  if (prep.status !== 'ok') return reply(prep.status);
-
-  const messages = buildMessages(prep, parsed.kind, parsed.itemId);
   let tickets: ExpoTicket[] = [];
   try {
     const res = await fetch(EXPO_PUSH_URL, {

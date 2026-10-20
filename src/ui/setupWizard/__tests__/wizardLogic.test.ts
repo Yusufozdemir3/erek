@@ -16,7 +16,7 @@ import {
 describe('buildSteps', () => {
   it('her şey varsa tam sıra: karşılama … bitiş', () => {
     expect(buildSteps({ accounts: true, widget: true })).toEqual([
-      'welcome', 'look', 'habit', 'task', 'goal', 'notifications', 'widget', 'account', 'done',
+      'welcome', 'look', 'habit', 'task', 'goal', 'notifications', 'widget', 'account', 'tips', 'guides', 'done',
     ]);
   });
 
@@ -26,7 +26,7 @@ describe('buildSteps', () => {
     const noWidget = buildSteps({ accounts: true, widget: false });
     expect(noWidget).not.toContain('widget');
     expect(buildSteps({ accounts: false, widget: false })).toEqual([
-      'welcome', 'look', 'habit', 'task', 'goal', 'notifications', 'done',
+      'welcome', 'look', 'habit', 'task', 'goal', 'notifications', 'tips', 'guides', 'done',
     ]);
   });
 
@@ -56,13 +56,13 @@ describe('progress', () => {
 
   it('yalnız gerçek adımları sayar', () => {
     expect(progress(steps, 0)).toBeNull(); // karşılama
-    expect(progress(steps, 1)).toEqual({ current: 1, total: 7 });
-    expect(progress(steps, 7)).toEqual({ current: 7, total: 7 });
-    expect(progress(steps, 8)).toBeNull(); // bitiş
+    expect(progress(steps, 1)).toEqual({ current: 1, total: 9 });
+    expect(progress(steps, 9)).toEqual({ current: 9, total: 9 });
+    expect(progress(steps, 10)).toBeNull(); // bitiş
   });
 
   it('adım çıkınca toplam kendiliğinden küçülür', () => {
-    expect(progress(buildSteps({ accounts: false, widget: false }), 1)).toEqual({ current: 1, total: 5 });
+    expect(progress(buildSteps({ accounts: false, widget: false }), 1)).toEqual({ current: 1, total: 7 });
   });
 });
 

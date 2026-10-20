@@ -1,4 +1,5 @@
-// Hakkında ve destek: sürüm, geri bildirim taslağı (mail uygulaması yoksa adres), gizlilik bağlantıları.
+// Hakkında ve destek: sürüm, tanıtım, geri bildirim taslağı (mail uygulaması yoksa adres),
+// mağazada değerlendirme, gizlilik bağlantıları.
 
 import { Alert, Linking } from 'react-native';
 import { fireEvent, waitFor } from '@testing-library/react-native';
@@ -20,6 +21,27 @@ describe('AboutScreen', () => {
   it('sürümü gösterir', async () => {
     const u = await renderUI(<AboutScreen />);
     expect(u.getByText('Sürüm 9.9.9')).toBeTruthy();
+  });
+
+  it('tanıtım, öne çıkanlar ve yasal bölümlerini gösterir', async () => {
+    const u = await renderUI(<AboutScreen />);
+    expect(u.getByText('Erek hakkında')).toBeTruthy();
+    expect(u.getByText('Öne çıkanlar')).toBeTruthy();
+    expect(u.getByText('Gizlilik odaklı')).toBeTruthy();
+    expect(u.getByText('Yasal')).toBeTruthy();
+    expect(u.getByText(`© ${new Date().getFullYear()} Yusuf Özdemir. Tüm hakları saklıdır.`)).toBeTruthy();
+  });
+
+  it('değerlendirme: önce Play Store uygulaması, olmazsa web sayfası', async () => {
+    const open = jest
+      .spyOn(Linking, 'openURL')
+      .mockRejectedValueOnce(new Error('no store app'))
+      .mockResolvedValue(true);
+    const u = await renderUI(<AboutScreen />);
+    fireEvent.press(u.getByLabelText('Uygulamayı değerlendir'));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    expect(open.mock.calls[0][0]).toBe('market://details?id=com.erek');
+    expect(open.mock.calls[1][0]).toBe('https://play.google.com/store/apps/details?id=com.erek');
   });
 
   it('geri bildirim: teknik altbilgili mailto açılır', async () => {

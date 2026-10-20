@@ -151,9 +151,13 @@ export function HabitForm({
   const [goals, setGoals] = useState<Goal[]>([]);
   const [datePicker, setDatePicker] = useState<'start' | 'end' | null>(null);
 
-  // Only numeric goals can be linked.
+  // Only numeric goals can be linked; archived ones only if already linked.
   useEffect(() => {
-    setGoals(goalRepo.listByUser(userId).filter((g) => g.goal_type === 'numeric'));
+    const linked = initial?.goal_id ? goalRepo.getById(initial.goal_id) : null;
+    const active = goalRepo.listActive(userId);
+    const list = linked && !active.some((g) => g.id === linked.id) ? [...active, linked] : active;
+    setGoals(list.filter((g) => g.goal_type === 'numeric'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const toggleWeekday = (wd: number) => {

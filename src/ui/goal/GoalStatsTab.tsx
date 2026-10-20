@@ -2,7 +2,8 @@
 // at-a-glance status, the required pace next to the actual pace, then the next step.
 
 import { Text, View } from 'react-native';
-import { diffDays } from '@/lib/helpers';
+import { diffDays, todayDate } from '@/lib/helpers';
+import { completionSummary } from '@/lib/goalCompletion';
 import { percentLabel, shortDate } from '@/ui/theme';
 import { fmtGoalValue } from '@/ui/goal/goalFormat';
 import { StatCard, StatGroupTitle } from '@/ui/goal/GoalStatCards';
@@ -60,7 +61,97 @@ export interface GoalStatsTabProps {
   styles: GoalStyles;
 }
 
-export function GoalStatsTab({ goal, stats, t, lang, styles }: GoalStatsTabProps) {
+// A finished goal looks back instead of forward: the open-goal cards (days left,
+// pace needed, projections) mean nothing once it is done.
+function CompletedStats({ goal, stats, t, lang, styles }: GoalStatsTabProps) {
+  const s = completionSummary({
+    startDate: goal.start_date,
+    completedAt: goal.completed_at,
+    deadline: goal.deadline,
+    isNumeric: goal.goal_type === 'numeric',
+    currentValue: goal.current_value,
+    targetValue: goal.target_value,
+    entries: stats.entries,
+    milestonesDone: stats.milestonesDone,
+    milestonesTotal: stats.milestonesTotal,
+    today: todayDate(),
+  });
+  const sub =
+    s.deadlineGap == null
+      ? undefined
+      : s.deadlineGap > 0
+        ? t('goalDone.early', { n: s.deadlineGap })
+        : s.deadlineGap === 0
+          ? t('goalDone.onTime')
+          : t('goalDone.late', { n: -s.deadlineGap });
+  return (
+    <View>
+      <View style={[styles.verdict, styles.verdictGood]}>
+        <Text style={[styles.verdictText, styles.verdictTextGood]}>{t('goalStats.verdictDone')}</Text>
+        {sub && <Text style={styles.verdictSub}>{sub}</Text>}
+      </View>
+
+      <View style={styles.statsGrid}>
+        {s.total != null && (
+          <StatCard label={t('goalDone.reached')} value={fmtGoalValue(s.total, goal.unit)} accent="primary" styles={styles} />
+        )}
+        {s.overTarget != null && s.overTarget > 1.005 && (
+          <StatCard
+            label={t('goalDone.ofTarget')}
+            value={percentLabel(Math.round(s.overTarget * 100), lang)}
+            styles={styles}
+          />
+        )}
+        <StatCard label={t('goalDone.duration')} value={String(s.durationDays)} styles={styles} />
+        <StatCard label={t('goalDone.started')} value={shortDate(s.startDay, lang)} styles={styles} />
+        <StatCard label={t('goalDone.finished')} value={shortDate(s.endDay, lang)} styles={styles} />
+      </View>
+
+      {s.total != null && s.avgDaily != null && (
+        <>
+          <StatGroupTitle label={t('goalDone.groupJourney')} styles={styles} />
+          <View style={styles.statsGrid}>
+            <StatCard label={t('goalDone.avgDaily')} value={fmtGoalValue(s.avgDaily, goal.unit)} styles={styles} />
+            {s.bestDay && (
+              <StatCard
+                label={t('goalDone.bestDay', { date: shortDate(s.bestDay.day, lang) })}
+                value={fmtGoalValue(s.bestDay.amount, goal.unit)}
+                styles={styles}
+              />
+            )}
+            {s.activeDays != null && s.activeDays > 0 && (
+              <StatCard
+                label={t('goalDone.activeDays')}
+                value={`${s.activeDays} / ${s.durationDays}`}
+                styles={styles}
+              />
+            )}
+            {s.entryCount != null && s.entryCount > 0 && (
+              <StatCard label={t('goalDone.entries')} value={String(s.entryCount)} styles={styles} />
+            )}
+          </View>
+        </>
+      )}
+
+      {s.milestonesTotal > 0 && (
+        <>
+          <StatGroupTitle label={t('goalStats.groupMilestones')} styles={styles} />
+          <View style={styles.statsGrid}>
+            <StatCard
+              label={t('goalDone.steps')}
+              value={`${s.milestonesDone} / ${s.milestonesTotal}`}
+              styles={styles}
+            />
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+
+export function GoalStatsTab(props: GoalStatsTabProps) {
+  if (props.stats.completed) return <CompletedStats {...props} />;
+  const { goal, stats, t, lang, styles } = props;
   return (
       <View>
         {(() => {

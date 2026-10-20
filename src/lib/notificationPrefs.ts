@@ -10,6 +10,7 @@ export interface NotificationPrefs {
   goalReminders: boolean;    // goal "don't forget to log" reminders
   timerDone: boolean;        // timer "time's up" notification
   weeklyReview: boolean;     // Sunday-evening review nudge (opt-in)
+  generalReminders: boolean; // "check off today" nudge at chosen times (generalReminders.ts)
   sound: boolean;            // notification SOUND (routes to the sound channel on Android)
   vibration: boolean;        // notification VIBRATION (separate from sound)
   customSoundUri: string | null;  // content:// URI from the device's ringtone picker; null = system default
@@ -26,6 +27,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   goalReminders: true,
   timerDone: true,
   weeklyReview: false,
+  generalReminders: true,
   sound: true,
   vibration: true,
   customSoundUri: null,
@@ -39,6 +41,7 @@ const KEYS: Record<BoolPrefKey, string> = {
   goalReminders: 'notif:goalReminders',
   timerDone: 'notif:timerDone',
   weeklyReview: 'notif:weeklyReview',
+  generalReminders: 'notif:generalReminders',
   sound: 'notif:sound',
   vibration: 'notif:vibration',
 };
@@ -70,6 +73,28 @@ export async function getNotificationPrefs(): Promise<NotificationPrefs> {
 
 export async function setNotificationPref(key: BoolPrefKey, value: boolean): Promise<void> {
   await AsyncStorage.setItem(KEYS[key], value ? '1' : '0');
+}
+
+// The times of day ("HH:MM", sorted) the general reminder fires at. Kept apart
+// from NotificationPrefs, which holds only on/off switches.
+const GENERAL_TIMES_KEY = 'notif:generalTimes';
+export const DEFAULT_GENERAL_TIMES = ['20:00'];
+export const MAX_GENERAL_TIMES = 5;
+
+export async function getGeneralTimes(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(GENERAL_TIMES_KEY);
+    if (raw == null) return DEFAULT_GENERAL_TIMES;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return DEFAULT_GENERAL_TIMES;
+    return parsed.filter((x): x is string => typeof x === 'string' && /^\d{2}:\d{2}$/.test(x)).sort();
+  } catch {
+    return DEFAULT_GENERAL_TIMES;
+  }
+}
+
+export async function setGeneralTimes(times: string[]): Promise<void> {
+  await AsyncStorage.setItem(GENERAL_TIMES_KEY, JSON.stringify([...new Set(times)].sort().slice(0, MAX_GENERAL_TIMES)));
 }
 
 // uri null = back to the system sound. The channel is made from the URI at

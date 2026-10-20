@@ -29,6 +29,7 @@ const goal: Goal = {
   completed_at: null,
   remind_at: null,
   start_date: '2026-07-01',
+  unarchived_at: null,
   updated_at: '2026-07-01T00:00:00.000Z',
   deleted_at: null,
   synced: 1,
@@ -179,5 +180,49 @@ describe('GoalStatsTab — sıradaki adım', () => {
   it('tüm adımlar bittiyse kutlama satırı çıkar', () => {
     renderTab({ milestonesTotal: 3, milestonesDone: 3, nextMilestone: null });
     expect(screen.getByText('goalStats.allMilestonesDone')).toBeTruthy();
+  });
+});
+
+describe('GoalStatsTab — tamamlanmış hedef özeti', () => {
+  const done = {
+    completed: true,
+    ratio: 1,
+    remaining: 0,
+    daysLeft: -400,
+    isOverdue: true,
+    overdueDays: 400,
+    entries: [
+      { id: 'e1', goal_id: 'g1', amount: 120, updated_at: '2026-07-05T09:00:00.000Z', deleted_at: null, synced: 1, added_by: null },
+    ],
+  } as Partial<GoalStats>;
+  const goalDone = { current_value: 240, completed_at: '2026-07-10T12:00:00', deadline: '2026-07-15' };
+
+  it('ileriye dönük kartlar yerine geriye dönük özet gösterilir', () => {
+    renderTab(done, goalDone);
+    expect(screen.getByText('goalStats.verdictDone')).toBeTruthy();
+    expect(screen.getByText(/goalDone\.early/)).toBeTruthy();
+    expect(screen.getByText('goalDone.reached')).toBeTruthy();
+    expect(screen.getByText('goalDone.avgDaily')).toBeTruthy();
+    // Nothing of the open-goal view:
+    expect(screen.queryByText('goalStats.overdueDaysLabel')).toBeNull();
+    expect(screen.queryByText('goal.statRemaining')).toBeNull();
+    expect(screen.queryByText('goalStats.groupRequiredPace')).toBeNull();
+    expect(screen.queryByText('goalStats.projectedAtDeadlineLabel')).toBeNull();
+  });
+
+  it('hedefi aşınca "hedefin yüzdesi" kartı çıkar, tam tutunca çıkmaz', () => {
+    renderTab(done, goalDone); // 240 / 200
+    expect(screen.getByText('goalDone.ofTarget')).toBeTruthy();
+  });
+
+  it('son tarih yoksa gecikme/erken cümlesi çıkmaz', () => {
+    renderTab(done, { ...goalDone, deadline: null });
+    expect(screen.queryByText(/goalDone\.(early|late|onTime)/)).toBeNull();
+  });
+
+  it('adım tipi tamamlanmış hedefte adım özeti çıkar', () => {
+    renderTab({ ...done, milestonesDone: 3, milestonesTotal: 3 }, { ...goalDone, goal_type: 'milestone' });
+    expect(screen.getByText('goalDone.steps')).toBeTruthy();
+    expect(screen.queryByText('goalDone.avgDaily')).toBeNull();
   });
 });

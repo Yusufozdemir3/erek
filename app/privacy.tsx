@@ -2,12 +2,13 @@
 // connection, every sentence derived from the phone's real state
 // (lib/privacySummary.ts) — no fixed marketing lines.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { PRIVACY_POLICY_URL } from '@/config';
 import { useI18n } from '@/i18n/I18nProvider';
+import { isPrivacyOptionsRequired, showPrivacyOptions } from '@/lib/ads';
 import { notificationPermission } from '@/lib/notifications';
 import { buildSummary, NEEDS_INTERNET, WORKS_OFFLINE, type MicPermission, type Where } from '@/lib/privacySummary';
 import { getMicPermission } from '@/lib/voice';
@@ -34,6 +35,15 @@ export default function PrivacyScreen() {
   const [mic, setMic] = useState<MicPermission>('unknown');
   const [consent, setConsent] = useState(false);
   const [notif, setNotif] = useState(false);
+  const [adsPrivacy, setAdsPrivacy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    isPrivacyOptionsRequired().then((r) => alive && setAdsPrivacy(r));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Re-read on every focus: the user may come back from the phone's settings.
   useFocusEffect(
@@ -95,6 +105,13 @@ export default function PrivacyScreen() {
           </View>
         ))}
       </View>
+
+      {adsPrivacy && (
+        <Pressable style={local.policyBtn} onPress={() => void showPrivacyOptions()} accessibilityRole="button">
+          <Feather name="sliders" size={16} color={colors.primary} />
+          <Text style={local.policyText}>{t('privacy.adChoices')}</Text>
+        </Pressable>
+      )}
 
       <Text style={local.promise}>{t('privacy.promise')}</Text>
       <Pressable

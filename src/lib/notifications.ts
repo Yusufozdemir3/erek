@@ -18,7 +18,8 @@ import type { Goal, Habit, Reminder, ReminderEntityType, Task } from '@/db';
 import { isScheduledOn, isWithinHabitDates, todayDate, toYmd } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
-import { getNotificationPrefs, soundContent, type NotificationPrefs } from '@/lib/notificationPrefs';
+import { getGeneralTimes, getNotificationPrefs, soundContent, type NotificationPrefs } from '@/lib/notificationPrefs';
+import { GENERAL_ID_PREFIX, planGeneralSlots } from '@/lib/generalRemindersLogic';
 import { ensureCustomSoundChannel } from '@/lib/customNotificationChannel';
 import { isNudgeData, NUDGE_CHANNEL_ID, parseNudgeData } from '@/lib/nudgePayload';
 import { nudgeRecipientUid } from '@/lib/nudgeRecipient';
@@ -537,6 +538,72 @@ export async function scheduleWeeklyReview(): Promise<boolean> {
   }
 }
 
+// General "check off today" reminder at the user's chosen times (a few days
+// ahead, see generalRemindersLogic). Today's slots are kept only while
+// something scheduled today is still unchecked, so it stays quiet once
+// everything is done. Rebuilt on startup, day rollover and every data change
+// (AppData). Never asks for permission (that happens when the user turns it on).
+let generalQueue: Promise<unknown> = Promise.resolve();
+
+export function scheduleGeneralReminders(userId: string, askPermission = false): Promise<boolean> {
+  const run = generalQueue.then(() => buildGeneralReminders(userId, askPermission));
+  generalQueue = run.catch(() => {});
+  return run;
+}
+
+async function buildGeneralReminders(userId: string, askPermission: boolean): Promise<boolean> {
+  try {
+    const prefs = await getNotificationPrefs();
+    const times = await getGeneralTimes();
+    const today = todayDate();
+
+    const habits = habitRepo
+      .listActive(userId, today)
+      .filter((h) => isScheduledOn(h.schedule, today) && isWithinHabitDates(h.start_date, h.end_date, today, h.skip_dates));
+    const states = habitRepo.getDayStates(habits.map((h) => h.id), today);
+    const openHabits = habits.filter((h) => !states[h.id]?.completed).length;
+    const openTasks = taskRepo.listForToday(userId, today).filter((t) => t.completed_at === null).length;
+
+    const wanted =
+      prefs.enabled && prefs.generalReminders && habits.length + openTasks > 0
+        ? planGeneralSlots(times, today, new Date(), openHabits + openTasks)
+        : [];
+    const keep = new Set(wanted.map((s) => s.id));
+
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    await Promise.all(
+      scheduled
+        .map((n) => n.identifier)
+        .filter((id) => id.startsWith(GENERAL_ID_PREFIX) && !keep.has(id))
+        .map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => {}))
+    );
+    if (wanted.length === 0) return true;
+
+    const perm = askPermission ? await ensurePermission() : (await Notifications.getPermissionsAsync()).granted;
+    if (!perm) return false;
+    const lang = await getStoredLang();
+    const channelId = channelIdFor(prefs, lang);
+    for (const slot of wanted) {
+      await Notifications.scheduleNotificationAsync({
+        identifier: slot.id,
+        content: {
+          title: translate(lang, 'notif.generalTitle'),
+          body:
+            slot.pending != null
+              ? translate(lang, 'notif.generalBodyN', { n: slot.pending })
+              : translate(lang, 'notif.generalBody'),
+          ...soundContent(prefs),
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: slot.when, channelId },
+      });
+    }
+    return true;
+  } catch (e) {
+    console.warn('[Bildirim] Genel hatırlatma kurulamadı:', e);
+    return false;
+  }
+}
+
 // Rebuilds every reminder from the DB: at startup, at day rollover (validity
 // depends on dates the OS triggers don't know, and Android keeps the process
 // alive for days) and after an account change. Never rejects.
@@ -554,6 +621,7 @@ export async function rescheduleEverything(userId: string): Promise<void> {
     console.warn('[Bildirim] Hedef hatırlatmaları kurulamadı:', e)
   );
   await scheduleWeeklyReview();
+  await scheduleGeneralReminders(userId);
 }
 
 // After ids change or data is wiped (account merge/switch, sign-out), old

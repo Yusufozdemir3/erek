@@ -37,12 +37,12 @@ beforeEach(async () => {
 });
 
 describe('Rehberler listesi', () => {
-  it('yedi rehberi listeler; hepsi yeni; açınca etiket kalkar ve "görüldü" yazılır', async () => {
+  it('sekiz rehberi listeler (tur dahil); hepsi yeni; açınca etiket kalkar ve "görüldü" yazılır', async () => {
     const u = await renderUI(<GuidesScreen />);
-    for (const name of ['Bugün ekranı', 'Alışkanlıklar', 'Görevler', 'Hedefler', 'Arkadaşlar', 'Widget’lar', 'Bildirimler']) {
+    for (const name of ['Hızlı tur', 'Bugün ekranı', 'Alışkanlıklar', 'Görevler', 'Hedefler', 'Arkadaşlar', 'Widget’lar', 'Bildirimler']) {
       expect(await u.findByText(name)).toBeTruthy();
     }
-    expect(u.getAllByText('Yeni')).toHaveLength(7);
+    expect(u.getAllByText('Yeni')).toHaveLength(8);
 
     fireEvent.press(u.getByLabelText('Widget’lar rehberini aç'));
     expect(await u.findByText('Ana ekranına Erek')).toBeTruthy();
@@ -50,12 +50,12 @@ describe('Rehberler listesi', () => {
     expect(await u.findByText('Uygulama kapalıyken')).toBeTruthy();
     fireEvent.press(u.getByText('Tamam'));
 
-    await waitFor(() => expect(u.getAllByText('Yeni')).toHaveLength(6));
+    await waitFor(() => expect(u.getAllByText('Yeni')).toHaveLength(7));
     expect(await AsyncStorage.getItem('guide:seen:widgets')).toBe('1');
   });
 
   it('daha önce görülenlerde "Yeni" yok', async () => {
-    for (const id of ['today', 'habits', 'tasks', 'goals', 'friends', 'widgets', 'notifications']) {
+    for (const id of ['tour', 'today', 'habits', 'tasks', 'goals', 'friends', 'widgets', 'notifications']) {
       await AsyncStorage.setItem(`guide:seen:${id}`, '1');
     }
     const u = await renderUI(<GuidesScreen />);
@@ -68,6 +68,7 @@ describe('Rehberler listesi', () => {
 describe('Bildirimler ekranında rehber', () => {
   it('yeni kurulumda ilk girişte açılır; hesapsızken 3 sayfa', async () => {
     await AsyncStorage.setItem('guide:newInstall', '1');
+    await AsyncStorage.setItem('guide:seen:tour', '1');
     await AsyncStorage.setItem('onboarding:done', '1');
     const u = await renderUI(<NotificationsScreen />);
     expect(await u.findByText('Hatırlatmalar')).toBeTruthy();

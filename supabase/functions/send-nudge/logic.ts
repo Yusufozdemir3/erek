@@ -3,6 +3,11 @@
 // (src/sync/__tests__/sendNudgeLogic.test.ts).
 
 export type NudgeKind = 'habit' | 'goal';
+// What a request asks for: a reminder to the item's owner (default), the
+// owner telling the people it is shared with that it is finished, or a friend
+// congratulating the owner of a finished item (goals, habits and tasks).
+export type Action = 'nudge' | 'finished' | 'congrats';
+export type CelebrationKind = 'habit' | 'goal' | 'task';
 export type Locale = 'tr' | 'en' | 'de';
 
 export interface PreparedNudge {
@@ -21,7 +26,14 @@ export interface ExpoMessage {
   priority: 'high';
   channelId: string;
   ttl: number;
-  data: { type: 'nudge'; kind: NudgeKind; itemId: string; to: string };
+  data: { type: 'nudge' | 'finished' | 'congrats'; kind: CelebrationKind; itemId: string; to: string };
+}
+
+export interface PreparedFinished {
+  status: string;
+  sender_name?: string | null;
+  item_title?: string | null;
+  recipients?: { recipient: string; tokens: { token: string; locale: Locale }[] }[];
 }
 
 export interface ExpoTicket {
@@ -45,12 +57,28 @@ export function pickServiceKey(legacy: string | undefined, secretKeysJson: strin
   }
 }
 
-export function parseRequest(body: unknown): { kind: NudgeKind; itemId: string } | null {
+export interface ParsedRequest {
+  action: Action;
+  kind: CelebrationKind;
+  itemId: string;
+}
+
+export function parseRequest(body: unknown): ParsedRequest | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Record<string, unknown>;
-  const kind = b.kind === 'habit' || b.kind === 'goal' ? b.kind : null;
+  const action: Action | null =
+    b.action === undefined || b.action === 'nudge'
+      ? 'nudge'
+      : b.action === 'finished' || b.action === 'congrats'
+        ? b.action
+        : null;
+  if (!action) return null;
+  // Reminders and "finished" notices are for habits and goals; only a
+  // congratulation may also be for a (finished) task.
+  const allowed: CelebrationKind[] = action === 'congrats' ? ['habit', 'goal', 'task'] : ['habit', 'goal'];
+  const kind = allowed.find((k) => k === b.kind) ?? null;
   const itemId = typeof b.itemId === 'string' && UUID.test(b.itemId) ? b.itemId : null;
-  return kind && itemId ? { kind, itemId } : null;
+  return kind && itemId ? { action, kind, itemId } : null;
 }
 
 // Title = WHO reminded you; body = WHAT (the item's title). On a locked screen
@@ -60,6 +88,19 @@ const TITLE: Record<Locale, (name: string | null) => string> = {
   tr: (n) => `${n ?? 'Bir arkadaşın'} sana bir hatırlatma gönderdi`,
   en: (n) => `${n ?? 'A friend'} sent you a reminder`,
   de: (n) => `${n ?? 'Ein Freund'} hat dir eine Erinnerung geschickt`,
+};
+
+// "Ada finished <item>" (to the people it is shared with) and "Ada
+// congratulated you" (to the owner). The item's title goes in the body.
+const FINISHED_TITLE: Record<Locale, (n: string | null) => string> = {
+  tr: (n) => `${n ?? 'Bir arkadaşın'} paylaştığı bir şeyi tamamladı 🎉`,
+  en: (n) => `${n ?? 'A friend'} finished something they shared 🎉`,
+  de: (n) => `${n ?? 'Ein Freund'} hat etwas Geteiltes geschafft 🎉`,
+};
+const CONGRATS_TITLE: Record<Locale, (n: string | null) => string> = {
+  tr: (n) => `${n ?? 'Bir arkadaşın'} seni tebrik etti 🎉`,
+  en: (n) => `${n ?? 'A friend'} congratulated you 🎉`,
+  de: (n) => `${n ?? 'Ein Freund'} gratuliert dir 🎉`,
 };
 
 // The first name reads friendlier than "Ada Lovelace" and is all we need.
@@ -78,17 +119,41 @@ const BODY_MAX = 120;
 const TTL_SECONDS = 12 * 3600;
 
 export function buildMessages(prep: PreparedNudge, kind: NudgeKind, itemId: string): ExpoMessage[] {
+  return messagesFor('nudge', TITLE, prep, prep.recipient ?? '', prep.tokens ?? [], kind, itemId);
+}
+
+// Congratulation to the owner (same shape as a nudge, other wording).
+export function buildCongratsMessages(prep: PreparedNudge, kind: CelebrationKind, itemId: string): ExpoMessage[] {
+  return messagesFor('congrats', CONGRATS_TITLE, prep, prep.recipient ?? '', prep.tokens ?? [], kind, itemId);
+}
+
+// "Finished" notices: one batch of messages for every recipient.
+export function buildFinishedMessages(prep: PreparedFinished, kind: NudgeKind, itemId: string): ExpoMessage[] {
+  return (prep.recipients ?? []).flatMap((r) =>
+    messagesFor('finished', FINISHED_TITLE, prep, r.recipient, r.tokens, kind, itemId)
+  );
+}
+
+function messagesFor(
+  type: ExpoMessage['data']['type'],
+  titles: Record<Locale, (name: string | null) => string>,
+  prep: { sender_name?: string | null; item_title?: string | null },
+  recipient: string,
+  tokens: { token: string; locale: Locale }[],
+  kind: CelebrationKind,
+  itemId: string
+): ExpoMessage[] {
   const name = firstName(prep.sender_name);
   const item = (prep.item_title ?? '').replace(/\s+/g, ' ').trim().slice(0, BODY_MAX);
-  return (prep.tokens ?? []).map((t) => ({
+  return tokens.map((t) => ({
     to: t.token,
-    title: (TITLE[t.locale] ?? TITLE.en)(name),
+    title: (titles[t.locale] ?? titles.en)(name),
     body: item || 'Erek',
     sound: 'default',
     priority: 'high',
     channelId: NUDGE_CHANNEL_ID,
     ttl: TTL_SECONDS,
-    data: { type: 'nudge', kind, itemId, to: prep.recipient ?? '' },
+    data: { type, kind, itemId, to: recipient },
   }));
 }
 

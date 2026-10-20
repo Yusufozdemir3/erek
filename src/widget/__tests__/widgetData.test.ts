@@ -18,7 +18,10 @@ jest.mock('react-native', () => ({
   StyleSheet: { create: (s: unknown) => s, hairlineWidth: 1 },
 }));
 const mockRemind = jest.fn(async (_id: string) => {});
-jest.mock('@/lib/notifications', () => ({ refreshTaskReminders: (id: string) => mockRemind(id) }));
+jest.mock('@/lib/notifications', () => ({
+  refreshTaskReminders: (id: string) => mockRemind(id),
+  scheduleGeneralReminders: async () => true,
+}));
 jest.mock('@/i18n/I18nProvider', () => ({ getStoredLang: async () => 'tr' }));
 
 import { buildTodaySnapshot, drainWidgetQueue, refreshWidget } from '../widgetData';

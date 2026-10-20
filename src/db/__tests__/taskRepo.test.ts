@@ -8,6 +8,10 @@ import { resetTestDb } from '../../test/dbTestUtils';
 
 let userId: string;
 
+// A "today" before every completion keeps the automatic archive (db/archive.ts)
+// out of these completed-window tests; archive.test.ts covers it.
+const NO_ARCHIVE = '2000-01-01';
+
 beforeEach(async () => {
   await resetTestDb();
   userId = userRepo.getOrCreateLocal().id;
@@ -30,7 +34,7 @@ describe('listForScreen / countCompletedBefore', () => {
     const old = createTask({ title: 'Eski' });
     completeAt(old.id, '2020-01-01T10:00:00.000Z');
 
-    const ids = taskRepo.listForScreen(userId, null).map((t) => t.id);
+    const ids = taskRepo.listForScreen(userId, null, NO_ARCHIVE).map((t) => t.id);
     expect(ids).toContain(active.id);
     expect(ids).toContain(old.id);
   });
@@ -40,7 +44,7 @@ describe('listForScreen / countCompletedBefore', () => {
     const old = createTask({ title: 'Eski tamamlanan' });
     completeAt(old.id, '2020-01-01T10:00:00.000Z');
 
-    const ids = taskRepo.listForScreen(userId, '2026-06-01').map((t) => t.id);
+    const ids = taskRepo.listForScreen(userId, '2026-06-01', NO_ARCHIVE).map((t) => t.id);
     expect(ids).toContain(active.id);
     expect(ids).not.toContain(old.id);
   });
@@ -49,7 +53,7 @@ describe('listForScreen / countCompletedBefore', () => {
     const recent = createTask({ title: 'Yeni tamamlanan' });
     completeAt(recent.id, '2026-06-15T10:00:00.000Z');
 
-    const ids = taskRepo.listForScreen(userId, '2026-06-01').map((t) => t.id);
+    const ids = taskRepo.listForScreen(userId, '2026-06-01', NO_ARCHIVE).map((t) => t.id);
     expect(ids).toContain(recent.id);
   });
 
@@ -58,7 +62,7 @@ describe('listForScreen / countCompletedBefore', () => {
     completeAt(done.id, '2026-06-15T10:00:00.000Z');
     const active = createTask({ title: 'Aktif' });
 
-    const list = taskRepo.listForScreen(userId, '2026-06-01');
+    const list = taskRepo.listForScreen(userId, '2026-06-01', NO_ARCHIVE);
     expect(list[list.length - 1].id).toBe(done.id);
     expect(list[0].id).toBe(active.id);
   });
@@ -72,7 +76,7 @@ describe('listForScreen / countCompletedBefore', () => {
     completeAt(old2.id, '2021-01-01T10:00:00.000Z');
     completeAt(recent.id, '2026-06-15T10:00:00.000Z');
 
-    expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(2);
+    expect(taskRepo.countCompletedBefore(userId, '2026-06-01', NO_ARCHIVE)).toBe(2);
     expect(active.completed_at).toBeNull(); // an active task never enters the count
   });
 
@@ -81,8 +85,8 @@ describe('listForScreen / countCompletedBefore', () => {
     completeAt(deleted.id, '2020-01-01T10:00:00.000Z');
     taskRepo.softDelete(deleted.id);
 
-    expect(taskRepo.listForScreen(userId, null).map((t) => t.id)).not.toContain(deleted.id);
-    expect(taskRepo.countCompletedBefore(userId, '2026-06-01')).toBe(0);
+    expect(taskRepo.listForScreen(userId, null, NO_ARCHIVE).map((t) => t.id)).not.toContain(deleted.id);
+    expect(taskRepo.countCompletedBefore(userId, '2026-06-01', NO_ARCHIVE)).toBe(0);
   });
 });
 

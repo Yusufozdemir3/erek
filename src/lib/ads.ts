@@ -57,6 +57,31 @@ function ensureInitialized(native: NativeAdsModule): Promise<void> {
   return initPromise;
 }
 
+// Whether the user must be offered a way to change their ad consent (EEA/UK/CH
+// after the AdMob message is published). Never rejects.
+export async function isPrivacyOptionsRequired(): Promise<boolean> {
+  const native = loadNative();
+  if (!native) return false;
+  try {
+    await native.AdsConsent.requestInfoUpdate();
+    const info = await native.AdsConsent.getConsentInfo();
+    return info.privacyOptionsRequirementStatus === native.AdsConsentPrivacyOptionsRequirementStatus.REQUIRED;
+  } catch {
+    return false;
+  }
+}
+
+// Re-opens the consent form so the user can revoke or change their choice.
+export async function showPrivacyOptions(): Promise<void> {
+  const native = loadNative();
+  if (!native) return;
+  try {
+    await native.AdsConsent.showPrivacyOptionsForm();
+  } catch (e) {
+    console.warn('[Reklam] Gizlilik seçenekleri açılamadı:', e);
+  }
+}
+
 // Called on every foreground (ui/AppData.tsx). Enforces the frequency limit
 // itself (persisted across restarts). Never rejects.
 export async function maybeShowInterstitial(): Promise<void> {

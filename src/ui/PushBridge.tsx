@@ -11,6 +11,7 @@ import { AppState } from 'react-native';
 import { router, type Href } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { goalRepo, habitRepo } from '@/db';
+import { celebrationRoute, parseCelebrationData } from '@/lib/celebrations';
 import { useI18n } from '@/i18n/I18nProvider';
 import { parseNudgeData } from '@/lib/nudgePayload';
 import { syncPushRegistration } from '@/lib/pushRegistration';
@@ -36,7 +37,22 @@ export function PushBridge() {
       if (!r) return;
       const id = r.notification.request.identifier;
       if (handled.current.has(id)) return;
-      const target = parseNudgeData(r.notification.request.content.data, nudgeRecipientUid());
+      const data = r.notification.request.content.data;
+      // "Ada finished …" (opens the shared item, where you can congratulate) and
+      // "Ada congratulated you" (opens your own item).
+      const celebration = parseCelebrationData(data, nudgeRecipientUid());
+      if (celebration) {
+        handled.current.add(id);
+        const route = celebrationRoute(celebration);
+        // A finished notice opens the friend's item (from the cached shared
+        // lists, so no local check); a congratulation needs my own copy.
+        const mine = celebration.type === 'congrats';
+        const exists =
+          !mine || (celebration.kind === 'habit' ? habitRepo.getById(celebration.itemId) : goalRepo.getById(celebration.itemId));
+        if (route && exists) router.push(route as Href);
+        return;
+      }
+      const target = parseNudgeData(data, nudgeRecipientUid());
       if (!target) return;
       handled.current.add(id);
       const exists = target.kind === 'habit' ? habitRepo.getById(target.itemId) : goalRepo.getById(target.itemId);

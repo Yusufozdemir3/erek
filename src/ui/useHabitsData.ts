@@ -47,7 +47,7 @@ export function useHabitsData(userId: string) {
     const goalTitles = new Map(goalRepo.listByUser(userId).map((g) => [g.id, g.title]));
     const reminderMap = reminderRepo.mapByType('habit');
     // Bulk queries, not two per habit.
-    const list = habitRepo.listByUser(userId);
+    const list = habitRepo.listActive(userId, today);
     const ids = list.map((h) => h.id);
     const dayStates = habitRepo.getDayStates(ids, today);
     const weekCompleted = habitRepo.completedDatesBetween(ids, week[0], today);

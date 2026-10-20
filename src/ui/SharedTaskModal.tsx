@@ -10,6 +10,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
 import { useI18n } from '@/i18n/I18nProvider';
+import { CongratsButton } from '@/ui/CongratsButton';
 import { ModalCard } from '@/ui/ModalCard';
 import { toggleSharedSubtaskOptimistic } from '@/ui/sharedTaskUi';
 import { useTheme } from '@/ui/ThemeProvider';
@@ -85,6 +86,11 @@ export function SharedTaskModal({ task, ownerName, onClose, onChanged }: Props) 
       })}
 
       {completedAt !== null && <Text style={styles.completed}>{t('sharedTask.completed')}</Text>}
+      {completedAt !== null && (
+        <View style={{ alignItems: 'center' }}>
+          <CongratsButton kind="task" itemId={task.id} ownerName={ownerName} title={task.title} />
+        </View>
+      )}
       <Text style={styles.hint}>{t('sharedTask.hint', { name: ownerName })}</Text>
 
       <Pressable style={styles.closeBtn} onPress={onClose} accessibilityRole="button">

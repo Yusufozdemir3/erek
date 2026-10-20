@@ -35,9 +35,13 @@ export default function ProfileScreen() {
           } as MenuRow,
         ]
       : []),
+    // Near the top and with a hint: people didn't find the guides at the bottom of the list.
+    { icon: 'book-open', label: t('profile.guides'), href: '/guides', hint: t('profile.guidesHint'), highlight: true },
     { icon: 'sliders', label: t('profile.appearance'), href: '/appearance' },
     { icon: 'bell', label: t('profile.notifications'), href: '/notifications' },
     { icon: 'tag', label: t('tags.manage'), href: '/tags' },
+    { icon: 'archive', label: t('archive.title'), href: '/archive' },
+    ...(signedIn ? [{ icon: 'at-sign', label: t('username.title'), href: '/username' } as MenuRow] : []),
     // Signed out: a locked row that leads to sign-in, so the feature is discoverable.
     ...(signedIn
       ? [{ icon: 'users', label: t('friends.title'), href: '/friends' } as MenuRow]
@@ -50,7 +54,6 @@ export default function ProfileScreen() {
     { icon: 'shield', label: t('profile.privacy'), href: '/privacy' },
     { icon: 'bar-chart-2', label: t('profile.review'), href: '/review' },
     { icon: 'database', label: t('profile.data'), href: '/data' },
-    { icon: 'book-open', label: t('profile.guides'), href: '/guides' },
     { icon: 'compass', label: t('profile.setupWizard'), href: '/setup' },
     { icon: 'info', label: t('profile.about'), href: '/about' },
   ];

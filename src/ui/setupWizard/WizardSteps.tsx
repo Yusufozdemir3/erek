@@ -11,6 +11,7 @@ import { goalRepo, habitRepo, reminderRepo, taskRepo } from '@/db';
 import { useI18n } from '@/i18n/I18nProvider';
 import { LANG_LABELS, SUPPORTED_LANGS } from '@/i18n/translations';
 import { todayDate } from '@/lib/helpers';
+import { GuideList } from '@/ui/guide/GuideList';
 import { ensurePermission, notificationPermission } from '@/lib/notifications';
 import { getNotificationPrefs, setNotificationPref } from '@/lib/notificationPrefs';
 import { parseTask } from '@/lib/quickAdd/parseTask';
@@ -105,12 +106,12 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
 
 // ---------------------------------------------------------------- welcome
 
-export function WelcomeStep() {
+export function WelcomeStep({ required = false }: { required?: boolean }) {
   const { t } = useI18n();
   const { styles } = useWizardStyles();
   return (
     <>
-      <Header icon="welcome" title={t('wizard.welcome.title')} body={t('wizard.welcome.body')} />
+      <Header icon="welcome" title={t('wizard.welcome.title')} body={t(required ? 'wizard.welcome.bodyRequired' : 'wizard.welcome.body')} />
       <Text style={styles.note}>{t('wizard.welcome.note')}</Text>
     </>
   );
@@ -651,6 +652,59 @@ export function AccountStep({ onCompleted }: StepProps) {
           <Text style={styles.note}>{t('wizard.account.friends')}</Text>
         </>
       )}
+    </>
+  );
+}
+
+// -------------------------------------------------------------------- tips
+
+// The three things people don't find on their own: adding a friend, the timer
+// (hold ＋) and adding a task by voice (double-tap Tasks). Reading counts as done.
+export function TipsStep({ onCompleted }: StepProps) {
+  const { t } = useI18n();
+  const { colors, styles } = useWizardStyles();
+  useEffect(() => {
+    onCompleted();
+  }, [onCompleted]);
+  const tips: { key: 'friends' | 'timer' | 'voice'; icon: LineIconId }[] = [
+    { key: 'friends', icon: 'people' },
+    { key: 'timer', icon: 'clock' },
+    { key: 'voice', icon: 'mic' },
+  ];
+  return (
+    <>
+      <Header icon="puzzle" title={t('wizard.tips.title')} body={t('wizard.tips.body')} />
+      {tips.map((tip) => (
+        <View key={tip.key} style={styles.stepRow}>
+          <View style={styles.stepNum}>
+            <LineIcon id={tip.icon} size={16} color={colors.primary} />
+          </View>
+          <Text style={styles.stepText}>
+            <Text style={{ fontWeight: '700' }}>{t(`wizard.tips.${tip.key}.title`)}</Text>
+            {'\n'}
+            {t(`wizard.tips.${tip.key}.body`)}
+          </Text>
+        </View>
+      ))}
+    </>
+  );
+}
+
+// ----------------------------------------------------------------- guides
+
+// The guides are easy to miss in the app, so they get a page of their own here.
+// Showing it counts as done; opening one is up to the person.
+export function GuidesStep({ onCompleted }: StepProps) {
+  const { t } = useI18n();
+  useEffect(() => {
+    onCompleted();
+  }, [onCompleted]);
+  return (
+    <>
+      <Header icon="search" title={t('wizard.guides.title')} body={t('wizard.guides.body')} />
+      <View style={{ marginTop: 16 }}>
+        <GuideList />
+      </View>
     </>
   );
 }

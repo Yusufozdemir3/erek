@@ -39,7 +39,7 @@ export default function GoalsScreen() {
     router.push({ pathname: '/goal/[id]', params: { id, tab } });
 
   const reload = useCallback(() => {
-    const list = goalRepo.listByUser(user.id);
+    const list = goalRepo.listActive(user.id);
     setGoals(list);
     // Step counts come from the views (a threshold is done by current_value);
     // a query per goal is fine for a short list.

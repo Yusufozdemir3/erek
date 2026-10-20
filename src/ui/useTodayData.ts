@@ -47,10 +47,11 @@ export function useTodayData(userId: string, selectedDate: string, today: string
 
   const reload = useCallback(() => {
     // Today also carries over earlier open tasks; other days show only their own.
+    // Past days are history, so archived tasks still show there.
     const isToday = selectedDate === today;
     const taskList = isToday
       ? taskRepo.listForToday(userId, selectedDate)
-      : taskRepo.listByDueDate(userId, selectedDate);
+      : taskRepo.listByDueDate(userId, selectedDate, selectedDate < today);
     setTasks(taskList);
     setSubtaskCounts(subtaskRepo.countsForTasks(taskList.map((t) => t.id)));
     const dueToday = habitRepo

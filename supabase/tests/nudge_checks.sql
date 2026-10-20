@@ -125,7 +125,7 @@ begin
     'only the owner''s token, with its locale, got ' || (r->'tokens')::text;
 
   r := public.prepare_nudge('00000000-0000-0000-0000-00000000000b', 'habit', '00000000-0000-0000-0000-0000000000a1');
-  assert r->>'status' = 'rate_limited_item', 'the same item twice within 12 h must be limited';
+  assert r->>'status' = 'rate_limited_item', 'the same item twice within 1 h must be limited';
 
   r := public.prepare_nudge('00000000-0000-0000-0000-00000000000b', 'goal', '00000000-0000-0000-0000-0000000000a3');
   assert r->>'status' = 'ok', 'a shared goal can be nudged too';

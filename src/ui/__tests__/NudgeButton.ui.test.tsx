@@ -38,11 +38,11 @@ describe('NudgeButton', () => {
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
-  it('12 saat içinde ikinci kez: açıklama gösterilir', async () => {
+  it('Bir saat içinde ikinci kez: açıklama gösterilir', async () => {
     mockSend.mockResolvedValue('alreadyToday');
     const { getByText, findByText } = await renderUI(<NudgeButton {...props} />);
     fireEvent.press(getByText('Arkadaşına hatırlat'));
-    expect(await findByText('Bunu zaten hatırlattın; 12 saat sonra yeniden hatırlatabilirsin.')).toBeTruthy();
+    expect(await findByText('Bunu zaten hatırlattın; bir saat sonra yeniden hatırlatabilirsin.')).toBeTruthy();
   });
 
   it('arkadaşın cihazı kayıtlı değilse mesajla hatırlatma önerilir', async () => {

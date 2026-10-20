@@ -49,8 +49,8 @@ export function OnboardingGate() {
   };
 
   return (
-    <Modal visible animationType="fade" onRequestClose={() => done({ skippedAll: true, accountSeen: false })}>
-      <SetupWizard onDone={done} />
+    <Modal visible animationType="fade" onRequestClose={() => {}}>
+      <SetupWizard onDone={done} required />
     </Modal>
   );
 }

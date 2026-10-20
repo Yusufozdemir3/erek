@@ -32,8 +32,8 @@ const prep: PreparedNudge = {
 
 describe('parseRequest', () => {
   it('yalnız habit/goal ve geçerli UUID kabul eder', () => {
-    expect(parseRequest({ kind: 'habit', itemId: ITEM })).toEqual({ kind: 'habit', itemId: ITEM });
-    expect(parseRequest({ kind: 'goal', itemId: ITEM })).toEqual({ kind: 'goal', itemId: ITEM });
+    expect(parseRequest({ kind: 'habit', itemId: ITEM })).toEqual({ action: 'nudge', kind: 'habit', itemId: ITEM });
+    expect(parseRequest({ kind: 'goal', itemId: ITEM })).toEqual({ action: 'nudge', kind: 'goal', itemId: ITEM });
     expect(parseRequest({ kind: 'task', itemId: ITEM })).toBeNull();
     expect(parseRequest({ kind: 'habit', itemId: "x' or 1=1" })).toBeNull();
     expect(parseRequest(null)).toBeNull();

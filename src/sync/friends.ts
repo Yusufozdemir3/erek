@@ -8,10 +8,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { taskRepo } from '../db/repositories/taskRepo';
 import { supabase } from './supabase';
 import { SharingError, toSharingError } from './sharingErrors';
+import { clearNicknames, ensureNicknames, named, refreshNicknames } from './nicknames';
 
 export interface Friend {
   id: string;
   displayName: string | null;
+  // The friend's own username, set only while a nickname replaces displayName.
+  originalName?: string | null;
   avatarUrl: string | null;
   connectedAt: string | null;
 }
@@ -62,7 +65,8 @@ export async function redeemInvite(code: string): Promise<Friend> {
     if (error) throw error;
     if (data?.error) throw new SharingError(toSharingError(data.error).code);
     if (!data?.friend?.id) throw new SharingError('ERK_UNKNOWN', 'empty friend');
-    return toFriend(data.friend);
+    await ensureNicknames();
+    return named(toFriend(data.friend));
   } catch (e) {
     throw toSharingError(e);
   }
@@ -78,7 +82,8 @@ export async function listConnections(): Promise<Friend[]> {
     throw toSharingError(e);
   }
   await AsyncStorage.setItem(FRIENDS_CACHE_KEY, JSON.stringify(friends)).catch(() => {});
-  return friends;
+  await refreshNicknames();
+  return friends.map(named);
 }
 
 export async function removeConnection(friendId: string): Promise<void> {
@@ -88,7 +93,14 @@ export async function removeConnection(friendId: string): Promise<void> {
   } catch (e) {
     throw toSharingError(e);
   }
-  const cached = await getCachedFriends();
+  const raw = await AsyncStorage.getItem(FRIENDS_CACHE_KEY).catch(() => null);
+  let cached: Friend[] = [];
+  try {
+    const parsed = raw ? JSON.parse(raw) : [];
+    cached = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // empty
+  }
   await AsyncStorage.setItem(
     FRIENDS_CACHE_KEY,
     JSON.stringify(cached.filter((f) => f.id !== friendId))
@@ -99,7 +111,8 @@ export async function getCachedFriends(): Promise<Friend[]> {
   try {
     const raw = await AsyncStorage.getItem(FRIENDS_CACHE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    await ensureNicknames();
+    return Array.isArray(parsed) ? parsed.map(named) : [];
   } catch {
     return [];
   }
@@ -116,6 +129,7 @@ export async function clearSharedData(): Promise<void> {
     const keys = await AsyncStorage.getAllKeys();
     const doomed = keys.filter((k) => k === FRIENDS_CACHE_KEY || k.startsWith(SHARED_CACHE_PREFIX));
     if (doomed.length > 0) await AsyncStorage.multiRemove(doomed);
+    await clearNicknames();
   } catch (e) {
     console.warn('[Friends] Failed to clear sharing caches:', e);
   }

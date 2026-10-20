@@ -21,7 +21,7 @@ export function HeaderActions({ onHelp }: { onHelp?: () => void }) {
           accessibilityRole="button"
           accessibilityLabel={t('guide.helpA11y')}
         >
-          <Feather name="help-circle" size={26} color={colors.muted} />
+          <Feather name="help-circle" size={26} color={colors.primary} />
         </Pressable>
       )}
       <ProfileButton />

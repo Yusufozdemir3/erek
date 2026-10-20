@@ -18,6 +18,11 @@ beforeEach(async () => {
 });
 
 describe('shouldAutoShowGuide', () => {
+  // Ekran rehberleri, yeni kurulumda turdan SONRA değerlendirilir (tur önce gelir).
+  beforeEach(async () => {
+    await AsyncStorage.setItem('guide:seen:tour', '1');
+  });
+
   it('eski kullanıcıda (yeni kurulum işareti yok) asla kendiliğinden açılmaz', async () => {
     await AsyncStorage.setItem('onboarding:done', '1');
     expect(await shouldAutoShowGuide('goals')).toBe(false);
@@ -65,13 +70,51 @@ describe('shouldAutoShowGuide', () => {
   });
 
   it('depolama okunamazsa açılmaz (kullanıcıyı bölmez)', async () => {
-    jest.spyOn(AsyncStorage, 'getItem').mockRejectedValue(new Error('disk'));
-    expect(await shouldAutoShowGuide('goals')).toBe(false);
-    jest.restoreAllMocks();
+    const original = AsyncStorage.getItem;
+    AsyncStorage.getItem = jest.fn().mockRejectedValue(new Error('disk'));
+    try {
+      expect(await shouldAutoShowGuide('goals')).toBe(false);
+    } finally {
+      AsyncStorage.getItem = original;
+    }
   });
 
   it('anahtarlar sabit (eski sürümlerle uyum)', () => {
     expect(NEW_INSTALL_KEY).toBe('guide:newInstall');
     expect(guideSeenKey('goals')).toBe('guide:seen:goals');
+  });
+});
+
+describe('hızlı tur', () => {
+  it('eski kullanıcıda da (yeni kurulum işareti yok) bir kez kendiliğinden açılır', async () => {
+    await AsyncStorage.setItem('onboarding:done', '1');
+    expect(await shouldAutoShowGuide('tour')).toBe(true);
+    await markGuideSeen('tour');
+    expect(await shouldAutoShowGuide('tour')).toBe(false);
+  });
+
+  it('sihirbaz ya da giriş ekranı açıkken açılmaz', async () => {
+    expect(await shouldAutoShowGuide('tour')).toBe(false); // sihirbaz bitmedi
+    await AsyncStorage.setItem('onboarding:done', '1');
+    await AsyncStorage.removeItem('login:seen');
+    expect(await shouldAutoShowGuide('tour')).toBe(false); // giriş ekranı açık
+  });
+
+  it('yeni kurulumda ekran rehberlerinden ÖNCE gelir; tur bitince onlar sessizleşir', async () => {
+    await AsyncStorage.removeItem('guide:seen:tour');
+    await markNewInstall();
+    await AsyncStorage.setItem('onboarding:done', '1');
+    expect(await shouldAutoShowGuide('tour')).toBe(true);
+    expect(await shouldAutoShowGuide('goals')).toBe(false);
+
+    await markGuideSeen('tour');
+    expect(await shouldAutoShowGuide('goals')).toBe(false); // artık "görüldü" yazıldı
+    expect(await hasSeenGuide('today')).toBe(true);
+  });
+
+  it('eski kullanıcıda tur diğer rehberleri "görüldü" yapmaz (listedeki "Yeni" etiketi kalır)', async () => {
+    await AsyncStorage.setItem('onboarding:done', '1');
+    await markGuideSeen('tour');
+    expect(await hasSeenGuide('today')).toBe(false);
   });
 });

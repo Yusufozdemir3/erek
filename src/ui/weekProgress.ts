@@ -30,7 +30,7 @@ export function computeWeekProgress(userId: string, selectedDate: string, today:
     );
     // Same rule as the list below it: today also carries over unfinished tasks.
     const tasks =
-      ymd === today ? taskRepo.listForToday(userId, ymd) : taskRepo.listByDueDate(userId, ymd);
+      ymd === today ? taskRepo.listForToday(userId, ymd) : taskRepo.listByDueDate(userId, ymd, ymd < today);
     const done =
       scheduled.filter((h) => states[h.id]?.completed).length +
       tasks.filter((t) => t.completed_at !== null).length;

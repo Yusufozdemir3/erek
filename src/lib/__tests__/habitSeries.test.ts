@@ -21,6 +21,7 @@ const baseHabit: Habit = {
   end_date: null,
   goal_contribution: null,
   goal_factor: 1,
+  unarchived_at: null,
   updated_at: '2026-01-01T00:00:00.000Z',
   deleted_at: null,
   synced: 1,

@@ -57,6 +57,7 @@ export interface Task extends SyncFields {
   shared_owner_uid: string | null; // local only: set = someone's task shared with me (check-off only)
   icon: string | null;             // ui/taskIcons id; null = none
   tag_ids: string[];               // the user's tags; may hold ids of deleted tags (skip them)
+  unarchived_at: string | null;    // last "Restore" from the archive (db/archive.ts)
 }
 
 // A user-made task label.
@@ -75,13 +76,15 @@ export interface Goal extends SyncFields {
   current_value: number;         // for numeric: current value (e.g. 40 km)
   unit: string | null;           // "km", "books", "hours"
   deadline: string | null;       // "YYYY-MM-DD"
-  // 'milestone' goals only; numeric ones are done at current_value >= target_value.
+  // 'milestone': set by hand / when every step is done. 'numeric': kept in step
+  // with current_value >= target_value (since migration024), for the archive.
   completed_at: string | null;
   remind_at: string | null;      // unused since migration016 (reminders table)
   start_date: string | null;     // "YYYY-MM-DD"; day zero of the pace (goalProjection.ts)
   // The part of current_value not made of entries (older progress, manual
   // corrections); current_value = this + live entries (migration019).
   value_baseline: number;
+  unarchived_at: string | null;  // last "Restore" from the archive (db/archive.ts)
 }
 
 // A goal step:
@@ -126,6 +129,7 @@ export interface Habit extends SyncFields {
   skip_dates?: string[] | null;  // rest days, treated as unscheduled
   goal_contribution: GoalContribution | null;
   goal_factor: number;           // 'amount' mode multiplier; default 1
+  unarchived_at: string | null;  // last "Restore" from the archive (db/archive.ts)
 }
 
 // A checklist item under a task: just a title and a tick.
