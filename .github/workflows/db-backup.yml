@@ -1,0 +1,79 @@
+name: DB yedeği
+
+# Supabase ücretsiz planda otomatik yedek yok. Bu iş her gece canlı veritabanının
+# dökümünü alır, şifreler ve 30 gün saklanan bir Actions çıktısı (artifact)
+# olarak bırakır. Başarısız olursa GitHub e-posta atar.
+#
+# GEREKEN GİZLİ DEĞERLER (Settings > Secrets and variables > Actions):
+#   SUPABASE_DB_URL     Supabase > Connect > "Session pooler" bağlantı adresi
+#                       (postgresql://postgres.<ref>:<parola>@aws-...pooler.supabase.com:5432/postgres).
+#                       "Direct connection" OLMAZ: yalnız IPv6, GitHub makinelerinde IPv6 yok.
+#   BACKUP_PASSPHRASE   Uzun, rastgele bir parola. Bir parola yöneticisinde de sakla:
+#                       o olmadan yedekler açılamaz.
+#
+# İÇERİK: public şeması (tablolar + veri + fonksiyonlar + policy'ler) ve
+# auth.users / auth.identities verisi (public tabloları bunlara bağlı).
+#
+# GERİ YÜKLEME (yerelde):
+#   gh run download <run-id> -n erek-db-<tarih>
+#   gpg -d erek-db-<tarih>.tar.gpg | tar x
+#   pg_restore --no-owner --data-only -d "<hedef-db-url>" auth.dump   # önce: public tablolar auth.users'a bağlı
+#   pg_restore --no-owner -d "<hedef-db-url>" public.dump              # "schema public already exists" zararsız
+# Canlıya geri yüklemeden önce boş bir test projesinde dene.
+on:
+  schedule:
+    - cron: '23 1 * * *'   # her gece 01:23 UTC (TR 04:23)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Gizli değerler tanımlı mı
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          [ -n "$DB_URL" ] || { echo "::error::SUPABASE_DB_URL tanımlı değil"; exit 1; }
+          [ -n "$PASSPHRASE" ] || { echo "::error::BACKUP_PASSPHRASE tanımlı değil"; exit 1; }
+
+      # pg_dump sunucudan eski olamaz; sunucunun ana sürümüne uygun resmi
+      # postgres imajındaki pg_dump kullanılır.
+      - name: Döküm al
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          MAJOR=$(docker run --rm postgres:17 psql "$DB_URL" -Atc "select current_setting('server_version_num')::int / 10000")
+          echo "Sunucu Postgres $MAJOR"
+          PG="docker run --rm -v $PWD/out:/out postgres:$MAJOR"
+          $PG pg_dump "$DB_URL" -Fc --no-owner --no-privileges -n public -f /out/public.dump
+          $PG pg_dump "$DB_URL" -Fc --no-owner --no-privileges --data-only \
+            -t auth.users -t auth.identities -f /out/auth.dump
+          ls -la out
+
+      - name: Şifrele
+        id: pack
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          NAME="erek-db-$(date -u +%Y-%m-%d)"
+          tar -C out -cf - public.dump auth.dump \
+            | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 \
+                  --symmetric --cipher-algo AES256 -o "$NAME.tar.gpg" 3<<<"$PASSPHRASE"
+          rm -rf out
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          ls -la "$NAME.tar.gpg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.name }}
+          path: ${{ steps.pack.outputs.name }}.tar.gpg
+          retention-days: 30
+          if-no-files-found: error
