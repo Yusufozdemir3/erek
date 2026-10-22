@@ -1,8 +1,11 @@
-// Removes three permissions the app never uses from the release manifest:
+// Removes permissions the app never uses from the release manifest:
 //   - SYSTEM_ALERT_WINDOW ("display over other apps") — from expo-dev-client's
 //     dev menu; sensitive, and flagged in Play review;
 //   - READ/WRITE_EXTERNAL_STORAGE — from expo-file-system, which is only here
-//     for expo-asset's icon fonts; no user data touches shared storage.
+//     for expo-asset's icon fonts; no user data touches shared storage;
+//   - READ_MEDIA_IMAGES — from expo-screen-capture 58, for its screenshot
+//     listener. We only set FLAG_SECURE (lib/appLock.ts), never listen, and
+//     Play blocks a release with a photo permission until it is declared.
 // android/ is generated, hence a plugin.
 
 const { withAndroidManifest } = require('expo/config-plugins');
@@ -11,6 +14,7 @@ const REMOVED_PERMISSIONS = [
   'android.permission.SYSTEM_ALERT_WINDOW',
   'android.permission.READ_EXTERNAL_STORAGE',
   'android.permission.WRITE_EXTERNAL_STORAGE',
+  'android.permission.READ_MEDIA_IMAGES',
 ];
 
 // One tools:node="remove" marker per permission and no plain declaration left:

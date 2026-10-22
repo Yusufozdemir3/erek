@@ -1,4 +1,4 @@
-// Yayın APK'sında istenmeyen izinler (üstte çizilme, harici depolama) olmamalı:
+// Yayın APK'sında istenmeyen izinler (üstte çizilme, harici depolama, fotoğraf) olmamalı:
 // eklenti düz satırları siler ve her izin için TEK kaldırma işareti bırakır.
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -15,6 +15,7 @@ describe('withoutUnusedPermissions', () => {
       perm('android.permission.READ_EXTERNAL_STORAGE'),
       perm('android.permission.WRITE_EXTERNAL_STORAGE'),
       perm('android.permission.WRITE_EXTERNAL_STORAGE', true),
+      perm('android.permission.READ_MEDIA_IMAGES'),
       perm('android.permission.VIBRATE'),
     ]);
     applyRemovals(m);
