@@ -148,12 +148,10 @@ export default function TasksScreen() {
       if (!t.shared_owner_uid) toggleSelected(t.id);
       return;
     }
+    // A task shared with me is a shared list: always the list window (items to
+    // tick/add/remove, and the congratulate button once it is finished).
     if (t.shared_owner_uid) {
-      if (subtaskRepo.countForTask(t.id).total > 0) {
-        setViewingShared(t);
-        return;
-      }
-      Alert.alert(t.title, tr('share.readOnlyTask', { name: friendNames.get(t.shared_owner_uid) ?? tr('friends.unknownName') }));
+      setViewingShared(t);
       return;
     }
     setEditingTask(t);
@@ -392,7 +390,7 @@ export default function TasksScreen() {
                 {tr('tasks.showOlderCompleted', { n: olderCompletedCount })}
               </Text>
             </Pressable>
-          ) : null
+          ) : undefined
         }
       />
 

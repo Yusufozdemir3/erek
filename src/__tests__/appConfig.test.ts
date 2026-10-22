@@ -21,7 +21,7 @@ describe('app.config.js — R8', () => {
   it('varsayılan: R8 anahtarları eklenmez', () => {
     delete process.env.EREK_R8;
     const cfg = loadConfig()({ config: base });
-    expect(buildProps(cfg).enableProguardInReleaseBuilds).toBeUndefined();
+    expect(buildProps(cfg).enableMinifyInReleaseBuilds).toBeUndefined();
     expect(buildProps(cfg).enableShrinkResourcesInReleaseBuilds).toBeUndefined();
   });
 
@@ -31,7 +31,7 @@ describe('app.config.js — R8', () => {
     expect(buildProps(cfg)).toMatchObject({
       compileSdkVersion: 36,
       targetSdkVersion: 36,
-      enableProguardInReleaseBuilds: true,
+      enableMinifyInReleaseBuilds: true,
       enableShrinkResourcesInReleaseBuilds: true,
     });
     expect(cfg.plugins[0]).toBe('expo-font');
@@ -39,6 +39,6 @@ describe('app.config.js — R8', () => {
 
   it('başka bir değer (0, true) R8 açmaz', () => {
     process.env.EREK_R8 = 'true';
-    expect(buildProps(loadConfig()({ config: base })).enableProguardInReleaseBuilds).toBeUndefined();
+    expect(buildProps(loadConfig()({ config: base })).enableMinifyInReleaseBuilds).toBeUndefined();
   });
 });

@@ -6,6 +6,8 @@ module.exports = {
   displayName: 'ui',
   preset: 'jest-expo',
   testMatch: ['<rootDir>/src/**/*.ui.test.tsx'],
+  // Reanimated 4 / worklets: their own resolver picks the Jest-safe (web) builds.
+  resolver: 'react-native-reanimated/jest/resolver',
   setupFilesAfterEnv: ['<rootDir>/src/test/setup-ui.tsx'],
   moduleNameMapper: {
     '^expo-sqlite$': '<rootDir>/src/test/mocks/expo-sqlite.ts',

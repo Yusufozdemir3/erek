@@ -15,7 +15,7 @@ import { ACCOUNTS_ENABLED } from '@/config';
 import { nowIso } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { getCachedFriends, listConnections, type Friend } from '@/sync/friends';
-import { toggleSharedSubtask, toggleSharedTask } from '@/sync/sharedTasks';
+import { addSharedSubtask, deleteSharedSubtask, toggleSharedSubtask, toggleSharedTask } from '@/sync/sharedTasks';
 import { sharingErrorKey, toSharingError } from '@/sync/sharingErrors';
 import { useOptionalAppData } from '@/ui/AppData';
 
@@ -135,7 +135,7 @@ export async function toggleSharedSubtaskOptimistic(
   reload();
   try {
     const r = await toggleSharedSubtask(subtask.id, completing);
-    subtaskRepo.applySharedCompletion(subtask.id, r.completed, r.subtaskUpdatedAt);
+    subtaskRepo.applySharedCompletion(subtask.id, r.completed, r.subtaskUpdatedAt, r.completedBy);
     taskRepo.applySharedCompletion(r.taskId, r.taskCompletedAt, r.taskUpdatedAt);
   } catch (e) {
     subtaskRepo.applySharedCompletion(subtask.id, !completing, subtask.updated_at);
@@ -144,6 +144,56 @@ export async function toggleSharedSubtaskOptimistic(
     if (toSharingError(e).code === 'ERK_NOT_SHARED') onGone?.();
   }
   reload();
+}
+
+// A recipient adding an item to a shared list. Not optimistic: the row's id
+// and position come from the server. true = added.
+export async function addSharedSubtaskAction(
+  taskId: string,
+  title: string,
+  reload: () => void,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  onGone?: () => void
+): Promise<boolean> {
+  try {
+    const r = await addSharedSubtask(taskId, title);
+    subtaskRepo.applySharedAdd({
+      id: r.subtaskId,
+      taskId: r.taskId,
+      title: r.title,
+      position: r.position,
+      updatedAt: r.subtaskUpdatedAt,
+    });
+    taskRepo.applySharedCompletion(r.taskId, r.taskCompletedAt, r.taskUpdatedAt);
+    tapLight();
+    reload();
+    return true;
+  } catch (e) {
+    Alert.alert(t('friends.errorTitle'), t(sharingErrorKey(e)));
+    if (toSharingError(e).code === 'ERK_NOT_SHARED') onGone?.();
+    return false;
+  }
+}
+
+// A recipient removing an item from a shared list. true = removed.
+export async function deleteSharedSubtaskAction(
+  subtask: Subtask,
+  reload: () => void,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  onGone?: () => void
+): Promise<boolean> {
+  try {
+    const r = await deleteSharedSubtask(subtask.id);
+    subtaskRepo.applySharedDelete(subtask.id, r.subtaskUpdatedAt);
+    taskRepo.applySharedCompletion(r.taskId, r.taskCompletedAt, r.taskUpdatedAt);
+    tapLight();
+    reload();
+    return true;
+  } catch (e) {
+    Alert.alert(t('friends.errorTitle'), t(sharingErrorKey(e)));
+    if (toSharingError(e).code === 'ERK_NOT_SHARED') onGone?.();
+    return false;
+  }
 }
 
 // Gate on the last ATTEMPT (success or not), not on the last success: with a

@@ -9,7 +9,7 @@ import { requestAdd } from '@/lib/addRequest';
 import Animated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { habitRepo, subtaskRepo, taskRepo } from '@/db';
+import { habitRepo, taskRepo } from '@/db';
 import type { Task } from '@/db';
 import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } from '@/lib/helpers';
 import { notifySuccess, tapLight } from '@/lib/haptics';
@@ -150,12 +150,10 @@ export default function TodayScreen() {
   };
 
   const openTask = (t: Task) => {
+    // A task shared with me is a shared list: always the list window (items to
+    // tick/add/remove, and the congratulate button once it is finished).
     if (t.shared_owner_uid) {
-      if (subtaskRepo.countForTask(t.id).total > 0) {
-        setViewingShared(t);
-        return;
-      }
-      Alert.alert(t.title, tr('share.readOnlyTask', { name: friendNames.get(t.shared_owner_uid) ?? tr('friends.unknownName') }));
+      setViewingShared(t);
       return;
     }
     setEditingTask(t);

@@ -1,8 +1,8 @@
 diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
-index acc7924..3385f6c 100644
+index 1c12d1f..a19f42c 100644
 --- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
 +++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
-@@ -129,7 +129,7 @@ public class RNWidget {
+@@ -174,7 +174,7 @@ public class RNWidget {
              R.id.rn_widget_clickable_positioner,
              offsetViewBounds.left,
              offsetViewBounds.top,
@@ -11,7 +11,7 @@ index acc7924..3385f6c 100644
              0
          );
  
-@@ -140,6 +140,16 @@ public class RNWidget {
+@@ -199,6 +199,16 @@ public class RNWidget {
          widgetView.addView(R.id.rn_widget_clickable_container, clickableRemoteView);
      }
  
@@ -28,7 +28,7 @@ index acc7924..3385f6c 100644
      private void registerClickTask(int id, ClickableView clickableView, RemoteViews widgetView, Integer button) {
          Intent intent = new Intent(appContext.getPackageName() + ".WIDGET_CLICK");
          intent.setComponent(new ComponentName(appContext, RNWidgetUtil.getWidgetProviderClassName(appContext, widgetName)));
-@@ -181,8 +191,8 @@ public class RNWidget {
+@@ -252,8 +262,8 @@ public class RNWidget {
              R.id.rn_widget_list_positioner,
              offsetViewBounds.left,
              offsetViewBounds.top,

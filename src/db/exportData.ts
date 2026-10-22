@@ -14,7 +14,7 @@ import { getDb } from './database';
 export const EXPORT_FORMAT_VERSION = 1;
 
 // Columns that never leave the device in an export.
-const DROP = new Set(['synced', 'deleted_at', 'shared_with_id', 'shared_owner_uid', 'added_by']);
+const DROP = new Set(['synced', 'deleted_at', 'shared_with_id', 'shared_with_ids', 'shared_owner_uid', 'added_by', 'completed_by']);
 
 export interface ExportDocument {
   app: 'Erek';

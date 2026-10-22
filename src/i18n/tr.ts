@@ -674,6 +674,9 @@ export const tr: Dict = {
   'friends.err.ERK_GOAL_NOT_SYNCED': 'Hedef henüz buluta yedeklenmedi. Birazdan tekrar dene.',
   'friends.err.ERK_INVALID_AMOUNT': 'Bu miktar eklenemez.',
   'friends.err.ERK_CORRECTION_LIMIT': 'Eksi giriş yalnızca kendi eklediklerini geri alabilir.',
+  'friends.err.ERK_LIST_FULL': 'Listede en fazla 100 madde olabilir.',
+  'friends.err.ERK_LIST_BUSY': 'Bu listede çok fazla değişiklik yapıldı. Biraz sonra tekrar dene.',
+  'friends.err.ERK_INVALID_TITLE': 'Madde 1–120 karakter olmalı.',
   'friends.sharedBy': 'Paylaşan: {name}',
   'friends.sharedSectionTitle': "Seninle paylaşılanlar",
   'friends.addTitle': "Arkadaş ekle",
@@ -697,10 +700,11 @@ export const tr: Dict = {
   'sharedGoal.you': 'Sen',
   'sharedGoal.contributeHint': 'Eklediğin miktar {name} ile ortak bu hedefe yazılır. Eksi değerle yalnızca kendi eklediklerini düzeltebilirsin. İnternet gerekir.',
   'sharedGoal.contributeA11y': 'Hedefe eklenecek miktar',
-  'share.taskSection': 'Arkadaşla paylaş',
+  'share.taskSection': 'Arkadaşlarla paylaş',
   'share.nobody': 'Kimse',
+  'share.taskHint': 'Seçtiklerin listeyi görür; maddeleri işaretleyebilir, ekleyebilir ve silebilir (en fazla 10 kişi).',
   'share.recurringBlocked': 'Tekrarlayan görevler paylaşılamaz.',
-  'share.readOnlyTask': 'Bu görevi {name} seninle paylaştı. Yalnızca tamamlandı işaretleyebilirsin; düzenleme ve silme ona ait.',
+  'share.readOnlyTask': 'Bu görevi {name} seninle paylaştı. Maddeleri işaretleyebilir, ekleyebilir ve silebilirsin; görevin kendisini düzenlemek ona ait.',
   // Voice input (the mic in the task form). The dialogs promise only what the
   // code enforces: no audio file is written; online recognition only after
   // consent (see lib/voice.ts, lib/voiceLogic.ts).
@@ -756,6 +760,7 @@ export const tr: Dict = {
   'congrats.sent': '{name} tebrik edildi 🎉',
   'congrats.already': '{name} zaten tebrik edildi',
   'congrats.message': '{name}, “{title}” harika iş, tebrikler! 🎉',
+  'congrats.failedBody': 'Tebrik şu an gönderilemedi (kod: {code}). Mesajla tebrik etmek ister misin?',
   'congrats.noDeviceTitle': 'Bildirim gidemedi',
   'congrats.noDeviceBody': '{name}’in telefonuna bildirim gönderemedik. Tebriği mesajla iletmek ister misin?',
   'congrats.notYetTitle': 'Henüz bitmemiş görünüyor',
@@ -776,8 +781,13 @@ export const tr: Dict = {
   'nudge.permissionHint': 'Arkadaşların sana hatırlatma gönderebilsin diye bildirimleri aç.',
   'nudge.enableNotifications': 'Bildirimleri aç',
   'sharedTask.from': '{name} seninle paylaştı',
-  'sharedTask.hint': 'Alt görevleri işaretleyebilirsin; hepsi bitince görev de tamamlanır. Düzenleme ve silme {name} adlı kişiye ait.',
+  'sharedTask.hint': 'Maddeleri işaretleyebilir, ekleyebilir ve silebilirsin; hepsi bitince görev de tamamlanır. Başlığı düzenlemek ve görevi silmek {name} adlı kişiye ait.',
   'sharedTask.completed': 'Tamamlandı',
+  'sharedTask.tickedByYou': 'Sen işaretledin',
+  'sharedTask.tickedBy': '{name} işaretledi',
+  'sharedTask.removeA11y': '{title} maddesini sil',
+  'sharedTask.addA11y': 'Maddeyi listeye ekle',
+  'sharedTask.addPlaceholder': 'Madde ekle…',
   'sharedTask.progressA11y': '{total} alt görevden {done} tanesi tamamlandı',
   // Setup wizard (ui/setupWizard).
   'profile.setupWizard': 'Kurulum sihirbazı',
@@ -1092,15 +1102,15 @@ export const tr: Dict = {
 
   // Archive (app/archive.tsx; rules in db/archive.ts)
   'archive.title': 'Arşiv',
-  'archive.hint': 'Tamamlanan görevler bir hafta sonra, tamamlanan hedefler ertesi gün, bitiş tarihi geçen alışkanlıklar kendiliğinden buraya taşınır. Geri aldığın, olduğu gibi listesine döner.',
+  'archive.hint': 'Tamamlanan görevler bir hafta sonra, tamamlanan hedefler ve bitiş tarihi geçen alışkanlıklar 3 gün sonra kendiliğinden buraya taşınır; paylaşılıyorlarsa paylaşım da biter. Geri aldığın, olduğu gibi listesine döner.',
   'archive.completedOn': 'Tamamlandı: {date}',
   'archive.endedOn': 'Bitti: {date}',
   'archive.restore': 'Geri al',
   'archive.restoreA11y': '{title} arşivden geri alınsın',
   'archive.emptyTitle': 'Arşiv boş',
   'archive.empty.tasks': 'Tamamladığın görevler bir hafta sonra burada olur.',
-  'archive.empty.habits': 'Bitiş tarihi geçen alışkanlıklar burada olur.',
-  'archive.empty.goals': 'Ulaştığın hedefler ertesi gün burada olur.',
+  'archive.empty.habits': 'Bitiş tarihi geçen alışkanlıklar 3 gün sonra burada olur.',
+  'archive.empty.goals': 'Ulaştığın hedefler 3 gün sonra burada olur.',
 
   // General check-off reminder (notifications.ts scheduleGeneralReminders)
   'profile.notifGeneral': 'Genel işaretleme hatırlatması',

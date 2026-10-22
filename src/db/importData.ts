@@ -41,7 +41,7 @@ const PLAN = [
 type Key = (typeof PLAN)[number]['key'];
 
 // Columns the file never controls.
-const NEVER_FROM_FILE = new Set(['user_id', 'synced', 'deleted_at', 'shared_with_id', 'shared_owner_uid', 'added_by']);
+const NEVER_FROM_FILE = new Set(['user_id', 'synced', 'deleted_at', 'shared_with_id', 'shared_with_ids', 'shared_owner_uid', 'added_by', 'completed_by']);
 // Columns that hold JSON text (a recurrence or schedule rule, a tag id list).
 const JSON_COLUMNS = new Set(['schedule', 'recurrence', 'tag_ids']);
 

@@ -3,7 +3,6 @@
 // only). Plain React Native — it runs in its own activity, outside the app's
 // providers — and reads only the snapshot.
 
-import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import type { WidgetConfigurationScreenProps } from 'react-native-android-widget';

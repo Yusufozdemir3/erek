@@ -14,16 +14,31 @@ import {
 import { todayDate } from '@/lib/helpers';
 import { supabase } from './supabase';
 
+// The last answer (or why there was none), so a failed congratulation can tell
+// the user WHAT failed instead of a bare "couldn't send".
+let lastStatus = 'none';
+export function lastCelebrationStatus(): string {
+  return lastStatus;
+}
+
 async function call(body: Record<string, unknown>): Promise<unknown> {
-  if (!supabase) return undefined;
+  if (!supabase) {
+    lastStatus = 'offline';
+    return undefined;
+  }
   try {
     const { data, error } = await supabase.functions.invoke('send-nudge', { body });
     if (error) {
-      const parsed = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      const res = (error as { context?: Response }).context;
+      const parsed = await res?.json?.().catch(() => null);
+      lastStatus = typeof parsed?.status === 'string' ? parsed.status : res?.status ? `http_${res.status}` : 'network';
       return parsed?.status;
     }
-    return (data as { status?: unknown } | null)?.status;
+    const status = (data as { status?: unknown } | null)?.status;
+    lastStatus = typeof status === 'string' ? status : 'empty';
+    return status;
   } catch {
+    lastStatus = 'network';
     return undefined;
   }
 }

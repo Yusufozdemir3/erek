@@ -100,7 +100,7 @@ export default function SharedGoalScreen() {
               {t('friends.sharedBy', { name: ownerName })}
               {status === 'offline' ? ` · ${t('sharedHabit.offline')}` : ''}
             </Text>
-            {goal.completed_at ? (
+            {goal.completed_at || stats.completed ? (
               <CongratsButton kind="goal" itemId={id} ownerName={ownerName} title={goal.title} />
             ) : (
               <NudgeButton

@@ -3,12 +3,11 @@
     "name": "Erek",
     "slug": "habit-app",
     "owner": "yusufozdemir",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "habitapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -20,7 +19,7 @@
     },
     "android": {
       "package": "com.erek",
-      "versionCode": 18,
+      "versionCode": 24,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F4F1EA"
@@ -43,11 +42,10 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 36,
             "targetSdkVersion": 36,
-            "buildToolsVersion": "36.0.0",
-            "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# Room databases (WorkManager, used by the widgets) are created by reflection.\n-keep class * extends androidx.room.RoomDatabase { <init>(); }"
           }
         }
       ],
@@ -56,6 +54,9 @@
       "./plugins/withForceDarkDisabled",
       "./plugins/withoutUnusedPermissions",
       "./plugins/withBackupRules",
+      "./plugins/withReleaseSigning",
+      "./plugins/withWindowsCmake",
+      "./plugins/withR8CompatMode",
       [
         "react-native-android-widget",
         {
@@ -154,7 +155,6 @@
           "androidAppId": "ca-app-pub-1389231740794130~1288487312"
         }
       ],
-      "./plugins/withAdsCompatibleGmsAds",
       "expo-secure-store",
       "expo-speech-recognition",
       "./plugins/withOptionalMicrophone"

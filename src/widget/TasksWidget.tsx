@@ -6,7 +6,6 @@
 // Same loading rule as TodayWidget.tsx: only in a real build, never from the
 // app's screen tree.
 
-import * as React from 'react';
 import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
 import { FALLBACK_COLORS, type WidgetSnapshot } from './widgetSnapshot';
 import { TASK_ACTION, isStale } from './widgetQueue';

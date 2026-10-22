@@ -3,7 +3,7 @@
 // cache only for the moment of sharing and is deleted afterwards — Erek keeps
 // no copy.
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { buildExport } from '@/db/exportData';
 import { todayDate } from '@/lib/helpers';

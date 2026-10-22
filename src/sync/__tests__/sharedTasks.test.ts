@@ -33,6 +33,7 @@ describe('toggleSharedSubtask', () => {
     expect(mockRpc).toHaveBeenCalledWith('toggle_shared_subtask', { p_subtask_id: SUB, p_completed: true });
     expect(r).toEqual({
       completed: true,
+      completedBy: null,
       subtaskUpdatedAt: '2026-10-03T10:00:00.000Z',
       taskId: TASK,
       taskCompletedAt: '2026-10-03T10:00:00.000Z',

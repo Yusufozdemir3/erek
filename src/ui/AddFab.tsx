@@ -203,7 +203,7 @@ const makeStyles = (c: Colors) =>
     plusBarV: { position: 'absolute', width: 2.5, height: 16, borderRadius: 2, backgroundColor: c.onAccent },
 
     // — The overlay —
-    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.35)' },
+    backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(15,23,42,0.35)' },
     fan: {
       position: 'absolute',
       left: 0,

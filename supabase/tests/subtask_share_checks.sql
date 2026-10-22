@@ -31,12 +31,15 @@ alter table public.subtasks disable trigger trg_subtasks_server_updated;
 update public.subtasks set server_updated_at = now() - interval '1 hour';
 alter table public.subtasks enable trigger trg_subtasks_server_updated;
 
--- A shares the task with B (as postgres: the same UPDATE the client's push does).
+-- A shares the task with B: the same UPDATE an older (single-friend) client's
+-- push does. It runs as postgres but with A's JWT, since PHASE 8's guard only
+-- reads a bare shared_with_id change as "this one friend" when the OWNER makes it.
 do $$
 declare before_ts timestamptz;
 begin
   select min(server_updated_at) into before_ts from public.subtasks
   where task_id = '00000000-0000-0000-0000-0000000000a5';
+  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
   update public.tasks set shared_with_id = '00000000-0000-0000-0000-00000000000b'
   where id = '00000000-0000-0000-0000-0000000000a5';
   assert (select count(*) from public.subtasks

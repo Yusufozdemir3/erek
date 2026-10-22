@@ -36,7 +36,7 @@ describe('AboutScreen', () => {
     const open = jest
       .spyOn(Linking, 'openURL')
       .mockRejectedValueOnce(new Error('no store app'))
-      .mockResolvedValue(true);
+      .mockResolvedValue(undefined);
     const u = await renderUI(<AboutScreen />);
     fireEvent.press(u.getByLabelText('Uygulamayı değerlendir'));
     await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
@@ -45,7 +45,7 @@ describe('AboutScreen', () => {
   });
 
   it('geri bildirim: teknik altbilgili mailto açılır', async () => {
-    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const u = await renderUI(<AboutScreen />);
     fireEvent.press(u.getByLabelText('Geri bildirim gönder'));
     await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
@@ -64,7 +64,7 @@ describe('AboutScreen', () => {
   });
 
   it('gizlilik sayfasına gider, politikayı dışarıda açar', async () => {
-    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const u = await renderUI(<AboutScreen />);
     fireEvent.press(u.getByLabelText('Gizlilik ve çevrimdışı'));
     expect(mockPush).toHaveBeenCalledWith('/privacy');

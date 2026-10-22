@@ -98,7 +98,12 @@ function fakeFrom(table: string) {
             (r) =>
               (inIds == null || inIds.includes(String(r.id))) &&
               eqs.every(([c, v]) => r[c] === v) &&
-              nulls.every((c) => r[c] == null)
+              nulls.every((c) => r[c] == null) &&
+              // RLS: a task is visible while it is mine or shared with me (list or legacy column).
+              (table !== 'tasks' ||
+                r.user_id === UID ||
+                r.shared_with_id === UID ||
+                (typeof r.shared_with_ids === 'string' && r.shared_with_ids.includes(UID)))
           );
           resolve({ data: rows.map((r) => ({ id: r.id })), error: null });
         },
@@ -976,6 +981,25 @@ describe('paylaşılan görevler', () => {
     remoteData['tasks'] = [remoteTask({ id: 't-shared', shared_with_id: null })];
     await runSync(user.id);
 
+    expect(sharedRows()).toEqual([]);
+  });
+
+  it('birden çok kişiyle paylaşılan görev, listede olduğum sürece kalır (ilk kişi başkası olsa da)', async () => {
+    const user = userRepo.getOrCreateLocal();
+    const multi = { shared_with_id: 'baska-uid', shared_with_ids: JSON.stringify(['baska-uid', UID]) };
+    remoteData['tasks'] = [remoteTask({ id: 't-shared', ...multi })];
+    await runSync(user.id);
+    expect(sharedRows().map((r) => r.id)).toEqual(['t-shared']);
+
+    // Still on the list after another round: nothing is purged.
+    await runSync(user.id);
+    expect(sharedRows().map((r) => r.id)).toEqual(['t-shared']);
+
+    // Removed from the list (the others keep it): gone for me.
+    remoteData['tasks'] = [
+      remoteTask({ id: 't-shared', shared_with_id: 'baska-uid', shared_with_ids: JSON.stringify(['baska-uid']) }),
+    ];
+    await runSync(user.id);
     expect(sharedRows()).toEqual([]);
   });
 

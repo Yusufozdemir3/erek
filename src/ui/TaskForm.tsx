@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import type { Priority, Recurrence } from '@/db';
+import { MAX_TASK_SHARES, type Priority, type Recurrence } from '@/db';
 import type { Friend } from '@/sync/friends';
 import { buildScheduleLabels, extractTime, hmToDate, scheduleLabel, shiftYmd, toHm, todayDate, toYmd } from '@/lib/helpers';
 import { parseTask } from '@/lib/quickAdd/parseTask';
@@ -37,14 +37,14 @@ export interface TaskFormValues {
   remind_times: string[]; // on the due day
   // Creation only: draft subtask titles, written with the task.
   subtasks?: string[];
-  // The friend it's shared with (check-off only); never on a recurring task.
-  shared_with_id: string | null;
+  // The friends it's shared with (they tick, add and remove items); never on a recurring task.
+  shared_with_ids: string[];
   icon: string | null;
   tag_ids: string[];
 }
 
 interface Props {
-  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[]; shared_with_id: string | null; icon: string | null; tag_ids: string[] }>;
+  initial?: Partial<{ title: string; priority: Priority; due_date: string | null; end_time: string | null; recurrence: Recurrence | null; remind_times: string[]; shared_with_ids: string[]; icon: string | null; tag_ids: string[] }>;
   submitLabel: string;                  // "Save" | "Add"
   onSubmit: (values: TaskFormValues) => void;
   onDelete?: () => void;                // editing only
@@ -131,7 +131,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [draftSubs, setDraftSubs] = useState<string[]>([]);
   const [newSub, setNewSub] = useState('');
-  const [sharedWith, setSharedWith] = useState<string | null>(initial?.shared_with_id ?? null);
+  const [sharedWith, setSharedWith] = useState<string[]>(initial?.shared_with_ids ?? []);
   const [icon, setIcon] = useState<string | null>(initial?.icon ?? null);
   const [iconOpen, setIconOpen] = useState(false);
   const [tagIds, setTagIds] = useState<string[]>(initial?.tag_ids ?? []);
@@ -200,9 +200,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     id: f.id,
     name: f.displayName ?? t('friends.unknownName'),
   }));
-  if (sharedWith && !shareOptions.some((o) => o.id === sharedWith)) {
-    shareOptions.push({ id: sharedWith, name: t('friends.unknownName') });
+  for (const id of sharedWith) {
+    if (!shareOptions.some((o) => o.id === id)) shareOptions.push({ id, name: t('friends.unknownName') });
   }
+  const toggleShare = (id: string) =>
+    setSharedWith((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(0, MAX_TASK_SHARES)));
 
   const addDraftSub = () => {
     const t = newSub.trim();
@@ -269,7 +271,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       recurrence,
       remind_times: remindTimes,
       subtasks: enableSubtaskDraft ? draftSubs : undefined,
-      shared_with_id: recurrence ? null : sharedWith,
+      shared_with_ids: recurrence ? [] : sharedWith,
       icon,
       tag_ids: tagIds,
     });
@@ -533,21 +535,22 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         dueDate={dueDate}
       />
 
-      {/* The friend sees it in their lists and can only check it off. */}
+      {/* The friends see it in their lists; they tick, add and remove its subtasks (a shopping list). */}
       {shareOptions.length > 0 && (
         <>
           <Text style={styles.label}>{t('share.taskSection')}</Text>
           <View style={[styles.row, { flexWrap: 'wrap' }]}>
             {[{ id: null as string | null, name: t('share.nobody') }, ...shareOptions].map((o) => {
-              const selected = !shareBlocked && sharedWith === o.id;
+              const selected = !shareBlocked && (o.id === null ? sharedWith.length === 0 : sharedWith.includes(o.id));
+              const full = o.id !== null && !selected && sharedWith.length >= MAX_TASK_SHARES;
               return (
                 <Pressable
                   key={o.id ?? 'none'}
-                  style={[styles.chip, selected && styles.chipShareSelected, shareBlocked && { opacity: 0.4 }]}
-                  onPress={() => setSharedWith(o.id)}
-                  disabled={shareBlocked}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selected, disabled: shareBlocked }}
+                  style={[styles.chip, selected && styles.chipShareSelected, (shareBlocked || full) && { opacity: 0.4 }]}
+                  onPress={() => (o.id === null ? setSharedWith([]) : toggleShare(o.id))}
+                  disabled={shareBlocked || full}
+                  accessibilityRole={o.id === null ? 'radio' : 'checkbox'}
+                  accessibilityState={{ checked: selected, disabled: shareBlocked || full }}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]} numberOfLines={1}>
                     {o.name}
@@ -556,7 +559,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
               );
             })}
           </View>
-          {shareBlocked && <Text style={styles.hint}>{t('share.recurringBlocked')}</Text>}
+          {shareBlocked ? (
+            <Text style={styles.hint}>{t('share.recurringBlocked')}</Text>
+          ) : (
+            <Text style={styles.hint}>{t('share.taskHint')}</Text>
+          )}
         </>
       )}
 

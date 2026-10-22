@@ -11,6 +11,7 @@ function rowToSubtask(row: any): Subtask {
     title: row.title,
     completed: row.completed,
     position: row.position,
+    completed_by: row.completed_by ?? null,
     updated_at: row.updated_at,
     deleted_at: row.deleted_at,
     synced: row.synced,
@@ -58,6 +59,7 @@ export const subtaskRepo = {
       title,
       completed: 0,
       position,
+      completed_by: null,
       updated_at: now,
       deleted_at: null,
       synced: 0,
@@ -108,7 +110,7 @@ export const subtaskRepo = {
     // A subtask of a task shared with me is never touched here (its tick goes
     // through applySharedCompletion below).
     db.runSync(
-      `UPDATE subtasks SET completed = ?, updated_at = ?, synced = 0
+      `UPDATE subtasks SET completed = ?, completed_by = NULL, updated_at = ?, synced = 0
        WHERE id = ? AND task_id NOT IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)`,
       [completed ? 1 : 0, nowIso(), id]
     );
@@ -116,11 +118,40 @@ export const subtaskRepo = {
 
   // Mirrors the server's answer for a subtask shared WITH me; synced stays 1
   // (it's the cloud row, not a local edit).
-  applySharedCompletion(id: string, completed: boolean, updatedAt: string): void {
+  applySharedCompletion(id: string, completed: boolean, updatedAt: string, completedBy?: string | null): void {
+    // completedBy undefined = leave as it is (optimistic placeholders and rollbacks).
+    const by = completedBy === undefined ? '' : ', completed_by = ?';
     getDb().runSync(
-      `UPDATE subtasks SET completed = ?, updated_at = ?, synced = 1
+      `UPDATE subtasks SET completed = ?, updated_at = ?${by}, synced = 1
        WHERE id = ? AND task_id IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)`,
-      [completed ? 1 : 0, updatedAt, id]
+      completedBy === undefined
+        ? [completed ? 1 : 0, updatedAt, id]
+        : [completed ? 1 : 0, updatedAt, completed ? completedBy : null, id]
+    );
+  },
+
+  // A recipient added an item to a shared task: mirrors the server's row
+  // (synced = 1, it's the cloud row). Only for tasks shared WITH me.
+  applySharedAdd(row: { id: string; taskId: string; title: string; position: number; updatedAt: string }): void {
+    const db = getDb();
+    const shared = db.getFirstSync<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM tasks WHERE id = ? AND shared_owner_uid IS NOT NULL`,
+      [row.taskId]
+    );
+    if (!shared || shared.n === 0) return;
+    db.runSync(
+      `INSERT OR REPLACE INTO subtasks (id, task_id, title, completed, position, completed_by, updated_at, deleted_at, synced)
+       VALUES (?, ?, ?, 0, ?, NULL, ?, NULL, 1)`,
+      [row.id, row.taskId, row.title, row.position, row.updatedAt]
+    );
+  },
+
+  // A recipient removed an item from a shared task (the server soft-deletes it).
+  applySharedDelete(id: string, updatedAt: string): void {
+    getDb().runSync(
+      `UPDATE subtasks SET deleted_at = ?, updated_at = ?, synced = 1
+       WHERE id = ? AND task_id IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)`,
+      [updatedAt, updatedAt, id]
     );
   },
 

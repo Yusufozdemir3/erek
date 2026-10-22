@@ -14,7 +14,7 @@ const mockShare = jest.fn(async () => {});
 const mockAvailable = jest.fn(async () => true);
 const mockBuild = jest.fn(() => ({ app: 'Erek', habits: [] }));
 
-jest.mock('expo-file-system', () => ({
+jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
   writeAsStringAsync: (...a: unknown[]) => (mockWrite as any)(...a),
   deleteAsync: (...a: unknown[]) => (mockDelete as any)(...a),

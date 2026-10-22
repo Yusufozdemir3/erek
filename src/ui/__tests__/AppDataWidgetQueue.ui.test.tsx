@@ -1,7 +1,6 @@
 // Uygulama açıkken widget dokunuşu hemen veritabanına yazılır ve ekranlar
 // yenilenir; açılışta da bekleyenler boşaltılır.
 
-import * as React from 'react';
 import { Text } from 'react-native';
 import { act, waitFor } from '@testing-library/react-native';
 import { renderUI } from '@/test/renderWithProviders';

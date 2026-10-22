@@ -9,7 +9,6 @@
 // Imports the widget library, so it's only loaded in a real build (lazily by
 // widgetData and by the headless handler) — never from the app's screens.
 
-import * as React from 'react';
 import { FlexWidget, ListWidget, TextWidget } from 'react-native-android-widget';
 import { FALLBACK_COLORS, type WidgetHabit, type WidgetSnapshot, type WidgetTask } from './widgetSnapshot';
 import { INC_ACTION, TASK_ACTION, TOGGLE_ACTION, habitKind, isStale } from './widgetQueue';

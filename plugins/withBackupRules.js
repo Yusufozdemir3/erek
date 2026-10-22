@@ -10,7 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
+const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 
 const DATA_EXTRACTION_RULES = `<?xml version="1.0" encoding="utf-8"?>
 <!-- GENERATED FILE — sourced from plugins/withBackupRules.js, do not edit by hand. -->

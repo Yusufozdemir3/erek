@@ -53,7 +53,8 @@ export interface Task extends SyncFields {
   recurrence: Recurrence | null; // null = one-off
   remind_at: string | null;      // unused since migration016 (reminders table)
   completed_at: string | null;   // null = not completed
-  shared_with_id: string | null;   // owner side: the friend's cloud uid
+  shared_with_id: string | null;   // owner side: the FIRST friend's cloud uid (older app versions only know this one)
+  shared_with_ids: string[];       // owner side: every friend's cloud uid (up to 10); the shopping-list share
   shared_owner_uid: string | null; // local only: set = someone's task shared with me (check-off only)
   icon: string | null;             // ui/taskIcons id; null = none
   tag_ids: string[];               // the user's tags; may hold ids of deleted tags (skip them)
@@ -138,6 +139,7 @@ export interface Subtask extends SyncFields {
   title: string;
   completed: 0 | 1;
   position: number; // creation order = display order
+  completed_by: string | null; // cloud uid of whoever ticked it (server-decided); null = nobody / before sharing
 }
 
 // Any number of reminder times per habit/task/goal (reminderRepo).

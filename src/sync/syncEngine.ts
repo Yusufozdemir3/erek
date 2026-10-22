@@ -84,8 +84,8 @@ export const TABLES: TableCfg[] = [
   },
   {
     table: 'tasks',
-    // shared_with_id: the friend's RAW cloud uid (they have no identity on this device).
-    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at', 'shared_with_id', 'icon', 'tag_ids', 'unarchived_at'],
+    // shared_with_id / shared_with_ids: the friends' RAW cloud uids (they have no identity on this device).
+    cols: ['id', 'user_id', 'title', 'due_date', 'end_time', 'priority', 'recurrence', 'remind_at', 'completed_at', 'updated_at', 'deleted_at', 'shared_with_id', 'shared_with_ids', 'icon', 'tag_ids', 'unarchived_at'],
     hasUserId: true,
     defaults: { priority: 'medium' },
     pushWhere: 'shared_owner_uid IS NULL',
@@ -110,7 +110,8 @@ export const TABLES: TableCfg[] = [
   },
   {
     table: 'subtasks',
-    cols: ['id', 'task_id', 'title', 'completed', 'position', 'updated_at', 'deleted_at'],
+    // completed_by: the ticking person's RAW cloud uid, decided by the server.
+    cols: ['id', 'task_id', 'title', 'completed', 'position', 'completed_by', 'updated_at', 'deleted_at'],
     hasUserId: false, // owned through the parent task (RLS too)
     defaults: { completed: 0, position: 0 },
     // Subtasks of a task shared WITH me are pulled but never pushed back.
@@ -441,7 +442,7 @@ async function pullTable(
 // A task shared WITH me just stops arriving when the share ends (no tombstone),
 // so after each pull, local shared-with-me rows the server no longer shows are
 // dropped. Keyed by local ids (chunked); skipped when there are none.
-async function reconcileSharedTasks(uid: string): Promise<number> {
+async function reconcileSharedTasks(): Promise<number> {
   const local = taskRepo.listSharedWithMeIds();
   if (local.length === 0) return 0;
   const live = new Set<string>();
@@ -450,7 +451,6 @@ async function reconcileSharedTasks(uid: string): Promise<number> {
       .from('tasks')
       .select('id')
       .in('id', ids)
-      .eq('shared_with_id', uid)
       .is('deleted_at', null);
     if (error) throw new Error(`tasks reconcile: ${error.message}`);
     for (const r of data ?? []) live.add((r as any).id);
@@ -481,7 +481,7 @@ export async function runSync(localUserId: string): Promise<SyncResult> {
       }
     }
 
-    await reconcileSharedTasks(uid);
+    await reconcileSharedTasks();
 
     // Goal progress is re-derived from the entries (merged row by row) once
     // they've all landed; the pulled current_value is a stale cache that

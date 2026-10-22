@@ -3,7 +3,7 @@
 import { runMigrations } from './database';
 import { purgeOldTombstones } from './maintenance';
 import { userRepo } from './repositories/userRepo';
-import { taskRepo } from './repositories/taskRepo';
+import { taskRepo, MAX_TASK_SHARES } from './repositories/taskRepo';
 import { subtaskRepo } from './repositories/subtaskRepo';
 import { habitRepo } from './repositories/habitRepo';
 import { goalRepo } from './repositories/goalRepo';
@@ -12,7 +12,7 @@ import { goalEntryRepo } from './repositories/goalEntryRepo';
 import { reminderRepo } from './repositories/reminderRepo';
 import { tagRepo } from './repositories/tagRepo';
 
-export { userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews, reminderRepo, tagRepo };
+export { MAX_TASK_SHARES, userRepo, taskRepo, subtaskRepo, habitRepo, goalRepo, goalMilestoneRepo, goalEntryRepo, milestoneViews, reminderRepo, tagRepo };
 export type { MilestoneView } from './repositories/goalMilestoneRepo';
 export type { GoalJustCompleted } from './repositories/habitRepo';
 export type {

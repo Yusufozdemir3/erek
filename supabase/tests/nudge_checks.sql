@@ -25,6 +25,13 @@ insert into public.habits (id, user_id, title, updated_at) values
 insert into public.goals (id, user_id, title, goal_type, target_value, current_value, value_baseline, updated_at) values
   ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-00000000000a', 'Run 100 km', 'numeric', 100, 0, 0, now());
 
+-- B's username (names are the user's own since set_username; the Google name is never copied).
+do $$ begin
+  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+  assert public.set_username('Bora Test')->>'status' = 'ok', 'B picks a username';
+  perform set_config('request.jwt.claims', '', true);
+end $$;
+
 -- Set up as postgres: A and B are friends, B sees A's items.
 insert into public.connections (user_a, user_b)
 values ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b');

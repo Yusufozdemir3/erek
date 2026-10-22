@@ -237,3 +237,54 @@ describe('setCompleted — tekrar (recurrence)', () => {
     expect(taskRepo.getById(task.id)!.completed_at).toBeNull();
   });
 });
+
+// Shopping-list sharing: one task, several friends. shared_with_id keeps the
+// first one for older app versions; the list is capped like the server (10).
+describe('çok kişiyle paylaşım', () => {
+  const uid = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+
+  it('liste saklanır, ilk kişi eski sütuna da yazılır', () => {
+    const task = createTask({ shared_with_ids: [uid(1), uid(2), uid(3)] });
+    const got = taskRepo.getById(task.id)!;
+    expect(got.shared_with_ids).toEqual([uid(1), uid(2), uid(3)]);
+    expect(got.shared_with_id).toBe(uid(1));
+    expect(got.synced).toBe(0);
+  });
+
+  it('tek kişilik eski çağrı da listeye yansır', () => {
+    const task = createTask({ shared_with_id: uid(1) });
+    expect(taskRepo.getById(task.id)!.shared_with_ids).toEqual([uid(1)]);
+  });
+
+  it('tekrarlanan kişiler ve 10 sınırı uygulanır', () => {
+    const many = Array.from({ length: 14 }, (_, i) => uid(i + 1));
+    const task = createTask({ shared_with_ids: [uid(1), ...many] });
+    const got = taskRepo.getById(task.id)!;
+    expect(got.shared_with_ids).toHaveLength(10);
+    expect(new Set(got.shared_with_ids).size).toBe(10);
+  });
+
+  it('güncelleyince liste değişir; boş liste paylaşımı kaldırır', () => {
+    const task = createTask({ shared_with_ids: [uid(1), uid(2)] });
+    taskRepo.update(task.id, { shared_with_ids: [uid(2)] });
+    expect(taskRepo.getById(task.id)).toMatchObject({ shared_with_ids: [uid(2)], shared_with_id: uid(2) });
+    taskRepo.update(task.id, { shared_with_ids: [] });
+    expect(taskRepo.getById(task.id)).toMatchObject({ shared_with_ids: [], shared_with_id: null });
+  });
+
+  it('tekrarlayan görev paylaşılamaz', () => {
+    const task = createTask({ recurrence: { freq: 'daily' }, shared_with_ids: [uid(1)] });
+    expect(taskRepo.getById(task.id)!.shared_with_ids).toEqual([]);
+    const other = createTask({ shared_with_ids: [uid(1)] });
+    taskRepo.update(other.id, { recurrence: { freq: 'daily' } });
+    expect(taskRepo.getById(other.id)).toMatchObject({ shared_with_ids: [], shared_with_id: null });
+  });
+
+  it('eski sürümden kalan tek sütun listede de görünür', () => {
+    const task = createTask();
+    // A row written by a build that only knew shared_with_id.
+    const { getDb } = jest.requireActual('../database');
+    getDb().runSync(`UPDATE tasks SET shared_with_id = ?, shared_with_ids = NULL WHERE id = ?`, [uid(9), task.id]);
+    expect(taskRepo.getById(task.id)!.shared_with_ids).toEqual([uid(9)]);
+  });
+});

@@ -5,7 +5,7 @@
 //     for expo-asset's icon fonts; no user data touches shared storage.
 // android/ is generated, hence a plugin.
 
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest } = require('expo/config-plugins');
 
 const REMOVED_PERMISSIONS = [
   'android.permission.SYSTEM_ALERT_WINDOW',
