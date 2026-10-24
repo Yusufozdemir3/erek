@@ -276,44 +276,35 @@ tanıma durumunda; cihazda tanımada hiç toplanmaz.)
 
 ## Yenilikler (bu sürüm — en fazla 500 karakter)
 
-Bu sürüm: **1.2.0, versionCode 17**. İlk herkese açık (production) yayın.
-Notlar hem yeni kullanıcılara hem testçilere hitap ediyor. Play Console'a
-aşağıdaki blok olduğu gibi yapıştırılabilir (dil etiketleriyle, 400–410 karakter).
+Bu sürüm: **1.3.1, versionCode 26** (production'da 1.3.1 vc25; sürüm adı aynı kaldı). Play Console'a
+aşağıdaki blok olduğu gibi yapıştırılabilir (dil etiketleriyle; TR 385,
+EN 371, DE 405 karakter).
 
 ```
 <tr-TR>
-Erek artık herkese açık! 🎉
-• Görevlere renkli etiket ve ikon ekle, etikete göre süz.
-• Zamanlayıcı kilit ekranında: uygulamayı açmadan duraklat ya da bitir.
-• Ana ekran widget'larıyla gününü tek dokunuşla işaretle.
-• Mola günü: alışkanlık kartına uzun bas, serin bozulmasın.
-• Altı yazı tipi arasından seç; Hakkında ekranı yenilendi.
-• Daha küçük uygulama boyutu.
-Teste katılan herkese teşekkürler!
+• Yeni Bildirimler kutusu (sağ üstteki zil): tebrikler, hatırlatmalar ve arkadaşının bitirdiği işler artık kaybolmaz.
+• Uygulamayı yeniden mi yükledin? Kurulumda "Daha önce kullandım" de, verilerin geri gelsin.
+• Karta dokun, ayrıntılar açılsın; düzenleme kaydırmada ve ✏️ düğmesinde.
+• Paylaşılan hedef bitince arkadaşın hemen görür.
+• Takılan pencere ve kaydırma sorunları giderildi.
 </tr-TR>
 <en-US>
-Erek is now available to everyone! 🎉
-• Add colored tags and an icon to tasks, and filter by tag.
-• Timer on the lock screen: pause or finish without opening the app.
-• Check off your day with one tap from home screen widgets.
-• Rest days: long-press a habit card to keep your streak safe.
-• Pick from six typefaces; the About screen got a refresh.
-• A smaller download.
-Thanks to everyone who tested it!
+• New Notifications inbox (the bell at the top right): congratulations, reminders and friends' finished goals no longer get lost.
+• Reinstalled the app? Choose "I've used it before" in setup and your data comes back.
+• Tap a card to see its details; edit by swiping or with the ✏️ button.
+• Friends see a finished shared goal right away.
+• Fixed stuck dialogs and swipes.
 </en-US>
 <de-DE>
-Erek ist jetzt für alle verfügbar! 🎉
-• Farbige Tags und ein Symbol für Aufgaben, Filter nach Tag.
-• Timer auf dem Sperrbildschirm: pausieren oder beenden, ohne die App zu öffnen.
-• Hake deinen Tag mit einem Tippen über Widgets ab.
-• Pausentage: Karte lange drücken, damit deine Serie bleibt.
-• Sechs Schriftarten zur Auswahl; neuer Über-Bildschirm.
-• Kleinerer Download.
-Danke an alle, die getestet haben!
+• Neue Benachrichtigungen (Glocke oben rechts): Glückwünsche, Erinnerungen und geschaffte Ziele von Freunden gehen nicht mehr verloren.
+• App neu installiert? Wähle beim Einrichten „Ich habe Erek schon benutzt“, deine Daten kommen zurück.
+• Tippe auf eine Karte für Details; bearbeiten per Wischen oder ✏️.
+• Freunde sehen ein geschafftes geteiltes Ziel sofort.
+• Hängende Fenster und Wischgesten behoben.
 </de-DE>
 ```
 
-Önceki (vc15, yayına çıkmadı) notlar git geçmişinde: commit 251ac4c.
+Önceki sürümlerin notları bu dosyanın git geçmişinde.
 
 ---
 
