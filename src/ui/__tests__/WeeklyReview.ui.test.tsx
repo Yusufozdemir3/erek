@@ -59,6 +59,17 @@ describe('ReviewScreen', () => {
     expect(u.getByText('İyi gidiyorsun, devam.')).toBeTruthy();
   });
 
+  it('oran dile göre yazılır (İngilizce: 71%)', async () => {
+    await AsyncStorage.setItem('i18n:lang', 'en');
+    const h = habitRepo.create({ user_id: mockUserId, title: 'Read', start_date: ago(6) });
+    for (const n of [0, 1, 2, 3, 4]) habitRepo.toggleLog(h.id, ago(n), true);
+
+    const u = await renderUI(<ReviewScreen />);
+
+    expect(await u.findByText('71%')).toBeTruthy();
+    expect(u.queryByText('%71')).toBeNull();
+  });
+
   it('birden çok alışkanlıkta hepsi oranlarıyla listelenir', async () => {
     const a = habitRepo.create({ user_id: mockUserId, title: 'Kitap oku', start_date: ago(6) });
     const b = habitRepo.create({ user_id: mockUserId, title: 'Yoga', start_date: ago(6) });

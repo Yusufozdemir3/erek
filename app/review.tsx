@@ -14,7 +14,7 @@ import { useAppData } from '@/ui/AppData';
 import { makeProfileStyles } from '@/ui/profileStyles';
 import { loadReview } from '@/ui/reviewData';
 import { useTheme } from '@/ui/ThemeProvider';
-import { DATE_LOCALE, type Colors } from '@/ui/theme';
+import { DATE_LOCALE, percentLabel, type Colors } from '@/ui/theme';
 
 const BAR_MAX_HEIGHT = 72;
 
@@ -64,7 +64,7 @@ export default function ReviewScreen() {
           {t('review.rate')} · {t('review.subtitle')}
         </Text>
         <Text style={local.rate} accessibilityLabel={`${t('review.rate')}: ${review.rate}%`}>
-          %{review.rate}
+          {percentLabel(review.rate, lang)}
         </Text>
         {delta && (
           <View style={local.deltaRow}>

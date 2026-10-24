@@ -75,6 +75,9 @@ export default function HabitsScreen() {
   const openEdit = (h: HabitListItem) => {
     setEditing(habitRepo.getById(h.id));
   };
+  const openStats = (h: HabitListItem) => {
+    router.push({ pathname: '/habit/[id]', params: { id: h.id } });
+  };
 
   const undo = useUndoNotice();
 
@@ -158,11 +161,13 @@ export default function HabitsScreen() {
                     <HabitToggle icon={h.icon} color={h.color} completed={h.completedToday} />
                   </Pressable>
                 )}
+                {/* The card opens the stats screen (like Goals/Tasks); editing is
+                    on the swipe and the stats screen's pencil. */}
                 <Pressable
                   style={styles.titleArea}
-                  onPress={() => openEdit(h)}
+                  onPress={() => openStats(h)}
                   accessibilityRole="button"
-                  accessibilityLabel={t('common.editA11y', { title: h.title })}
+                  accessibilityLabel={t('habit.statsA11y', { title: h.title })}
                 >
                   <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
                     {h.title}
@@ -189,10 +194,9 @@ export default function HabitsScreen() {
                   h.streak > 0 && <StreakBadge streak={h.streak} />
                 )}
               </View>
-              {/* Opens the stats screen */}
               <Pressable
                 style={styles.week}
-                onPress={() => router.push({ pathname: '/habit/[id]', params: { id: h.id } })}
+                onPress={() => openStats(h)}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel={t('habit.statsA11y', { title: h.title })}

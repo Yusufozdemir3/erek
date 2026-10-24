@@ -1,6 +1,7 @@
 // Goals tab: a read-only list (progress, steps, deadline). Progress entry and
-// steps live on the goal screen (/goal/[id]): the title opens its Edit tab, the
-// stats pill its Stats tab, anything else Overview. Adding is in the ＋ menu.
+// steps live on the goal screen (/goal/[id]): the card opens Overview, a stepped
+// goal's box its Steps tab, the stats pill its Stats tab, the swipe its Edit tab.
+// Adding is in the ＋ menu.
 
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -35,7 +36,7 @@ export default function GoalsScreen() {
   const [milestoneCounts, setMilestoneCounts] = useState<Record<string, { done: number; total: number }>>({});
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
-  const openGoal = (id: string, tab: 'stats' | 'edit') =>
+  const openGoal = (id: string, tab: 'overview' | 'stats' | 'milestones' | 'edit') =>
     router.push({ pathname: '/goal/[id]', params: { id, tab } });
 
   const reload = useCallback(() => {
@@ -127,13 +128,27 @@ export default function GoalsScreen() {
               {/* spacing on the wrapper, see tasks.tsx */}
               <View style={[styles.goalCard, styles.noMargin]}>
                 <View style={styles.goalHead}>
-                  {/* Status only; completing happens on the goal screen. */}
+                  {/* Looks like the tickable box of tasks/habits, but a stepped
+                      goal completes from its steps: so it opens them. */}
                   {goal.goal_type === 'milestone' && (
-                    <View style={[styles.checkbox, completed && styles.checkboxDone]}>
-                      {completed && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
+                    <Pressable
+                      onPress={() => openGoal(goal.id, 'milestones')}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('goal.stepsA11y', { title: goal.title })}
+                    >
+                      <View style={[styles.checkbox, completed && styles.checkboxDone]}>
+                        {completed && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                    </Pressable>
                   )}
-                  <Pressable style={styles.titleArea} onPress={() => openGoal(goal.id, 'edit')}>
+                  {/* Overview: where progress is entered (guide.goals.3). */}
+                  <Pressable
+                    style={styles.titleArea}
+                    onPress={() => openGoal(goal.id, 'overview')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('goal.openA11y', { title: goal.title })}
+                  >
                     <Text style={[styles.goalTitle, completed && styles.goalTitleDone]}>{goal.title}</Text>
                   </Pressable>
                   <Pressable

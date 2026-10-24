@@ -1,5 +1,5 @@
 // "Shared with you" lists under the Habits and Goals tabs: read-only rows, tap to
-// open, long-press to remove. Cache first, then the server; offline keeps the
+// open, swipe left (or long-press) to remove. Cache first, then the server; offline keeps the
 // last list. Nothing shows when signed out.
 
 import { useCallback, useRef, useState } from 'react';
@@ -21,6 +21,7 @@ import { goalRepo } from '@/db';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useAppData } from '@/ui/AppData';
 import { HabitIconGlyph } from '@/ui/habitIcons';
+import { SwipeableRow } from '@/ui/SwipeableRow';
 import { fmtGoalValue } from '@/ui/goal/goalFormat';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -102,6 +103,38 @@ export function useSharedLists() {
   };
 }
 
+// Remove only (it's not mine to edit); onHide asks itself, so no second tap.
+function SharedRow({
+  id,
+  title,
+  openId,
+  setOpenId,
+  onHide,
+  children,
+}: {
+  id: string;
+  title: string;
+  openId: string | null;
+  setOpenId: (id: string | null) => void;
+  onHide: () => void;
+  children: React.ReactNode;
+}) {
+  const { t } = useI18n();
+  return (
+    <View style={{ marginBottom: 8 }}>
+      <SwipeableRow
+        isOpen={openId === id}
+        onOpenChange={(open) => setOpenId(open ? id : null)}
+        onDelete={onHide}
+        confirmDelete={false}
+        deleteA11yLabel={t('friends.hideSharedA11y', { title })}
+      >
+        {children}
+      </SwipeableRow>
+    </View>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
@@ -123,14 +156,22 @@ export function SharedHabitsSection({
   const { colors } = useTheme();
   const { t } = useI18n();
   const styles = makeStyles(colors);
+  const [openId, setOpenId] = useState<string | null>(null);
   if (items.length === 0) return null;
   return (
     <Section title={t('friends.sharedSectionTitle')}>
       {items.map((s) => {
         const color = s.habit.color ?? DEFAULT_HABIT_COLOR;
         return (
-          <Pressable
+          <SharedRow
             key={s.habit.id}
+            id={s.habit.id}
+            title={s.habit.title}
+            openId={openId}
+            setOpenId={setOpenId}
+            onHide={() => onHide(s)}
+          >
+          <Pressable
             style={styles.row}
             onPress={() => router.push({ pathname: '/shared-habit/[id]', params: { id: s.habit.id } })}
             onLongPress={() => onHide(s)}
@@ -150,6 +191,7 @@ export function SharedHabitsSection({
             </View>
             <Feather name="chevron-right" size={18} color={colors.faint} />
           </Pressable>
+          </SharedRow>
         );
       })}
     </Section>
@@ -166,6 +208,7 @@ export function SharedGoalsSection({
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeStyles(colors);
+  const [openId, setOpenId] = useState<string | null>(null);
   if (items.length === 0) return null;
   return (
     <Section title={t('friends.sharedSectionTitle')}>
@@ -173,8 +216,15 @@ export function SharedGoalsSection({
         const g = s.goal;
         const pct = Math.round(goalRepo.progressRatio(g) * 100);
         return (
-          <Pressable
+          <SharedRow
             key={g.id}
+            id={g.id}
+            title={g.title}
+            openId={openId}
+            setOpenId={setOpenId}
+            onHide={() => onHide(s)}
+          >
+          <Pressable
             style={styles.row}
             onPress={() => router.push({ pathname: '/shared-goal/[id]', params: { id: g.id } })}
             onLongPress={() => onHide(s)}
@@ -197,6 +247,7 @@ export function SharedGoalsSection({
             </View>
             <Feather name="chevron-right" size={18} color={colors.faint} />
           </Pressable>
+          </SharedRow>
         );
       })}
     </Section>
@@ -217,7 +268,6 @@ const makeStyles = (c: Colors) =>
       borderColor: c.border,
       paddingVertical: 12,
       paddingHorizontal: 14,
-      marginBottom: 8,
     },
     icon: {
       width: 30,

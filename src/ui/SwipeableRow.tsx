@@ -2,6 +2,8 @@
 // Today, where tapping the card already checks it). Built with PanResponder +
 // Animated, so no gesture-handler native dependency. Delete needs a second tap,
 // like everywhere in the app. The parent owns isOpen, so one row is open at a time.
+// Without onEdit only Delete shows (a friend's shared row: "remove from my
+// list"); confirmDelete={false} is for an onDelete that asks by itself.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
@@ -11,16 +13,15 @@ import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from './theme';
 
 const ACTION_WIDTH = 56;
-const ACTIONS_WIDTH = ACTION_WIDTH * 2;
-const OPEN_THRESHOLD = ACTIONS_WIDTH / 2;
 
 interface Props {
-  onEdit: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  editA11yLabel: string;
+  editA11yLabel?: string;
   deleteA11yLabel: string;
+  confirmDelete?: boolean;
   children: ReactNode;
 }
 
@@ -31,6 +32,7 @@ export function SwipeableRow({
   onOpenChange,
   editA11yLabel,
   deleteA11yLabel,
+  confirmDelete = true,
   children,
 }: Props) {
   const { colors } = useTheme();
@@ -42,6 +44,10 @@ export function SwipeableRow({
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
+  // Read by the PanResponder (created once) like isOpen.
+  const actionsWidth = (onEdit ? 2 : 1) * ACTION_WIDTH;
+  const widthRef = useRef(actionsWidth);
+  widthRef.current = actionsWidth;
   const offsetRef = useRef(0); // translateX at gesture start
   const [armed, setArmed] = useState(false);
 
@@ -62,21 +68,28 @@ export function SwipeableRow({
       onMoveShouldSetPanResponder: (_e, g) =>
         Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderGrant: () => {
-        offsetRef.current = isOpenRef.current ? -ACTIONS_WIDTH : 0;
+        offsetRef.current = isOpenRef.current ? -widthRef.current : 0;
       },
       onPanResponderMove: (_e, g) => {
-        const next = Math.min(0, Math.max(-ACTIONS_WIDTH, offsetRef.current + g.dx));
+        const next = Math.min(0, Math.max(-widthRef.current, offsetRef.current + g.dx));
         translateX.setValue(next);
       },
-      onPanResponderRelease: (_e, g) => {
-        const next = offsetRef.current + g.dx;
-        const shouldOpen = next < -OPEN_THRESHOLD;
-        animateTo(shouldOpen ? -ACTIONS_WIDTH : 0);
-        onOpenChange(shouldOpen);
-        if (!shouldOpen) setArmed(false);
-      },
+      // Once sliding, the list's scroll doesn't take the gesture over.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (_e, g) => settle(offsetRef.current + g.dx),
+      // Taken away anyway (system gesture, incoming call): settle like a
+      // release, or the card stays half open with isOpen out of step.
+      onPanResponderTerminate: (_e, g) => settle(offsetRef.current + g.dx),
     })
   ).current;
+
+  // Snaps open or shut from where the finger left the card.
+  function settle(next: number) {
+    const shouldOpen = next < -widthRef.current / 2;
+    animateTo(shouldOpen ? -widthRef.current : 0);
+    onOpenChange(shouldOpen);
+    if (!shouldOpen) setArmed(false);
+  }
 
   const close = () => {
     animateTo(0);
@@ -85,7 +98,10 @@ export function SwipeableRow({
   };
 
   const handleDeletePress = () => {
-    if (armed) onDelete();
+    if (!confirmDelete) {
+      close();
+      onDelete();
+    } else if (armed) onDelete();
     else setArmed(true);
   };
 
@@ -96,17 +112,19 @@ export function SwipeableRow({
       <Animated.View
         style={[styles.actions, { opacity: translateX.interpolate({ inputRange: [-12, 0], outputRange: [1, 0], extrapolate: 'clamp' }) }]}
       >
-        <Pressable
-          style={styles.actionBtn}
-          onPress={() => {
-            close();
-            onEdit();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={editA11yLabel}
-        >
-          <Feather name="edit-3" size={20} color={colors.onAccent} />
-        </Pressable>
+        {onEdit && (
+          <Pressable
+            style={styles.actionBtn}
+            onPress={() => {
+              close();
+              onEdit();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={editA11yLabel}
+          >
+            <Feather name="edit-3" size={20} color={colors.onAccent} />
+          </Pressable>
+        )}
         <Pressable
           style={[styles.actionBtn, styles.deleteBtn, armed && styles.deleteBtnArmed]}
           onPress={handleDeletePress}
