@@ -33,6 +33,16 @@ export function buildSteps(cap: WizardCapabilities): StepId[] {
   return steps;
 }
 
+// Someone reinstalling (or on a new phone) has an account to come back to: no
+// first habit, task and goal (signing in brings theirs back, and anything made
+// before it would mix in), just the look, signing in and notifications.
+export function buildReturningSteps(cap: WizardCapabilities): StepId[] {
+  const steps: StepId[] = ['welcome', 'look'];
+  if (cap.accounts) steps.push('account');
+  steps.push('notifications', 'done');
+  return steps;
+}
+
 // Steps that can be skipped one by one. Welcome and the closing page can't:
 // they're the frame, and "skip everything" is its own button.
 export const SKIPPABLE: ReadonlySet<StepId> = new Set<StepId>([

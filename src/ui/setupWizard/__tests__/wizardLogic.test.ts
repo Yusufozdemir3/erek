@@ -1,6 +1,7 @@
 // Sihirbazın saf mantığı: adım sırası, atlanabilirlik, tarih hesapları.
 
 import {
+  buildReturningSteps,
   buildSteps,
   continueBlocked,
   dueDateOf,
@@ -12,6 +13,16 @@ import {
   SKIPPABLE,
   summaryLines,
 } from '../wizardLogic';
+
+describe('buildReturningSteps', () => {
+  it('daha önce kullananlar: alışkanlık/görev/hedef ve widget yok, giriş var', () => {
+    expect(buildReturningSteps({ accounts: true, widget: true })).toEqual(['welcome', 'look', 'account', 'notifications', 'done']);
+  });
+
+  it('hesap yoksa giriş adımı da yok', () => {
+    expect(buildReturningSteps({ accounts: false, widget: true })).toEqual(['welcome', 'look', 'notifications', 'done']);
+  });
+});
 
 describe('buildSteps', () => {
   it('her şey varsa tam sıra: karşılama … bitiş', () => {

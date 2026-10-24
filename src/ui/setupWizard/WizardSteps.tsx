@@ -106,9 +106,32 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
 
 // ---------------------------------------------------------------- welcome
 
-export function WelcomeStep({ required = false }: { required?: boolean }) {
+// onChoose (first launch with accounts): "new here" or "used it before" — the
+// second skips the first habit/task/goal and goes to signing in.
+export function WelcomeStep({
+  required = false,
+  onChoose,
+}: {
+  required?: boolean;
+  onChoose?: (returning: boolean) => void;
+}) {
   const { t } = useI18n();
   const { styles } = useWizardStyles();
+  if (onChoose) {
+    return (
+      <>
+        <Header icon="welcome" title={t('wizard.welcome.title')} body={t('wizard.welcome.bodyChoice')} />
+        <Pressable style={styles.primaryBtn} onPress={() => onChoose(false)} accessibilityRole="button">
+          <Text style={styles.primaryText}>{t('wizard.welcome.new')}</Text>
+        </Pressable>
+        <Text style={styles.note}>{t('wizard.welcome.newNote')}</Text>
+        <Pressable style={[styles.outlineBtn, { marginTop: 20 }]} onPress={() => onChoose(true)} accessibilityRole="button">
+          <Text style={styles.outlineText}>{t('wizard.welcome.returning')}</Text>
+        </Pressable>
+        <Text style={styles.note}>{t('wizard.welcome.returningNote')}</Text>
+      </>
+    );
+  }
   return (
     <>
       <Header icon="welcome" title={t('wizard.welcome.title')} body={t(required ? 'wizard.welcome.bodyRequired' : 'wizard.welcome.body')} />
@@ -614,7 +637,8 @@ export function WidgetStep({ onCompleted }: StepProps) {
 
 // ---------------------------------------------------------------- account
 
-export function AccountStep({ onCompleted }: StepProps) {
+// returning: the "used it before" path, where signing in is the point.
+export function AccountStep({ onCompleted, returning = false }: StepProps & { returning?: boolean }) {
   const { t } = useI18n();
   const { styles, colors } = useWizardStyles();
   const { authUser } = useAppData();
@@ -622,10 +646,14 @@ export function AccountStep({ onCompleted }: StepProps) {
   const connected = !!authUser && !authUser.isAnonymous;
   return (
     <>
-      <Header icon="cloud" title={t('wizard.account.title')} body={t('wizard.account.body')} />
+      <Header
+        icon="cloud"
+        title={t(returning ? 'wizard.account.titleReturning' : 'wizard.account.title')}
+        body={t(returning ? 'wizard.account.bodyReturning' : 'wizard.account.body')}
+      />
       {connected ? (
         <>
-          <Text style={styles.okText}>{t('wizard.account.connected')}</Text>
+          <Text style={styles.okText}>{t(returning ? 'wizard.account.restored' : 'wizard.account.connected')}</Text>
           {authUser?.email ? (
             <Text style={styles.note}>{t('wizard.account.connectedAs', { email: authUser.email })}</Text>
           ) : null}

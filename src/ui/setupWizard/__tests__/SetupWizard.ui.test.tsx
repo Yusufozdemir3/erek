@@ -54,6 +54,8 @@ const next = (u: Utils) => fireEvent.press(u.getByLabelText('Devam'));
 const pass = (u: Utils) => fireEvent.press(u.queryByText('Bu adımı atla') ?? u.getByLabelText('Devam'));
 const continueDisabled = (u: Utils) => u.getByLabelText('Devam').props.accessibilityState?.disabled === true;
 const start = (u: Utils) => fireEvent.press(u.getByLabelText('Kuruluma başla'));
+// First launch asks "new or returning" instead of a single start button.
+const startNew = (u: Utils) => fireEvent.press(u.getByText('İlk kez kullanıyorum'));
 
 beforeEach(async () => {
   await resetTestDb();
@@ -158,7 +160,7 @@ describe('SetupWizard — zorunlu (ilk açılış)', () => {
   it('Hepsini atla yok; alışkanlık adımında Bu adımı atla yok ve Devam kapalı', async () => {
     const u = await renderUI(<SetupWizard onDone={jest.fn()} required />);
     expect(u.queryByLabelText('Kurulum sihirbazının tamamını atla')).toBeNull();
-    start(u);
+    startNew(u);
     fireEvent.press(u.getByLabelText('Devam')); // görünüm hâlâ atlanabilir
     expect(u.queryByText('Bu adımı atla')).toBeNull();
     expect(continueDisabled(u)).toBe(true);
@@ -174,6 +176,52 @@ describe('SetupWizard — zorunlu (ilk açılış)', () => {
     start(u);
     pass(u);
     expect(u.getByText('Bu adımı atla')).toBeTruthy();
+  });
+});
+
+describe('SetupWizard — daha önce kullananlar', () => {
+  it('ilk açılışta iki seçenek var, tek "Kuruluma başla" düğmesi yok', async () => {
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} required />);
+    expect(u.getByText('İlk kez kullanıyorum')).toBeTruthy();
+    expect(u.getByText('Daha önce kullandım')).toBeTruthy();
+    expect(u.queryByLabelText('Kuruluma başla')).toBeNull();
+  });
+
+  it('"Daha önce kullandım": görünüm → giriş → bildirimler → bitiş; alışkanlık/görev/hedef yok', async () => {
+    const onDone = jest.fn();
+    const u = await renderUI(<SetupWizard onDone={onDone} required />);
+    fireEvent.press(u.getByText('Daha önce kullandım'));
+    expect(u.getByText('Dil ve görünüm')).toBeTruthy();
+    expect(u.getByText('Adım 1/3')).toBeTruthy();
+    pass(u);
+    expect(u.getByText('Verilerini geri getir')).toBeTruthy();
+    pass(u);
+    expect(u.queryByPlaceholderText('Alışkanlığın adı')).toBeNull();
+    pass(u);
+    fireEvent.press(u.getByLabelText('Erek’i aç'));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith({ skippedAll: false, accountSeen: true }));
+    expect(habitRepo.listByUser(mockUserId)).toHaveLength(0);
+  });
+
+  it('Geri ile karşılamaya dönüp yeni kullanıcı yolunu seçebilir', async () => {
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} required />);
+    fireEvent.press(u.getByText('Daha önce kullandım'));
+    fireEvent.press(u.getByLabelText('Geri'));
+    startNew(u);
+    pass(u);
+    expect(u.getByPlaceholderText('Alışkanlığın adı')).toBeTruthy();
+  });
+
+  it('hesap kurulamıyorsa seçenek sorulmaz', async () => {
+    mockSyncConfigured = false;
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} required />);
+    expect(u.queryByText('Daha önce kullandım')).toBeNull();
+    expect(u.getByLabelText('Kuruluma başla')).toBeTruthy();
+  });
+
+  it('Profil’den açılan sihirbaz sormaz', async () => {
+    const u = await renderUI(<SetupWizard onDone={jest.fn()} />);
+    expect(u.queryByText('Daha önce kullandım')).toBeNull();
   });
 });
 

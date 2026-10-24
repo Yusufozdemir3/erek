@@ -28,6 +28,7 @@ export {
 export { SharingError, sharingErrorKey, toSharingError, type SharingErrorCode } from './sharingErrors';
 export { sendCongrats, lastCelebrationStatus, announceFinishedShares, hasPendingFinished } from './celebrations';
 export { sendNudge, getNudgePrefs, setNudgeMute, setNudgesEnabled, type NudgePrefs } from './nudges';
+export { getInbox, getCachedInbox, getInboxSeenAt, setInboxSeenAt } from './inbox';
 export {
   shareHabit,
   unshareHabit,

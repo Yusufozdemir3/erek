@@ -87,6 +87,7 @@ function ThemedStack() {
         <Stack.Screen name="account-sync" options={{ headerShown: true, title: t('profile.accountSync'), presentation: 'modal' }} />
         <Stack.Screen name="notifications" options={{ headerShown: true, title: t('notifications.title'), presentation: 'modal' }} />
         <Stack.Screen name="friends" options={{ headerShown: true, title: t('friends.title'), presentation: 'modal' }} />
+        <Stack.Screen name="inbox" options={{ headerShown: true, title: t('inbox.title'), presentation: 'modal' }} />
         <Stack.Screen name="privacy" options={{ headerShown: true, title: t('profile.privacy'), presentation: 'modal' }} />
         <Stack.Screen name="review" options={{ headerShown: true, title: t('profile.review'), presentation: 'modal' }} />
         <Stack.Screen name="data" options={{ headerShown: true, title: t('profile.data'), presentation: 'modal' }} />

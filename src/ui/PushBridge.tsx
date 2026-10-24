@@ -11,12 +11,13 @@ import { AppState } from 'react-native';
 import { router, type Href } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { goalRepo, habitRepo } from '@/db';
-import { celebrationRoute, parseCelebrationData } from '@/lib/celebrations';
+import { celebrationRoute, isCelebrationData, parseCelebrationData } from '@/lib/celebrations';
 import { useI18n } from '@/i18n/I18nProvider';
-import { parseNudgeData } from '@/lib/nudgePayload';
+import { isNudgeData, parseNudgeData } from '@/lib/nudgePayload';
 import { syncPushRegistration } from '@/lib/pushRegistration';
 import { nudgeRecipientUid } from '@/lib/nudgeRecipient';
 import { useAppData } from '@/ui/AppData';
+import { refreshInbox } from '@/ui/useInbox';
 
 export function PushBridge() {
   const { authUser } = useAppData();
@@ -31,6 +32,16 @@ export function PushBridge() {
     });
     return () => sub.remove();
   }, [uid, lang]);
+
+  // A friend's push arriving while the app is open: the bell's dot shows now.
+  useEffect(() => {
+    if (!uid) return;
+    const sub = Notifications.addNotificationReceivedListener((n) => {
+      const data = n.request.content.data;
+      if (isCelebrationData(data) || isNudgeData(data)) refreshInbox(true);
+    });
+    return () => sub.remove();
+  }, [uid]);
 
   useEffect(() => {
     const open = (r: Notifications.NotificationResponse | null) => {

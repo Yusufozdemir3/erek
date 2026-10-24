@@ -2,6 +2,8 @@
 // first habit, task, goal → notifications → widget → account. Every step and
 // the whole wizard can be skipped. Runs on first launch (OnboardingGate) and
 // from Profile › Setup wizard. Pages: WizardSteps.tsx; pure parts: wizardLogic.ts.
+// On first launch the welcome page asks "new here, or used it before?": the
+// second answer takes the short path (buildReturningSteps) to signing in.
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
@@ -30,6 +32,7 @@ import {
 } from './WizardSteps';
 import { makeWizardStyles } from './wizardStyles';
 import {
+  buildReturningSteps,
   buildSteps,
   continueBlocked,
   isSkippable,
@@ -68,7 +71,13 @@ export function SetupWizard({ onDone, required = false }: Props) {
   const { t } = useI18n();
   const styles = makeWizardStyles(colors);
   const { user, authUser, notifyDataChanged } = useAppData();
-  const steps = useMemo(() => buildSteps(wizardCapabilities()), []);
+  const cap = useMemo(() => wizardCapabilities(), []);
+  const newSteps = useMemo(() => buildSteps(cap), [cap]);
+  const returningSteps = useMemo(() => buildReturningSteps(cap), [cap]);
+  // Only on first launch, and only if there is an account to come back to.
+  const offerReturning = required && cap.accounts;
+  const [returning, setReturning] = useState(false);
+  const steps = returning ? returningSteps : newSteps;
   const [index, setIndex] = useState(0);
   const [outcomes, setOutcomes] = useState<Outcomes>({});
   const [created, setCreated] = useState<Created>({});
@@ -99,6 +108,14 @@ export function SetupWizard({ onDone, required = false }: Props) {
     const next = Math.max(0, Math.min(steps.length - 1, to));
     maxIndex.current = Math.max(maxIndex.current, next);
     setIndex(next);
+    scroll.current?.scrollTo({ y: 0, animated: false });
+  };
+
+  // The welcome page's answer: the path starts at its second page.
+  const choosePath = (isReturning: boolean) => {
+    setReturning(isReturning);
+    maxIndex.current = 1;
+    setIndex(1);
     scroll.current?.scrollTo({ y: 0, animated: false });
   };
 
@@ -134,7 +151,7 @@ export function SetupWizard({ onDone, required = false }: Props) {
   let page: React.JSX.Element;
   switch (id) {
     case 'welcome':
-      page = <WelcomeStep required={required} />;
+      page = <WelcomeStep required={required} onChoose={offerReturning ? choosePath : undefined} />;
       break;
     case 'look':
       page = <LookStep {...props} />;
@@ -155,7 +172,7 @@ export function SetupWizard({ onDone, required = false }: Props) {
       page = <WidgetStep {...props} />;
       break;
     case 'account':
-      page = <AccountStep {...props} />;
+      page = <AccountStep {...props} returning={returning} />;
       break;
     case 'tips':
       page = <TipsStep {...props} />;
@@ -233,16 +250,19 @@ export function SetupWizard({ onDone, required = false }: Props) {
               <Text style={styles.skipStepText}>{t('wizard.skipStep')}</Text>
             </Pressable>
           )}
-          <Pressable
-            style={[styles.nextBtn, blocked && styles.primaryBtnOff]}
-            onPress={isLast ? () => finish(false) : next}
-            disabled={finishing || blocked}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: finishing || blocked }}
-            accessibilityLabel={isLast ? t('wizard.finish') : isFirst ? t('wizard.start') : t('wizard.next')}
-          >
-            <Text style={styles.nextText}>{isLast ? t('wizard.finish') : isFirst ? t('wizard.start') : t('wizard.next')}</Text>
-          </Pressable>
+          {/* The welcome page's two answers are its buttons. */}
+          {!(isFirst && offerReturning) && (
+            <Pressable
+              style={[styles.nextBtn, blocked && styles.primaryBtnOff]}
+              onPress={isLast ? () => finish(false) : next}
+              disabled={finishing || blocked}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: finishing || blocked }}
+              accessibilityLabel={isLast ? t('wizard.finish') : isFirst ? t('wizard.start') : t('wizard.next')}
+            >
+              <Text style={styles.nextText}>{isLast ? t('wizard.finish') : isFirst ? t('wizard.start') : t('wizard.next')}</Text>
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
     </LinearGradient>

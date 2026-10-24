@@ -77,7 +77,7 @@ describe('OnboardingGate + LoginGate', () => {
   it('ilk açılışta "Hepsini atla" yoktur; alışkanlık/görev/hedef atlanamaz', async () => {
     const u = await renderUI(<Gates />);
     expect(u.queryByLabelText('Kurulum sihirbazının tamamını atla')).toBeNull();
-    fireEvent.press(await u.findByLabelText('Kuruluma başla'));
+    fireEvent.press(await u.findByText('İlk kez kullanıyorum'));
     fireEvent.press(u.getByLabelText('Devam')); // görünüm (atlanabilir)
     for (const step of ['habit', 'task', 'goal']) {
       expect(u.queryByText('Bu adımı atla')).toBeNull();
@@ -102,7 +102,7 @@ describe('OnboardingGate + LoginGate', () => {
 
   it('hesap adımını görüp atlayan kullanıcıya giriş ekranı İKİNCİ kez çıkmaz', async () => {
     const u = await renderUI(<Gates />);
-    fireEvent.press(await u.findByLabelText('Kuruluma başla'));
+    fireEvent.press(await u.findByText('İlk kez kullanıyorum'));
     fireEvent.press(u.getByLabelText('Devam')); // görünüm
     fireEvent.changeText(u.getByPlaceholderText('Alışkanlığın adı'), 'Su iç');
     fireEvent.press(u.getByLabelText('Devam')); // "Devam" dolu formu kaydeder
