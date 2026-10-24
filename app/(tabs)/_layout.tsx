@@ -72,7 +72,7 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: t('tabs.today'),
-            tabBarIcon: ({ color }) => <Feather name="calendar" size={22} color={color} />,
+            tabBarIcon: ({ color }) => <Feather name="calendar" size={22} color={color as string} />,
           }}
         />
         <Tabs.Screen
@@ -90,7 +90,7 @@ export default function TabsLayout() {
           }}
           options={{
             title: t('tabs.tasks'),
-            tabBarIcon: ({ color }) => <Feather name="check-square" size={22} color={color} />,
+            tabBarIcon: ({ color }) => <Feather name="check-square" size={22} color={color as string} />,
           }}
         />
         <Tabs.Screen
@@ -111,7 +111,7 @@ export default function TabsLayout() {
           options={{
             title: t('tabs.habits'),
             tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? 'flame' : 'flame-outline'} size={23} color={color} />
+              <Ionicons name={focused ? 'flame' : 'flame-outline'} size={23} color={color as string} />
             ),
           }}
         />
@@ -119,7 +119,7 @@ export default function TabsLayout() {
           name="goals"
           options={{
             title: t('tabs.goals'),
-            tabBarIcon: ({ color }) => <Feather name="target" size={22} color={color} />,
+            tabBarIcon: ({ color }) => <Feather name="target" size={22} color={color as string} />,
           }}
         />
       </Tabs>

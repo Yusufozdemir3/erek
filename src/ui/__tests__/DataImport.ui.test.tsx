@@ -17,7 +17,7 @@ const mockDelete = jest.fn(async () => {});
 const mockReschedule = jest.fn(async () => {});
 
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: (...a: unknown[]) => mockPick(...a) }));
-jest.mock('expo-file-system', () => ({
+jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
   readAsStringAsync: (...a: unknown[]) => mockRead(...a),
   deleteAsync: (...a: unknown[]) => (mockDelete as any)(...a),

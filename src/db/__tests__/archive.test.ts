@@ -1,6 +1,6 @@
 // Automatic archive (db/archive.ts, migration024): tasks a week after
-// completion (recurring never), goals the day after, habits once end_date has
-// passed; "Restore" brings an item back as it is and keeps it out until it
+// completion (recurring never), goals 3 days after completion, habits 3 days
+// after end_date; "Restore" brings an item back as it is and keeps it out until it
 // is completed / ends again. Stats-facing lists keep every row.
 
 import { getDb } from '../database';
@@ -138,20 +138,24 @@ describe('hedefler', () => {
     expect(goalRepo.getById(goal.id)!.completed_at).toBeNull();
   });
 
-  it('tamamlandığı gün listede kalır, ertesi gün arşive gider', () => {
+  it('tamamlandıktan sonra 2 gün listede kalır, 3. gün arşive gider', () => {
     const goal = numericGoal();
     goalRepo.addProgress(goal.id, 100);
     expect(ids(goalRepo.listActive(userId, today))).toContain(goal.id);
-    expect(ids(goalRepo.listArchived(userId, shiftYmd(today, 1)))).toEqual([goal.id]);
-    expect(ids(goalRepo.listActive(userId, shiftYmd(today, 1)))).not.toContain(goal.id);
+    expect(ids(goalRepo.listActive(userId, shiftYmd(today, 2)))).toContain(goal.id);
+    expect(goalRepo.listArchived(userId, shiftYmd(today, 2))).toHaveLength(0);
+    expect(ids(goalRepo.listArchived(userId, shiftYmd(today, 3)))).toEqual([goal.id]);
+    expect(ids(goalRepo.listActive(userId, shiftYmd(today, 3)))).not.toContain(goal.id);
     // Stats and reminders still see it.
     expect(ids(goalRepo.listByUser(userId))).toContain(goal.id);
   });
 
-  it('adımlı hedef de ertesi gün arşive gider; geri alınınca listede kalır', () => {
+  it('adımlı hedef de 3 gün sonra arşive gider; geri alınınca listede kalır', () => {
     const goal = goalRepo.create({ user_id: userId, title: 'Taşın', goal_type: 'milestone' });
     goalRepo.setCompleted(goal.id, true);
     set('goals', goal.id, { completed_at: isoDaysAgo(2) });
+    expect(goalRepo.listArchived(userId, today)).toHaveLength(0);
+    set('goals', goal.id, { completed_at: isoDaysAgo(3) });
     expect(ids(goalRepo.listArchived(userId, today))).toEqual([goal.id]);
 
     goalRepo.unarchive(goal.id);
@@ -162,14 +166,15 @@ describe('hedefler', () => {
 });
 
 describe('alışkanlıklar', () => {
-  it('bitiş tarihi geçince arşive gider; bitiş günü ve bitişsizler listede kalır', () => {
-    const ended = habitRepo.create({ user_id: userId, title: 'Bitti', end_date: shiftYmd(today, -1) });
+  it('bitiş tarihinden 3 gün sonra arşive gider; ondan önce ve bitişsizler listede kalır', () => {
+    const ended = habitRepo.create({ user_id: userId, title: 'Bitti', end_date: shiftYmd(today, -3) });
+    const recent = habitRepo.create({ user_id: userId, title: 'Yeni bitti', end_date: shiftYmd(today, -2) });
     const lastDay = habitRepo.create({ user_id: userId, title: 'Son gün', end_date: today });
     const open = habitRepo.create({ user_id: userId, title: 'Süresiz' });
 
     expect(ids(habitRepo.listArchived(userId, today))).toEqual([ended.id]);
-    expect(ids(habitRepo.listActive(userId, today)).sort()).toEqual([lastDay.id, open.id].sort());
-    expect(habitRepo.listByUser(userId)).toHaveLength(3);
+    expect(ids(habitRepo.listActive(userId, today)).sort()).toEqual([recent.id, lastDay.id, open.id].sort());
+    expect(habitRepo.listByUser(userId)).toHaveLength(4);
   });
 
   it('geri alınan alışkanlık kalır; bitiş tarihi ileri alınıp yine geçince tekrar arşivlenir', () => {
@@ -179,8 +184,8 @@ describe('alışkanlıklar', () => {
     expect(habitRepo.getById(habit.id)!.synced).toBe(0);
 
     habitRepo.update(habit.id, { end_date: shiftYmd(today, 2) });
-    expect(habitRepo.listArchived(userId, shiftYmd(today, 2))).toHaveLength(0);
-    expect(ids(habitRepo.listArchived(userId, shiftYmd(today, 3)))).toEqual([habit.id]);
+    expect(habitRepo.listArchived(userId, shiftYmd(today, 4))).toHaveLength(0);
+    expect(ids(habitRepo.listArchived(userId, shiftYmd(today, 5)))).toEqual([habit.id]);
   });
 });
 

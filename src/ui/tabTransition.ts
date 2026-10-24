@@ -5,7 +5,7 @@
 // arriving one in during the second, so the two never overlap.
 
 import { Easing } from 'react-native';
-import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
+import type { BottomTabNavigationOptions } from 'expo-router/js-tabs';
 
 type Interpolator = NonNullable<BottomTabNavigationOptions['sceneStyleInterpolator']>;
 type Spec = NonNullable<BottomTabNavigationOptions['transitionSpec']>;

@@ -76,7 +76,7 @@ jest.mock('@/ui/sharedTaskUi', () => ({
   useFriends: () => [],
 }));
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: async () => ({ canceled: true, assets: null }) }));
-jest.mock('expo-file-system', () => ({ cacheDirectory: 'file:///c/', readAsStringAsync: jest.fn(), writeAsStringAsync: jest.fn(), deleteAsync: jest.fn() }));
+jest.mock('expo-file-system/legacy', () => ({ cacheDirectory: 'file:///c/', readAsStringAsync: jest.fn(), writeAsStringAsync: jest.fn(), deleteAsync: jest.fn() }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: async () => false, shareAsync: jest.fn() }));
 jest.mock('react-native-reanimated', () => {
   const RN = require('react-native');

@@ -67,7 +67,7 @@ export function AddSheet({ visible, onClose, initialStep = 'menu', autoVoice = f
       due_date: values.due_date,
       end_time: values.end_time,
       recurrence: values.recurrence,
-      shared_with_id: values.shared_with_id,
+      shared_with_ids: values.shared_with_ids,
       icon: values.icon,
       tag_ids: values.tag_ids,
     });

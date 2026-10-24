@@ -4,7 +4,7 @@
 // from Profile › Setup wizard. Pages: WizardSteps.tsx; pure parts: wizardLogic.ts.
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -75,7 +75,7 @@ export function SetupWizard({ onDone, required = false }: Props) {
   const [finishing, setFinishing] = useState(false);
   const [form, setForm] = useState<WizardForm | null>(null);
   const maxIndex = useRef(0);
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
 
   const id = steps[index];
   const isFirst = index === 0;

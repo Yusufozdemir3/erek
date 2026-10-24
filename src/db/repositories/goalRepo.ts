@@ -50,16 +50,23 @@ function recompute(id: string, bumpSync: boolean): void {
 
 // A numeric goal's completed_at follows current_value >= target_value: set
 // the first time it's reached (kept while it stays there), cleared below it.
-// The archive needs that completion day (db/archive.ts). Never touches
-// updated_at/synced: the caller's own write already queued the row (or, after
-// a pull, every device derives the same).
-function syncNumericCompletion(id: string | null): void {
+// The archive needs that completion day (db/archive.ts). Only rows whose
+// completion actually flips are written.
+//
+// queue: false after a user action (the caller's own write already queued the
+// row); true after a pull, where a friend's pulled contribution can finish the
+// goal. The server only learns completed_at from the owner's push (friends,
+// celebrations and the share cleanup read it), so a flip is queued then.
+// Rows that don't flip stay untouched, so pulls don't ping-pong.
+const REACHED = `COALESCE(target_value > 0 AND current_value >= target_value, 0)`;
+function syncNumericCompletion(id: string | null, queue = false): void {
+  const now = nowIso();
   getDb().runSync(
-    `UPDATE goals SET completed_at = CASE
-       WHEN target_value > 0 AND current_value >= target_value THEN COALESCE(completed_at, ?)
-       ELSE NULL END
-     WHERE goal_type = 'numeric' ${id ? 'AND id = ?' : ''}`,
-    id ? [nowIso(), id] : [nowIso()]
+    `UPDATE goals SET completed_at = CASE WHEN ${REACHED} THEN COALESCE(completed_at, ?) ELSE NULL END
+       ${queue ? ', updated_at = ?, synced = 0' : ''}
+     WHERE goal_type = 'numeric' AND deleted_at IS NULL
+       AND (completed_at IS NOT NULL) <> ${REACHED} ${id ? 'AND id = ?' : ''}`,
+    [now, ...(queue ? [now] : []), ...(id ? [id] : [])]
   );
 }
 
@@ -240,7 +247,8 @@ export const goalRepo = {
   },
 
   // After a pull (syncEngine.runSync): pulled entries/baselines may change the
-  // total, and the pulled current_value is a stale cache. Leaves synced alone.
+  // total, and the pulled current_value is a stale cache. Leaves synced alone,
+  // except for a completion flip (syncNumericCompletion).
   recomputeAllFromEntries(): void {
     const db = getDb();
     db.runSync(
@@ -249,7 +257,7 @@ export const goalRepo = {
           WHERE goal_entries.goal_id = goals.id AND goal_entries.deleted_at IS NULL
        ), 0))`
     );
-    syncNumericCompletion(null);
+    syncNumericCompletion(null, true);
   },
 
   // Takes its reminder rows along (see habitRepo.softDelete).

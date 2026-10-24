@@ -4,7 +4,7 @@
 // only moves bytes.
 
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { MAX_IMPORT_BYTES, parseExport, type ParseResult } from '@/db/importData';
 
 export type PickResult = { kind: 'cancelled' } | { kind: 'parsed'; result: ParseResult };

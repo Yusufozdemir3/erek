@@ -7,7 +7,7 @@
 // POINT_SPACING_MIN, after which it scrolls (scoreChartLayout.ts).
 
 import { useEffect, useRef, useState } from 'react';
-import { LayoutChangeEvent, ScrollView, Text, View } from 'react-native';
+import { LayoutChangeEvent, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
 import { AXIS_W, chartLayout } from '@/ui/scoreChartLayout';
 import { percentLabel } from '@/ui/theme';
 import type { Lang } from '@/i18n/translations';
@@ -83,7 +83,7 @@ export function ScoreLineChart({ points, color, gridColor, labelColor, lang }: S
   const [containerWidth, setContainerWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setContainerWidth(e.nativeEvent.layout.width);
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // Scroll to the newest point once, not on every re-render (it would yank the
   // user's own scrolling back)...
   const didAutoScroll = useRef(false);

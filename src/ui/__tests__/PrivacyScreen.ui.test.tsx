@@ -70,7 +70,7 @@ describe('PrivacyScreen', () => {
   });
 
   it('gizlilik politikası bağlantısı doğru adresi açar', async () => {
-    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const u = await renderUI(<PrivacyScreen />);
     fireEvent.press(await u.findByText('Gizlilik politikasını aç'));
     expect(open).toHaveBeenCalledWith(PRIVACY_POLICY_URL);

@@ -8,14 +8,20 @@ import { subtaskRepo, taskRepo, userRepo } from '@/db';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
 import { renderUI } from '@/test/renderWithProviders';
 import { resetTestDb } from '@/test/dbTestUtils';
-import { toggleSharedSubtask } from '@/sync/sharedTasks';
+import { addSharedSubtask, deleteSharedSubtask, getTaskParticipants, toggleSharedSubtask } from '@/sync/sharedTasks';
 import { SharingError } from '@/sync/sharingErrors';
 
 jest.mock('@/sync/sharedTasks', () => ({
   toggleSharedSubtask: jest.fn(),
   toggleSharedTask: jest.fn(),
+  addSharedSubtask: jest.fn(),
+  deleteSharedSubtask: jest.fn(),
+  getTaskParticipants: jest.fn(async () => []),
 }));
 const mockToggle = toggleSharedSubtask as jest.Mock;
+const mockAdd = addSharedSubtask as jest.Mock;
+const mockDelete = deleteSharedSubtask as jest.Mock;
+const mockParticipants = getTaskParticipants as jest.Mock;
 
 const FRIEND = 'friend-uid';
 const OLD = '2026-07-01T10:00:00.000Z';
@@ -169,5 +175,82 @@ describe('SharedTaskModal', () => {
       fireEvent.press(getByText('Kapat'));
     });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('listeye madde eklenir: sunucu çağrılır, yerel kopya kuyruğa girmeden yazılır', async () => {
+    const task = seedShared();
+    mockAdd.mockResolvedValue({
+      subtaskId: 's3',
+      title: 'Yumurta',
+      position: 2,
+      subtaskUpdatedAt: NEW,
+      taskId: 't-shared',
+      taskCompletedAt: null,
+      taskUpdatedAt: NEW,
+    });
+    const onChanged = jest.fn();
+    const { getByPlaceholderText, getByLabelText, findByText } = await renderUI(
+      <SharedTaskModal task={task} ownerName="Ayşe" onClose={jest.fn()} onChanged={onChanged} />
+    );
+
+    fireEvent.changeText(getByPlaceholderText('Madde ekle…'), '  Yumurta ');
+    fireEvent.press(getByLabelText('Maddeyi listeye ekle'));
+
+    expect(await findByText('Yumurta')).toBeTruthy();
+    expect(mockAdd).toHaveBeenCalledWith('t-shared', 'Yumurta');
+    expect(subtaskRepo.listByTask('t-shared').map((s) => s.title)).toEqual(['Süt', 'Ekmek', 'Yumurta']);
+    expect(subtaskRepo.listByTask('t-shared')[2]).toMatchObject({ id: 's3', synced: 1, completed: 0 });
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('boş madde sunucuya gitmez', async () => {
+    const task = seedShared();
+    const { getByPlaceholderText, getByLabelText } = await renderUI(
+      <SharedTaskModal task={task} ownerName="Ayşe" onClose={jest.fn()} onChanged={jest.fn()} />
+    );
+    fireEvent.changeText(getByPlaceholderText('Madde ekle…'), '   ');
+    fireEvent.press(getByLabelText('Maddeyi listeye ekle'));
+    expect(mockAdd).not.toHaveBeenCalled();
+  });
+
+  it('madde silinir: sunucu çağrılır, yerel satır kuyruğa girmeden silinmiş olur', async () => {
+    const task = seedShared();
+    mockDelete.mockResolvedValue({
+      subtaskUpdatedAt: NEW,
+      taskId: 't-shared',
+      taskCompletedAt: null,
+      taskUpdatedAt: NEW,
+    });
+    const { getByLabelText, queryByText } = await renderUI(
+      <SharedTaskModal task={task} ownerName="Ayşe" onClose={jest.fn()} onChanged={jest.fn()} />
+    );
+
+    fireEvent.press(getByLabelText('Süt maddesini sil'));
+
+    await waitFor(() => expect(queryByText('Süt')).toBeNull(), { timeout: 4000 });
+    expect(mockDelete).toHaveBeenCalledWith('s1');
+    expect(subtaskRepo.listByTask('t-shared').map((s) => s.title)).toEqual(['Ekmek']);
+  });
+
+  it('ekleme reddedilirse (ERK_LIST_FULL) hata gösterilir, liste değişmez', async () => {
+    const task = seedShared();
+    mockAdd.mockRejectedValue(new SharingError('ERK_LIST_FULL'));
+    const { getByPlaceholderText, getByLabelText } = await renderUI(
+      <SharedTaskModal task={task} ownerName="Ayşe" onClose={jest.fn()} onChanged={jest.fn()} />
+    );
+    fireEvent.changeText(getByPlaceholderText('Madde ekle…'), 'Yumurta');
+    fireEvent.press(getByLabelText('Maddeyi listeye ekle'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    expect(subtaskRepo.listByTask('t-shared')).toHaveLength(2);
+  });
+
+  it('işaretlenen madde kimin işaretlediğini gösterir', async () => {
+    const task = seedShared();
+    getDb().runSync(`UPDATE subtasks SET completed = 1, completed_by = 'u2' WHERE id = 's1'`);
+    mockParticipants.mockResolvedValue([{ id: 'u2', displayName: 'Mehmet', isOwner: false }]);
+    const { findByText } = await renderUI(
+      <SharedTaskModal task={task} ownerName="Ayşe" onClose={jest.fn()} onChanged={jest.fn()} />
+    );
+    expect(await findByText('Mehmet işaretledi')).toBeTruthy();
   });
 });

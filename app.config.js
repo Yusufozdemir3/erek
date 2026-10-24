@@ -3,9 +3,9 @@
 //    build takes it from the project root, EAS from the GOOGLE_SERVICES_JSON
 //    file variable. Without it only friend nudges fall back to the share sheet
 //    (docs/push-setup.md).
-// 2. R8 shrinking, only with EREK_R8=1: minifying can break reflection-based
-//    native modules in ways only a device shows, so it stays a test build
-//    until every screen is checked (docs/r8-test.md).
+// 2. EREK_R8=1 adds the R8 switches. Redundant today: app.json has turned R8
+//    on for every release build since a9a84d3 (plus withR8CompatMode under
+//    AGP 9); the switch only matters for a config without them (docs/r8-test.md).
 
 const fs = require('fs');
 const path = require('path');
@@ -21,7 +21,7 @@ function withR8(config) {
         ...props,
         android: {
           ...props.android,
-          enableProguardInReleaseBuilds: true,
+          enableMinifyInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,
         },
       },

@@ -16,7 +16,7 @@ import {
   DarkTheme,
   DefaultTheme,
   type Theme,
-} from '@react-navigation/native';
+} from 'expo-router/react-navigation';
 import { AppDataProvider } from '@/ui/AppData';
 import { LoginGate } from '@/ui/LoginScreen';
 import { OnboardingGate } from '@/ui/Onboarding';

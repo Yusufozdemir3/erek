@@ -2,7 +2,7 @@
 // `styles` comes from habitStatsStyles.ts.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import type { Habit } from '@/db';
@@ -115,7 +115,7 @@ export function HistoryBars({
   lang: Lang;
   styles: Styles;
 }) {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const didAutoScroll = useRef(false);
   // Scroll to the newest bucket again when the tab changes (no remount).
   useEffect(() => {

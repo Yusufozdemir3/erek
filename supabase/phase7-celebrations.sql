@@ -38,8 +38,11 @@ set search_path = ''
 as $$
   select g.user_id, g.title from public.goals g
   where p_kind = 'goal' and g.id = p_item_id and g.deleted_at is null
-    and g.completed_at is not null
-    and (g.goal_type <> 'numeric' or public.goal_current_value(g.id) >= g.target_value)
+    -- A numeric goal counts as finished once its total (friends' contributions
+    -- included) reaches the target: the owner's app may not have synced completed_at.
+    and ((g.goal_type <> 'numeric' and g.completed_at is not null)
+      or (g.goal_type = 'numeric' and g.target_value > 0
+          and public.goal_current_value(g.id) >= g.target_value))
   union all
   select h.user_id, h.title from public.habits h
   where p_kind = 'habit' and h.id = p_item_id and h.deleted_at is null

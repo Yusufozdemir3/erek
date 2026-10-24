@@ -327,6 +327,18 @@ UPDATE goals SET completed_at = updated_at
     AND target_value > 0 AND current_value >= target_value;
 `;
 
+// Migration 025: shopping-list tasks. tasks.shared_with_ids = JSON array of the
+// friends' RAW cloud uids a task is shared with (shared_with_id stays as "the
+// first one" for older app versions). subtasks.completed_by = the raw cloud uid
+// of whoever ticked an item; NULL = not ticked, or ticked before it was shared.
+// The server decides it on every tick (supabase PHASE 8), the app only mirrors it.
+export const migration025 = `
+ALTER TABLE tasks ADD COLUMN shared_with_ids TEXT;
+ALTER TABLE subtasks ADD COLUMN completed_by TEXT;
+UPDATE tasks SET shared_with_ids = '["' || shared_with_id || '"]'
+  WHERE shared_with_id IS NOT NULL AND shared_with_ids IS NULL;
+`;
+
 // Applied in order; a schema change = a new element.
 export const migrations = [
   { version: 1, sql: migration001 },
@@ -353,4 +365,5 @@ export const migrations = [
   { version: 22, sql: migration022 },
   { version: 23, sql: migration023 },
   { version: 24, sql: migration024 },
+  { version: 25, sql: migration025 },
 ];

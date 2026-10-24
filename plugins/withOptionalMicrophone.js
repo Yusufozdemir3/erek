@@ -2,7 +2,7 @@
 // devices without one. Voice input is optional, so the feature is declared not
 // required. android/ is generated, hence a plugin.
 
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest } = require('expo/config-plugins');
 
 const FEATURE = 'android.hardware.microphone';
 

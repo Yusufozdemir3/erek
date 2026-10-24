@@ -14,7 +14,7 @@ import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
-import { useFriends } from '@/ui/sharedTaskUi';
+import { useFriendNames, useFriends } from '@/ui/sharedTaskUi';
 
 interface Props {
   task: Task | null; // null = panel closed
@@ -29,6 +29,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
   const friends = useFriends(true);
+  const tickerNames = useFriendNames(subtasks.map((s) => s.completed_by));
 
   useEffect(() => {
     if (task) {
@@ -90,7 +91,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
       due_date: values.due_date,
       end_time: values.end_time,
       recurrence: values.recurrence,
-      shared_with_id: values.shared_with_id,
+      shared_with_ids: values.shared_with_ids,
       icon: values.icon,
       tag_ids: values.tag_ids,
     });
@@ -127,7 +128,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
           end_time: task.end_time,
           recurrence: task.recurrence,
           remind_times: reminderRepo.listByEntity('task', task.id).map((r) => r.time),
-          shared_with_id: task.shared_with_id,
+          shared_with_ids: task.shared_with_ids,
           icon: task.icon,
           tag_ids: task.tag_ids,
         }}
@@ -140,6 +141,7 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
             <Text style={styles.label}>{tr('task.subtasks')}</Text>
             {subtasks.map((s) => {
               const done = s.completed === 1;
+              const tickedBy = done && s.completed_by ? tickerNames.get(s.completed_by) : undefined;
               return (
                 <View key={s.id} style={styles.subtaskRow}>
                   <Pressable
@@ -155,6 +157,9 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
                   </Pressable>
                   <Text style={[styles.subtaskTitle, done && styles.subtaskTitleDone]}>
                     {s.title}
+                    {tickedBy ? (
+                      <Text style={{ color: colors.faint, fontSize: 11 }}> · {tr('sharedTask.tickedBy', { name: tickedBy })}</Text>
+                    ) : null}
                   </Text>
                   <Pressable
                     onPress={() => removeSubtask(s)}

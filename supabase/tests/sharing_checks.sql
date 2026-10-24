@@ -31,15 +31,25 @@ insert into public.goals (id, user_id, title, goal_type, target_value, current_v
 insert into public.goal_entries (id, goal_id, amount, updated_at) values
   ('00000000-0000-0000-0000-000000000a31', '00000000-0000-0000-0000-0000000000a3', 20, now() - interval '1 day');
 
--- 1) Profiles are created by the trigger; a non-Google avatar host is dropped.
+-- 1) Profiles are created by the trigger WITHOUT the Google name (the name is
+-- the user's own, set_username); a non-Google avatar host is dropped.
 do $$ begin
-  assert (select display_name from public.profiles where id = '00000000-0000-0000-0000-00000000000a') = 'Test A',
-    'profile trigger must copy full_name';
+  assert (select display_name from public.profiles where id = '00000000-0000-0000-0000-00000000000a') is null,
+    'profile trigger must not copy the Google name';
   assert (select avatar_url from public.profiles where id = '00000000-0000-0000-0000-00000000000a') is null,
     'avatar on a lookalike host must be rejected';
   assert (select avatar_url from public.profiles where id = '00000000-0000-0000-0000-00000000000b')
          = 'https://lh3.googleusercontent.com/a/abc',
     'google avatar must be kept';
+end $$;
+
+-- A and B pick their usernames (set_username runs as the user).
+do $$ begin
+  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+  assert public.set_username('Test A')->>'status' = 'ok', 'A picks a username';
+  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
+  assert public.set_username('Test B')->>'status' = 'ok', 'B picks a username';
+  perform set_config('request.jwt.claims', '', true);
 end $$;
 
 -- ---------------------------------------------------------------- A: invite

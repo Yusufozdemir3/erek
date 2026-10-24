@@ -8,7 +8,7 @@ import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { notifySuccess } from '@/lib/haptics';
 import type { CelebrationKind } from '@/lib/celebrations';
-import { sendCongrats } from '@/sync';
+import { lastCelebrationStatus, sendCongrats } from '@/sync';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
@@ -49,7 +49,7 @@ export function CongratsButton({ kind, itemId, ownerName, title }: Props) {
       if (result === 'noDevice') offerShare(t('congrats.noDeviceTitle'), t('congrats.noDeviceBody', { name: ownerName }));
       else if (result === 'notFinished') offerShare(t('congrats.notYetTitle'), t('congrats.notYetBody'));
       else if (result === 'dailyLimit') Alert.alert(t('congrats.limitTitle'), t('congrats.limitBody'));
-      else offerShare(t('nudge.failedTitle'), t('nudge.failedBody'));
+      else offerShare(t('nudge.failedTitle'), t('congrats.failedBody', { code: lastCelebrationStatus() }));
     }
   };
 

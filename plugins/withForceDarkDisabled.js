@@ -3,7 +3,7 @@
 // fighting the in-app theme choice. ThemeProvider alone decides light/dark.
 // android/ is generated, hence a plugin.
 
-const { withAndroidStyles, AndroidConfig } = require('@expo/config-plugins');
+const { withAndroidStyles, AndroidConfig } = require('expo/config-plugins');
 
 module.exports = function withForceDarkDisabled(config) {
   return withAndroidStyles(config, (cfg) => {

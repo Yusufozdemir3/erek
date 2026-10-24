@@ -13,10 +13,16 @@ module.exports = {
       'ts-jest',
       {
         // The project's tsconfig targets Metro (bundler/esnext); Jest needs CJS.
+        // Transpile only: `npm run typecheck` does the type checking, and
+        // RN 0.88's types (package "exports") don't resolve under CJS settings.
         tsconfig: {
           module: 'commonjs',
           moduleResolution: 'node',
           esModuleInterop: true,
+          isolatedModules: true,
+          rootDir: __dirname,
+          // TS 6 deprecates node10 resolution; fine for transpile-only CJS.
+          ignoreDeprecations: '6.0',
         },
       },
     ],

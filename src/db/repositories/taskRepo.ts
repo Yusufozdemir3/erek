@@ -35,11 +35,28 @@ function rowToTask(row: any): Task {
     deleted_at: row.deleted_at,
     synced: row.synced,
     shared_with_id: row.shared_with_id ?? null,
+    shared_with_ids: sharedIdsOfRow(row),
     shared_owner_uid: row.shared_owner_uid ?? null,
     icon: row.icon ?? null,
     tag_ids: parseTagIds(row.tag_ids),
     unarchived_at: row.unarchived_at ?? null,
   };
+}
+
+// The friends a task is shared with: the list column, or (rows written by an
+// older build) the single legacy one.
+function sharedIdsOfRow(row: any): string[] {
+  const ids = parseTagIds(row.shared_with_ids);
+  if (ids.length > 0) return ids;
+  return row.shared_with_id ? [row.shared_with_id] : [];
+}
+
+// Mirrors the server guard: at most 10 friends, none on a recurring task. The
+// legacy single column always holds the first one.
+export const MAX_TASK_SHARES = 10;
+function shareColumns(ids: readonly string[] | null | undefined): { first: string | null; json: string | null } {
+  const clean = [...new Set((ids ?? []).filter((x) => typeof x === 'string' && x.length > 0))].slice(0, MAX_TASK_SHARES);
+  return { first: clean[0] ?? null, json: tagIdsToJson(clean) };
 }
 
 export interface CreateTaskInput {
@@ -50,7 +67,8 @@ export interface CreateTaskInput {
   priority?: Priority;
   recurrence?: Recurrence | null;
   remind_at?: string | null;
-  shared_with_id?: string | null; // friend's cloud uid; ignored for recurring tasks
+  shared_with_id?: string | null; // one friend's cloud uid (use shared_with_ids); ignored for recurring tasks
+  shared_with_ids?: string[];     // every friend's cloud uid; ignored for recurring tasks
   icon?: string | null;
   tag_ids?: string[];
 }
@@ -75,10 +93,13 @@ export const taskRepo = {
     const db = getDb();
     const id = newId();
     const now = nowIso();
+    const share = shareColumns(
+      input.recurrence ? [] : input.shared_with_ids ?? (input.shared_with_id ? [input.shared_with_id] : [])
+    );
     db.runSync(
       `INSERT INTO tasks
-       (id, user_id, title, due_date, end_time, priority, recurrence, remind_at, completed_at, updated_at, deleted_at, synced, shared_with_id, icon, tag_ids)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0, ?, ?, ?)`,
+       (id, user_id, title, due_date, end_time, priority, recurrence, remind_at, completed_at, updated_at, deleted_at, synced, shared_with_id, shared_with_ids, icon, tag_ids)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, 0, ?, ?, ?, ?)`,
       [
         id,
         input.user_id,
@@ -89,8 +110,8 @@ export const taskRepo = {
         toJson(input.recurrence ?? null),
         input.remind_at ?? null,
         now,
-        // Mirrors the server guard: recurring tasks can't be shared.
-        input.recurrence ? null : input.shared_with_id ?? null,
+        share.first,
+        share.json,
         input.icon ?? null,
         tagIdsToJson(input.tag_ids),
       ]
@@ -266,8 +287,12 @@ export const taskRepo = {
     if (fields.icon !== undefined) { sets.push('icon = ?'); vals.push(fields.icon); }
     if (fields.tag_ids !== undefined) { sets.push('tag_ids = ?'); vals.push(tagIdsToJson(fields.tag_ids)); }
     // Recurring tasks can't be shared (mirrors the server guard).
-    if (fields.recurrence) { sets.push('shared_with_id = NULL'); }
-    else if (fields.shared_with_id !== undefined) { sets.push('shared_with_id = ?'); vals.push(fields.shared_with_id); }
+    if (fields.recurrence) { sets.push('shared_with_id = NULL', 'shared_with_ids = NULL'); }
+    else if (fields.shared_with_ids !== undefined || fields.shared_with_id !== undefined) {
+      const share = shareColumns(fields.shared_with_ids ?? (fields.shared_with_id ? [fields.shared_with_id] : []));
+      sets.push('shared_with_id = ?', 'shared_with_ids = ?');
+      vals.push(share.first, share.json);
+    }
     if (sets.length === 0) return;
     sets.push('updated_at = ?'); vals.push(nowIso());
     sets.push('synced = 0');
@@ -335,7 +360,7 @@ export const taskRepo = {
       `SELECT EXISTS (
          SELECT 1 FROM tasks
          WHERE user_id = ? AND deleted_at IS NULL
-           AND (shared_owner_uid IS NOT NULL OR shared_with_id IS NOT NULL)
+           AND (shared_owner_uid IS NOT NULL OR shared_with_id IS NOT NULL OR shared_with_ids IS NOT NULL)
        ) AS n`,
       [userId]
     );

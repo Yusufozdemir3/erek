@@ -15,19 +15,19 @@ const TASK_ARCHIVED = `COALESCE((
   AND (unarchived_at IS NULL OR julianday(unarchived_at) < julianday(completed_at))
 ), 0)`;
 
-// Goals: completed on an earlier day (the completion day stays visible). A
-// numeric goal must still be at its target; completed_at follows it (goalRepo).
+// Goals: completed at least 3 days ago. A numeric goal must still be at its
+// target; completed_at follows it (goalRepo).
 const GOAL_ARCHIVED = `COALESCE((
   completed_at IS NOT NULL
-  AND date(completed_at, 'localtime') < ?
+  AND date(completed_at, 'localtime') <= date(?, '-3 days')
   AND (goal_type <> 'numeric' OR (target_value > 0 AND current_value >= target_value))
   AND (unarchived_at IS NULL OR julianday(unarchived_at) < julianday(completed_at))
 ), 0)`;
 
-// Habits: end_date has passed. Restored after the end -> kept until the end
-// date is moved past the restore day and passes again.
+// Habits: end_date (the last day) was at least 3 days ago. Restored after the
+// end -> kept until the end date is moved past the restore day and passes again.
 const HABIT_ARCHIVED = `COALESCE((
-  end_date IS NOT NULL AND end_date < ?
+  end_date IS NOT NULL AND end_date <= date(?, '-3 days')
   AND (unarchived_at IS NULL OR end_date >= date(unarchived_at, 'localtime'))
 ), 0)`;
 

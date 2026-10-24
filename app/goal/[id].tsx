@@ -16,6 +16,7 @@ import { NUMBER_MAX_LEN, TITLE_MAX_LEN } from '@/ui/formLimits';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { GoalForm, type GoalFormValues } from '@/ui/GoalForm';
 import { useGoalStats } from '@/ui/useGoalStats';
+import { useAppData } from '@/ui/AppData';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import { deadlineLabel, percentLabel, shortDate } from '@/ui/theme';
@@ -37,6 +38,9 @@ export default function GoalDetailScreen() {
   const styles = makeGoalStyles(colors);
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: GoalTab }>();
   const stats = useGoalStats(id);
+  // A data change also lets AppData sync a just-finished shared goal right
+  // away; otherwise friends only see it after the next launch/foreground.
+  const { notifyDataChanged } = useAppData();
   const [activeTab, setActiveTab] = useState<GoalTab>((tab as GoalTab) || 'overview');
   const [newMilestone, setNewMilestone] = useState('');
   // A new step's optional amount (numeric goals) and due date.
@@ -79,6 +83,7 @@ export default function GoalDetailScreen() {
     setEntryText('');
     refreshReminder();
     stats.reload();
+    notifyDataChanged();
   };
   const toggleGoalCompleted = () => {
     if (!goal) return;
@@ -87,6 +92,7 @@ export default function GoalDetailScreen() {
     completing ? notifySuccess() : tapLight();
     refreshReminder();
     stats.reload();
+    notifyDataChanged();
   };
 
   // — Steps tab —
@@ -110,6 +116,7 @@ export default function GoalDetailScreen() {
     syncGoalCompletion();
     refreshReminder(); // steps may have completed or reopened the goal
     stats.reload();
+    notifyDataChanged();
   };
   const addMilestone = () => {
     const v = newMilestone.trim();
@@ -159,6 +166,7 @@ export default function GoalDetailScreen() {
       if (!ok) Alert.alert(t('notif.noPermTitle'), t('notif.noPermBody'));
     });
     stats.reload();
+    notifyDataChanged();
     setActiveTab('overview');
   };
   const handleDelete = () => {

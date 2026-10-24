@@ -4,6 +4,7 @@
 import { goalEntryRepo } from '../repositories/goalEntryRepo';
 import { goalRepo } from '../repositories/goalRepo';
 import { userRepo } from '../repositories/userRepo';
+import { getDb } from '../database';
 import { TIME_UNIT } from '../../lib/helpers';
 import { resetTestDb } from '../../test/dbTestUtils';
 
@@ -420,6 +421,69 @@ describe('isCompleted / setCompleted', () => {
     const goal = numericGoal();
     goalRepo.setCompleted(goal.id, true);
     expect(goalRepo.getById(goal.id)!.completed_at).toBeNull();
+  });
+});
+
+// A friend's contribution reaches the owner only through a pull; the server
+// learns completed_at from the owner's push, so a flip there must be queued.
+describe('recomputeAllFromEntries — çekme sonrası tamamlanma', () => {
+  const OLD = '2026-01-01T00:00:00.000Z';
+  const markSynced = (id: string) =>
+    getDb().runSync(`UPDATE goals SET synced = 1, updated_at = ? WHERE id = ?`, [OLD, id]);
+  const row = (id: string) =>
+    getDb().getFirstSync<any>(`SELECT completed_at, synced, updated_at FROM goals WHERE id = ?`, [id]);
+
+  it('çekilen girdi hedefi bitirirse completed_at gönderim kuyruğuna girer', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 90);
+    markSynced(goal.id);
+    goalEntryRepo.create(goal.id, 10); // the friend's pulled entry
+
+    goalRepo.recomputeAllFromEntries();
+
+    const r = row(goal.id);
+    expect(r.completed_at).not.toBeNull();
+    expect(r.synced).toBe(0);
+    expect(r.updated_at).not.toBe(OLD);
+  });
+
+  it('tamamlanma değişmezse satıra dokunmaz (döngü yok)', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 100);
+    const completedAt = row(goal.id).completed_at;
+    markSynced(goal.id);
+
+    goalRepo.recomputeAllFromEntries();
+
+    expect(row(goal.id)).toEqual({ completed_at: completedAt, synced: 1, updated_at: OLD });
+  });
+
+  it('çekilen düzeltme hedefi yeniden açarsa bu da kuyruğa girer', () => {
+    const goal = numericGoal();
+    goalRepo.addProgress(goal.id, 100);
+    markSynced(goal.id);
+    goalEntryRepo.create(goal.id, -5);
+
+    goalRepo.recomputeAllFromEntries();
+
+    const r = row(goal.id);
+    expect(r.completed_at).toBeNull();
+    expect(r.synced).toBe(0);
+  });
+
+  it('silinmiş hedefi ve parçalı hedefi kuyruğa almaz', () => {
+    const numeric = numericGoal();
+    goalRepo.addProgress(numeric.id, 100);
+    goalRepo.softDelete(numeric.id);
+    markSynced(numeric.id);
+    getDb().runSync(`UPDATE goals SET completed_at = NULL WHERE id = ?`, [numeric.id]);
+    const steps = milestoneGoal();
+    markSynced(steps.id);
+
+    goalRepo.recomputeAllFromEntries();
+
+    expect(row(numeric.id).synced).toBe(1);
+    expect(row(steps.id).synced).toBe(1);
   });
 });
 
