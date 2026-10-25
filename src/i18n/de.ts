@@ -1035,6 +1035,12 @@ export const de: Dict = {
   'widget.pickEmpty': 'Keine passende Gewohnheit für dieses Widget. Lege zuerst eine in Erek an.',
   'widget.pickLabel': 'Gewohnheit wählen — tippen',
   'widget.notToday': 'Heute nicht geplant',
+  'widget.timersTitle': 'Timer',
+  'widget.timersToday': 'Heute {time}',
+  'widget.timersMinutes': '{n} Min.',
+  'widget.timersMore': '+{n} weitere',
+  'widget.timersEmpty': 'Heute keine Timer-Gewohnheit',
+  'widget.timersStart': 'Starten',
   // Task icons and tags
   'task.icon': 'Symbol',
   'task.iconNone': 'Keins',

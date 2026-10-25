@@ -72,12 +72,19 @@ object TimerNotifier {
     try { Color.parseColor(o.optString(k, "")) } catch (e: Exception) { fallback }
 
   // Draws and posts the card for `o` (elapsedMs counted at `shownAt`) and remembers it.
+  // The state is kept even without a card (notify = false: notifications off):
+  // the timer widget shows the same timer.
   fun post(ctx: Context, o: JSONObject, shownAt: Long = System.currentTimeMillis()) {
-    synchronized(lock) {
-      o.put("shownAt", shownAt)
-      prefs(ctx).edit().putString(KEY_STATE, o.toString()).apply()
-      render(ctx, o)
-    }
+    synchronized(lock) { postLocked(ctx, o, shownAt) }
+    WidgetRender.updateTimers(ctx)
+  }
+
+  private fun postLocked(ctx: Context, o: JSONObject, shownAt: Long) {
+    o.put("shownAt", shownAt)
+    if (!o.has("date")) o.put("date", WidgetStore.today(shownAt))
+    prefs(ctx).edit().putString(KEY_STATE, o.toString()).apply()
+    if (o.optString("kind") == "habit") WidgetStore.setLastTimer(ctx, o.optString("id"))
+    render(ctx, o)
   }
 
   fun loadState(ctx: Context): JSONObject? = synchronized(lock) {
@@ -89,6 +96,11 @@ object TimerNotifier {
   private fun render(ctx: Context, o: JSONObject) {
     val manager = ctx.getSystemService(NotificationManager::class.java) ?: return
     val service = TimerForegroundService.instance
+    if (!o.optBoolean("notify", true)) {
+      service?.release(false)
+      manager.cancel(NOTIFICATION_ID)
+      return
+    }
     if (o.optBoolean("running", false)) {
       var started = false
       try {
@@ -183,48 +195,90 @@ object TimerNotifier {
   }
 
   fun cancel(ctx: Context) {
-    synchronized(lock) {
-      prefs(ctx).edit().remove(KEY_STATE).apply()
-      TimerForegroundService.instance?.release(false)
-      ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+    synchronized(lock) { clearLocked(ctx) }
+    WidgetRender.updateTimers(ctx)
+  }
+
+  private fun clearLocked(ctx: Context) {
+    prefs(ctx).edit().remove(KEY_STATE).apply()
+    TimerForegroundService.instance?.release(false)
+    ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+  }
+
+  // A button press at time `at` (the card's or the timer widget's). Updates the
+  // card and the widgets, queues the action for JS. "start" (widget only)
+  // starts the habit `targetId`, pausing whatever else runs: one timer at a time.
+  fun handle(ctx: Context, op: String, at: Long, targetId: String? = null) {
+    synchronized(lock) { handleLocked(ctx, op, at, targetId) }
+    WidgetRender.updateTimers(ctx)
+  }
+
+  private fun handleLocked(ctx: Context, op: String, at: Long, targetId: String?) {
+    val raw = prefs(ctx).getString(KEY_STATE, null)
+    val o = raw?.let { try { JSONObject(it) } catch (e: Exception) { null } }
+    val running = o?.optBoolean("running", false) ?: false
+
+    if (op == "start") {
+      val id = targetId ?: return
+      if (o != null && running && o.optString("kind") == "habit" && o.optString("id") == id) return
+      // Built before anything changes: an unknown habit must not pause the running one.
+      val fresh = WidgetRender.timerStateFor(ctx, id) ?: return
+      if (o != null && running) stopLocked(ctx, o, "pause", at, post = false)
+      postLocked(ctx, fresh, at)
+      queue(ctx, JSONObject().put("op", "resume").put("at", at).put("kind", "habit").put("id", id))
+      return
+    }
+    if (o == null) return
+    when {
+      op == "pause" && running -> stopLocked(ctx, o, "pause", at, post = true)
+      op == "resume" && !running -> {
+        o.put("running", true)
+        postLocked(ctx, o, at)
+        queue(ctx, entry(o, "resume", at))
+      }
+      op == "finish" -> stopLocked(ctx, o, "finish", at, post = false)
+      else -> return // stale button (e.g. a second tap)
     }
   }
 
-  // A button press at time `at`. Updates the card, queues the action for JS.
-  fun handle(ctx: Context, op: String, at: Long) {
-    synchronized(lock) {
-      val raw = prefs(ctx).getString(KEY_STATE, null) ?: return
-      val o = try { JSONObject(raw) } catch (e: Exception) { return }
-      val running = o.optBoolean("running", false)
-      val shownAt = o.optLong("shownAt", at)
-      val elapsedMs = o.optDouble("elapsedMs", 0.0).toLong() + if (running) (at - shownAt).coerceAtLeast(0) else 0L
-
-      when {
-        op == "pause" && running -> {
-          o.put("running", false)
-          o.put("elapsedMs", elapsedMs.toDouble())
-          post(ctx, o, at)
-        }
-        op == "resume" && !running -> {
-          o.put("running", true)
-          post(ctx, o, at)
-        }
-        op == "finish" -> {
-          prefs(ctx).edit().remove(KEY_STATE).apply()
-          TimerForegroundService.instance?.release(false)
-          ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
-        }
-        else -> return // stale button (e.g. a second tap)
-      }
-      val entry = JSONObject()
-        .put("op", op)
-        .put("at", at)
-        .put("kind", o.optString("kind", ""))
-        .put("id", o.optString("id", ""))
-      val pending = try { JSONArray(prefs(ctx).getString(KEY_PENDING, "[]")) } catch (e: Exception) { JSONArray() }
-      pending.put(entry)
-      prefs(ctx).edit().putString(KEY_PENDING, pending.toString()).apply()
+  // Pause / finish at `at`. A running habit timer books its total for the day
+  // on the widgets right away; JS books it in SQLite from the queue.
+  private fun stopLocked(ctx: Context, o: JSONObject, op: String, at: Long, post: Boolean) {
+    val running = o.optBoolean("running", false)
+    val e = entry(o, op, at)
+    if (running) {
+      val elapsedMs = o.optDouble("elapsedMs", 0.0).toLong() + (at - o.optLong("shownAt", at)).coerceAtLeast(0)
+      val day = o.optString("date", "").ifEmpty { WidgetStore.today(o.optLong("shownAt", at)) }
+      e.put("date", day).put("total", elapsedMs / 1000.0)
+      if (o.optString("kind") == "habit") WidgetStore.bookTimer(ctx, o.optString("id"), day, elapsedMs / 1000.0)
+      o.put("running", false)
+      o.put("elapsedMs", elapsedMs.toDouble())
     }
+    if (op == "finish") clearLocked(ctx)
+    else if (post) postLocked(ctx, o, at)
+    else {
+      // Replaced right after (start): only remember the frozen state.
+      o.put("shownAt", at)
+      prefs(ctx).edit().putString(KEY_STATE, o.toString()).apply()
+    }
+    queue(ctx, e)
+  }
+
+  private fun entry(o: JSONObject, op: String, at: Long): JSONObject = JSONObject()
+    .put("op", op)
+    .put("at", at)
+    .put("kind", o.optString("kind", ""))
+    .put("id", o.optString("id", ""))
+
+  private fun queue(ctx: Context, e: JSONObject) {
+    val pending = try { JSONArray(prefs(ctx).getString(KEY_PENDING, "[]")) } catch (x: Exception) { JSONArray() }
+    pending.put(e)
+    prefs(ctx).edit().putString(KEY_PENDING, pending.toString()).apply()
+  }
+
+  // The queue without clearing it (the widgets lay unbooked stops over a new board).
+  fun peekPending(ctx: Context): JSONArray = synchronized(lock) {
+    try { JSONArray(prefs(ctx).getString(KEY_PENDING, "[]")) } catch (e: Exception) { JSONArray() }
   }
 
   // Returns the queued button presses (a JSON array, oldest first) and clears them.

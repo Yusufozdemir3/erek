@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown in the widget picker (Android 12+). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+  <ImageView
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:scaleType="fitXY"
+      android:src="@drawable/erek_widget_card"
+      android:tint="#FF2F5D45" />
+  <ImageView
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:layout_margin="1.5dp"
+      android:scaleType="fitXY"
+      android:src="@drawable/erek_widget_card"
+      android:tint="#FFFFFFFF" />
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:gravity="center_vertical"
+      android:orientation="horizontal"
+      android:paddingStart="12dp"
+      android:paddingEnd="8dp">
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+      <TextView
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:maxLines="1"
+          android:text="@string/erek_widget_preview_timer"
+          android:textColor="#FF0F172A"
+          android:textSize="13sp"
+          android:textStyle="bold" />
+      <TextView
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:text="12:40"
+          android:textColor="#FF2F5D45"
+          android:textSize="17sp"
+          android:textStyle="bold" />
+    </LinearLayout>
+    <FrameLayout
+        android:layout_width="34dp"
+        android:layout_height="34dp">
+      <ImageView
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:src="@drawable/timer_oval"
+          android:tint="#FF2F5D45" />
+      <TextView
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:gravity="center"
+          android:text="❚❚"
+          android:textColor="#FFFFFFFF"
+          android:textSize="12sp"
+          android:textStyle="bold" />
+    </FrameLayout>
+  </LinearLayout>
+</FrameLayout>

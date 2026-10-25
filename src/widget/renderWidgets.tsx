@@ -12,31 +12,19 @@ import { TasksWidget } from './TasksWidget';
 import { GoalsWidget } from './GoalsWidget';
 import { QuickAddWidget } from './QuickAddWidget';
 import { LockedWidget } from './LockedWidget';
-import { HabitButtonWidget } from './HabitButtonWidget';
 import { isWidgetFree } from '@/plus/plusLogic';
 import {
   COUNTER_WIDGET_NAME,
   GOALS_WIDGET_NAME,
-  HABIT_CHECK_WIDGET_NAME,
-  HABIT_COUNT_WIDGET_NAME,
   QUICKADD_WIDGET_NAME,
   TASKS_WIDGET_NAME,
   WIDGET_NAME,
-  readPicks,
-  type WidgetPicks,
   type WidgetSnapshot,
 } from './widgetSnapshot';
 
-// Every widget the app ships (keep in step with app.json's config plugin).
-export const ALL_WIDGETS = [
-  WIDGET_NAME,
-  COUNTER_WIDGET_NAME,
-  TASKS_WIDGET_NAME,
-  GOALS_WIDGET_NAME,
-  QUICKADD_WIDGET_NAME,
-  HABIT_CHECK_WIDGET_NAME,
-  HABIT_COUNT_WIDGET_NAME,
-];
+// Every JS widget the app ships (keep in step with app.json's config plugin;
+// the native ones are in nativeWidgets.ts).
+export const ALL_WIDGETS = [WIDGET_NAME, COUNTER_WIDGET_NAME, TASKS_WIDGET_NAME, GOALS_WIDGET_NAME, QUICKADD_WIDGET_NAME];
 
 // MIUI/HyperOS reports a widget size ~8% larger than the visible frame (Redmi
 // Note 8 Pro), and the bitmap is drawn unscaled from the top-left, so the right
@@ -52,37 +40,21 @@ function needsMiuiInset(): boolean {
   return MIUI_BRANDS.some((b) => maker.includes(b));
 }
 
-function widgetBody(
-  name: string,
-  snapshot: WidgetSnapshot | null,
-  widgetId: number | undefined,
-  picks: WidgetPicks
-): React.JSX.Element {
+function widgetBody(name: string, snapshot: WidgetSnapshot | null): React.JSX.Element {
   if (snapshot?.locked && !isWidgetFree(name)) return <LockedWidget snapshot={snapshot} name={name} />;
   if (name === COUNTER_WIDGET_NAME) return <CounterWidget snapshot={snapshot} />;
   if (name === TASKS_WIDGET_NAME) return <TasksWidget snapshot={snapshot} />;
   if (name === GOALS_WIDGET_NAME) return <GoalsWidget snapshot={snapshot} />;
   if (name === QUICKADD_WIDGET_NAME) return <QuickAddWidget snapshot={snapshot} />;
-  if (name === HABIT_CHECK_WIDGET_NAME || name === HABIT_COUNT_WIDGET_NAME) {
-    const habitId = widgetId === undefined ? null : (picks[String(widgetId)] ?? null);
-    return (
-      <HabitButtonWidget
-        snapshot={snapshot}
-        habitId={habitId}
-        kind={name === HABIT_COUNT_WIDGET_NAME ? 'numeric' : 'binary'}
-      />
-    );
-  }
   return <TodayWidget snapshot={snapshot} />;
 }
 
 export function widgetFor(
   name: string,
   snapshot: WidgetSnapshot | null,
-  size?: WidgetSize,
-  picks: WidgetPicks = {}
+  size?: WidgetSize
 ): React.JSX.Element {
-  const body = widgetBody(name, snapshot, size?.widgetId, picks);
+  const body = widgetBody(name, snapshot);
   if (!needsMiuiInset()) return body;
   return (
     <FlexWidget
@@ -104,12 +76,11 @@ export async function updateWidgets(
   snapshot: WidgetSnapshot | null,
   names: string[] = ALL_WIDGETS
 ): Promise<void> {
-  const picks = await readPicks();
   for (const widgetName of names) {
     try {
       await requestWidgetUpdate({
         widgetName,
-        renderWidget: (info) => widgetFor(widgetName, snapshot, info, picks),
+        renderWidget: (info) => widgetFor(widgetName, snapshot, info),
         widgetNotFound: () => {},
       });
     } catch {

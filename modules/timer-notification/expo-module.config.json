@@ -1,6 +1,9 @@
 {
   "platforms": ["android", "web"],
   "android": {
-    "modules": ["expo.modules.timernotification.TimerNotificationModule"]
+    "modules": [
+      "expo.modules.timernotification.TimerNotificationModule",
+      "expo.modules.timernotification.ErekWidgetsModule"
+    ]
   }
 }

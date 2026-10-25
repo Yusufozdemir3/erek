@@ -19,3 +19,17 @@ android {
     abortOnError false
   }
 }
+
+// The widgets draw habit icons from the same icon fonts the app uses
+// (WidgetIcons.kt). Copied from node_modules at build time, so the glyph codes
+// JS sends always match the font.
+def iconFontsDir = new File(projectDir, "../../../node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts")
+def widgetAssetsDir = layout.buildDirectory.dir("generated/erekWidgetAssets").get().asFile
+def copyWidgetFonts = tasks.register("copyErekWidgetFonts", Copy) {
+  from(iconFontsDir) {
+    include "Feather.ttf", "Ionicons.ttf"
+  }
+  into(new File(widgetAssetsDir, "erek_widget_fonts"))
+}
+android.sourceSets.main.assets.srcDir(widgetAssetsDir)
+tasks.named("preBuild").configure { dependsOn(copyWidgetFonts) }

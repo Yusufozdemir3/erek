@@ -30,7 +30,8 @@ class TimerForegroundService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     val state = TimerNotifier.loadState(this)
-    if (state == null || !state.optBoolean("running", false)) {
+    // Notifications off: the timer still runs (the widget shows it), without a card.
+    if (state == null || !state.optBoolean("running", false) || !state.optBoolean("notify", true)) {
       stopSelf()
       return START_NOT_STICKY
     }

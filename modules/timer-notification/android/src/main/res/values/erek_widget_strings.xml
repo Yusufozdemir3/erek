@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The native widgets' names in the widget picker, and the few texts shown
+     before the app has published anything (the rest comes from JS, translated). -->
+<resources>
+  <string name="erek_widget_check_label">Erek — Evet/Hayır düğmesi</string>
+  <string name="erek_widget_check_description">Seçtiğin alışkanlık için tek dokunuşla tamamla</string>
+  <string name="erek_widget_count_label">Erek — Sayaç düğmesi</string>
+  <string name="erek_widget_count_description">Seçtiğin sayılı alışkanlık her dokunuşta bir artar</string>
+  <string name="erek_widget_timer_label">Erek — Zamanlayıcı</string>
+  <string name="erek_widget_timer_description">Zamanlayıcını ana ekrandan başlat, duraklat, bitir</string>
+  <string name="erek_widget_open_app">Başlamak için Erek’i bir kez aç</string>
+  <string name="erek_widget_preview_habit">Su iç</string>
+  <string name="erek_widget_preview_timer">Kitap oku</string>
+</resources>

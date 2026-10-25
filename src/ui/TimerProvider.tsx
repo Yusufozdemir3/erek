@@ -83,6 +83,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const notifInfo = (a: ActiveTimer, title: string, elapsedSeconds: number) => ({
     kind: a.kind,
     id: a.targetId,
+    date: a.date,
     title,
     elapsedSeconds,
     targetSeconds: a.targetSeconds,
@@ -145,9 +146,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   // doesn't remount). Nobody watched the gap, so a stale session (day changed
   // or target reached) books only what was left to the target and closes; a
   // fresh one simply continues (timerLogic.isStaleSession/restoreCommitDelta).
-  // Notification-button presses made while the app was not looking are replayed
-  // FIRST, at the moments they happened, so a pause pressed with the screen off
-  // books exactly up to then (not up to now).
+  // Notification-button and timer-widget presses made while the app was not
+  // looking are replayed FIRST, at the moments they happened, so a pause pressed
+  // with the screen off books exactly up to then (not up to now).
   useEffect(() => {
     (async () => {
       try {
@@ -159,10 +160,14 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
             AsyncStorage.removeItem(ACTIVE_KEY);
           }
         }
-        applyNativeActions(consumeNativeTimerActions());
+        const replayed = consumeNativeTimerActions();
+        applyNativeActions(replayed);
         const a = activeRef.current;
         if (!a) return;
-        if (isStaleSession(a, todayDate())) {
+        // Started (or resumed) on the card / timer widget: it was counting
+        // there in plain sight the whole time, so only the day rule applies.
+        const watched = replayed.some((x) => x.op === 'resume' && x.kind === a.kind && x.id === a.targetId);
+        if (watched ? a.date !== todayDate() : isStaleSession(a, todayDate())) {
           commit(a, restoreCommitDelta(a));
           activeRef.current = null;
           setActive(null);
