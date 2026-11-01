@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zamanlayıcı widget, small (2×1): habit-colored border, title over the clock, ■ and ▶/❚❚. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/t_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+  <ImageView
+      android:id="@+id/t_border"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:scaleType="fitXY"
+      android:src="@drawable/erek_widget_card" />
+
+  <ImageView
+      android:id="@+id/t_fill"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:layout_margin="1.5dp"
+      android:scaleType="fitXY"
+      android:src="@drawable/erek_widget_card" />
+
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:gravity="center_vertical"
+      android:orientation="horizontal"
+      android:paddingStart="12dp"
+      android:paddingEnd="8dp"
+      android:paddingTop="6dp"
+      android:paddingBottom="6dp">
+
+    <LinearLayout
+        android:id="@+id/t_body"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+      <TextView
+          android:id="@+id/t_title"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:ellipsize="end"
+          android:maxLines="1"
+          android:textSize="13sp"
+          android:textStyle="bold" />
+
+      <Chronometer
+          android:id="@+id/t_chrono"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:maxLines="1"
+          android:textSize="17sp"
+          android:textStyle="bold" />
+
+      <TextView
+          android:id="@+id/t_clock"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:ellipsize="end"
+          android:maxLines="2"
+          android:textSize="17sp"
+          android:textStyle="bold"
+          android:visibility="gone" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/t_stop"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="6dp">
+      <ImageView
+          android:id="@+id/t_stop_bg"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:src="@drawable/timer_oval" />
+      <TextView
+          android:id="@+id/t_stop_text"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:gravity="center"
+          android:text="■"
+          android:textSize="12sp"
+          android:textStyle="bold" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/t_main"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="6dp">
+      <ImageView
+          android:id="@+id/t_main_bg"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:src="@drawable/timer_oval" />
+      <TextView
+          android:id="@+id/t_main_text"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:gravity="center"
+          android:textSize="12sp"
+          android:textStyle="bold" />
+    </FrameLayout>
+  </LinearLayout>
+</FrameLayout>

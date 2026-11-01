@@ -1,0 +1,431 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zamanlayıcı widget, wide (4×2): the running / paused timer on top (big clock,
+     progress to the target, ■ ❚❚), then up to three other timer habits with ▶.
+     Idle: a "Zamanlayıcılar · Bugün X dk" header over the list.
+     The three rows are identical but for their ids. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+  <ImageView
+      android:id="@+id/w_border"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:scaleType="fitXY"
+      android:src="@drawable/erek_widget_card" />
+
+  <ImageView
+      android:id="@+id/w_fill"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:layout_margin="1.5dp"
+      android:scaleType="fitXY"
+      android:src="@drawable/erek_widget_card" />
+
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:orientation="vertical"
+      android:paddingStart="12dp"
+      android:paddingEnd="10dp"
+      android:paddingTop="10dp"
+      android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:id="@+id/a_block"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+      <LinearLayout
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:gravity="center_vertical"
+          android:orientation="horizontal">
+        <LinearLayout
+            android:id="@+id/a_body"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+          <FrameLayout
+              android:layout_width="26dp"
+              android:layout_height="26dp">
+            <ImageView
+                android:id="@+id/a_fill"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:src="@drawable/timer_oval" />
+            <ImageView
+                android:id="@+id/a_ring"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:src="@drawable/timer_ring" />
+            <ImageView
+                android:id="@+id/a_glyph"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_gravity="center" />
+          </FrameLayout>
+          <TextView
+              android:id="@+id/a_title"
+              android:layout_width="0dp"
+              android:layout_height="wrap_content"
+              android:layout_weight="1"
+              android:layout_marginStart="8dp"
+              android:ellipsize="end"
+              android:maxLines="1"
+              android:textSize="14sp"
+              android:textStyle="bold" />
+        </LinearLayout>
+        <FrameLayout
+            android:id="@+id/a_stop"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="6dp">
+          <ImageView
+              android:id="@+id/a_stop_bg"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_oval" />
+          <TextView
+              android:id="@+id/a_stop_text"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:gravity="center"
+              android:text="■"
+              android:textSize="12sp"
+              android:textStyle="bold" />
+        </FrameLayout>
+        <FrameLayout
+            android:id="@+id/a_main"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="6dp">
+          <ImageView
+              android:id="@+id/a_main_bg"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_oval" />
+          <TextView
+              android:id="@+id/a_main_text"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:gravity="center"
+              android:textSize="12sp"
+              android:textStyle="bold" />
+        </FrameLayout>
+      </LinearLayout>
+      <LinearLayout
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:baselineAligned="true"
+          android:orientation="horizontal">
+        <Chronometer
+            android:id="@+id/a_chrono"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+        <TextView
+            android:id="@+id/a_clock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+        <TextView
+            android:id="@+id/a_target"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:maxLines="1"
+            android:textSize="14sp" />
+      </LinearLayout>
+      <FrameLayout
+          android:id="@+id/a_bar"
+          android:layout_width="match_parent"
+          android:layout_height="6dp"
+          android:layout_marginTop="2dp"
+          android:layout_marginBottom="4dp">
+        <ImageView
+            android:id="@+id/a_track"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY"
+            android:src="@drawable/erek_widget_bar" />
+        <ImageView
+            android:id="@+id/a_progress"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY"
+            android:src="@drawable/erek_widget_bar_fill" />
+      </FrameLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/h_block"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+      <TextView
+          android:id="@+id/h_title"
+          android:layout_width="0dp"
+          android:layout_height="wrap_content"
+          android:layout_weight="1"
+          android:ellipsize="end"
+          android:maxLines="1"
+          android:textSize="15sp"
+          android:textStyle="bold" />
+      <TextView
+          android:id="@+id/h_total"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginStart="8dp"
+          android:maxLines="1"
+          android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/r0"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+      <LinearLayout
+          android:id="@+id/r0_body"
+          android:layout_width="0dp"
+          android:layout_height="match_parent"
+          android:layout_weight="1"
+          android:gravity="center_vertical"
+          android:orientation="horizontal">
+        <FrameLayout
+            android:layout_width="22dp"
+            android:layout_height="22dp">
+          <ImageView
+              android:id="@+id/r0_fill"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_oval" />
+          <ImageView
+              android:id="@+id/r0_ring"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_ring" />
+          <ImageView
+              android:id="@+id/r0_glyph"
+              android:layout_width="12dp"
+              android:layout_height="12dp"
+              android:layout_gravity="center" />
+        </FrameLayout>
+        <TextView
+            android:id="@+id/r0_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/r0_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:maxLines="1"
+            android:textSize="12sp" />
+      </LinearLayout>
+      <FrameLayout
+          android:id="@+id/r0_play"
+          android:layout_width="28dp"
+          android:layout_height="28dp"
+          android:layout_marginStart="8dp">
+        <ImageView
+            android:id="@+id/r0_play_bg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/timer_oval" />
+        <TextView
+            android:id="@+id/r0_play_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="▶"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+      </FrameLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/r1"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+      <LinearLayout
+          android:id="@+id/r1_body"
+          android:layout_width="0dp"
+          android:layout_height="match_parent"
+          android:layout_weight="1"
+          android:gravity="center_vertical"
+          android:orientation="horizontal">
+        <FrameLayout
+            android:layout_width="22dp"
+            android:layout_height="22dp">
+          <ImageView
+              android:id="@+id/r1_fill"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_oval" />
+          <ImageView
+              android:id="@+id/r1_ring"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_ring" />
+          <ImageView
+              android:id="@+id/r1_glyph"
+              android:layout_width="12dp"
+              android:layout_height="12dp"
+              android:layout_gravity="center" />
+        </FrameLayout>
+        <TextView
+            android:id="@+id/r1_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/r1_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:maxLines="1"
+            android:textSize="12sp" />
+      </LinearLayout>
+      <FrameLayout
+          android:id="@+id/r1_play"
+          android:layout_width="28dp"
+          android:layout_height="28dp"
+          android:layout_marginStart="8dp">
+        <ImageView
+            android:id="@+id/r1_play_bg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/timer_oval" />
+        <TextView
+            android:id="@+id/r1_play_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="▶"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+      </FrameLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/r2"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+      <LinearLayout
+          android:id="@+id/r2_body"
+          android:layout_width="0dp"
+          android:layout_height="match_parent"
+          android:layout_weight="1"
+          android:gravity="center_vertical"
+          android:orientation="horizontal">
+        <FrameLayout
+            android:layout_width="22dp"
+            android:layout_height="22dp">
+          <ImageView
+              android:id="@+id/r2_fill"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_oval" />
+          <ImageView
+              android:id="@+id/r2_ring"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:src="@drawable/timer_ring" />
+          <ImageView
+              android:id="@+id/r2_glyph"
+              android:layout_width="12dp"
+              android:layout_height="12dp"
+              android:layout_gravity="center" />
+        </FrameLayout>
+        <TextView
+            android:id="@+id/r2_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/r2_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:maxLines="1"
+            android:textSize="12sp" />
+      </LinearLayout>
+      <FrameLayout
+          android:id="@+id/r2_play"
+          android:layout_width="28dp"
+          android:layout_height="28dp"
+          android:layout_marginStart="8dp">
+        <ImageView
+            android:id="@+id/r2_play_bg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/timer_oval" />
+        <TextView
+            android:id="@+id/r2_play_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="▶"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+      </FrameLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/w_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:maxLines="1"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/w_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="3"
+        android:textSize="13sp"
+        android:visibility="gone" />
+  </LinearLayout>
+</FrameLayout>

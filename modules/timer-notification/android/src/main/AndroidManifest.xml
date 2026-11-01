@@ -15,5 +15,54 @@
           android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="Kullanıcının başlattığı alışkanlık/hedef zamanlayıcısını bildirim kartında canlı tutar" />
     </service>
+    <!-- Ana ekran widget'ları (Evet/Hayır, Sayaç düğmesi, Zamanlayıcı): yerel
+         RemoteViews. İlk ikisinin sınıf adı eski JS sürümleriyle aynı — ana
+         ekrandaki widget güncellemede kendiliğinden yerele geçer. -->
+    <receiver
+        android:name="com.erek.widget.ErekHabitCheck"
+        android:exported="false"
+        android:label="@string/erek_widget_check_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_habit_check" />
+    </receiver>
+    <receiver
+        android:name="com.erek.widget.ErekHabitCount"
+        android:exported="false"
+        android:label="@string/erek_widget_count_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_habit_count" />
+    </receiver>
+    <receiver
+        android:name="com.erek.widget.ErekTimer"
+        android:exported="false"
+        android:label="@string/erek_widget_timer_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_timer" />
+    </receiver>
+    <receiver
+        android:name="expo.modules.timernotification.WidgetReceiver"
+        android:exported="false" />
+    <activity
+        android:name="expo.modules.timernotification.HabitPickActivity"
+        android:excludeFromRecents="true"
+        android:exported="true"
+        android:taskAffinity=""
+        android:theme="@android:style/Theme.Material.NoActionBar">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
   </application>
 </manifest>

@@ -1,0 +1,5 @@
+<!-- The progress bar's fill: the image level (0–10000) is the share shown. -->
+<clip xmlns:android="http://schemas.android.com/apk/res/android"
+    android:clipOrientation="horizontal"
+    android:gravity="start"
+    android:drawable="@drawable/erek_widget_bar" />

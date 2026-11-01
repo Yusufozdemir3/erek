@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One widget, two faces: 2×1 shows one timer, 4×2 and up adds the list (WidgetRender). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:resizeMode="horizontal|vertical"
+    android:description="@string/erek_widget_timer_description"
+    android:initialLayout="@layout/erek_widget_timer_small"
+    android:previewLayout="@layout/erek_widget_preview_timer"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

@@ -1039,6 +1039,12 @@ export const en: Dict = {
   'widget.pickEmpty': 'No suitable habit for this widget. Add one in Erek first.',
   'widget.pickLabel': 'Pick a habit — tap',
   'widget.notToday': 'Not planned today',
+  'widget.timersTitle': 'Timers',
+  'widget.timersToday': 'Today {time}',
+  'widget.timersMinutes': '{n} min',
+  'widget.timersMore': '+{n} more',
+  'widget.timersEmpty': 'No timed habit today',
+  'widget.timersStart': 'Start',
   // Task icons and tags
   'task.icon': 'Icon',
   'task.iconNone': 'None',

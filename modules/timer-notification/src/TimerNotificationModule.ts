@@ -6,7 +6,12 @@ export interface TimerNotificationOptions {
   kind: string;
   id: string;
   running: boolean;
+  // false: notifications are off — the state is kept (the timer widget shows
+  // it) but no card is posted.
+  notify: boolean;
+  date: string;          // "YYYY-MM-DD" the session belongs to
   elapsedMs: number;     // the chronometer / frozen clock starts from here
+  targetSeconds: number; // 0 without a target (the widget's progress bar)
   targetText: string;    // "30:00", or "" without a target
   runningText: string;   // plain text while running (accessibility, hidden content)
   pausedTextTemplate: string; // "Paused · {time}" — the native side fills the time

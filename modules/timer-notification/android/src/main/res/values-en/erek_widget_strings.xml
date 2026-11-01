@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="erek_widget_check_label">Erek — Yes/No button</string>
+  <string name="erek_widget_check_description">Complete the habit you pick with one tap</string>
+  <string name="erek_widget_count_label">Erek — Counter button</string>
+  <string name="erek_widget_count_description">The counted habit you pick goes up by one on every tap</string>
+  <string name="erek_widget_timer_label">Erek — Timer</string>
+  <string name="erek_widget_timer_description">Start, pause and finish your timer from the home screen</string>
+  <string name="erek_widget_open_app">Open Erek once to get started</string>
+  <string name="erek_widget_preview_habit">Drink water</string>
+  <string name="erek_widget_preview_timer">Read a book</string>
+</resources>

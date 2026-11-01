@@ -1062,6 +1062,12 @@ export const tr: Dict = {
   'widget.pickEmpty': 'Bu widget için uygun alışkanlık yok. Önce Erek’te ekle.',
   'widget.pickLabel': 'Alışkanlık seç — dokun',
   'widget.notToday': 'Bugün planlı değil',
+  'widget.timersTitle': 'Zamanlayıcılar',
+  'widget.timersToday': 'Bugün {time}',
+  'widget.timersMinutes': '{n} dk',
+  'widget.timersMore': '+{n} daha',
+  'widget.timersEmpty': 'Bugün zamanlayıcılı alışkanlık yok',
+  'widget.timersStart': 'Başlat',
   // Task icons and tags
   'task.icon': 'İkon',
   'task.iconNone': 'Yok',

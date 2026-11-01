@@ -19,6 +19,7 @@ import { useI18n } from '@/i18n/I18nProvider';
 import { usePlusState } from '@/plus/plusStore';
 import { drainWidgetQueue, refreshWidget } from '@/widget/widgetData';
 import { onWidgetAction } from '@/widget/widgetQueue';
+import { onNativeWidgetAction } from '@/widget/nativeWidgets';
 
 interface AppData {
   user: User;
@@ -171,7 +172,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [user, dataVersion, colors.bg, colors.primary, plusState.plus]);
 
   // Widget taps are queued by the headless handler, which can't use SQLite
-  // (widget/widgetQueue.ts). They're written once the user is ready, on every
+  // (widget/widgetQueue.ts), and by the native button widgets
+  // (widget/nativeWidgets.ts). They're written once the user is ready, on every
   // foreground, and right away while the app is alive.
   useEffect(() => {
     if (!user) return;
@@ -184,11 +186,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     };
     drain();
     const unsubscribe = onWidgetAction(drain);
+    const offNative = onNativeWidgetAction(drain);
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') drain();
     });
     return () => {
       unsubscribe();
+      offNative();
       sub.remove();
     };
   }, [user, notifyDataChanged]);

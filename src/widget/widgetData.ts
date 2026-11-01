@@ -3,62 +3,36 @@
 // native widgets. Needs only a userId — language and theme are read from
 // storage. The widget library is required lazily: Expo Go has no native module.
 
-import { Appearance, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { goalMilestoneRepo, goalRepo, habitRepo, milestoneViews, taskRepo } from '@/db';
 import { refreshTaskReminders, scheduleGeneralReminders } from '@/lib/notifications';
 import { isScheduledOn, isWithinHabitDates, todayDate } from '@/lib/helpers';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
 import { areFeaturesUnlocked } from '@/plus/plusStore';
-import {
-  ACCENT_THEMES,
-  DEFAULT_ACCENT,
-  DEFAULT_HABIT_COLOR,
-  PRIORITY_COLOR,
-  blackColors,
-  darkColors,
-  lightColors,
-  fullDateLabel,
-  percentLabel,
-  type AccentKey,
-} from '@/ui/theme';
+import { DEFAULT_HABIT_COLOR, PRIORITY_COLOR, fullDateLabel, percentLabel } from '@/ui/theme';
 import { writeSnapshot, type WidgetColors, type WidgetSnapshot } from './widgetSnapshot';
 import { pickGoals } from './widgetGoals';
-import { applyAll, readPending, removePending, serialized } from './widgetQueue';
+import { appendPending, applyAll, readPending, removePending, serialized, type WidgetAction } from './widgetQueue';
+import { currentScheme, readWidgetTheme, themeColors } from './widgetTheme';
+import { consumeNativeWidgetActions, publishNativeBoard } from './nativeWidgets';
 
 // More than this wouldn't fit any widget size; the snapshot stays small.
 const MAX_WIDGET_TASKS = 30;
 
-// ThemeProvider's keys, read outside React.
-const MODE_KEY = 'theme:mode';
-const ACCENT_KEY = 'theme:accent';
-const DARK_STYLE_KEY = 'theme:darkStyle';
-
 async function resolveColors(): Promise<WidgetColors> {
-  const [mode, accentRaw, darkStyle] = await Promise.all([
-    AsyncStorage.getItem(MODE_KEY),
-    AsyncStorage.getItem(ACCENT_KEY),
-    AsyncStorage.getItem(DARK_STYLE_KEY),
-  ]);
-  const system = Appearance.getColorScheme();
-  const scheme: 'light' | 'dark' =
-    mode === 'dark' || mode === 'light' ? mode : system === 'dark' ? 'dark' : 'light';
-  const base =
-    scheme === 'dark' ? (darkStyle === 'black' ? blackColors : darkColors) : lightColors;
-  const accent: AccentKey =
-    accentRaw && accentRaw in ACCENT_THEMES ? (accentRaw as AccentKey) : DEFAULT_ACCENT;
-  const primary = ACCENT_THEMES[accent][scheme].primary;
+  const settings = await readWidgetTheme();
+  const c = themeColors(settings, currentScheme(settings));
   return {
-    bg: base.bg,
-    card: base.card,
-    text: base.text,
-    muted: base.muted,
-    faint: base.faint,
-    primary,
-    done: base.done,
-    border: base.border,
-    onAccent: base.onAccent,
+    bg: c.bg,
+    card: c.card,
+    text: c.text,
+    muted: c.muted,
+    faint: c.faint,
+    primary: c.primary,
+    done: c.done,
+    border: c.border,
+    onAccent: c.onAccent,
   };
 }
 
@@ -124,20 +98,6 @@ export async function buildTodaySnapshot(userId: string): Promise<WidgetSnapshot
     emptyLabel: translate(lang, 'widget.empty'),
     todayEmptyLabel: translate(lang, 'widget.todayEmpty'),
     quickAddLabel: translate(lang, 'widget.quickAdd'),
-    pickable: habitRepo
-      .listActive(userId, today)
-      .filter((h) => h.kind === 'binary' || h.kind === 'numeric')
-      .map((h) => ({
-        id: h.id,
-        title: h.title,
-        color: h.color ?? DEFAULT_HABIT_COLOR,
-        kind: h.kind as 'binary' | 'numeric',
-      })),
-    pickTitle: translate(lang, 'widget.pickTitle'),
-    pickEmptyLabel: translate(lang, 'widget.pickEmpty'),
-    pickLabel: translate(lang, 'widget.pickLabel'),
-    notTodayLabel: translate(lang, 'widget.notToday'),
-    cancelLabel: translate(lang, 'common.cancel'),
     summaryTemplate: translate(lang, 'widget.summary'),
     locked: !areFeaturesUnlocked(),
     lockedLabel: translate(lang, 'widget.locked'),
@@ -164,9 +124,11 @@ export async function refreshWidget(userId: string): Promise<void> {
   // general reminder's "anything left today?" answer can change.
   scheduleGeneralReminders(userId).catch(() => {});
   let snap: WidgetSnapshot;
+  let pending: WidgetAction[] = [];
   try {
     snap = await serialized(async () => {
-      const built = applyAll(await buildTodaySnapshot(userId), await readPending());
+      pending = await readPending();
+      const built = applyAll(await buildTodaySnapshot(userId), pending);
       await writeSnapshot(built).catch(() => {});
       return built;
     });
@@ -175,6 +137,8 @@ export async function refreshWidget(userId: string): Promise<void> {
   }
 
   if (Platform.OS !== 'android') return;
+  // The native widgets first: they are the ones that look instant.
+  await publishNativeBoard(userId, pending);
   try {
     const { updateWidgets } = require('./renderWidgets');
     await updateWidgets(snap);
@@ -184,10 +148,12 @@ export async function refreshWidget(userId: string): Promise<void> {
 }
 
 // Writes the queued widget taps into SQLite (widgetQueue.ts) and returns how
-// many changed something. Taps for deleted or changed habits are dropped.
+// many changed something. Taps for deleted or changed habits are dropped. The
+// native button widgets' taps join the JS queue first (nativeWidgets.ts).
 // Never await it inside serialized() — it takes the same chain.
 export async function drainWidgetQueue(): Promise<number> {
   return serialized(async () => {
+    for (const a of consumeNativeWidgetActions()) await appendPending(a);
     const pending = await readPending();
     let applied = 0;
     for (const a of pending) {

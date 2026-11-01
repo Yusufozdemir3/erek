@@ -20,6 +20,14 @@ jest.mock('react-native-android-widget', () => ({
   requestWidgetUpdate: (o: unknown) => mockRequestUpdate(o),
 }));
 
+// The native button widgets (nativeWidgets.ts): their queued taps, and the mirror of ours.
+const mockNativeTaps = jest.fn((): unknown[] => []);
+const mockPatch = jest.fn();
+jest.mock('../nativeWidgets', () => ({
+  consumeNativeWidgetActions: () => mockNativeTaps(),
+  patchNativeHabit: (...a: unknown[]) => mockPatch(...a),
+}));
+
 const today = localYmd();
 
 function snap(over: Partial<WidgetSnapshot> = {}): WidgetSnapshot {
@@ -220,6 +228,32 @@ describe('widgetTaskHandler', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
     mockRequestUpdate.mockClear();
+    mockNativeTaps.mockReset();
+    mockNativeTaps.mockReturnValue([]);
+    mockPatch.mockClear();
+  });
+
+  it('yerel düğmenin dokunuşu: yeniden çizimden önce kuyruğa ve görüntüye alınır', async () => {
+    await writeSnapshot(snap());
+    mockNativeTaps.mockReturnValueOnce([{ id: 'n1', kind: 'inc', habitId: 'su', date: today, delta: 1 }]);
+    const render = jest.fn();
+    await widgetTaskHandler({ widgetInfo: info('ErekToday'), widgetAction: 'WIDGET_UPDATE', renderWidget: render });
+
+    expect(await readPending()).toEqual([expect.objectContaining({ id: 'n1', kind: 'inc', habitId: 'su' })]);
+    expect((await readSnapshot())?.habits[1].amount).toBe(7);
+    expect((render.mock.calls[0][0] as El).props.snapshot.habits[1].amount).toBe(7);
+  });
+
+  it('JS widget’taki dokunuş yerel düğmelere de yansır', async () => {
+    await writeSnapshot(snap());
+    await widgetTaskHandler({
+      widgetInfo: info('ErekToday'),
+      widgetAction: 'WIDGET_CLICK',
+      clickAction: INC_ACTION,
+      clickActionData: { habitId: 'su' },
+      renderWidget: jest.fn(),
+    });
+    expect(mockPatch).toHaveBeenCalledWith('su', today, false, 7);
   });
 
   it('dokunuş: kuyruğa girer, görüntü anında güncellenir, diğer widget da tazelenir, uygulamaya haber verilir', async () => {
@@ -309,7 +343,7 @@ describe('widgetTaskHandler', () => {
     expect((await readSnapshot())?.tasks?.map((t) => [t.id, t.completed])).toEqual([['market', true], ['mail', true]]);
     expect((render.mock.calls[0][0] as El).type).toBe(TasksWidget);
     const refreshed = mockRequestUpdate.mock.calls.map((c) => (c[0] as { widgetName: string }).widgetName).sort();
-    expect(refreshed).toEqual(['ErekCounter', 'ErekGoals', 'ErekHabitCheck', 'ErekHabitCount', 'ErekQuickAdd', 'ErekToday']);
+    expect(refreshed).toEqual(['ErekCounter', 'ErekGoals', 'ErekQuickAdd', 'ErekToday']);
   });
 
   it('ekleme/güncelleme olayında doğru widget çizilir', async () => {

@@ -3,8 +3,10 @@
 // title, "clock / target", round pause button). The system chronometer counts
 // the time (modules/timer-notification), so it keeps ticking with the app
 // closed. Pausing leaves the same card frozen, with a play button (it times
-// out on its own). Needs the master notification switch and permission;
-// everything is best-effort — a failure here must never affect the timer itself.
+// out on its own). The card needs the master notification switch and
+// permission; the native state is kept either way, because the timer widget
+// shows the same timer (and starts one natively, with its own card).
+// Everything is best-effort — a failure here must never affect the timer itself.
 
 import { Platform } from 'react-native';
 import { getStoredLang } from '@/i18n/I18nProvider';
@@ -29,6 +31,7 @@ export interface TimerNotifStyle {
 export interface TimerNotifInfo {
   kind: TimerKind;
   id: string;
+  date: string; // the session's day (ActiveTimer.date)
   title: string;
   elapsedSeconds: number;
   targetSeconds: number;
@@ -51,18 +54,17 @@ function loadNative(): NativeApi | null {
   }
 }
 
-async function usable(): Promise<NativeApi | null> {
-  const native = loadNative();
-  if (!native) return null;
+// The card may be posted: the master switch is on and permission is granted.
+async function mayNotify(): Promise<boolean> {
   const prefs = await getNotificationPrefs();
-  if (!prefs.enabled) return null;
-  return (await ensurePermission()) ? native : null;
+  return prefs.enabled && (await ensurePermission());
 }
 
 async function show(running: boolean, info: TimerNotifInfo, style: TimerNotifStyle): Promise<void> {
   try {
-    const native = await usable();
+    const native = loadNative();
     if (!native) return;
+    const notify = await mayNotify();
     const lang = await getStoredLang();
     const elapsed = Math.max(0, info.elapsedSeconds);
     const targetText = info.targetSeconds > 0 ? fmtClock(info.targetSeconds) : '';
@@ -74,7 +76,10 @@ async function show(running: boolean, info: TimerNotifInfo, style: TimerNotifSty
       kind: info.kind,
       id: info.id,
       running,
+      notify,
+      date: info.date,
       elapsedMs: elapsed * 1000,
+      targetSeconds: Math.max(0, info.targetSeconds),
       targetText,
       runningText: translate(lang, 'timer.notifRunning'),
       pausedTextTemplate: translate(lang, 'timer.notifPaused', { time: '{time}' }),

@@ -40,6 +40,13 @@ jest.mock('@/lib/notifications', () => ({
 
 jest.mock('@/lib/haptics', () => ({ notifySuccess: jest.fn() }));
 
+// Presses queued on the timer card / widget while the app was closed.
+const mockNativeActions = jest.fn((): unknown[] => []);
+jest.mock('@/lib/timerNotification', () => ({
+  ...jest.requireActual('@/lib/timerNotification'),
+  consumeNativeTimerActions: () => mockNativeActions(),
+}));
+
 // A tiny probe that leaks TimerProvider's context out — all the test needs is
 // to see that `active()` is null after the restore.
 function Probe({ onReady }: { onReady: (api: ReturnType<typeof useTimer>) => void }) {
@@ -57,6 +64,8 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   userId = userRepo.getOrCreateLocal().id;
   mockNotifyDataChanged.mockClear();
+  mockNativeActions.mockReset();
+  mockNativeActions.mockReturnValue([]);
 });
 
 describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
@@ -161,6 +170,24 @@ describe('TimerProvider — süreç ölümünden sonra geri yükleme', () => {
 
     await waitFor(() => expect(habitRepo.getAmountOn(habit.id, today)).toBe(10 * 60)); // the target amount, not 30 min
     expect(api!.active()).toBeNull();
+  });
+
+  it('widget’tan başlatılıp hedefi geçen seans kesilmez: orada sayıyordu, devam eder', async () => {
+    const habit = habitRepo.create({ user_id: userId, title: 'Kitap oku', kind: 'timer', target_amount: 10 * 60 });
+    const startedAt = Date.now() - 30 * 60_000;
+    mockNativeActions.mockReturnValueOnce([{ op: 'resume', at: startedAt, kind: 'habit', id: habit.id }]);
+
+    let api: ReturnType<typeof useTimer> | null = null;
+    await renderUI(
+      <TimerProvider>
+        <Probe onReady={(t) => (api = t)} />
+      </TimerProvider>
+    );
+
+    await waitFor(() => expect(api!.active()).toEqual({ kind: 'habit', id: habit.id }));
+    expect(api!.liveSeconds('habit', habit.id)).toBeGreaterThanOrEqual(30 * 60 - 1);
+    // Nothing booked yet: the full time is booked when it is paused.
+    expect(habitRepo.getAmountOn(habit.id, todayDate())).toBe(0);
   });
 
   it('kalıcı durum yoksa hiçbir şey yapmaz (temiz açılış)', async () => {
