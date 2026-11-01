@@ -3,16 +3,16 @@
 // onChanged on each change so the list's "1/3" badge stays current.
 
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, Text } from 'react-native';
 import { reminderRepo, subtaskRepo, taskRepo } from '@/db';
 import type { Subtask, Task } from '@/db';
-import { notifySuccess, tapLight } from '@/lib/haptics';
-import { cancelTaskReminders, refreshTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
-import { TITLE_MAX_LEN } from '@/ui/formLimits';
+import { cancelTaskReminders, scheduleTaskReminders } from '@/lib/notifications';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
 import type { Colors } from '@/ui/theme';
+import { SubtaskEditor } from '@/ui/SubtaskEditor';
+import { syncTaskCompletionFromSubtasks } from '@/ui/subtaskActions';
 import { TaskForm, type TaskFormValues } from '@/ui/TaskForm';
 import { useFriendNames, useFriends } from '@/ui/sharedTaskUi';
 
@@ -27,50 +27,25 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
   const { t: tr } = useI18n();
   const styles = makeStyles(colors);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
-  const [newSubtask, setNewSubtask] = useState('');
   const friends = useFriends(true);
   const tickerNames = useFriendNames(subtasks.map((s) => s.completed_by));
 
   useEffect(() => {
     if (task) {
       setSubtasks(subtaskRepo.listByTask(task.id));
-      setNewSubtask('');
     }
   }, [task]);
 
   if (!task) return null;
 
-  // All subtasks done completes the task; reopening or adding one reopens it.
-  const syncParentCompletion = () => {
-    const { done, total } = subtaskRepo.countForTask(task.id);
-    if (total === 0) return;
-    const current = taskRepo.getById(task.id);
-    if (!current) return;
-    const shouldBeCompleted = done === total;
-    const isCompleted = current.completed_at !== null;
-    if (shouldBeCompleted && !isCompleted) {
-      taskRepo.setCompleted(task.id, true);
-      notifySuccess();
-      // A recurring task may have moved instead.
-      refreshTaskReminders(task.id);
-    } else if (!shouldBeCompleted && isCompleted) {
-      taskRepo.setCompleted(task.id, false);
-      tapLight();
-      refreshTaskReminders(task.id);
-    }
-  };
-
   const refreshSubtasks = () => {
-    syncParentCompletion();
+    syncTaskCompletionFromSubtasks(task.id);
     setSubtasks(subtaskRepo.listByTask(task.id));
     onChanged();
   };
 
-  const addSubtask = () => {
-    const t = newSubtask.trim();
-    if (!t) return;
-    subtaskRepo.create(task.id, t);
-    setNewSubtask('');
+  const addSubtasks = (titles: string[]) => {
+    subtaskRepo.createMany(task.id, titles);
     refreshSubtasks();
   };
 
@@ -81,6 +56,16 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 
   const removeSubtask = (s: Subtask) => {
     subtaskRepo.softDelete(s.id);
+    refreshSubtasks();
+  };
+
+  const renameSubtask = (s: Subtask, title: string) => {
+    subtaskRepo.rename(s.id, title);
+    refreshSubtasks();
+  };
+
+  const reorderSubtasks = (orderedIds: string[]) => {
+    subtaskRepo.reorder(task.id, orderedIds);
     refreshSubtasks();
   };
 
@@ -138,61 +123,15 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
         onDelete={handleDelete}
       >
             {/* Saved immediately */}
-            <Text style={styles.label}>{tr('task.subtasks')}</Text>
-            {subtasks.map((s) => {
-              const done = s.completed === 1;
-              const tickedBy = done && s.completed_by ? tickerNames.get(s.completed_by) : undefined;
-              return (
-                <View key={s.id} style={styles.subtaskRow}>
-                  <Pressable
-                    onPress={() => toggleSubtask(s)}
-                    hitSlop={8}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: done }}
-                    accessibilityLabel={s.title}
-                  >
-                    <View style={[styles.subtaskBox, done && styles.subtaskBoxDone]}>
-                      {done && <Text style={styles.subtaskCheck}>✓</Text>}
-                    </View>
-                  </Pressable>
-                  <Text style={[styles.subtaskTitle, done && styles.subtaskTitleDone]}>
-                    {s.title}
-                    {tickedBy ? (
-                      <Text style={{ color: colors.faint, fontSize: 11 }}> · {tr('sharedTask.tickedBy', { name: tickedBy })}</Text>
-                    ) : null}
-                  </Text>
-                  <Pressable
-                    onPress={() => removeSubtask(s)}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel={tr('task.removeSubtaskA11y', { title: s.title })}
-                  >
-                    <Text style={styles.subtaskDelete}>×</Text>
-                  </Pressable>
-                </View>
-              );
-            })}
-            <View style={styles.subtaskAddRow}>
-              <TextInput
-                style={styles.subtaskInput}
-                value={newSubtask}
-                onChangeText={setNewSubtask}
-                placeholder={tr('task.addSubtask')}
-                placeholderTextColor={colors.faint}
-                onSubmitEditing={addSubtask}
-                blurOnSubmit={false}
-                returnKeyType="done"
-                maxLength={TITLE_MAX_LEN}
-              />
-              <Pressable
-                style={styles.subtaskAddBtn}
-                onPress={addSubtask}
-                accessibilityRole="button"
-                accessibilityLabel={tr('task.addSubtask')}
-              >
-                <Text style={styles.subtaskAddText}>＋</Text>
-              </Pressable>
-            </View>
+            <SubtaskEditor
+              items={subtasks}
+              tickerNames={tickerNames}
+              onToggle={toggleSubtask}
+              onRemove={removeSubtask}
+              onRename={renameSubtask}
+              onReorder={reorderSubtasks}
+              onAdd={addSubtasks}
+            />
           </TaskForm>
     </ModalCard>
   );
@@ -201,41 +140,4 @@ export function TaskEditModal({ task, onClose, onChanged }: Props) {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     heading: { fontSize: 18, fontWeight: '700', color: c.text, marginBottom: 16, textAlign: 'center' },
-    label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },
-    subtaskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 10 },
-    subtaskBox: {
-      width: 20,
-      height: 20,
-      borderRadius: 6,
-      borderWidth: 2,
-      borderColor: c.line,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    subtaskBoxDone: { backgroundColor: c.done, borderColor: c.done },
-    subtaskCheck: { color: c.onAccent, fontSize: 12, fontWeight: '800' },
-    subtaskTitle: { flex: 1, fontSize: 14, color: c.text },
-    subtaskTitleDone: { color: c.faint, textDecorationLine: 'line-through' },
-    subtaskDelete: { fontSize: 20, color: c.faint, paddingHorizontal: 4 },
-    subtaskAddRow: { flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' },
-    subtaskInput: {
-      flex: 1,
-      backgroundColor: c.inputBg,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 15,
-      color: c.text,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    subtaskAddBtn: {
-      width: 44,
-      alignSelf: 'stretch',
-      borderRadius: 12,
-      backgroundColor: c.primarySoft,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    subtaskAddText: { fontSize: 20, color: c.primary, fontWeight: '600' },
   });

@@ -13,6 +13,8 @@ import {
   useEffect,
   useReducer,
   useRef,
+  useState,
+  type ComponentRef,
   type ReactNode,
 } from 'react';
 import {
@@ -78,6 +80,19 @@ class LayerStore {
 }
 
 const LayerContext = createContext<LayerStore | null>(null);
+type ScrollInstance = ComponentRef<typeof ScrollView>;
+type Field = ComponentRef<typeof View>;
+const RevealContext = createContext<((field: Field | null) => void) | null>(null);
+
+// For a field low in a long card: scrolls it into view once the keyboard is up.
+// The keyboard covers the card (the window isn't resized), so while it is open
+// the card's content gets the keyboard's height as bottom padding — otherwise a
+// field at the end of the form has nothing left to scroll over.
+export function useRevealInModal(): (field: Field | null) => void {
+  return useContext(RevealContext) ?? noopReveal;
+}
+const noopReveal = () => {};
+
 let nextLayerId = 1;
 
 function LayerHost({ store }: { store: LayerStore }) {
@@ -109,16 +124,46 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
   if (!parent && !storeRef.current) storeRef.current = new LayerStore();
   const idRef = useRef(0);
   if (idRef.current === 0) idRef.current = nextLayerId++;
+  const scrollRef = useRef<ScrollInstance>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardHeightRef = useRef(0);
+  const pendingField = useRef<Field | null>(null);
+
+  const scrollToField = () => {
+    const field = pendingField.current;
+    const scroll = scrollRef.current;
+    const inner = scroll?.getInnerViewRef?.();
+    pendingField.current = null;
+    if (!field || !scroll || !inner) return;
+    field.measureLayout?.(
+      inner as never,
+      (_x: number, y: number) => scroll.scrollTo({ y: Math.max(0, y - 96), animated: true }),
+      () => scroll.scrollToEnd({ animated: true })
+    );
+  };
+  const reveal = (field: Field | null) => {
+    pendingField.current = field;
+    // Keyboard already up: go now. Otherwise keyboardDidShow's padding does it.
+    if (keyboardHeightRef.current > 0) setTimeout(scrollToField, 50);
+  };
+  // The padding is laid out before this runs.
+  useEffect(() => {
+    if (keyboardHeight > 0 && pendingField.current) scrollToField();
+  });
 
   // Android back with the keyboard open only closes the keyboard, so a reflexive
   // back press doesn't throw away what was typed.
   const keyboardVisible = useRef(false);
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
       keyboardVisible.current = true;
+      keyboardHeightRef.current = e.endCoordinates.height;
+      setKeyboardHeight(e.endCoordinates.height);
     });
     const hideSub = Keyboard.addListener('keyboardDidHide', () => {
       keyboardVisible.current = false;
+      keyboardHeightRef.current = 0;
+      setKeyboardHeight(0);
     });
     return () => {
       showSub.remove();
@@ -147,8 +192,13 @@ export function ModalCard({ visible, onClose, children, scroll = true }: Props) 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
         {scroll ? (
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {children}
+          <ScrollView
+            ref={scrollRef}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: keyboardHeight }}
+          >
+            <RevealContext.Provider value={reveal}>{children}</RevealContext.Provider>
           </ScrollView>
         ) : (
           children

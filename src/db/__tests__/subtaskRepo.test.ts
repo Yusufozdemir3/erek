@@ -3,6 +3,7 @@
 import { subtaskRepo } from '../repositories/subtaskRepo';
 import { taskRepo } from '../repositories/taskRepo';
 import { userRepo } from '../repositories/userRepo';
+import { getDb } from '../database';
 import { resetTestDb } from '../../test/dbTestUtils';
 
 let taskId: string;
@@ -109,5 +110,35 @@ describe('countsForTasks (çoklu)', () => {
     subtaskRepo.create(taskId, 'B');
     subtaskRepo.softDelete(a.id);
     expect(subtaskRepo.countsForTasks([taskId])).toEqual({ [taskId]: { done: 0, total: 1 } });
+  });
+});
+
+describe('createMany / rename / reorder', () => {
+  it('createMany satırları verilen sırayla ekler', () => {
+    subtaskRepo.create(taskId, 'Önceki');
+    subtaskRepo.createMany(taskId, ['Süt', 'Ekmek']);
+    expect(subtaskRepo.listByTask(taskId).map((s) => s.title)).toEqual(['Önceki', 'Süt', 'Ekmek']);
+  });
+
+  it('rename başlığı değiştirir ve satırı yeniden senkron bekletir', () => {
+    const s = subtaskRepo.create(taskId, 'Eski');
+    getDb().runSync(`UPDATE subtasks SET synced = 1 WHERE id = ?`, [s.id]);
+    subtaskRepo.rename(s.id, 'Yeni');
+    const after = subtaskRepo.listByTask(taskId)[0];
+    expect(after.title).toBe('Yeni');
+    expect(after.synced).toBe(0);
+  });
+
+  it('reorder sırayı yazar; yalnızca yeri değişenleri senkron bekletir', () => {
+    const a = subtaskRepo.create(taskId, 'A');
+    const b = subtaskRepo.create(taskId, 'B');
+    const c = subtaskRepo.create(taskId, 'C');
+    getDb().runSync(`UPDATE subtasks SET synced = 1 WHERE task_id = ?`, [taskId]);
+
+    subtaskRepo.reorder(taskId, [a.id, c.id, b.id]);
+
+    const list = subtaskRepo.listByTask(taskId);
+    expect(list.map((s) => s.title)).toEqual(['A', 'C', 'B']);
+    expect(list.map((s) => s.synced)).toEqual([1, 0, 0]);
   });
 });

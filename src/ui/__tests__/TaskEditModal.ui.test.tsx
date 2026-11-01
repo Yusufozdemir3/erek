@@ -83,3 +83,44 @@ describe('TaskEditModal — alt görev / ana görev senkronu', () => {
     expect(taskRepo.getById(task.id)!.completed_at).toBeNull();
   });
 });
+
+describe('TaskEditModal — alt görev düzenleme', () => {
+  it('yapıştırılan çok satırlı metin her satır için ayrı alt görev oluşturur', async () => {
+    const { task } = taskWithSubtasks([]);
+    const { getByPlaceholderText, getByLabelText } = await renderUI(
+      <TaskEditModal task={taskRepo.getById(task.id)} onClose={jest.fn()} onChanged={jest.fn()} />
+    );
+    fireEvent.changeText(getByPlaceholderText('Alt görev ekle…'), '- Süt\n2. Ekmek\n\n  Yumurta  ');
+    await act(async () => {
+      fireEvent.press(getByLabelText('Alt görev ekle…'));
+    });
+    expect(subtaskRepo.listByTask(task.id).map((s) => s.title)).toEqual(['Süt', 'Ekmek', 'Yumurta']);
+  });
+
+  it('yazıya dokunup adı değiştirir; boş bırakılırsa eski ad kalır', async () => {
+    const { task, subs } = taskWithSubtasks(['Eski ad']);
+    const { getByLabelText } = await renderUI(
+      <TaskEditModal task={taskRepo.getById(task.id)} onClose={jest.fn()} onChanged={jest.fn()} />
+    );
+    await act(async () => {
+      fireEvent.press(getByLabelText('Eski ad alt görevinin adını değiştir'));
+    });
+    const input = getByLabelText('Eski ad alt görevinin adını değiştir');
+    fireEvent.changeText(input, 'Yeni ad');
+    await act(async () => {
+      fireEvent(input, 'submitEditing');
+    });
+    expect(subtaskRepo.listByTask(task.id)[0].title).toBe('Yeni ad');
+
+    await act(async () => {
+      fireEvent.press(getByLabelText('Yeni ad alt görevinin adını değiştir'));
+    });
+    const input2 = getByLabelText('Yeni ad alt görevinin adını değiştir');
+    fireEvent.changeText(input2, '   ');
+    await act(async () => {
+      fireEvent(input2, 'submitEditing');
+    });
+    expect(subtaskRepo.listByTask(task.id)[0].title).toBe('Yeni ad');
+    expect(subs).toHaveLength(1);
+  });
+});

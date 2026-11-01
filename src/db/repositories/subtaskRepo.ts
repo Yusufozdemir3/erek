@@ -66,7 +66,35 @@ export const subtaskRepo = {
     };
   },
 
-  // In the order they were added.
+  // Several at once (a pasted list), appended in the order given.
+  createMany(taskId: string, titles: string[]): Subtask[] {
+    return titles.map((title) => subtaskRepo.create(taskId, title));
+  },
+
+  rename(id: string, title: string): void {
+    getDb().runSync(
+      `UPDATE subtasks SET title = ?, updated_at = ?, synced = 0
+       WHERE id = ? AND task_id NOT IN (SELECT id FROM tasks WHERE shared_owner_uid IS NOT NULL)`,
+      [title, nowIso(), id]
+    );
+  },
+
+  // Rewrites positions to match `orderedIds`; only rows whose position changes
+  // are touched, so a small move doesn't re-sync the whole list.
+  reorder(taskId: string, orderedIds: string[]): void {
+    if (parentSharedWithMe(taskId)) return;
+    const db = getDb();
+    const now = nowIso();
+    orderedIds.forEach((id, position) => {
+      db.runSync(
+        `UPDATE subtasks SET position = ?, updated_at = ?, synced = 0
+         WHERE id = ? AND task_id = ? AND position <> ?`,
+        [position, now, id, taskId, position]
+      );
+    });
+  },
+
+  // In the order they were added (or dragged to).
   listByTask(taskId: string): Subtask[] {
     const db = getDb();
     const rows = db.getAllSync<any>(

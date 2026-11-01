@@ -31,6 +31,7 @@ import { SwipeableRow } from '@/ui/SwipeableRow';
 import { bulkComplete, bulkDelete, bulkPostpone, type BulkResult } from '@/ui/taskBulk';
 import { toggleSharedTaskOptimistic, useFriendNames, useSharedTasksFreshness } from '@/ui/sharedTaskUi';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
+import { SubtaskChecklist, SubtaskProgress } from '@/ui/SubtaskChecklist';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { TagFilterBar, TagPills, tagsOf, useTags } from '@/ui/tags';
 import { TaskIconGlyph } from '@/ui/taskIcons';
@@ -67,6 +68,8 @@ export default function TasksScreen() {
   // A task shared WITH me with subtasks opens this to tick them.
   const [viewingShared, setViewingShared] = useState<Task | null>(null);
   const [openRowId, setOpenRowId] = useState<string | null>(null);
+  // Task cards whose subtask checklist is open.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [subtaskCounts, setSubtaskCounts] = useState<
     Record<string, { done: number; total: number }>
   >({});
@@ -174,6 +177,14 @@ export default function TasksScreen() {
     reload();
   };
 
+  const toggleExpanded = (id: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const undo = useUndoNotice();
 
   const removeTask = (t: Task) => {
@@ -270,7 +281,8 @@ export default function TasksScreen() {
           {/* Spacing lives on the wrapper (rowSpacing): a card margin would show
               the swipe panel's color as a strip under the card. */}
           {wrapRow(t, (
-            <View style={[shared.card, styles.noMargin, selected?.has(t.id) && styles.selectedCard]}>
+            <View style={[shared.card, styles.noMargin, styles.cardColumn, selected?.has(t.id) && styles.selectedCard]}>
+              <View style={styles.cardRow}>
               <Pressable
                 onPress={() => toggleTask(t)}
                 hitSlop={8}
@@ -312,23 +324,41 @@ export default function TasksScreen() {
                     t.due_date && !done
                       ? { text: shortDate(t.due_date, lang), icon: 'calendar', danger: overdue }
                       : null,
-                    subtaskCounts[t.id]
-                      ? {
-                          text: `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`,
-                        }
-                      : null,
                   ]}
                 />
+                {subtaskCounts[t.id] && (
+                  <SubtaskProgress done={subtaskCounts[t.id].done} total={subtaskCounts[t.id].total} />
+                )}
                 {!t.shared_owner_uid && <TagPills tags={tagsOf(t.tag_ids, tags)} />}
               </Pressable>
               {time && !done && <TimeBadge time={time} endTime={t.end_time} />}
-              {!done && <PriorityMark priority={t.priority} />}
+              {subtaskCounts[t.id] && !selecting && (
+                <Pressable
+                  style={styles.expandBtn}
+                  onPress={() => toggleExpanded(t.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: expandedIds.has(t.id) }}
+                  accessibilityLabel={tr('task.subtasksToggleA11y')}
+                >
+                  <Feather name={expandedIds.has(t.id) ? 'chevron-up' : 'chevron-down'} size={20} color={colors.muted} />
+                </Pressable>
+              )}
+              {/* The priority mark stays the rightmost item, so it lines up on every card. */}
+              {!done ? <PriorityMark priority={t.priority} /> : subtaskCounts[t.id] && !selecting ? <View style={styles.markSpacer} /> : null}
+              </View>
+              {subtaskCounts[t.id] && expandedIds.has(t.id) && !selecting && (
+                <SubtaskChecklist
+                  task={t}
+                  refreshKey={`${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total}`}
+                  onChanged={reload}
+                />
+              )}
             </View>
           ))}
         </Animated.View>
       );
     },
-    [openRowId, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors, selected, tasks, tags]
+    [openRowId, expandedIds, subtaskCounts, schedLabels, styles, shared, lang, tr, friendNames, completedOpen, colors, selected, tasks, tags]
   );
 
   return (
@@ -338,7 +368,7 @@ export default function TasksScreen() {
         renderItem={renderItem}
         keyExtractor={(r) => (r.kind === 'divider' ? 'completed-divider' : r.task.id)}
         // Rows also depend on state FlatList can't see.
-        extraData={`${openRowId}|${tasks.length}|${completedOpen}|${query}|${selected ? [...selected].join(',') : ''}|${activeTag}|${tags.length}`}
+        extraData={`${openRowId}|${[...expandedIds].join(',')}|${tasks.length}|${completedOpen}|${query}|${selected ? [...selected].join(',') : ''}|${activeTag}|${tags.length}`}
         contentContainerStyle={shared.content}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -449,6 +479,12 @@ const makeStyles = (c: Colors) =>
     sectionHeaderText: { fontSize: 13, fontWeight: '700', color: c.muted },
     rowSpacing: { marginBottom: 8 },
     noMargin: { marginBottom: 0 },
+    // The card is a column: the task's row, then its open subtask checklist.
+    cardColumn: { flexDirection: 'column', alignItems: 'stretch' },
+    cardRow: { flexDirection: 'row', alignItems: 'center' },
+    // Left of the priority mark (which keeps the right edge); the spacer holds its column on a done card.
+    expandBtn: { width: 44, height: 44, marginVertical: -8, alignItems: 'center', justifyContent: 'center' },
+    markSpacer: { width: 10, height: 10 },
     selectedCard: { borderColor: c.primary, borderWidth: 2 },
     bulkBar: {
       position: 'absolute',

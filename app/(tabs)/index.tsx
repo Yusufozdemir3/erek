@@ -23,6 +23,7 @@ import { ReviewCard } from '@/ui/ReviewCard';
 import { loadReview } from '@/ui/reviewData';
 import { isReviewDay } from '@/lib/weeklyReview';
 import { SharedTaskModal } from '@/ui/SharedTaskModal';
+import { SubtaskChecklist, SubtaskProgress } from '@/ui/SubtaskChecklist';
 import { TaskEditModal } from '@/ui/TaskEditModal';
 import { DatePickerModal } from '@/ui/DatePickerModal';
 import { WeekStrip } from '@/ui/WeekStrip';
@@ -78,6 +79,8 @@ export default function TodayScreen() {
 
   const [showPicker, setShowPicker] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // Task cards whose subtask checklist is open.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   // A task shared WITH me with subtasks opens this to tick them.
   const [viewingShared, setViewingShared] = useState<Task | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -158,6 +161,14 @@ export default function TodayScreen() {
     }
     setEditingTask(t);
   };
+
+  const toggleExpanded = (id: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const toggleTask = (t: Task) => {
     if (t.shared_owner_uid) {
@@ -254,7 +265,8 @@ export default function TodayScreen() {
     const done = t.completed_at !== null;
     const time = extractTime(t.due_date);
     return (
-      <Animated.View key={t.id} layout={LIST_LAYOUT} style={shared.card}>
+      <Animated.View key={t.id} layout={LIST_LAYOUT} style={[shared.card, styles.cardColumn]}>
+        <View style={styles.cardRow}>
         <Pressable
           onPress={() => toggleTask(t)}
           hitSlop={8}
@@ -289,17 +301,33 @@ export default function TodayScreen() {
           !done && t.due_date && t.due_date.slice(0, 10) < today
             ? { text: shortDate(t.due_date, lang), icon: 'calendar', danger: true }
             : null,
-          subtaskCounts[t.id]
-            ? {
-                text: `${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total} ${tr('task.subtaskCountSuffix', { n: subtaskCounts[t.id].total })}`,
-              }
-            : null,
         ]}
       />
+          {subtaskCounts[t.id] && <SubtaskProgress done={subtaskCounts[t.id].done} total={subtaskCounts[t.id].total} />}
           {!t.shared_owner_uid && <TagPills tags={tagsOf(t.tag_ids, tags)} />}
     </Pressable>
         {time && <TimeBadge time={time} endTime={t.end_time} />}
-        {!done && <PriorityMark priority={t.priority} />}
+        {subtaskCounts[t.id] && (
+          <Pressable
+            style={styles.expandBtn}
+            onPress={() => toggleExpanded(t.id)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: expandedIds.has(t.id) }}
+            accessibilityLabel={tr('task.subtasksToggleA11y')}
+          >
+            <Feather name={expandedIds.has(t.id) ? 'chevron-up' : 'chevron-down'} size={20} color={colors.muted} />
+          </Pressable>
+        )}
+        {/* The priority mark stays the rightmost item, so it lines up on every card. */}
+        {!done ? <PriorityMark priority={t.priority} /> : subtaskCounts[t.id] ? <View style={styles.markSpacer} /> : null}
+        </View>
+        {subtaskCounts[t.id] && expandedIds.has(t.id) && (
+          <SubtaskChecklist
+            task={t}
+            refreshKey={`${subtaskCounts[t.id].done}/${subtaskCounts[t.id].total}`}
+            onChanged={reload}
+          />
+        )}
       </Animated.View>
     );
   };
@@ -551,6 +579,12 @@ export default function TodayScreen() {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    // The card is a column: the task's row, then its open subtask checklist.
+    cardColumn: { flexDirection: 'column', alignItems: 'stretch' },
+    cardRow: { flexDirection: 'row', alignItems: 'center' },
+    // Left of the priority mark (which keeps the right edge); the spacer holds its column on a done card.
+    expandBtn: { width: 44, height: 44, marginVertical: -8, alignItems: 'center', justifyContent: 'center' },
+    markSpacer: { width: 10, height: 10 },
     headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     backToday: { fontSize: 14, fontWeight: '700', color: c.primary },
