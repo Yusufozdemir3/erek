@@ -19,6 +19,8 @@ export interface SharedHabit {
   habit: Habit;
   owner: Friend;
   sharedAt: string;
+  // false = shared "just to watch": joining is closed. Old caches lack it (= true).
+  together?: boolean;
 }
 
 const LIST_KEY = 'shared:habits:list';
@@ -73,6 +75,7 @@ function toSharedHabit(row: any): SharedHabit {
       connectedAt: null,
     },
     sharedAt: row.shared_at,
+    together: row.together !== false,
   };
 }
 
@@ -105,6 +108,28 @@ export async function unshareHabit(habitId: string, friendId: string): Promise<v
   try {
     const { error } = await client().rpc('unshare_habit', { p_habit_id: habitId, p_friend: friendId });
     if (error) throw error;
+  } catch (e) {
+    throw toSharingError(e);
+  }
+}
+
+// "Just watch" (false) or "do it together" (true) for every share of this habit.
+export async function setHabitShareMode(habitId: string, together: boolean): Promise<void> {
+  try {
+    const { error } = await client().rpc('set_habit_share_mode', { p_habit_id: habitId, p_together: together });
+    if (error) throw error;
+  } catch (e) {
+    throw toSharingError(e);
+  }
+}
+
+// The mode of this habit's shares; null when it isn't shared with anyone.
+export async function getHabitShareMode(habitId: string): Promise<boolean | null> {
+  try {
+    const { data, error } = await client().from('habit_shares').select('together').eq('habit_id', habitId);
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    return data.some((r: any) => r.together !== false);
   } catch (e) {
     throw toSharingError(e);
   }

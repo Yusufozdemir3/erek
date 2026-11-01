@@ -8,6 +8,8 @@ import { HabitForm, type HabitFormValues } from '@/ui/HabitForm';
 import { ModalCard } from '@/ui/ModalCard';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
+import { useHabitGroups } from '@/ui/useHabitGroups';
+import { groupOfHabit } from '@/lib/habitGroup';
 
 interface Props {
   habit: Habit | null; // null = panel closed
@@ -18,7 +20,14 @@ interface Props {
 export function HabitEditModal({ habit, onClose, onChanged }: Props) {
   const { colors } = useTheme();
   const { t } = useI18n();
+  const { groups } = useHabitGroups();
   if (!habit) return null;
+  // A joined copy: name, schedule and target follow the founder's habit.
+  const group = groupOfHabit(groups, habit.id);
+  const founder = group?.members.find((m) => m.isOwner && !m.isMe);
+  const rulesLockedNote = founder
+    ? t('group.rulesLocked', { name: founder.displayName ?? t('friends.unknownName') })
+    : undefined;
 
   const handleSubmit = (values: HabitFormValues) => {
     habitRepo.update(habit.id, values);
@@ -57,6 +66,7 @@ export function HabitEditModal({ habit, onClose, onChanged }: Props) {
         submitLabel={t('common.save')}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
+        rulesLockedNote={rulesLockedNote}
       />
     </ModalCard>
   );

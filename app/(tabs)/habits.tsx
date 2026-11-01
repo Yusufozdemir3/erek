@@ -26,6 +26,8 @@ import { MetaLine } from '@/ui/MetaLine';
 import { StreakBadge } from '@/ui/StreakBadge';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { SharedHabitsSection, useSharedLists } from '@/ui/SharedLists';
+import { refreshGroups, useHabitGroups } from '@/ui/useHabitGroups';
+import { groupDayStatus, groupOfHabit } from '@/lib/habitGroup';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -57,7 +59,16 @@ export default function HabitsScreen() {
   const { refreshing, onRefresh } = usePullRefresh(() => {
     reload();
     shared_.reload();
+    refreshGroups(true);
   });
+  // Shared habits: struck through only once every member has marked today.
+  const habitGroups = useHabitGroups();
+  const groupInfo = (h: HabitListItem) => {
+    const g = groupOfHabit(habitGroups.groups, h.id);
+    if (!g) return null;
+    const status = groupDayStatus(g, habitGroups.logs, today, { done: h.completedToday, resting: false });
+    return { size: g.members.length, allDone: status.allDone };
+  };
 
   // Weekday letters under the 7-day squares (oldest → today).
   const weekLabels = lastDays(7).map((d) =>
@@ -169,7 +180,7 @@ export default function HabitsScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={t('habit.statsA11y', { title: h.title })}
                 >
-                  <Text style={[shared.cardTitle, h.completedToday && shared.cardTitleDone]}>
+                  <Text style={[shared.cardTitle, (groupInfo(h)?.allDone ?? h.completedToday) && shared.cardTitleDone]}>
                     {h.title}
                   </Text>
                   <MetaLine
@@ -180,6 +191,7 @@ export default function HabitsScreen() {
                         ? { text: h.reminderTimes.join(', '), icon: 'bell' }
                         : null,
                       h.goalTitle ? { text: h.goalTitle, icon: 'target' } : null,
+                      groupInfo(h) ? { text: t('group.metaMembers', { n: groupInfo(h)!.size }), icon: 'users' } : null,
                     ]}
                   />
                 </Pressable>

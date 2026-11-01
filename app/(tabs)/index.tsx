@@ -2,7 +2,7 @@
 // The week strip and the date (→ calendar) move to other days; adding happens
 // from the ＋ menu.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { requestAdd } from '@/lib/addRequest';
@@ -15,6 +15,7 @@ import { buildScheduleLabels, extractTime, scheduleLabel, toYmd, todayDate } fro
 import { notifySuccess, tapLight } from '@/lib/haptics';
 import { highestMilestone } from '@/lib/milestones';
 import { restDayOffered } from '@/lib/restDay';
+import { groupDayStatus, groupOfHabit, groupStartYmd, sharedStreak, type GroupDayStatus } from '@/lib/habitGroup';
 import { refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
 import { refreshWidget } from '@/widget/widgetData';
@@ -42,6 +43,8 @@ import { useFeatureGuide } from '@/ui/guide/useFeatureGuide';
 import { Confetti } from '@/ui/Confetti';
 import { MetaLine } from '@/ui/MetaLine';
 import { StreakBadge } from '@/ui/StreakBadge';
+import { GroupStrip } from '@/ui/habit/GroupStrip';
+import { refreshGroups, useHabitGroups } from '@/ui/useHabitGroups';
 import { usePullRefresh } from '@/ui/usePullRefresh';
 import { TimeBadge } from '@/ui/TimeBadge';
 import { TagPills, tagsOf, useTags } from '@/ui/tags';
@@ -91,7 +94,37 @@ export default function TodayScreen() {
   const { tasks, habits, skippedHabits, subtaskCounts, weekProgress, reload } = useTodayData(user.id, selectedDate, today);
   const friendNames = useFriendNames(tasks.map((t) => t.shared_owner_uid ?? t.shared_with_id));
   useSharedTasksFreshness(reload);
-  const { refreshing, onRefresh } = usePullRefresh(reload);
+  // Pulling also fetches the shared habits' members afresh.
+  const reloadAll = useCallback(() => {
+    reload();
+    refreshGroups(true);
+  }, [reload]);
+  const { refreshing, onRefresh } = usePullRefresh(reloadAll);
+
+  // Shared habits: our mark is only our part; the card is done once everyone's is.
+  const habitGroups = useHabitGroups();
+  const groupStatus = useMemo(() => {
+    const map = new Map<string, GroupDayStatus>();
+    for (const h of habits) {
+      const g = groupOfHabit(habitGroups.groups, h.id);
+      if (g) map.set(h.id, groupDayStatus(g, habitGroups.logs, selectedDate, { done: h.completed, resting: false }));
+    }
+    return map;
+  }, [habits, habitGroups, selectedDate]);
+  const isDone = (h: HabitView) => groupStatus.get(h.id)?.allDone ?? h.completed;
+  // "Ortak seri: N gün" under a shared card (days everyone did it).
+  const groupStreaks = useMemo(() => {
+    const map = new Map<string, number>();
+    const today = todayDate();
+    for (const h of habits) {
+      const g = groupOfHabit(habitGroups.groups, h.id);
+      const full = g ? habitRepo.getById(h.id) : null;
+      if (!g || !full) continue;
+      const mine = habitRepo.completedDatesBetween([h.id], groupStartYmd(g), today)[h.id] ?? new Set<string>();
+      map.set(h.id, sharedStreak(g, habitGroups.logs, full, mine, today));
+    }
+    return map;
+  }, [habits, habitGroups]);
 
   // The filter narrows only the list; the summary and "empty day" use everything.
   const showTasks = typeFilter !== 'habit';
@@ -101,7 +134,7 @@ export default function TodayScreen() {
   // Rest days are habits too; they're listed (with their Undo) under the habit filter.
   const filteredSkipped = showHabits ? skippedHabits : [];
   // Only plain habits fold away when done; counters and timers can go on.
-  const isFoldable = (h: HabitView) => h.completed && h.kind !== 'timer' && h.target == null;
+  const isFoldable = (h: HabitView) => isDone(h) && h.kind !== 'timer' && h.target == null;
   const openTasks = filteredTasks.filter((t) => t.completed_at === null);
   const doneTasks = filteredTasks.filter((t) => t.completed_at !== null);
   const openHabits = filteredHabits.filter((h) => !isFoldable(h));
@@ -115,7 +148,7 @@ export default function TodayScreen() {
   // A future day can't be checked off.
   const isFuture = selectedDate > today;
 
-  const habitsDone = habits.filter((h) => h.completed).length;
+  const habitsDone = habits.filter(isDone).length;
   const tasksDone = tasks.filter((t) => t.completed_at !== null).length;
 
   // Confetti when the day becomes complete or a habit earns a badge — armed by
@@ -124,7 +157,7 @@ export default function TodayScreen() {
   const dayFullyDone = () =>
     tasks.length + habits.length > 0 &&
     tasks.every((t) => t.completed_at !== null) &&
-    habits.every((h) => h.completed);
+    habits.every(isDone);
   const armed = useRef<{ habitId: string | null; prevMedal: number; wasAllDone: boolean } | null>(null);
   const armCelebration = (h?: HabitView) => {
     armed.current = {
@@ -355,19 +388,41 @@ export default function TodayScreen() {
     </Animated.View>
   );
 
+  // A shared habit's card also lists its members under the title.
+  const habitTitle = (h: HabitView) => {
+    const status = groupStatus.get(h.id);
+    const title = (
+      <Text style={[shared.cardTitle, status && styles.groupTitle, isDone(h) && shared.cardTitleDone]}>
+        {h.title}
+      </Text>
+    );
+    if (!status) return title;
+    return (
+      <View style={styles.groupTitleCol}>
+        {title}
+        {/* Tapping the members opens the habit's group section (where friends can be reminded). */}
+        <Pressable
+          onPress={() => router.push({ pathname: '/habit/[id]', params: { id: h.id, section: 'group' } })}
+          accessibilityRole="button"
+          accessibilityLabel={tr('group.title')}
+        >
+          <GroupStrip status={status} streak={groupStreaks.get(h.id)} />
+        </Pressable>
+      </View>
+    );
+  };
+
   const renderHabit = (h: HabitView) =>
     h.kind === 'timer' ? (
       <AnimatedPressable
         key={h.id}
         layout={LIST_LAYOUT}
-        style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+        style={[shared.card, isFuture && styles.futureCard, isDone(h) && styles.doneCard]}
         onLongPress={() => openHabitMenu(h)}
         accessibilityHint={tr('habit.cardMenuHint')}
       >
         <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
-        <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
-          {h.title}
-        </Text>
+        {habitTitle(h)}
         <HabitTimer
           habitId={h.id}
           amount={h.amount}
@@ -380,14 +435,12 @@ export default function TodayScreen() {
       <AnimatedPressable
         key={h.id}
         layout={LIST_LAYOUT}
-        style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+        style={[shared.card, isFuture && styles.futureCard, isDone(h) && styles.doneCard]}
         onLongPress={() => openHabitMenu(h)}
         accessibilityHint={tr('habit.cardMenuHint')}
       >
         <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
-        <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
-          {h.title}
-        </Text>
+        {habitTitle(h)}
         <AmountStepper
           amount={h.amount}
           target={h.target}
@@ -402,7 +455,7 @@ export default function TodayScreen() {
       <AnimatedPressable
         key={h.id}
         layout={LIST_LAYOUT}
-        style={[shared.card, isFuture && styles.futureCard, h.completed && styles.doneCard]}
+        style={[shared.card, isFuture && styles.futureCard, isDone(h) && styles.doneCard]}
         onPress={() => toggleHabit(h)}
         onLongPress={() => openHabitMenu(h)}
         disabled={isFuture}
@@ -412,9 +465,7 @@ export default function TodayScreen() {
         accessibilityLabel={tr('habit.checkboxA11y', { title: h.title })}
       >
         <HabitToggle icon={h.icon} color={h.color} completed={h.completed} />
-        <Text style={[shared.cardTitle, h.completed && shared.cardTitleDone]}>
-          {h.title}
-        </Text>
+        {habitTitle(h)}
         {/* Quota habits: the week's "2/3"; their streak is in weeks. */}
         {h.weekQuota && (
           <Text style={styles.quotaChip}>
@@ -605,6 +656,8 @@ const makeStyles = (c: Colors) =>
     skipNote: { fontSize: 12, color: c.muted, marginTop: 2 },
     skipUndo: { fontSize: 13, fontWeight: '700', color: c.primary, paddingVertical: 8 },
     doneCard: { opacity: 0.6 },
+    groupTitleCol: { flex: 1 },
+    groupTitle: { flex: 0 },
     dateLink: { color: c.primary, fontWeight: '600' },
     filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 },
     filterChip: {

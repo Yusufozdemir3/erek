@@ -30,6 +30,8 @@ export interface ShareWithFriendsProps {
   // The server's answer when the entity was created offline and isn't in the
   // cloud yet: we push it (sync) and retry once.
   notSyncedCode: SharingErrorCode;
+  // Shown between the hint and the friend chips (the habit card's mode switch).
+  header?: React.ReactNode;
 }
 
 export function ShareWithFriendsSection({
@@ -39,6 +41,7 @@ export function ShareWithFriendsSection({
   share,
   unshare,
   notSyncedCode,
+  header,
 }: ShareWithFriendsProps) {
   const { colors } = useTheme();
   const { t } = useI18n();
@@ -114,6 +117,7 @@ export function ShareWithFriendsSection({
     <View style={styles.card}>
       <Text style={styles.title}>{t('share.habitSection')}</Text>
       <Text style={styles.hint}>{hint}</Text>
+      {header}
       {offline && <Text style={styles.warn}>{t('friends.err.ERK_NETWORK')}</Text>}
       {friends.length === 0 ? (
         loading ? (

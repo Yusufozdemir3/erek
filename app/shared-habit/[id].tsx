@@ -9,6 +9,7 @@ import { useSharedHabit } from '@/ui/useSharedHabit';
 import { todayDate } from '@/lib/helpers';
 import { CongratsButton } from '@/ui/CongratsButton';
 import { NudgeButton } from '@/ui/NudgeButton';
+import { JoinGroupButton } from '@/ui/habit/JoinGroupButton';
 import { HabitStatsBody } from '@/ui/habit/HabitStatsBody';
 import { useTheme } from '@/ui/ThemeProvider';
 import { useI18n } from '@/i18n/I18nProvider';
@@ -55,15 +56,18 @@ export default function SharedHabitScreen() {
                   title={habit.title}
                 />
               ) : (
-                <NudgeButton
-                  kind="habit"
-                  itemId={id}
-                  ownerName={shared.owner.displayName ?? t('friends.unknownName')}
-                  message={t('friends.nudgeHabitMessage', {
-                    name: shared.owner.displayName ?? t('friends.unknownName'),
-                    title: habit.title,
-                  })}
-                />
+                <>
+                  <JoinGroupButton habitId={id} title={habit.title} together={shared.together !== false} />
+                  <NudgeButton
+                    kind="habit"
+                    itemId={id}
+                    ownerName={shared.owner.displayName ?? t('friends.unknownName')}
+                    message={t('friends.nudgeHabitMessage', {
+                      name: shared.owner.displayName ?? t('friends.unknownName'),
+                      title: habit.title,
+                    })}
+                  />
+                </>
               ))}
             <HabitStatsBody stats={{ ...stats, habit }} calendar={calendar} subtitle={subtitle} />
           </>

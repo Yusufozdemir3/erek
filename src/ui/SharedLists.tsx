@@ -20,6 +20,8 @@ import {
 import { goalRepo } from '@/db';
 import { ACCOUNTS_ENABLED } from '@/config';
 import { useAppData } from '@/ui/AppData';
+import { useHabitGroups } from '@/ui/useHabitGroups';
+import { JoinGroupButton } from '@/ui/habit/JoinGroupButton';
 import { HabitIconGlyph } from '@/ui/habitIcons';
 import { SwipeableRow } from '@/ui/SwipeableRow';
 import { fmtGoalValue } from '@/ui/goal/goalFormat';
@@ -82,8 +84,12 @@ export function useSharedLists() {
     ]);
   };
 
+  // A habit we joined is ours now (a copy in our own list); its original isn't listed again.
+  const { groups } = useHabitGroups();
+  const joined = new Set(groups.filter((g) => g.members.some((m) => m.isMe && !m.isOwner)).map((g) => g.groupId));
+
   return {
-    sharedHabits: habits.items,
+    sharedHabits: habits.items.filter((s) => !joined.has(s.habit.id)),
     sharedGoals: goals.items,
     reload: useCallback(() => {
       habits.reload();
@@ -171,8 +177,9 @@ export function SharedHabitsSection({
             setOpenId={setOpenId}
             onHide={() => onHide(s)}
           >
+          <View style={styles.habitCard}>
           <Pressable
-            style={styles.row}
+            style={styles.habitRow}
             onPress={() => router.push({ pathname: '/shared-habit/[id]', params: { id: s.habit.id } })}
             onLongPress={() => onHide(s)}
             accessibilityRole="button"
@@ -186,11 +193,21 @@ export function SharedHabitsSection({
                 {s.habit.title}
               </Text>
               <Text style={styles.sub} numberOfLines={1}>
-                {t('friends.sharedBy', { name: s.owner.displayName ?? t('friends.unknownName') })}
+                {s.owner.displayName ?? t('friends.unknownName')} · {t(s.together !== false ? 'group.inviteTag' : 'group.viewTag')}
               </Text>
             </View>
+            {s.together === false && <Feather name="eye" size={16} color={colors.faint} />}
             <Feather name="chevron-right" size={18} color={colors.faint} />
           </Pressable>
+          {s.together !== false && (
+            <View style={styles.joinRow}>
+              <Pressable style={styles.notNow} onPress={() => onHide(s)} accessibilityRole="button">
+                <Text style={styles.notNowText}>{t('group.joinNotNow')}</Text>
+              </Pressable>
+              <JoinGroupButton habitId={s.habit.id} title={s.habit.title} compact />
+            </View>
+          )}
+          </View>
           </SharedRow>
         );
       })}
@@ -269,6 +286,27 @@ const makeStyles = (c: Colors) =>
       paddingVertical: 12,
       paddingHorizontal: 14,
     },
+    habitCard: {
+      backgroundColor: c.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      gap: 10,
+    },
+    habitRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    joinRow: { flexDirection: 'row', gap: 10 },
+    notNow: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 9,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.line,
+    },
+    notNowText: { fontSize: 14, fontWeight: '600', color: c.text },
     icon: {
       width: 30,
       height: 30,

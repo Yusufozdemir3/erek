@@ -70,7 +70,13 @@ interface Props {
   onDelete?: () => void;                // editing only
   autoFocusTitle?: boolean;
   stepped?: boolean;                    // wizard mode (creation only)
+  // A joined shared habit (editing only): name, schedule, end date and target
+  // belong to the founder and are shown read-only with this note.
+  rulesLockedNote?: string;
 }
+
+// Fields a joined shared habit can't change.
+const lockedStyle = { opacity: 0.5 };
 
 type WizardStep = 'kind' | 'identity' | 'schedule' | 'tracking' | 'reminder';
 type FreqMode = HabitFreqMode;
@@ -91,7 +97,9 @@ export function HabitForm({
   onDelete,
   autoFocusTitle,
   stepped,
+  rulesLockedNote,
 }: Props) {
+  const locked = !!rulesLockedNote;
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const styles = makeHabitFormStyles(colors);
@@ -316,9 +324,11 @@ export function HabitForm({
       {show('identity') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionIdentity')}</Text>
+          {locked && <Text style={styles.hint}>{rulesLockedNote}</Text>}
           <Text style={styles.label}>{t('habit.title')}</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, locked && lockedStyle]}
+            editable={!locked}
             value={title}
             onChangeText={setTitle}
             placeholder={t('habit.titlePlaceholder')}
@@ -349,79 +359,82 @@ export function HabitForm({
       {show('schedule') && (
         <>
           <Text style={styles.sectionHeader}>{t('habit.sectionSchedule')}</Text>
-          <Text style={styles.label}>{t('habit.frequency')}</Text>
-          <View style={styles.freqRow}>
-            {(
-              [
-                { mode: 'daily', labelKey: 'habit.everyDay' },
-                { mode: 'days', labelKey: 'habit.specificDays' },
-                { mode: 'interval', labelKey: 'habit.freqInterval' },
-                { mode: 'quota', labelKey: 'habit.freqQuota' },
-              ] as { mode: FreqMode; labelKey: string }[]
-            ).map(({ mode, labelKey }) => {
-              const sel = freqMode === mode;
-              return (
-                <Pressable
-                  key={mode}
-                  style={[styles.freqBtn, sel && styles.freqBtnSel]}
-                  onPress={() => {
-                    setFreqMode(mode);
-                    // Start with today's weekday.
-                    if (mode === 'days' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
-                  }}
-                >
-                  <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>
-                    {t(labelKey)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {freqMode === 'days' && (
-            <View style={styles.dayRow}>
-              {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
-                const sel = weekdays.includes(wd);
+          <View pointerEvents={locked ? 'none' : 'auto'} style={locked && lockedStyle}>
+            <Text style={styles.label}>{t('habit.frequency')}</Text>
+            <View style={styles.freqRow}>
+              {(
+                [
+                  { mode: 'daily', labelKey: 'habit.everyDay' },
+                  { mode: 'days', labelKey: 'habit.specificDays' },
+                  { mode: 'interval', labelKey: 'habit.freqInterval' },
+                  { mode: 'quota', labelKey: 'habit.freqQuota' },
+                ] as { mode: FreqMode; labelKey: string }[]
+              ).map(({ mode, labelKey }) => {
+                const sel = freqMode === mode;
                 return (
                   <Pressable
-                    key={wd}
-                    style={[styles.dayChip, sel && styles.dayChipSel]}
-                    onPress={() => toggleWeekday(wd)}
+                    key={mode}
+                    style={[styles.freqBtn, sel && styles.freqBtnSel]}
+                    onPress={() => {
+                      setFreqMode(mode);
+                      // Start with today's weekday.
+                      if (mode === 'days' && weekdays.length === 0) setWeekdays([new Date().getDay()]);
+                    }}
                   >
-                    <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{t(labelKey)}</Text>
+                    <Text style={[styles.freqBtnText, sel && styles.freqBtnTextSel]}>
+                      {t(labelKey)}
+                    </Text>
                   </Pressable>
                 );
               })}
             </View>
-          )}
 
-          {freqMode === 'interval' && (
-            <View style={styles.freqNumRow}>
-              <Text style={styles.freqNumLabel}>{t('habit.everyNPrompt')}</Text>
-              <TextInput
-                style={styles.freqNumInput}
-                value={everyNText}
-                onChangeText={setEveryNText}
-                keyboardType="number-pad"
-                maxLength={SHORT_NUMBER_MAX_LEN}
-              />
-              <Text style={styles.freqNumHint}>{t('habit.everyNHint')}</Text>
-            </View>
-          )}
+            {freqMode === 'days' && (
+              <View style={styles.dayRow}>
+                {WEEKDAY_OPTIONS.map(({ labelKey, wd }) => {
+                  const sel = weekdays.includes(wd);
+                  return (
+                    <Pressable
+                      key={wd}
+                      style={[styles.dayChip, sel && styles.dayChipSel]}
+                      onPress={() => toggleWeekday(wd)}
+                    >
+                      <Text style={[styles.dayChipText, sel && styles.dayChipTextSel]}>{t(labelKey)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
 
-          {freqMode === 'quota' && (
-            <View style={styles.freqNumRow}>
-              <Text style={styles.freqNumLabel}>{t('habit.quotaPrompt')}</Text>
-              <TextInput
-                style={styles.freqNumInput}
-                value={quotaText}
-                onChangeText={setQuotaText}
-                keyboardType="number-pad"
-                maxLength={1}
-              />
-              <Text style={styles.freqNumHint}>{t('habit.quotaHint')}</Text>
-            </View>
-          )}
+            {freqMode === 'interval' && (
+              <View style={styles.freqNumRow}>
+                <Text style={styles.freqNumLabel}>{t('habit.everyNPrompt')}</Text>
+                <TextInput
+                  style={styles.freqNumInput}
+                  value={everyNText}
+                  onChangeText={setEveryNText}
+                  keyboardType="number-pad"
+                  maxLength={SHORT_NUMBER_MAX_LEN}
+                />
+                <Text style={styles.freqNumHint}>{t('habit.everyNHint')}</Text>
+              </View>
+            )}
+
+            {freqMode === 'quota' && (
+              <View style={styles.freqNumRow}>
+                <Text style={styles.freqNumLabel}>{t('habit.quotaPrompt')}</Text>
+                <TextInput
+                  style={styles.freqNumInput}
+                  value={quotaText}
+                  onChangeText={setQuotaText}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                />
+                <Text style={styles.freqNumHint}>{t('habit.quotaHint')}</Text>
+              </View>
+            )}
+
+          </View>
 
           {/* Outside the range the habit is hidden and the streak untouched. */}
           <Text style={styles.label}>{t('habit.startDate')}</Text>
@@ -439,7 +452,7 @@ export function HabitForm({
           </View>
 
           <Text style={styles.label}>{t('habit.endDate')}</Text>
-          <View style={styles.row}>
+          <View style={[styles.row, locked && lockedStyle]} pointerEvents={locked ? 'none' : 'auto'}>
             <Pressable style={styles.dateBtn} onPress={() => setDatePicker('end')}>
               <Text style={styles.dateBtnText}>
                 {endDate ? shortDate(endDate, lang) : t('habit.noEnd')}
@@ -475,9 +488,10 @@ export function HabitForm({
       {kind === 'numeric' && (
         <>
           <Text style={styles.label}>{t('habit.dailyTarget')}</Text>
-          <View style={styles.row}>
+          <View style={[styles.row, locked && lockedStyle]} pointerEvents={locked ? 'none' : 'auto'}>
             <TextInput
               style={[styles.input, styles.targetInput]}
+              editable={!locked}
               value={targetText}
               onChangeText={setTargetText}
               placeholder={t('habit.amountPlaceholder')}
@@ -487,6 +501,7 @@ export function HabitForm({
             />
             <TextInput
               style={[styles.input, styles.targetInput]}
+              editable={!locked}
               value={unit}
               onChangeText={setUnit}
               placeholder={t('habit.unitPlaceholder')}
@@ -503,7 +518,8 @@ export function HabitForm({
         <>
           <Text style={styles.label}>{t('habit.durationTarget')}</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, locked && lockedStyle]}
+            editable={!locked}
             value={targetText}
             onChangeText={setTargetText}
             placeholder={t('habit.durationPlaceholder')}

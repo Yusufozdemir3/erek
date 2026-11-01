@@ -31,6 +31,8 @@ export { sendNudge, getNudgePrefs, setNudgeMute, setNudgesEnabled, type NudgePre
 export { getInbox, getCachedInbox, getInboxSeenAt, setInboxSeenAt } from './inbox';
 export {
   shareHabit,
+  setHabitShareMode,
+  getHabitShareMode,
   unshareHabit,
   listHabitShares,
   getSharedHabits,
@@ -39,6 +41,17 @@ export {
   syncSharedHabitLogs,
   type SharedHabit,
 } from './sharedHabits';
+export {
+  joinHabitGroup,
+  leaveHabitGroup,
+  getCachedHabitGroups,
+  refreshHabitGroups,
+  EMPTY_GROUPS,
+  type HabitGroup,
+  type HabitGroupMember,
+  type HabitGroupsSnapshot,
+  type GroupLogs,
+} from './habitGroups';
 export {
   shareGoal,
   unshareGoal,
