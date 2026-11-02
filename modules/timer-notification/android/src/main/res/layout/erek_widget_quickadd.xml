@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hızlı görev: a single "+" that opens the native add card. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/q_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+  <ImageView
+      android:id="@+id/q_bg"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+      android:scaleType="fitXY"
+      android:src="@drawable/erek_widget_card" />
+  <FrameLayout
+      android:layout_width="36dp"
+      android:layout_height="36dp"
+      android:layout_gravity="center">
+    <ImageView
+        android:id="@+id/q_plus_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="@drawable/timer_oval" />
+    <TextView
+        android:id="@+id/q_plus"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="+"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+  </FrameLayout>
+</FrameLayout>

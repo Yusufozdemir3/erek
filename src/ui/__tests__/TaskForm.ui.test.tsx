@@ -100,12 +100,32 @@ describe('TaskForm', () => {
   });
 
   // Reminders are separate from the due time.
+  it('yeni görevde az kullanılan alanlar kapalı başlar; düğme açar ve kapatır', async () => {
+    const { getByText, queryByText } = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />);
+    // Başlık, tarih ve saat hep açık.
+    expect(getByText('Saat yok')).toBeTruthy();
+    expect(queryByText('Öncelik')).toBeNull();
+    fireEvent.press(getByText('Daha fazla seçenek'));
+    expect(getByText('Öncelik')).toBeTruthy();
+    fireEvent.press(getByText('Daha az'));
+    expect(queryByText('Öncelik')).toBeNull();
+  });
+
+  it('düzenlemede ve değer girilmişse kapalı kısım açık başlar', async () => {
+    const edit = await renderUI(<TaskForm submitLabel="Kaydet" onSubmit={jest.fn()} onDelete={jest.fn()} />);
+    expect(edit.getByText('Öncelik')).toBeTruthy();
+    edit.unmount();
+    const set = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={jest.fn()} initial={{ priority: 'high' }} />);
+    expect(set.getByText('Öncelik')).toBeTruthy();
+  });
+
   it('hatırlatma saati eklenince remind_times listesine girer', async () => {
     const onSubmit = jest.fn();
     const { getByText, getByPlaceholderText } = await renderUI(
       <TaskForm submitLabel="Ekle" onSubmit={onSubmit} />
     );
     fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'İlaç al');
+    fireEvent.press(getByText('Daha fazla seçenek')); // the reminder is in the folded part
     fireEvent.press(getByText('＋ Saat ekle')); // open the reminder picker
     await pick('time', new Date(2026, 0, 1, 8, 0));
     fireEvent.press(getByText('Ekle'));
@@ -132,6 +152,7 @@ describe('TaskForm', () => {
 
     it('pencere kapalı başlar; özet "Tekrar yok" der', async () => {
       const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={jest.fn()} />);
+      fireEvent.press(u.getByText('Daha fazla seçenek'));
       expect(u.getByLabelText('Tekrar: Tekrar yok')).toBeTruthy();
       expect(u.queryByText('Birkaç günde bir')).toBeNull();
     });
@@ -139,6 +160,7 @@ describe('TaskForm', () => {
     it('kip seçilince pencere açık kalır; Tamam kapatır, özet ve kayıt güncellenir', async () => {
       const onSubmit = jest.fn();
       const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={onSubmit} />);
+      fireEvent.press(u.getByText('Daha fazla seçenek'));
       open(u, 'Tekrar yok');
       expect(u.getAllByRole('radio')).toHaveLength(6); // eşit satırlı tek liste
       pickMode(u, 'Her gün');
@@ -158,6 +180,7 @@ describe('TaskForm', () => {
       const extraLabel = extra === 1 ? 'Pzt' : 'Çar';
       const onSubmit = jest.fn();
       const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={onSubmit} />);
+      fireEvent.press(u.getByText('Daha fazla seçenek'));
       open(u, 'Tekrar yok');
       pickMode(u, 'Belirli günler');
       fireEvent.press(u.getByLabelText(extraLabel));
@@ -174,6 +197,7 @@ describe('TaskForm', () => {
     it('birkaç günde bir ve ayın günü: sayı alanı seçilen satırın altında', async () => {
       const onSubmit = jest.fn();
       const u = await renderUI(<TaskForm submitLabel="Ekle" onSubmit={onSubmit} />);
+      fireEvent.press(u.getByText('Daha fazla seçenek'));
       open(u, 'Tekrar yok');
       pickMode(u, 'Birkaç günde bir');
       fireEvent.changeText(u.getByLabelText('Kaç günde bir?'), '3');

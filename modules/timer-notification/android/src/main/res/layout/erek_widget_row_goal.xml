@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A Hedefler row: title and percent over a progress bar. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/g_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="6dp"
+    android:paddingBottom="4dp"
+    android:paddingEnd="6dp">
+  <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:gravity="center_vertical"
+      android:orientation="horizontal">
+    <TextView
+        android:id="@+id/g_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textSize="14sp" />
+    <TextView
+        android:id="@+id/g_percent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+  </LinearLayout>
+  <FrameLayout
+      android:layout_width="match_parent"
+      android:layout_height="6dp"
+      android:layout_marginTop="5dp">
+    <ImageView
+        android:id="@+id/g_track"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/erek_widget_bar" />
+    <ImageView
+        android:id="@+id/g_fill"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/erek_widget_bar_fill" />
+  </FrameLayout>
+</LinearLayout>

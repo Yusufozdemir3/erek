@@ -178,7 +178,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const drain = () => {
-      drainWidgetQueue()
+      drainWidgetQueue(user.id)
         .then((n) => {
           if (n > 0) notifyDataChanged();
         })

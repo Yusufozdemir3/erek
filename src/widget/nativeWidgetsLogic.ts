@@ -22,6 +22,7 @@ export interface NativeBoardHabit {
   color: string;
   kind: 'binary' | 'numeric' | 'timer';
   icon: IconSpec | null;
+  unit?: string | null;
   target: number | null; // numeric: daily amount · timer: seconds
   amount: number; // today (timer: seconds)
   completed: boolean;
@@ -64,6 +65,36 @@ export interface NativeLabels {
   channelName: string;
   running: string;
   pausedTemplate: string; // "Duraklatıldı · {time}"
+  // The list widgets.
+  todayTitle: string;
+  summary: string; // "{done}/{total} tamamlandı"
+  todayEmpty: string;
+  counterTitle: string;
+  counterEmpty: string;
+  tasksTitle: string;
+  tasksEmpty: string;
+  goalsTitle: string;
+  goalsEmpty: string;
+  stale: string; // a new day the app hasn't refreshed yet
+  quickAdd: string;
+  quickAddHint: string;
+  quickAddSave: string;
+  quickAddDone: string;
+}
+
+// A task on today's list (Bugün, Görevler); color is its priority color.
+export interface NativeBoardTask {
+  id: string;
+  title: string;
+  color: string;
+  completed: boolean;
+}
+
+export interface NativeBoardGoal {
+  id: string;
+  title: string;
+  percent: number; // 0-100
+  percentLabel: string; // localized ("%40" / "40%")
 }
 
 export interface NativeBoard {
@@ -77,6 +108,8 @@ export interface NativeBoard {
   notify: boolean; // the notification switch: a timer started from the widget posts its card
   labels: NativeLabels;
   habits: NativeBoardHabit[];
+  tasks: NativeBoardTask[];
+  goals: NativeBoardGoal[];
   goalIcon: IconSpec | null;
 }
 
@@ -120,7 +153,7 @@ export function overlayPending(
   pending: WidgetAction[]
 ): NativeBoardHabit[] {
   return pending.reduce((list, a) => {
-    if (a.kind === 'task' || a.date !== date) return list;
+    if (a.kind === 'task' || a.kind === 'taskAdd' || a.date !== date) return list;
     return list.map((h) => {
       if (h.id !== a.habitId) return h;
       if (a.kind === 'toggle') return h.kind === 'binary' ? { ...h, completed: a.completed } : h;
@@ -131,9 +164,24 @@ export function overlayPending(
   }, habits);
 }
 
+// The same for the task rows.
+export function overlayPendingTasks(
+  tasks: NativeBoardTask[],
+  date: string,
+  pending: WidgetAction[]
+): NativeBoardTask[] {
+  return pending.reduce((list, a) => {
+    if (a.date !== date) return list;
+    // Typed into the quick-add card, not a task yet: shown as typed (same id the native board used).
+    if (a.kind === 'taskAdd') return [...list, { id: `add:${a.id}`, title: a.title, color: '', completed: false }];
+    if (a.kind !== 'task') return list;
+    return list.map((t) => (t.id === a.taskId ? { ...t, completed: a.completed } : t));
+  }, tasks);
+}
+
 // The native queue (a JSON array, oldest first) as widget actions; anything
 // malformed is dropped. Shapes: {id, kind:'toggle', habitId, date, completed}
-// and {id, kind:'inc', habitId, date, delta}.
+// {id, kind:'inc', habitId, date, delta} and {id, kind:'task', taskId, date, completed} and {id, kind:'taskAdd', title, date}.
 export function parseNativeWidgetActions(json: string): WidgetAction[] {
   let raw: unknown;
   try {
@@ -146,12 +194,19 @@ export function parseNativeWidgetActions(json: string): WidgetAction[] {
   for (const e of raw) {
     if (!e || typeof e !== 'object') continue;
     const x = e as Record<string, unknown>;
-    if (typeof x.id !== 'string' || typeof x.habitId !== 'string' || typeof x.date !== 'string') continue;
+    if (typeof x.id !== 'string' || typeof x.date !== 'string') continue;
+    if (x.kind !== 'task' && x.kind !== 'taskAdd' && typeof x.habitId !== 'string') continue;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(x.date)) continue;
-    if (x.kind === 'toggle' && typeof x.completed === 'boolean') {
-      out.push({ id: x.id, kind: 'toggle', habitId: x.habitId, date: x.date, completed: x.completed });
+    if (x.kind === 'taskAdd') {
+      if (typeof x.title === 'string' && x.title.trim()) out.push({ id: x.id, kind: 'taskAdd', title: x.title.trim(), date: x.date });
+      continue;
+    }
+    if (x.kind === 'task' && typeof x.taskId === 'string' && typeof x.completed === 'boolean') {
+      out.push({ id: x.id, kind: 'task', taskId: x.taskId, date: x.date, completed: x.completed });
+    } else if (x.kind === 'toggle' && typeof x.completed === 'boolean') {
+      out.push({ id: x.id, kind: 'toggle', habitId: x.habitId as string, date: x.date, completed: x.completed });
     } else if (x.kind === 'inc' && typeof x.delta === 'number' && Number.isFinite(x.delta)) {
-      out.push({ id: x.id, kind: 'inc', habitId: x.habitId, date: x.date, delta: x.delta });
+      out.push({ id: x.id, kind: 'inc', habitId: x.habitId as string, date: x.date, delta: x.delta });
     }
   }
   return out;

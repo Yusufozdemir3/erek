@@ -1,4 +1,4 @@
-// Ücretsiz sınırlar: hatırlatıcı eklemek, grafik sekmeleri, kilitli widget kartı, Plus uyarısı.
+// Ücretsiz sınırlar: hatırlatıcı eklemek, grafik sekmeleri, Plus uyarısı.
 
 import { Alert } from 'react-native';
 import { fireEvent } from '@testing-library/react-native';
@@ -6,9 +6,7 @@ import { renderUI } from '@/test/renderWithProviders';
 import { ReminderListEditor } from '@/ui/ReminderListEditor';
 import { PeriodTabs } from '@/ui/habit/HabitStatsSections';
 import { makeHabitStatsStyles } from '@/ui/habit/habitStatsStyles';
-import { LockedWidget } from '@/widget/LockedWidget';
 import { promptPlus } from '../openPlus';
-import { COUNTER_WIDGET_NAME } from '@/widget/widgetSnapshot';
 import { lightColors } from '@/ui/theme';
 
 let mockUnlocked = false;
@@ -20,10 +18,6 @@ jest.mock('../plusStore', () => ({
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ router: { push: (...a: unknown[]) => mockPush(...a) } }));
-jest.mock('react-native-android-widget', () => {
-  const { View, Text } = require('react-native');
-  return { FlexWidget: View, TextWidget: ({ text }: { text: string }) => <Text>{text}</Text> };
-});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -66,19 +60,6 @@ describe('grafik sekmeleri', () => {
     expect(onChange).not.toHaveBeenCalled();
     fireEvent.press(u.getByText('stats.periodDay'));
     expect(onChange).toHaveBeenCalledWith('day');
-  });
-});
-
-describe('kilitli widget', () => {
-  it('başlığı ve kilit yazısını gösterir', async () => {
-    const u = await renderUI(
-      <LockedWidget
-        name={COUNTER_WIDGET_NAME}
-        snapshot={{ counterTitle: 'Sayaçlar', lockedLabel: 'Erek Plus ile açılır — dokun' } as never}
-      />
-    );
-    expect(u.getByText('Sayaçlar')).toBeTruthy();
-    expect(u.getByText('Erek Plus ile açılır — dokun')).toBeTruthy();
   });
 });
 

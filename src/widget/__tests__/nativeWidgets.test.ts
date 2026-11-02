@@ -4,10 +4,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userRepo } from '../../db/repositories/userRepo';
 import { habitRepo } from '../../db/repositories/habitRepo';
+import { taskRepo } from '../../db/repositories/taskRepo';
+import { goalRepo } from '../../db/repositories/goalRepo';
+import { getDb } from '../../db/database';
 import { resetTestDb } from '../../test/dbTestUtils';
 import { todayDate } from '../../lib/helpers';
 import { readPending } from '../widgetQueue';
-import { PICKS_KEY } from '../widgetSnapshot';
 import { addDaysYmd } from '../nativeWidgetsLogic';
 
 jest.mock('react-native', () => ({
@@ -18,6 +20,7 @@ jest.mock('react-native', () => ({
 jest.mock('@/lib/notifications', () => ({
   refreshTaskReminders: async () => {},
   scheduleGeneralReminders: async () => true,
+  scheduleTaskReminders: async () => true,
 }));
 jest.mock('@/i18n/I18nProvider', () => ({ getStoredLang: async () => 'tr' }));
 // The icon set's components need the UI runtime; the board only uses its ids.
@@ -26,7 +29,6 @@ jest.mock('../../ui/habitIcons', () => ({
     id === 'water' ? { family: 'ionicons', name: 'water-outline' } : id === 'target' ? { family: 'feather', name: 'target' } : undefined,
 }));
 // The JS widget library: nothing placed.
-jest.mock('../renderWidgets', () => ({ updateWidgets: async () => {} }));
 
 interface MockNative {
   board: string | null;
@@ -54,7 +56,7 @@ const mockNative: MockNative = {
 };
 jest.mock('../../../modules/timer-notification/src/ErekWidgetsModule', () => ({ default: mockNative }));
 
-import { buildNativeBoard } from '../nativeWidgets';
+import { PICKS_KEY, buildNativeBoard } from '../nativeWidgets';
 import { drainWidgetQueue, refreshWidget } from '../widgetData';
 
 let uid: string;
@@ -70,6 +72,26 @@ beforeEach(async () => {
 });
 
 describe('buildNativeBoard', () => {
+  it('bugünün görevleri (paylaşılan hariç, bekleyen dokunuş üstte) ve açık hedefler yüzdeleriyle', async () => {
+    const done = taskRepo.create({ user_id: uid, title: 'Bitti', due_date: today() });
+    taskRepo.setCompleted(done.id, true);
+    const open = taskRepo.create({ user_id: uid, title: 'Açık', due_date: today(), priority: 'high' });
+    const shared = taskRepo.create({ user_id: uid, title: 'Arkadaşın', due_date: today() });
+    getDb().runSync("UPDATE tasks SET shared_owner_uid = 'friend' WHERE id = ?", [shared.id]);
+    const g = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 100, deadline: '2999-01-01' });
+    goalRepo.addProgress(g.id, 40);
+    const fin = goalRepo.create({ user_id: uid, title: 'Bitti', goal_type: 'numeric', target_value: 10 });
+    goalRepo.addProgress(fin.id, 10);
+
+    const b = await buildNativeBoard(uid, [{ id: 'p', kind: 'task', taskId: open.id, date: today(), completed: true }]);
+    expect(b.tasks.map((t) => [t.title, t.completed])).toEqual([['Açık', true], ['Bitti', true]]);
+    expect(b.tasks[0].color).toBe('#ef4444');
+    expect(b.goals).toEqual([expect.objectContaining({ title: 'Koş', percent: 40 })]);
+    expect(b.goals[0].percentLabel).toContain('40');
+    expect(b.labels.tasksTitle).toBeTruthy();
+    expect(b.labels.summary).toContain('{done}');
+  });
+
   it('etkin alışkanlıklar türü, bugünkü durumu, ikonu ve planlı günleriyle', async () => {
     const kitap = habitRepo.create({ user_id: uid, title: 'Kitap' });
     const su = habitRepo.create({ user_id: uid, title: 'Su', kind: 'numeric', target_amount: 8, icon: 'water', color: '#2266aa' });
@@ -138,6 +160,25 @@ describe('yerel düğmeler ↔ SQLite', () => {
     expect(habitRepo.isCompletedOn(su.id, today())).toBe(true);
     expect(await readPending()).toEqual([]);
     expect(mockNative.queue).toBe('[]');
+  });
+
+  it('Hızlı görev kartına yazılan cümle görev olur (tarih ve saat ayrıştırılır)', async () => {
+    mockNative.queue = JSON.stringify([
+      { id: 'a1', kind: 'taskAdd', title: 'süt al', date: today() },
+      { id: 'a2', kind: 'taskAdd', title: 'yarın 14:00 doktor', date: today() },
+      { id: 'a3', kind: 'taskAdd', title: '   ', date: today() },
+    ]);
+
+    // Kullanıcı yokken (kimlik verilmeden) beklerler, kuyruktan silinmezler.
+    expect(await drainWidgetQueue()).toBe(0);
+    expect((await readPending()).map((a) => a.id)).toEqual(['a1', 'a2']);
+
+    expect(await drainWidgetQueue(uid)).toBe(2);
+    expect(await readPending()).toEqual([]);
+    const rows = getDb().getAllSync<{ title: string; due_date: string }>('SELECT title, due_date FROM tasks ORDER BY title');
+    const tomorrow = addDaysYmd(today(), 1);
+    expect(rows.find((r) => r.title === 'Süt al')?.due_date).toBe(today());
+    expect(rows.find((r) => r.title === 'Doktor')?.due_date).toBe(`${tomorrow}T14:00:00`);
   });
 
   it('refreshWidget panoyu yayımlar; eski seçimler bir kez taşınır', async () => {

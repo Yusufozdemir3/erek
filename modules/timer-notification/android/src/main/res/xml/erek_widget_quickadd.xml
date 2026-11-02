@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:resizeMode="horizontal|vertical"
+    android:description="@string/erek_widget_quickadd_description"
+    android:initialLayout="@layout/erek_widget_quickadd"
+    android:previewImage="@drawable/erek_widget_preview_quickadd"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />

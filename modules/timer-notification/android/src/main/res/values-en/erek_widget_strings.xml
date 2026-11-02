@@ -6,6 +6,17 @@
   <string name="erek_widget_count_description">The counted habit you pick goes up by one on every tap</string>
   <string name="erek_widget_timer_label">Erek — Timer</string>
   <string name="erek_widget_timer_description">Start, pause and finish your timer from the home screen</string>
+  <string name="erek_widget_today_label">Erek — Today</string>
+  <string name="erek_widget_today_description">Habits due today — tap to check off</string>
+  <string name="erek_widget_counter_label">Erek — Counter</string>
+  <string name="erek_widget_counter_description">One tap adds +1 to counted habits like water or pages</string>
+  <string name="erek_widget_tasks_label">Erek — Tasks</string>
+  <string name="erek_widget_tasks_description">Tasks due today — tap to complete</string>
+  <string name="erek_widget_goals_label">Erek — Goals</string>
+  <string name="erek_widget_goals_description">Your open goals and how far along you are</string>
+  <string name="erek_widget_quickadd_label">Erek — Quick task</string>
+  <string name="erek_widget_quickadd_description">Add a new task with one tap</string>
+  <string name="erek_widget_quickadd_text">Add a new task</string>
   <string name="erek_widget_open_app">Open Erek once to get started</string>
   <string name="erek_widget_preview_habit">Drink water</string>
   <string name="erek_widget_preview_timer">Read a book</string>

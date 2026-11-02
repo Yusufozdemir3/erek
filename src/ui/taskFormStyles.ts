@@ -5,6 +5,9 @@ import type { Colors } from '@/ui/theme';
 
 export const makeTaskFormStyles = (c: Colors) =>
   StyleSheet.create({
+    moreBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 12, marginTop: 8 },
+    moreBtnText: { color: c.primary, fontSize: 14, fontWeight: '600' },
+    moreSummary: { color: c.muted, fontSize: 12, marginTop: -6, marginBottom: 6 },
     label: { fontSize: 13, fontWeight: '600', color: c.muted, marginBottom: 8, marginTop: 4 },
     counter: { fontSize: 11, color: c.faint, textAlign: 'right', marginTop: -8, marginBottom: 12 },
     input: {

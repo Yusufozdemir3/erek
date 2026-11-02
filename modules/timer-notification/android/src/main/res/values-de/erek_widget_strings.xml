@@ -6,6 +6,17 @@
   <string name="erek_widget_count_description">Die gewählte Zähl-Gewohnheit steigt mit jedem Tippen um eins</string>
   <string name="erek_widget_timer_label">Erek — Timer</string>
   <string name="erek_widget_timer_description">Starte, pausiere und beende deinen Timer vom Startbildschirm</string>
+  <string name="erek_widget_today_label">Erek — Heute</string>
+  <string name="erek_widget_today_description">Heutige Gewohnheiten — zum Abhaken antippen</string>
+  <string name="erek_widget_counter_label">Erek — Zähler</string>
+  <string name="erek_widget_counter_description">Ein Tippen zählt Gewohnheiten wie Wasser oder Seiten um +1 hoch</string>
+  <string name="erek_widget_tasks_label">Erek — Aufgaben</string>
+  <string name="erek_widget_tasks_description">Heutige Aufgaben — zum Erledigen antippen</string>
+  <string name="erek_widget_goals_label">Erek — Ziele</string>
+  <string name="erek_widget_goals_description">Deine offenen Ziele und dein Fortschritt</string>
+  <string name="erek_widget_quickadd_label">Erek — Schnelle Aufgabe</string>
+  <string name="erek_widget_quickadd_description">Mit einem Tippen eine neue Aufgabe anlegen</string>
+  <string name="erek_widget_quickadd_text">Neue Aufgabe hinzufügen</string>
   <string name="erek_widget_open_app">Öffne Erek einmal, um loszulegen</string>
   <string name="erek_widget_preview_habit">Wasser trinken</string>
   <string name="erek_widget_preview_timer">Buch lesen</string>

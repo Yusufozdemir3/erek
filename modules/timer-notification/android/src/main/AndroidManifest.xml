@@ -15,9 +15,9 @@
           android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="Kullanıcının başlattığı alışkanlık/hedef zamanlayıcısını bildirim kartında canlı tutar" />
     </service>
-    <!-- Ana ekran widget'ları (Evet/Hayır, Sayaç düğmesi, Zamanlayıcı): yerel
-         RemoteViews. İlk ikisinin sınıf adı eski JS sürümleriyle aynı — ana
-         ekrandaki widget güncellemede kendiliğinden yerele geçer. -->
+    <!-- Ana ekran widget'ları (hepsi): yerel RemoteViews. Sınıf
+         adları eski JS sürümleriyle aynı — ana ekrandaki widget'lar güncellemede
+         kendiliğinden yerele geçer. -->
     <receiver
         android:name="com.erek.widget.ErekHabitCheck"
         android:exported="false"
@@ -52,8 +52,75 @@
           android:resource="@xml/erek_widget_timer" />
     </receiver>
     <receiver
+        android:name="com.erek.widget.ErekToday"
+        android:exported="false"
+        android:label="@string/erek_widget_today_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_today" />
+    </receiver>
+    <receiver
+        android:name="com.erek.widget.ErekCounter"
+        android:exported="false"
+        android:label="@string/erek_widget_counter_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_counter" />
+    </receiver>
+    <receiver
+        android:name="com.erek.widget.ErekTasks"
+        android:exported="false"
+        android:label="@string/erek_widget_tasks_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_tasks" />
+    </receiver>
+    <receiver
+        android:name="com.erek.widget.ErekGoals"
+        android:exported="false"
+        android:label="@string/erek_widget_goals_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_goals" />
+    </receiver>
+    <receiver
+        android:name="com.erek.widget.ErekQuickAdd"
+        android:exported="false"
+        android:label="@string/erek_widget_quickadd_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/erek_widget_quickadd" />
+    </receiver>
+    <service
+        android:name="expo.modules.timernotification.WidgetListService"
+        android:exported="false"
+        android:permission="android.permission.BIND_REMOTEVIEWS" />
+    <receiver
         android:name="expo.modules.timernotification.WidgetReceiver"
         android:exported="false" />
+    <!-- Hızlı görev kartı: widget'taki "+" üstüne açılan küçük yazı kutusu. -->
+    <activity
+        android:name="expo.modules.timernotification.QuickAddActivity"
+        android:excludeFromRecents="true"
+        android:exported="false"
+        android:taskAffinity=""
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
     <activity
         android:name="expo.modules.timernotification.HabitPickActivity"
         android:excludeFromRecents="true"

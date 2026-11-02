@@ -84,6 +84,9 @@ export function capitalize(s: string, lang: Lang): string {
   return up + s.slice(1);
 }
 
+// A number with its case ending glued on, no apostrophe: "7de", "3'te" without the '.
+const DIGITS_SUFFIX = /^(\d{1,2})(d[ae]|t[ae]|y?[ae]|y?[ıiuü])$/;
+
 const APOSTROPHES = /[’‘ʼ`´′]/g;
 const EDGE_PUNCT = /^["“”„«»()[\]{}.,;:!?…]+|["“”„«»()[\]{}.,;:!?…]+$/g;
 
@@ -102,6 +105,13 @@ export function tokenize(text: string, lang: Lang): Token[] {
     if (k > 0) {
       base = w.slice(0, k);
       sfx = w.slice(k + 1);
+    } else if (lang === 'tr') {
+      // Typed on a phone nobody reaches for the apostrophe: "7de", "3te", "5e".
+      const bare = DIGITS_SUFFIX.exec(w);
+      if (bare) {
+        base = bare[1];
+        sfx = bare[2];
+      }
     }
     out.push({ text: text_, raw, w, base, sfx, dot: text_.endsWith('.') });
   }

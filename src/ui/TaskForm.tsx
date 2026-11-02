@@ -137,6 +137,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
   const [tagIds, setTagIds] = useState<string[]>(initial?.tag_ids ?? []);
   // Recurring tasks can't be shared (the server would drop the share anyway).
   const shareBlocked = repeatMode !== 'none';
+  // The less-used fields start folded on a new task; editing, or anything already set, opens them.
+  const [moreOpen, setMoreOpen] = useState(
+    !!onDelete ||
+      !!initial?.icon ||
+      (initial?.tag_ids?.length ?? 0) > 0 ||
+      (initial?.priority ?? 'medium') !== 'medium' ||
+      (initial?.remind_times?.length ?? 0) > 0 ||
+      !!initial?.recurrence ||
+      (initial?.shared_with_ids?.length ?? 0) > 0
+  );
 
   // A voice fill changes only what the sentence names; what was heard and the
   // old values stay until the title is edited by hand.
@@ -172,6 +182,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
       setRemindTimes(patch.remindTimes);
       filled.push('remind');
     }
+    // What the sentence set in the folded part must be visible.
+    if (filled.includes('priority') || filled.includes('remind')) setMoreOpen(true);
     setVoiceNote({ heard, truncated: patch.titleTruncated, filled, prev });
   }, enableVoice);
   // One automatic start per opening; the flow's own dialogs handle permissions.
@@ -213,6 +225,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
     setNewSub('');
   };
   const removeDraftSub = (i: number) => setDraftSubs((prev) => prev.filter((_, idx) => idx !== i));
+
+  // What is set in the folded part, as one line under the "more" button.
+  const moreSummary = (): string =>
+    [
+      priority !== 'medium' ? t(`priority.${priority}`) : '',
+      remindTimes.length > 0 ? `${t('task.reminderShort')} ${remindTimes.join(', ')}` : '',
+      repeatMode !== 'none' ? repeatSummary() : '',
+      tagIds.length > 0 ? t('task.tags') : '',
+      sharedWith.length > 0 ? t('share.taskSection') : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
   const repeatSummary = (): string =>
     repeatMode === 'none'
@@ -327,73 +351,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         </>
       )}
 
-      {/* Icon and tags share a row: a small square for the icon, the tag chips beside it. */}
-      <View style={styles.pairRow}>
-        <View>
-          <Text style={styles.label}>{t('task.icon')}</Text>
-          <Pressable
-            style={[styles.iconBtn, (icon && resolveTaskIcon(icon)) || iconOpen ? styles.iconBtnOn : styles.iconBtnEmpty]}
-            onPress={() => setIconOpen((v) => !v)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: iconOpen }}
-            accessibilityLabel={t('task.iconA11y', {
-              name: icon && resolveTaskIcon(icon) ? t(resolveTaskIcon(icon)!.labelKey) : t('task.iconNone'),
-            })}
-          >
-            {icon && resolveTaskIcon(icon) ? (
-              <TaskIconGlyph id={icon} size={22} color={colors.primary} />
-            ) : (
-              <Feather name="plus" size={18} color={colors.faint} />
-            )}
-          </Pressable>
-        </View>
-        <View style={styles.pairCol}>
-          <Text style={styles.label}>{t('task.tags')}</Text>
-          <TagPicker selected={tagIds} onChange={setTagIds} />
-        </View>
-      </View>
-      {iconOpen && (
-        <View style={styles.iconGrid}>
-          {TASK_ICON_SET.map((entry) => {
-            const sel = icon === entry.id;
-            return (
-              <Pressable
-                key={entry.id}
-                style={[styles.iconCell, sel && styles.iconCellSel]}
-                onPress={() => {
-                  setIcon(sel ? null : entry.id);
-                  setIconOpen(false);
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: sel }}
-                accessibilityLabel={t(entry.labelKey)}
-              >
-                <TaskIconGlyph id={entry.id} size={20} color={sel ? colors.primary : colors.muted} />
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      <Text style={styles.label}>{t('task.priority')}</Text>
-      <View style={styles.row}>
-        {PRIORITY_ORDER.map((p) => {
-          const selected = p === priority;
-          const color = PRIORITY_COLOR[p];
-          return (
-            <Pressable
-              key={p}
-              style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
-              onPress={() => setPriority(p)}
-            >
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                {t(`priority.${p}`)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
       <Text style={styles.label}>{t('task.dueDate')}</Text>
       <View style={styles.row}>
         <Pressable style={[styles.dateBtn, voiceMark('date')]} onPress={() => setShowPicker(true)}>
@@ -495,6 +452,86 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
         />
       )}
 
+      {/* The everyday fields are above; the rest folds away (open while editing or when something is set). */}
+      <Pressable
+        style={styles.moreBtn}
+        onPress={() => setMoreOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: moreOpen }}
+      >
+        <Feather name={moreOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.primary} />
+        <Text style={styles.moreBtnText}>{moreOpen ? t('task.fewerOptions') : t('task.moreOptions')}</Text>
+      </Pressable>
+      {!moreOpen && moreSummary() !== '' && <Text style={styles.moreSummary}>{moreSummary()}</Text>}
+
+      {moreOpen && (
+      <>
+      {/* Icon and tags share a row: a small square for the icon, the tag chips beside it. */}
+      <View style={styles.pairRow}>
+        <View>
+          <Text style={styles.label}>{t('task.icon')}</Text>
+          <Pressable
+            style={[styles.iconBtn, (icon && resolveTaskIcon(icon)) || iconOpen ? styles.iconBtnOn : styles.iconBtnEmpty]}
+            onPress={() => setIconOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: iconOpen }}
+            accessibilityLabel={t('task.iconA11y', {
+              name: icon && resolveTaskIcon(icon) ? t(resolveTaskIcon(icon)!.labelKey) : t('task.iconNone'),
+            })}
+          >
+            {icon && resolveTaskIcon(icon) ? (
+              <TaskIconGlyph id={icon} size={22} color={colors.primary} />
+            ) : (
+              <Feather name="plus" size={18} color={colors.faint} />
+            )}
+          </Pressable>
+        </View>
+        <View style={styles.pairCol}>
+          <Text style={styles.label}>{t('task.tags')}</Text>
+          <TagPicker selected={tagIds} onChange={setTagIds} />
+        </View>
+      </View>
+      {iconOpen && (
+        <View style={styles.iconGrid}>
+          {TASK_ICON_SET.map((entry) => {
+            const sel = icon === entry.id;
+            return (
+              <Pressable
+                key={entry.id}
+                style={[styles.iconCell, sel && styles.iconCellSel]}
+                onPress={() => {
+                  setIcon(sel ? null : entry.id);
+                  setIconOpen(false);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sel }}
+                accessibilityLabel={t(entry.labelKey)}
+              >
+                <TaskIconGlyph id={entry.id} size={20} color={sel ? colors.primary : colors.muted} />
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      <Text style={styles.label}>{t('task.priority')}</Text>
+      <View style={styles.row}>
+        {PRIORITY_ORDER.map((p) => {
+          const selected = p === priority;
+          const color = PRIORITY_COLOR[p];
+          return (
+            <Pressable
+              key={p}
+              style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
+              onPress={() => setPriority(p)}
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                {t(`priority.${p}`)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
       {/* Reminders and repeat share a row; the repeat list and its per-mode
           controls open full width below it. */}
       <View style={styles.pairRow}>
@@ -608,6 +645,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onDelete, autoFocusTi
             </Pressable>
           </View>
         </>
+      )}
+
+      </>
       )}
 
       <View style={styles.actions}>

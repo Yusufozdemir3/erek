@@ -84,6 +84,8 @@ function minutes(toks: Token[], i: number): { m: number; len: number } | null {
   return n && n.cs === 'nom' && n.n >= 1 && n.n <= 59 ? { m: n.n, len: n.len } : null;
 }
 
+const PRICE_WORDS = new Set(['lira', 'tl', '₺', 'euro', 'dolar', 'kuruş', 'kg', 'km', 'gr', 'litre', 'lt', 'metre', 'cm', 'mm', 'tane', 'adet']);
+
 function trTime(toks: Token[], i: number): { clock: ClockSpec; len: number } | null {
   const saat = wAt(toks, i) === 'saat';
   const j = saat ? i + 1 : i;
@@ -93,9 +95,11 @@ function trTime(toks: Token[], i: number): { clock: ClockSpec; len: number } | n
   // "15:30", "15:30'da", "saat 9.45"
   const c = CLOCK_RE.exec(t.base);
   if (c) {
-    if (!(t.base.includes(':') || saat || sfxCase(t.sfx) === 'loc')) return null;
     const h = Number(c[1]);
     const m = Number(c[2]);
+    // "12.17" with a dot is a clock too, unless a price or measure follows ("2.30 lira").
+    const dotClock = !t.base.includes(':') && !PRICE_WORDS.has(wAt(toks, j + 1));
+    if (!(t.base.includes(':') || saat || sfxCase(t.sfx) === 'loc' || dotClock)) return null;
     if (h > 24 || m > 59) return null;
     const clock = clockOf(h, m);
     if (c[1].startsWith('0')) clock.exact = true; // "09:30" is the morning

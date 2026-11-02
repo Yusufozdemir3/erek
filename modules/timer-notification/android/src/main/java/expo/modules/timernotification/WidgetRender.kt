@@ -78,7 +78,7 @@ object WidgetRender {
     }
   }
 
-  private fun label(b: JSONObject?, k: String, fallback: String = ""): String =
+  internal fun label(b: JSONObject?, k: String, fallback: String = ""): String =
     b?.optJSONObject("labels")?.optString(k, fallback)?.ifEmpty { fallback } ?: fallback
 
   fun clock(totalSeconds: Double): String {
@@ -89,10 +89,10 @@ object WidgetRender {
     return if (h > 0) String.format("%d:%02d:%02d", h, m, sec) else String.format("%d:%02d", m, sec)
   }
 
-  private fun num(v: Double): String =
+  internal fun num(v: Double): String =
     if (v.isNaN()) "0" else if (v == Math.floor(v)) v.toLong().toString() else String.format("%.1f", v)
 
-  private fun habitColor(h: JSONObject?, fallback: Int): Int = parseColor(h?.optString("color"), fallback)
+  internal fun habitColor(h: JSONObject?, fallback: Int): Int = parseColor(h?.optString("color"), fallback)
 
   // — Pending intents —
 
@@ -107,7 +107,7 @@ object WidgetRender {
     )
   }
 
-  private fun open(ctx: Context, uri: String?, requestCode: Int): PendingIntent {
+  internal fun open(ctx: Context, uri: String?, requestCode: Int): PendingIntent {
     val intent = if (uri.isNullOrEmpty()) {
       ctx.packageManager.getLaunchIntentForPackage(ctx.packageName) ?: Intent()
     } else {
@@ -128,18 +128,20 @@ object WidgetRender {
     )
   }
 
-  private fun habitUri(id: String) = "habitapp://habit/${Uri.encode(id)}"
-  private const val PLUS_URI = "habitapp://plus"
+  internal fun habitUri(id: String) = "habitapp://habit/${Uri.encode(id)}"
+  internal const val PLUS_URI = "habitapp://plus"
   private const val HABITS_URI = "habitapp://habits"
 
   // — Updating —
 
-  private fun ids(ctx: Context, cls: Class<*>): IntArray =
+  internal fun ids(ctx: Context, cls: Class<*>): IntArray =
     try { AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, cls)) } catch (e: Exception) { IntArray(0) }
 
   fun updateAll(ctx: Context) {
     updateButtons(ctx)
     updateTimers(ctx)
+    WidgetLists.updateLists(ctx)
+    WidgetLists.updateQuickAdds(ctx)
   }
 
   fun updateButtons(ctx: Context) {
@@ -196,7 +198,7 @@ object WidgetRender {
   }
 
   // The next day starts from zero (WidgetStore): redraw at midnight.
-  private fun scheduleMidnight(ctx: Context) {
+  internal fun scheduleMidnight(ctx: Context) {
     val am = ctx.getSystemService(AlarmManager::class.java) ?: return
     val c = Calendar.getInstance()
     c.add(Calendar.DAY_OF_YEAR, 1)
@@ -213,7 +215,7 @@ object WidgetRender {
   fun pokeJsWidgets(ctx: Context) {
     if (ErekWidgetsModule.isJsAlive()) return // the app drains and repaints them itself
     val mgr = AppWidgetManager.getInstance(ctx)
-    for (name in listOf("ErekToday", "ErekCounter")) {
+    for (name in listOf("ErekCounter", "ErekTasks")) {
       try {
         val cn = ComponentName(ctx.packageName, "${ctx.packageName}.widget.$name")
         val placed = mgr.getAppWidgetIds(cn)

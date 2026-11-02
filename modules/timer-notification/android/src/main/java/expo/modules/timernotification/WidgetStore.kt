@@ -57,6 +57,8 @@ object WidgetStore {
   private fun rolled(b: JSONObject, day: String): JSONObject {
     if (b.optString("date") == day) return b
     b.put("date", day)
+    // Tasks are today's list: an older board's are not shown (the app refreshes them).
+    b.put("stale", true)
     val habits = b.optJSONArray("habits") ?: JSONArray()
     for (i in 0 until habits.length()) {
       val h = habits.optJSONObject(i) ?: continue
@@ -78,6 +80,15 @@ object WidgetStore {
     return null
   }
 
+  fun task(b: JSONObject, id: String): JSONObject? {
+    val tasks = b.optJSONArray("tasks") ?: return null
+    for (i in 0 until tasks.length()) {
+      val t = tasks.optJSONObject(i) ?: continue
+      if (t.optString("id") == id) return t
+    }
+    return null
+  }
+
   fun isDue(h: JSONObject, day: String): Boolean {
     val due = h.optJSONArray("due") ?: return false
     for (i in 0 until due.length()) if (due.optString(i) == day) return true
@@ -93,6 +104,10 @@ object WidgetStore {
 
   private fun applyEntry(b: JSONObject, e: JSONObject) {
     if (e.optString("date") != b.optString("date")) return
+    if (e.optString("kind") == "task") {
+      task(b, e.optString("taskId"))?.put("completed", e.optBoolean("completed"))
+      return
+    }
     val h = habit(b, e.optString("habitId")) ?: return
     when (e.optString("kind")) {
       "toggle" -> h.put("completed", e.optBoolean("completed"))
@@ -134,28 +149,92 @@ object WidgetStore {
       val habitId = pick(ctx, widgetId) ?: return false
       val b = board(ctx) ?: return false
       if (b.optBoolean("locked", false)) return false
+      return applyTap(ctx, b, habitId, op, at)
+    }
+  }
+
+  // A tap on a habit row of a list widget (Bugün, Sayaç); same rules as above.
+  fun tapRow(ctx: Context, habitId: String, op: String, at: Long): Boolean {
+    synchronized(lock) {
+      val b = board(ctx) ?: return false
+      return applyTap(ctx, b, habitId, op, at)
+    }
+  }
+
+  private fun applyTap(ctx: Context, b: JSONObject, habitId: String, op: String, at: Long): Boolean {
+    val day = today(at)
+    rolled(b, day)
+    val h = habit(b, habitId) ?: return false
+    if (!isDue(h, day)) return false
+    val entry = JSONObject()
+      .put("id", newId(at))
+      .put("habitId", habitId)
+      .put("date", day)
+    when {
+      op == "toggle" && h.optString("kind") == "binary" ->
+        entry.put("kind", "toggle").put("completed", !h.optBoolean("completed", false))
+      op == "inc" && h.optString("kind") == "numeric" ->
+        entry.put("kind", "inc").put("delta", 1)
+      else -> return false
+    }
+    applyEntry(b, entry)
+    saveBoard(ctx, b)
+    queue(ctx, entry)
+    return true
+  }
+
+  // A sentence typed into the Hızlı görev card. The app parses it (date, time, priority)
+  // and creates the task when it runs; until then it shows as a plain row on the board.
+  fun addTask(ctx: Context, title: String, at: Long) {
+    synchronized(lock) {
+      val day = today(at)
+      val entry = JSONObject()
+        .put("id", newId(at))
+        .put("kind", "taskAdd")
+        .put("title", title)
+        .put("date", day)
+      val b = board(ctx)
+      if (b != null) {
+        rolled(b, day)
+        if (!b.optBoolean("stale", false)) {
+          val tasks = b.optJSONArray("tasks") ?: JSONArray().also { b.put("tasks", it) }
+          tasks.put(
+            JSONObject().put("id", "add:" + entry.getString("id")).put("title", title).put("color", "").put("completed", false)
+          )
+          saveBoard(ctx, b)
+        }
+      }
+      queue(ctx, entry)
+    }
+  }
+
+  // A tap on a task row (Bugün, Görevler): checks it off or back.
+  fun tapTask(ctx: Context, taskId: String, at: Long): Boolean {
+    synchronized(lock) {
+      val b = board(ctx) ?: return false
       val day = today(at)
       rolled(b, day)
-      val h = habit(b, habitId) ?: return false
-      if (!isDue(h, day)) return false
+      if (b.optBoolean("stale", false)) return false
+      val t = task(b, taskId) ?: return false
       val entry = JSONObject()
-        .put("id", "n${at.toString(36)}-${(Math.random() * 1e9).toLong().toString(36)}")
-        .put("habitId", habitId)
+        .put("id", newId(at))
+        .put("kind", "task")
+        .put("taskId", taskId)
         .put("date", day)
-      when {
-        op == "toggle" && h.optString("kind") == "binary" ->
-          entry.put("kind", "toggle").put("completed", !h.optBoolean("completed", false))
-        op == "inc" && h.optString("kind") == "numeric" ->
-          entry.put("kind", "inc").put("delta", 1)
-        else -> return false
-      }
+        .put("completed", !t.optBoolean("completed", false))
       applyEntry(b, entry)
       saveBoard(ctx, b)
-      val pending = readPending(ctx)
-      pending.put(entry)
-      prefs(ctx).edit().putString(KEY_PENDING, pending.toString()).apply()
+      queue(ctx, entry)
       return true
     }
+  }
+
+  private fun newId(at: Long) = "n${at.toString(36)}-${(Math.random() * 1e9).toLong().toString(36)}"
+
+  private fun queue(ctx: Context, entry: JSONObject) {
+    val pending = readPending(ctx)
+    pending.put(entry)
+    prefs(ctx).edit().putString(KEY_PENDING, pending.toString()).apply()
   }
 
   // A tap JS already queued itself (the RN Bugün/Sayaç widgets): show it here

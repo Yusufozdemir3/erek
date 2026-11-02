@@ -76,6 +76,7 @@ describe('AddSheet — görev oluşturma', () => {
       <AddSheet visible onClose={onClose} initialStep="task" />
     );
     fireEvent.changeText(getByPlaceholderText('Görev başlığı'), 'Fatura öde');
+    fireEvent.press(getByText('Daha fazla seçenek')); // subtasks and reminders are in the folded part
     // Draft subtask (available at creation time — enableSubtaskDraft).
     fireEvent.changeText(getByPlaceholderText('Alt görev ekle…'), 'Fişi tara');
     fireEvent.press(getByText('＋'));

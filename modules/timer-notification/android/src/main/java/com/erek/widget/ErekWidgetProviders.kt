@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.os.Bundle
+import expo.modules.timernotification.WidgetLists
 import expo.modules.timernotification.WidgetRender
 import expo.modules.timernotification.WidgetStore
 
@@ -48,5 +49,25 @@ class ErekTimer : AppWidgetProvider() {
 
   override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, opts: Bundle) {
     WidgetRender.updateTimers(ctx)
+  }
+}
+
+// The list widgets (Bugün, Sayaç, Görevler, Hedefler) and Hızlı görev. Same class
+// names as the react-native-android-widget versions, so widgets already placed
+// carry over on update. Drawing: WidgetLists.
+open class ErekListProvider : AppWidgetProvider() {
+  override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+    WidgetLists.updateLists(ctx)
+  }
+}
+
+class ErekToday : ErekListProvider()
+class ErekCounter : ErekListProvider()
+class ErekTasks : ErekListProvider()
+class ErekGoals : ErekListProvider()
+
+class ErekQuickAdd : AppWidgetProvider() {
+  override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
+    WidgetLists.updateQuickAdds(ctx)
   }
 }

@@ -63,6 +63,7 @@ describe('TaskForm: ikon ve etiketler', () => {
     tagRepo.create(mockUserId, 'Ev', null);
     const onSubmit = jest.fn();
     const u = await renderUI(<TaskForm submitLabel="Kaydet" onSubmit={onSubmit} />);
+    fireEvent.press(u.getByText('Daha fazla seçenek'));
     expect(u.queryByLabelText('İş etiketi')).toBeNull(); // seçilmemiş etiket formda yok
     fireEvent.changeText(u.getByPlaceholderText('Görev başlığı'), 'Rapor');
 
@@ -99,6 +100,7 @@ describe('TaskForm: ikon ve etiketler', () => {
     tagRepo.create(mockUserId, 'Ev', '#4f46e5'); // paletin ilk rengi dolu
     const onSubmit = jest.fn();
     const u = await renderUI(<TaskForm submitLabel="Kaydet" onSubmit={onSubmit} />);
+    fireEvent.press(u.getByText('Daha fazla seçenek'));
     fireEvent.changeText(u.getByPlaceholderText('Görev başlığı'), 'Fatura');
     openTags(u);
     fireEvent.changeText(u.getByLabelText(SEARCH), '  Acil  ');
@@ -116,6 +118,7 @@ describe('TaskForm: ikon ve etiketler', () => {
     const home = tagRepo.create(mockUserId, 'Ev', null)!;
     const onSubmit = jest.fn();
     const u = await renderUI(<TaskForm submitLabel="Kaydet" onSubmit={onSubmit} />);
+    fireEvent.press(u.getByText('Daha fazla seçenek'));
     fireEvent.changeText(u.getByPlaceholderText('Görev başlığı'), 'Temizlik');
     openTags(u);
     fireEvent.changeText(u.getByLabelText(SEARCH), 'EV');
@@ -129,12 +132,14 @@ describe('TaskForm: ikon ve etiketler', () => {
 
   it('arama listeyi süzer; eşleşme yoksa söyler; hiç etiket yoksa nasıl oluşturulacağını söyler', async () => {
     const u0 = await renderUI(<TaskForm submitLabel="Kaydet" onSubmit={jest.fn()} />);
+    fireEvent.press(u0.getByText('Daha fazla seçenek'));
     openTags(u0);
     expect(u0.getByText('Henüz etiketin yok. Yukarıya bir ad yaz, oluştur.')).toBeTruthy();
     u0.unmount();
 
     for (const n of ['İş', 'Market', 'Okul']) tagRepo.create(mockUserId, n, null);
     const u = await renderUI(<TaskForm submitLabel="Kaydet" onSubmit={jest.fn()} />);
+    fireEvent.press(u.getByText('Daha fazla seçenek'));
     openTags(u);
     fireEvent.changeText(u.getByLabelText(SEARCH), 'mar');
     expect(u.getByLabelText('Market')).toBeTruthy();

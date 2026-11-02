@@ -11,26 +11,34 @@
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { habitRepo } from '@/db';
+import { goalMilestoneRepo, goalRepo, habitRepo, milestoneViews, taskRepo } from '@/db';
 import { isScheduledOn, isWithinHabitDates, todayDate } from '@/lib/helpers';
 import { getNotificationPrefs } from '@/lib/notificationPrefs';
 import { getStoredLang } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n/translations';
 import { areFeaturesUnlocked } from '@/plus/plusStore';
-import { DEFAULT_HABIT_COLOR, type Colors } from '@/ui/theme';
+import { DEFAULT_HABIT_COLOR, PRIORITY_COLOR, percentLabel, type Colors } from '@/ui/theme';
 import {
   dueDays,
   iconSpec,
   overlayPending,
+  overlayPendingTasks,
   parseNativeWidgetActions,
   picksToImport,
   type NativeBoard,
   type NativeBoardHabit,
   type NativePalette,
 } from './nativeWidgetsLogic';
-import { PICKS_KEY } from './widgetSnapshot';
+import { pickGoals } from './widgetGoals';
 import type { WidgetAction } from './widgetQueue';
 import { readWidgetTheme, themeColors } from './widgetTheme';
+
+// More than this wouldn't fit any widget size.
+const MAX_TASKS = 30;
+
+// Which habit each JS one-habit widget showed (widget id -> habit id), from
+// before those widgets went native; carried over once.
+export const PICKS_KEY = 'widget:picks';
 
 interface NativeApi {
   setBoard(json: string): void;
@@ -112,6 +120,7 @@ export async function buildNativeBoard(userId: string, pending: WidgetAction[]):
     color: h.color ?? DEFAULT_HABIT_COLOR,
     kind: h.kind,
     icon: iconSpec(h.icon, resolve, glyphs),
+    unit: h.unit,
     target: h.target_amount,
     amount: states[h.id]?.amount ?? 0,
     completed: states[h.id]?.completed ?? false,
@@ -120,6 +129,25 @@ export async function buildNativeBoard(userId: string, pending: WidgetAction[]):
       (d) => isScheduledOn(h.schedule, d) && isWithinHabitDates(h.start_date, h.end_date, d, h.skip_dates)
     ),
   }));
+
+  // Today's tasks (and carried-over ones); someone else's shared task is checked off through the server.
+  const tasks = taskRepo
+    .listForToday(userId, today)
+    .filter((x) => !x.shared_owner_uid)
+    .slice(0, MAX_TASKS)
+    .map((x) => ({ id: x.id, title: x.title, color: PRIORITY_COLOR[x.priority], completed: x.completed_at !== null }));
+
+  // Open goals: numeric by current/target, milestone goals by milestones reached.
+  const goals = pickGoals(
+    goalRepo.listActive(userId, today).map((g) => {
+      let ratio = goalRepo.progressRatio(g);
+      if (g.goal_type !== 'numeric') {
+        const views = milestoneViews(goalMilestoneRepo.listByGoal(g.id), g.current_value);
+        ratio = views.length > 0 ? views.filter((v) => v.reached).length / views.length : 0;
+      }
+      return { id: g.id, title: g.title, deadline: g.deadline, completed: goalRepo.isCompleted(g), ratio };
+    })
+  ).map((g) => ({ ...g, percentLabel: percentLabel(g.percent, lang) }));
 
   return {
     v: 1,
@@ -148,8 +176,24 @@ export async function buildNativeBoard(userId: string, pending: WidgetAction[]):
       channelName: t('timer.notifChannel'),
       running: t('timer.notifRunning'),
       pausedTemplate: t('timer.notifPaused', { time: '{time}' }),
+      todayTitle: t('widget.title'),
+      summary: t('widget.summary', { done: '{done}', total: '{total}' }),
+      todayEmpty: t('widget.todayEmpty'),
+      counterTitle: t('widget.counterTitle'),
+      counterEmpty: t('widget.counterEmpty'),
+      tasksTitle: t('widget.tasksTitle'),
+      tasksEmpty: t('widget.tasksEmpty'),
+      goalsTitle: t('widget.goalsTitle'),
+      goalsEmpty: t('widget.goalsEmpty'),
+      stale: t('widget.stale'),
+      quickAdd: t('widget.quickAdd'),
+      quickAddHint: t('widget.quickAddHint'),
+      quickAddSave: t('widget.quickAddSave'),
+      quickAddDone: t('widget.quickAddDone'),
     },
     habits: overlayPending(habits, today, pending),
+    tasks: overlayPendingTasks(tasks, today, pending),
+    goals,
     goalIcon: iconSpec('target', resolve, glyphs),
   };
 }

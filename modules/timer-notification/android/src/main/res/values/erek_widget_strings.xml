@@ -8,6 +8,17 @@
   <string name="erek_widget_count_description">Seçtiğin sayılı alışkanlık her dokunuşta bir artar</string>
   <string name="erek_widget_timer_label">Erek — Zamanlayıcı</string>
   <string name="erek_widget_timer_description">Zamanlayıcını ana ekrandan başlat, duraklat, bitir</string>
+  <string name="erek_widget_today_label">Erek — Bugün</string>
+  <string name="erek_widget_today_description">Bugünün alışkanlıkları — dokunarak işaretle</string>
+  <string name="erek_widget_counter_label">Erek — Sayaç</string>
+  <string name="erek_widget_counter_description">Su, sayfa gibi sayılı alışkanlıklara tek dokunuşla +1</string>
+  <string name="erek_widget_tasks_label">Erek — Görevler</string>
+  <string name="erek_widget_tasks_description">Bugünün görevleri — dokunarak tamamla</string>
+  <string name="erek_widget_goals_label">Erek — Hedefler</string>
+  <string name="erek_widget_goals_description">Açık hedeflerin ve ilerlemen</string>
+  <string name="erek_widget_quickadd_label">Erek — Hızlı görev</string>
+  <string name="erek_widget_quickadd_description">Tek dokunuşla yeni görev ekle</string>
+  <string name="erek_widget_quickadd_text">Yeni görev ekle</string>
   <string name="erek_widget_open_app">Başlamak için Erek’i bir kez aç</string>
   <string name="erek_widget_preview_habit">Su iç</string>
   <string name="erek_widget_preview_timer">Kitap oku</string>

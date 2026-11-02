@@ -5,12 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userRepo } from '../../db/repositories/userRepo';
 import { habitRepo } from '../../db/repositories/habitRepo';
 import { taskRepo } from '../../db/repositories/taskRepo';
-import { goalRepo } from '../../db/repositories/goalRepo';
 import { getDb } from '../../db/database';
 import { resetTestDb } from '../../test/dbTestUtils';
 import { todayDate } from '../../lib/helpers';
 import { appendPending, readPending, type WidgetAction } from '../widgetQueue';
-import { readSnapshot } from '../widgetSnapshot';
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios' }, // yerel widget güncellemesi atlanır; anlık görüntü yine yazılır
@@ -24,7 +22,7 @@ jest.mock('@/lib/notifications', () => ({
 }));
 jest.mock('@/i18n/I18nProvider', () => ({ getStoredLang: async () => 'tr' }));
 
-import { buildTodaySnapshot, drainWidgetQueue, refreshWidget } from '../widgetData';
+import { drainWidgetQueue } from '../widgetData';
 
 let uid: string;
 const today = () => todayDate();
@@ -111,64 +109,5 @@ describe('görevler', () => {
     expect(taskRepo.getById(shared.id)?.completed_at).toBeNull();
     expect(await readPending()).toEqual([]);
   });
-
-  it('anlık görüntü: bugünün görevleri açık olanlar önde; paylaşılan hariç; etiketler dolu', async () => {
-    const done = task('Bitti');
-    taskRepo.setCompleted(done.id, true);
-    task('Açık', { priority: 'high' });
-    const shared = task('Arkadaşın');
-    getDb().runSync("UPDATE tasks SET shared_owner_uid = 'friend' WHERE id = ?", [shared.id]);
-    task('Yarın', { due_date: '2999-01-01' });
-
-    const s = await buildTodaySnapshot(uid);
-    expect(s.tasks!.map((t) => [t.title, t.completed])).toEqual([['Açık', false], ['Bitti', true]]);
-    expect(s.tasks![0].color).toBe('#ef4444');
-    expect(s.tasksTitle).toBeTruthy();
-    expect(s.tasksEmptyLabel).toBeTruthy();
-  });
-
-  it('yenilemede bekleyen görev dokunuşu görüntüde korunur', async () => {
-    const t = task('Market');
-    await appendPending({ id: 'a', kind: 'task', taskId: t.id, date: today(), completed: true });
-    await refreshWidget(uid);
-    expect((await readSnapshot())?.tasks?.[0]).toMatchObject({ title: 'Market', completed: true });
-  });
 });
 
-describe('hedefler', () => {
-  it('anlık görüntüde açık hedefler yüzdeleriyle gelir, biten gelmez', async () => {
-    const a = goalRepo.create({ user_id: uid, title: 'Koş', goal_type: 'numeric', target_value: 100, deadline: '2999-01-01' });
-    goalRepo.addProgress(a.id, 40);
-    const done = goalRepo.create({ user_id: uid, title: 'Bitti', goal_type: 'numeric', target_value: 10 });
-    goalRepo.addProgress(done.id, 10);
-    const s = await buildTodaySnapshot(uid);
-    expect(s.goals).toEqual([expect.objectContaining({ title: 'Koş', percent: 40 })]);
-    expect(s.goals![0].percentLabel).toContain('40');
-    expect(s.goalsTitle).toBeTruthy();
-    expect(s.goalsEmptyLabel).toBeTruthy();
-  });
-});
-
-describe('anlık görüntü', () => {
-  it('tür, miktar, hedef ve birim widget’a taşınır; çeviri metinleri dolu', async () => {
-    habitRepo.create({ user_id: uid, title: 'Su', kind: 'numeric', target_amount: 8, unit: 'bardak' });
-    const s = await buildTodaySnapshot(uid);
-    expect(s.habits[0]).toMatchObject({ kind: 'numeric', amount: 0, target: 8, unit: 'bardak', completed: false });
-    expect(s.summaryTemplate).toContain('{done}');
-    expect(s.staleLabel).toBeTruthy();
-    expect(s.counterTitle).toBeTruthy();
-    expect(s.counterEmptyLabel).toBeTruthy();
-  });
-
-  it('henüz yazılmamış dokunuş yenilemede kaybolmaz (üstüne bindirilir)', async () => {
-    const h = habitRepo.create({ user_id: uid, title: 'Kitap' });
-    await appendPending(toggle(h.id, true));
-
-    await refreshWidget(uid);
-
-    const s = await readSnapshot();
-    expect(s?.habits[0].completed).toBe(true);
-    expect(s?.doneCount).toBe(1);
-    expect(habitRepo.isCompletedOn(h.id, today())).toBe(false); // veritabanına yenileme yazmaz
-  });
-});

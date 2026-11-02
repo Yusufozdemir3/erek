@@ -1,18 +1,10 @@
-// Widget dokunuşları: tıklamadan işlem çıkarma, anlık (iyimser) görünüm,
-// bekleyen kuyruk ve sıralı yazma.
+// Widget kuyruğu: bekleyen dokunuşlar, sıralı yazma ve sinyal.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  INC_ACTION,
-  TASK_ACTION,
   PENDING_KEY,
-  TOGGLE_ACTION,
-  actionFromClick,
   appendPending,
-  applyAll,
-  applyToSnapshot,
   emitWidgetAction,
-  isStale,
   localYmd,
   onWidgetAction,
   readPending,
@@ -20,154 +12,11 @@ import {
   serialized,
   type WidgetAction,
 } from '../widgetQueue';
-import { FALLBACK_COLORS, type WidgetSnapshot } from '../widgetSnapshot';
 
 const TODAY = '2026-10-03';
 
-function snap(over: Partial<WidgetSnapshot> = {}): WidgetSnapshot {
-  return {
-    date: TODAY,
-    dateLabel: '3 Ekim',
-    title: 'Bugün',
-    summaryLabel: '1/3 tamamlandı',
-    summaryTemplate: '{done}/{total} tamamlandı',
-    emptyLabel: 'boş',
-    doneCount: 1,
-    totalCount: 3,
-    colors: FALLBACK_COLORS,
-    tasks: [
-      { id: 'market', title: 'Market', color: '#f59e0b', completed: false },
-      { id: 'fatura', title: 'Fatura', color: '#ef4444', completed: false },
-      { id: 'mail', title: 'Mail', color: '#10b981', completed: true },
-    ],
-    habits: [
-      { id: 'kitap', title: 'Kitap oku', color: '#111111', completed: false, kind: 'binary' },
-      { id: 'su', title: 'Su iç', color: '#222222', completed: false, kind: 'numeric', amount: 6, target: 8, unit: 'bardak' },
-      { id: 'yoga', title: 'Yoga', color: '#333333', completed: true, kind: 'timer' },
-    ],
-    ...over,
-  };
-}
-
 beforeEach(async () => {
   await AsyncStorage.clear();
-});
-
-describe('actionFromClick', () => {
-  it('ikili alışkanlık: tersine çevrilmiş HEDEF durum yazılır (çift uygulanırsa zararsız)', () => {
-    expect(actionFromClick(snap(), TOGGLE_ACTION, { habitId: 'kitap' }, 'a1', TODAY)).toEqual({
-      id: 'a1', kind: 'toggle', habitId: 'kitap', date: TODAY, completed: true,
-    });
-  });
-
-  it('sayılı alışkanlık: +1', () => {
-    expect(actionFromClick(snap(), INC_ACTION, { habitId: 'su' }, 'a2', TODAY)).toEqual({
-      id: 'a2', kind: 'inc', habitId: 'su', date: TODAY, delta: 1,
-    });
-  });
-
-  it('yanlış türde dokunuş, bilinmeyen alışkanlık, bilinmeyen eylem: hiçbir şey yapılmaz', () => {
-    expect(actionFromClick(snap(), TOGGLE_ACTION, { habitId: 'su' }, 'x', TODAY)).toBeNull();
-    expect(actionFromClick(snap(), INC_ACTION, { habitId: 'kitap' }, 'x', TODAY)).toBeNull();
-    expect(actionFromClick(snap(), TOGGLE_ACTION, { habitId: 'yoga' }, 'x', TODAY)).toBeNull();
-    expect(actionFromClick(snap(), TOGGLE_ACTION, { habitId: 'yok' }, 'x', TODAY)).toBeNull();
-    expect(actionFromClick(snap(), TOGGLE_ACTION, { habitId: 42 }, 'x', TODAY)).toBeNull();
-    expect(actionFromClick(snap(), 'SOMETHING', { habitId: 'kitap' }, 'x', TODAY)).toBeNull();
-    expect(actionFromClick(null, TOGGLE_ACTION, { habitId: 'kitap' }, 'x', TODAY)).toBeNull();
-  });
-
-  it('dünkü anlık görüntüye dokunmak dünü işaretlemez', () => {
-    const old = snap({ date: '2026-10-02' });
-    expect(isStale(old, TODAY)).toBe(true);
-    expect(actionFromClick(old, TOGGLE_ACTION, { habitId: 'kitap' }, 'x', TODAY)).toBeNull();
-  });
-
-  it('eski sürümün anlık görüntüsü (kind yok) ikili sayılır', () => {
-    const legacy = snap({ habits: [{ id: 'k', title: 'K', color: '#000000', completed: false }] });
-    expect(actionFromClick(legacy, TOGGLE_ACTION, { habitId: 'k' }, 'x', TODAY)?.kind).toBe('toggle');
-  });
-});
-
-describe('görev dokunuşları', () => {
-  it('görev satırı HEDEF durumu taşır (açıksa tamamla, tamamsa yeniden aç)', () => {
-    expect(actionFromClick(snap(), TASK_ACTION, { taskId: 'market' }, 'a', TODAY)).toEqual({
-      id: 'a', kind: 'task', taskId: 'market', date: TODAY, completed: true,
-    });
-    expect(actionFromClick(snap(), TASK_ACTION, { taskId: 'mail' }, 'a', TODAY)).toMatchObject({ completed: false });
-  });
-
-  it('bilinmeyen görev, görev listesi olmayan eski görüntü, dünkü görüntü: işlem yok', () => {
-    expect(actionFromClick(snap(), TASK_ACTION, { taskId: 'yok' }, 'a', TODAY)).toBeNull();
-    expect(actionFromClick(snap({ tasks: undefined }), TASK_ACTION, { taskId: 'market' }, 'a', TODAY)).toBeNull();
-    expect(actionFromClick(snap({ date: '2000-01-01' }), TASK_ACTION, { taskId: 'market' }, 'a', TODAY)).toBeNull();
-  });
-
-  it('anlık görünüm: tamamlanan görev alta iner, yeniden açılan üste çıkar; alışkanlık sayaçları değişmez', () => {
-    const done = applyToSnapshot(snap(), { id: 't', kind: 'task', taskId: 'market', date: TODAY, completed: true });
-    expect(done.tasks!.map((t) => [t.id, t.completed])).toEqual([['fatura', false], ['market', true], ['mail', true]]);
-    expect(done.doneCount).toBe(1);
-    const reopened = applyToSnapshot(done, { id: 't2', kind: 'task', taskId: 'mail', date: TODAY, completed: false });
-    expect(reopened.tasks!.map((t) => t.id)).toEqual(['fatura', 'mail', 'market']);
-  });
-
-  it('başka günün ya da listede olmayan görevin işlemi görüntüyü değiştirmez', () => {
-    const s = snap();
-    expect(applyToSnapshot(s, { id: 't', kind: 'task', taskId: 'market', date: '2026-10-02', completed: true })).toBe(s);
-    expect(applyToSnapshot(s, { id: 't', kind: 'task', taskId: 'yok', date: TODAY, completed: true })).toBe(s);
-  });
-
-  it('kuyruğa yazılan görev işlemi okunur; eksik alanlı olanı atılır', async () => {
-    await appendPending({ id: 'x', kind: 'task', taskId: 'market', date: TODAY, completed: true });
-    await AsyncStorage.setItem(
-      PENDING_KEY,
-      JSON.stringify([...(await readPending()), { id: 'bad', kind: 'task', date: TODAY, completed: true }])
-    );
-    expect((await readPending()).map((a) => a.id)).toEqual(['x']);
-  });
-});
-
-describe('applyToSnapshot', () => {
-  const toggle = (completed: boolean) => ({ id: 't', kind: 'toggle' as const, habitId: 'kitap', date: TODAY, completed });
-  const inc: WidgetAction = { id: 'i', kind: 'inc', habitId: 'su', date: TODAY, delta: 1 };
-
-  it('işaretleme sayacı ve özeti günceller', () => {
-    const next = applyToSnapshot(snap(), toggle(true));
-    expect(next.habits[0].completed).toBe(true);
-    expect(next.doneCount).toBe(2);
-    expect(next.summaryLabel).toBe('2/3 tamamlandı');
-  });
-
-  it('+1 hedefe ulaşınca tamamlanır', () => {
-    const once = applyToSnapshot(snap(), inc);
-    expect(once.habits[1]).toMatchObject({ amount: 7, completed: false });
-    const twice = applyToSnapshot(once, { ...inc, id: 'i2' });
-    expect(twice.habits[1]).toMatchObject({ amount: 8, completed: true });
-    expect(twice.summaryLabel).toBe('2/3 tamamlandı');
-  });
-
-  it('hedefsiz sayılı alışkanlık hiç "tamamlanmaz"', () => {
-    const s = snap();
-    s.habits[1] = { ...s.habits[1], target: null };
-    expect(applyToSnapshot(s, inc).habits[1]).toMatchObject({ amount: 7, completed: false });
-  });
-
-  it('başka günün ya da listede olmayan alışkanlığın işlemi görüntüyü değiştirmez', () => {
-    const s = snap();
-    expect(applyToSnapshot(s, { ...toggle(true), date: '2026-10-02' })).toBe(s);
-    expect(applyToSnapshot(s, { ...toggle(true), habitId: 'yok' })).toBe(s);
-  });
-
-  it('şablonu olmayan eski görüntüde özet olduğu gibi kalır', () => {
-    const next = applyToSnapshot(snap({ summaryTemplate: undefined }), toggle(true));
-    expect(next.summaryLabel).toBe('1/3 tamamlandı');
-    expect(next.doneCount).toBe(2);
-  });
-
-  it('applyAll sırayla uygular: işaretle + geri al = başlangıç', () => {
-    const next = applyAll(snap(), [toggle(true), { ...toggle(false), id: 't2' }]);
-    expect(next.habits[0].completed).toBe(false);
-    expect(next.doneCount).toBe(1);
-  });
 });
 
 describe('bekleyen kuyruk', () => {
