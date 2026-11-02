@@ -276,31 +276,31 @@ tanıma durumunda; cihazda tanımada hiç toplanmaz.)
 
 ## Yenilikler (bu sürüm — en fazla 500 karakter)
 
-Bu sürüm: **1.3.1, versionCode 26** (production'da 1.3.1 vc25; sürüm adı aynı kaldı). Play Console'a
-aşağıdaki blok olduğu gibi yapıştırılabilir (dil etiketleriyle; TR 385,
-EN 371, DE 405 karakter).
+Bu sürüm: **1.4.0, versionCode 27** (production'da 1.3.1 vc26). Play Console'a
+aşağıdaki blok olduğu gibi yapıştırılabilir (dil etiketleriyle; TR 429,
+EN 443, DE 492 karakter).
 
 ```
 <tr-TR>
-• Yeni Bildirimler kutusu (sağ üstteki zil): tebrikler, hatırlatmalar ve arkadaşının bitirdiği işler artık kaybolmaz.
-• Uygulamayı yeniden mi yükledin? Kurulumda "Daha önce kullandım" de, verilerin geri gelsin.
-• Karta dokun, ayrıntılar açılsın; düzenleme kaydırmada ve ✏️ düğmesinde.
-• Paylaşılan hedef bitince arkadaşın hemen görür.
-• Takılan pencere ve kaydırma sorunları giderildi.
+• Ortak alışkanlık: arkadaşlarınla birlikte yap, gün herkes işaretleyince biter. Dürt, davet al, "herkes bitirdi" bildirimi gelsin.
+• Yeni ana ekran widget'ları: Bugün, Görevler, Hedefler, Sayaç listesi ve Zamanlayıcı; uygulamayı açmadan işaretle.
+• Hızlı görev: tek dokunuşla ekle, "yarın 14.00 doktor" yazman yeter.
+• Görev formu sadeleşti; ayrıntılar "Daha fazla seçenek"te.
+• Alt görevler kartta açılır, sürükleyip sıralanır.
 </tr-TR>
 <en-US>
-• New Notifications inbox (the bell at the top right): congratulations, reminders and friends' finished goals no longer get lost.
-• Reinstalled the app? Choose "I've used it before" in setup and your data comes back.
-• Tap a card to see its details; edit by swiping or with the ✏️ button.
-• Friends see a finished shared goal right away.
-• Fixed stuck dialogs and swipes.
+• Group habits: do it together with friends; the day is done when everyone ticks it. Nudge, get invites and an "everyone finished" notification.
+• New home-screen widgets: Today, Tasks, Goals, Counter list and Timer; tick things without opening the app.
+• Quick task: add with one tap, just type "tomorrow 2pm dentist".
+• The task form is simpler; details are under "More options".
+• Subtasks open on the card and can be reordered by dragging.
 </en-US>
 <de-DE>
-• Neue Benachrichtigungen (Glocke oben rechts): Glückwünsche, Erinnerungen und geschaffte Ziele von Freunden gehen nicht mehr verloren.
-• App neu installiert? Wähle beim Einrichten „Ich habe Erek schon benutzt“, deine Daten kommen zurück.
-• Tippe auf eine Karte für Details; bearbeiten per Wischen oder ✏️.
-• Freunde sehen ein geschafftes geteiltes Ziel sofort.
-• Hängende Fenster und Wischgesten behoben.
+• Gemeinsame Gewohnheiten: mit Freunden zusammen machen; der Tag ist geschafft, wenn alle abhaken. Anstupsen, Einladungen und „Alle fertig“-Meldung.
+• Neue Startbildschirm-Widgets: Heute, Aufgaben, Ziele, Zähler-Liste und Timer; abhaken ohne die App zu öffnen.
+• Schnelle Aufgabe: mit einem Tipp hinzufügen, „morgen 14 Uhr Zahnarzt“ genügt.
+• Das Aufgabenformular ist einfacher; Details unter „Weitere Optionen“.
+• Unteraufgaben klappen auf der Karte auf und lassen sich per Ziehen sortieren.
 </de-DE>
 ```
 
