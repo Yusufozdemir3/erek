@@ -4,6 +4,8 @@
 // (lockscreenVisibility PRIVATE) yapar, bkz. notifications.ts.
 
 import {
+  buildGroupDoneMessages,
+  buildInviteMessages,
   buildMessages,
   deadTokens,
   firstName,
@@ -12,6 +14,7 @@ import {
   parseRequest,
   pickServiceKey,
   type ExpoTicket,
+  type PreparedFinished,
   type PreparedNudge,
 } from '../../../supabase/functions/send-nudge/logic';
 import { NUDGE_CHANNEL_ID as APP_CHANNEL_ID } from '@/lib/nudgePayload';
@@ -127,5 +130,52 @@ describe('deadTokens / outcome', () => {
   it('başka hatalar ya da boş yanıt hata sayılır', () => {
     expect(outcome(msgs, [other, gone, other])).toBe('error');
     expect(outcome(msgs, [])).toBe('error');
+  });
+});
+
+describe('shared habit pushes', () => {
+  const DAY = '2026-11-01';
+  it('parses invite (habit only) and group_done (needs a day)', () => {
+    expect(parseRequest({ action: 'invite', kind: 'habit', itemId: ITEM })).toEqual({
+      action: 'invite',
+      kind: 'habit',
+      itemId: ITEM,
+    });
+    expect(parseRequest({ action: 'invite', kind: 'goal', itemId: ITEM })).toBeNull();
+    expect(parseRequest({ action: 'group_done', kind: 'habit', itemId: ITEM })).toBeNull();
+    expect(parseRequest({ action: 'group_done', kind: 'habit', itemId: ITEM, day: 'yarin' })).toBeNull();
+    expect(parseRequest({ action: 'group_done', kind: 'habit', itemId: ITEM, day: DAY })).toEqual({
+      action: 'group_done',
+      kind: 'habit',
+      itemId: ITEM,
+      day: DAY,
+    });
+  });
+
+  const finished: PreparedFinished = {
+    status: 'ok',
+    sender_name: 'Mert Kaya',
+    item_title: 'Su iç',
+    recipients: [
+      { recipient: OWNER, item_id: '33333333-3333-4333-8333-333333333333', tokens: [{ token: 'ExponentPushToken[a]', locale: 'tr' }] },
+    ],
+  };
+
+  it('invite: names the sender and opens the founder\'s habit', () => {
+    const [m] = buildInviteMessages(finished, ITEM);
+    expect(m.title).toContain('Mert');
+    expect(m.body).toBe('Su iç');
+    expect(m.data).toEqual({ type: 'invite', kind: 'habit', itemId: ITEM, to: OWNER });
+  });
+
+  it('group_done: each recipient gets THEIR OWN habit id', () => {
+    const [m] = buildGroupDoneMessages(finished, ITEM);
+    expect(m.title).toContain('hepiniz');
+    expect(m.data).toEqual({
+      type: 'group_done',
+      kind: 'habit',
+      itemId: '33333333-3333-4333-8333-333333333333',
+      to: OWNER,
+    });
   });
 });

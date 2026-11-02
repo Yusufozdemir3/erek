@@ -18,6 +18,7 @@ import { restDayOffered } from '@/lib/restDay';
 import { groupDayStatus, groupOfHabit, groupStartYmd, sharedStreak, type GroupDayStatus } from '@/lib/habitGroup';
 import { refreshTaskReminders } from '@/lib/notifications';
 import { useAppData } from '@/ui/AppData';
+import { sendGroupDone } from '@/sync';
 import { refreshWidget } from '@/widget/widgetData';
 import { useTodayData, type HabitView, type SkippedHabitView } from '@/ui/useTodayData';
 import { ReviewCard } from '@/ui/ReviewCard';
@@ -74,7 +75,7 @@ export default function TodayScreen() {
   const { t: tr, lang } = useI18n();
   const styles = makeStyles(colors);
   // Shared so the ＋ menu can default a new task to the viewed day.
-  const { user, selectedDate, setSelectedDate } = useAppData();
+  const { user, selectedDate, setSelectedDate, syncNow } = useAppData();
   const guide = useFeatureGuide('today');
   const { tags } = useTags();
   const timer = useTimer();
@@ -125,6 +126,24 @@ export default function TodayScreen() {
     }
     return map;
   }, [habits, habitGroups]);
+
+  // I just marked the day and that completed my group's day: tell the others. Only MY mark
+  // counts (a friend's arriving later flips nothing here), and the server re-checks everything.
+  const myMarkWas = useRef(new Map<string, boolean>());
+  useEffect(() => {
+    for (const h of habits) {
+      const st = groupStatus.get(h.id);
+      if (!st) continue;
+      const key = `${h.id}:${selectedDate}`;
+      const was = myMarkWas.current.get(key);
+      myMarkWas.current.set(key, h.completed);
+      if (was === false && h.completed && st.allDone && selectedDate === todayDate()) {
+        syncNow()
+          .then(() => sendGroupDone(h.id, selectedDate))
+          .catch(() => {});
+      }
+    }
+  }, [habits, groupStatus, selectedDate, syncNow]);
 
   // The filter narrows only the list; the summary and "empty day" use everything.
   const showTasks = typeFilter !== 'habit';

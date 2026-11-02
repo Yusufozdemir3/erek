@@ -2,7 +2,7 @@
 // what a row says and where a tap opens. Fetching lives in sync/inbox.ts; the
 // server side is get_inbox() (supabase/phase11-inbox.sql).
 
-export type InboxType = 'congrats' | 'finished' | 'nudge';
+export type InboxType = 'congrats' | 'finished' | 'nudge' | 'invite' | 'group_done';
 export type InboxKind = 'habit' | 'goal' | 'task';
 
 export interface InboxItem {
@@ -16,7 +16,7 @@ export interface InboxItem {
   createdAt: string; // ISO
 }
 
-const TYPES: InboxType[] = ['congrats', 'finished', 'nudge'];
+const TYPES: InboxType[] = ['congrats', 'finished', 'nudge', 'invite', 'group_done'];
 const KINDS: InboxKind[] = ['habit', 'goal', 'task'];
 
 // The RPC's rows -> items; anything malformed is dropped, not guessed.
@@ -67,5 +67,9 @@ export function inboxTextKey(item: InboxItem): string {
 // notice about the friend's shared one. Tasks have no screen of their own.
 export function inboxRoute(item: InboxItem): string | null {
   if (item.kind === 'task' || item.itemTitle == null) return null;
-  return item.type === 'finished' ? `/shared-${item.kind}/${item.itemId}` : `/${item.kind}/${item.itemId}`;
+  if (item.type === 'group_done') return `/habit/${item.itemId}?section=group`;
+  // A finished notice and an invitation are about the friend's shared habit.
+  return item.type === 'finished' || item.type === 'invite'
+    ? `/shared-${item.kind}/${item.itemId}`
+    : `/${item.kind}/${item.itemId}`;
 }

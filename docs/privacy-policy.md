@@ -1,7 +1,7 @@
 # Gizlilik Politikası / Privacy Policy
 
 **Erek** ("Uygulama")
-Yürürlük tarihi / Effective date: **7 Ekim 2026 / October 7, 2026**
+Yürürlük tarihi / Effective date: **2 Kasım 2026 / November 2, 2026**
 
 ---
 
@@ -93,9 +93,11 @@ arkadaşa görünür:
   tamamlama geçmişi (serileri ve takvimi). Arkadaşınız bunları değiştiremez;
   hedef bağlantıları ve hatırlatma saatleri paylaşılmaz.
 - **Paylaşılan görev:** başlığı, tarihi/saati, önceliği, tamamlanma durumu ve
-  alt görevleri (başlıkları ve tamamlanma durumları). Arkadaşınız görevi ve
-  alt görevlerini yalnızca tamamlandı olarak işaretleyebilir; hepsi
-  tamamlanınca görev de tamamlanır, biri geri alınınca yeniden açılır.
+  alt görevleri (başlıkları ve tamamlanma durumları). Bir görev en fazla 10
+  arkadaşla paylaşılabilir. Arkadaşlarınız alt görevleri (alışveriş listesi
+  gibi) işaretleyebilir, yeni alt görev ekleyebilir ve silebilir; hangi alt
+  görevi kimin işaretlediği kaydedilir. Görevin kendisini değiştiremezler.
+  Hepsi tamamlanınca görev de tamamlanır, biri geri alınınca yeniden açılır.
   Hatırlatmalar paylaşılmaz.
 - **Paylaşılan hedef:** adı, hedef değeri/birimi, son tarihi, adımları ve
   ilerleme geçmişi (her girişi kimin eklediğiyle birlikte). Arkadaşınız
@@ -103,6 +105,18 @@ arkadaşa görünür:
   hedefinizin geçmişine onun adıyla kaydedilir ve bağlantı kaldırılsa da
   geçmişte kalır. Hedefin kendisini değiştiremez; hatırlatmalar ve bağlı
   alışkanlıklar paylaşılmaz.
+- **Ortak alışkanlık (birlikte yapma):** Bir alışkanlığı bir arkadaşınızla
+  "birlikte yapalım" olarak paylaşırsanız arkadaşınız alışkanlığa **Katıl**
+  diyebilir. Katılınca onun hesabında alışkanlığın kendi kopyası oluşur; kendi
+  işaretleri, serisi ve hatırlatmaları ona aittir. Bir grupta en fazla 5 kişi
+  olur. Alışkanlığın kuralları (ad, tür, sıklık, günlük hedef, birim, bitiş)
+  sizde kalır ve kopyalara yansır. Grubun üyeleri birbirinin **adını, profil
+  fotoğrafını ve o alışkanlık için günlük işaretlerini ile serisini** görür;
+  katılan kişiye bu, Katıl'a basmadan önce uygulamada söylenir. "Sadece
+  görsünler" olarak paylaştığınız arkadaşlar katılamaz, yalnızca geçmişi görür.
+  Paylaşımı kaldırırsanız ya da arkadaşlık biterse üyelik de biter; kopya, üyenin
+  hesabında kendi alışkanlığı olarak kalır. Gruptan istediğiniz an
+  ayrılabilirsiniz.
 
 Paylaşımı ya da bağlantıyı istediğiniz an kaldırabilirsiniz; bağlantı
 kaldırılınca aranızdaki tüm paylaşımlar da sona erer ve paylaşılan veriler,
@@ -144,6 +158,19 @@ düğmesine bastığında telefonunuza bir bildirim gelir. Bunun için:
   ilk bağlantıda); aynı telefonda başka biri giriş yaparsa anahtar onun hesabına
   geçer. Hesabınızı sildiğinizde anahtarlarınız, hatırlatma kayıtlarınız ve
   sessize alma tercihleriniz de silinir.
+
+**Diğer arkadaş bildirimleri (isteğe bağlı, yalnızca hesapla):** Aynı
+yöntemle şu bildirimler de gidebilir: paylaştığınız bir hedef ya da alışkanlık
+bittiğinde arkadaşınıza "bitirdi" bildirimi; arkadaşınız sizi tebrik ederse
+tebrik bildirimi; bir alışkanlığı "birlikte yapalım" olarak paylaşınca davet
+bildirimi; ortak alışkanlığın herkesi o günü tamamlayınca "herkes bitirdi"
+bildirimi. Metin yalnızca gönderenin adını ve öğenin adını içerir ve yukarıda
+anılan bildirim hizmetlerinden geçer. Bu bildirimlerin kaydı (kimden, kime, hangi
+öğe, hangi gün) tekrarı önlemek ve alıcıya uygulamadaki **Bildirimler kutusunda**
+son 30 günü gösterebilmek için tutulur; kutuyu yalnızca alıcı görür, sessize
+aldığınız ya da bağlantısını kaldırdığınız kişinin bildirimleri görünmez.
+Hesabınızı sildiğinizde bu kayıtlar da silinir. Bildirimler ayarından tümünü
+kapatabilirsiniz.
 
 ### 4. Reklamlar
 
@@ -341,14 +368,27 @@ you choose:
   completion history (streaks and calendar). Your friend can't change any of
   it; goal links and reminder times are not shared.
 - **A shared task:** its title, date/time, priority, completion state and
-  subtasks (their titles and completion state). Your friend can only mark the
-  task and its subtasks as done; the task completes when all subtasks are done
-  and reopens when one is unticked. Reminders are not shared.
+  subtasks (their titles and completion state). A task can be shared with up to
+  10 friends. They can tick subtasks (like a shopping list), add new subtasks
+  and remove them; who ticked which subtask is recorded. They can't change the
+  task itself. The task completes when all subtasks are done and reopens when
+  one is unticked. Reminders are not shared.
 - **A shared goal:** its name, target/unit, deadline, milestones and progress
   history (including who added each entry). Your friend can add their own
   progress to a numeric goal; those entries are recorded in your goal's history
   under their name and stay there even if the connection is removed. They can't
   change the goal itself; reminders and linked habits are not shared.
+- **A group habit (doing it together):** if you share a habit with a friend as
+  "let's do it together", your friend can tap **Join**. Joining creates the
+  friend's own copy of the habit in their account; their check-ins, streak and
+  reminders belong to them. A group has up to 5 people. The habit's rules (name,
+  type, frequency, daily target, unit, end date) stay with you and carry over to
+  the copies. Members of a group see each other's **name, profile photo, and
+  daily check-ins and streak for that habit**; the app tells the person
+  joining this before they tap Join. Friends you share with as "just watch"
+  can't join and only see the history. If you stop sharing or the connection
+  ends, the membership ends too; the copy stays in the member's account as
+  their own habit. You can leave a group at any time.
 
 You can stop sharing or remove a connection at any time; removing a connection
 ends everything shared between you, and your friend's app removes the shared
@@ -389,6 +429,19 @@ notification. For this:
   connection if you're offline); if someone else signs in on the same phone, the
   token moves to their account. Deleting your account also deletes your tokens,
   reminder records and mute settings.
+
+**Other friend notifications (optional, account only):** the same way, these
+can be sent: a "finished" notification to a friend when a goal or habit you
+shared is completed; a congratulation if your friend congratulates you; an
+invitation when you share a habit as "let's do it together"; and an "everyone
+finished" notification when all members of a group habit have completed a day.
+The text contains only the sender's name and the item's name and passes only
+through the delivery services above. A record of these notifications (from
+whom, to whom, which item, which day) is kept to prevent repeats and to show the
+recipient their last 30 days in the in-app **Notifications inbox**; only the
+recipient sees the inbox, and notifications from someone you muted or are no
+longer connected to are hidden. Deleting your account deletes these records
+too. You can turn all of them off in the Notifications settings.
 
 ### 4. Advertising
 

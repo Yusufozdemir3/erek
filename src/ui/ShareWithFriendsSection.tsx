@@ -32,6 +32,13 @@ export interface ShareWithFriendsProps {
   notSyncedCode: SharingErrorCode;
   // Shown between the hint and the friend chips (the habit card's mode switch).
   header?: React.ReactNode;
+  // Habits: each friend is shared in ONE mode. Only the friends in `active` mode show ticked;
+  // one in the other mode is switched over by tapping (not unshared).
+  modes?: {
+    active: boolean;
+    load: (id: string) => Promise<Record<string, boolean>>;
+    assign: (id: string, friendId: string, together: boolean) => Promise<void>;
+  };
 }
 
 export function ShareWithFriendsSection({
@@ -42,6 +49,7 @@ export function ShareWithFriendsSection({
   unshare,
   notSyncedCode,
   header,
+  modes,
 }: ShareWithFriendsProps) {
   const { colors } = useTheme();
   const { t } = useI18n();
@@ -51,6 +59,7 @@ export function ShareWithFriendsSection({
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [sharedWith, setSharedWith] = useState<Set<string>>(new Set());
+  const [modeMap, setModeMap] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -62,11 +71,12 @@ export function ShareWithFriendsSection({
       getCachedFriends().then((c) => {
         if (active && c.length > 0) setFriends(c);
       });
-      Promise.all([listConnections(), listShares(entityId)])
-        .then(([list, shares]) => {
+      Promise.all([listConnections(), listShares(entityId), modes ? modes.load(entityId) : Promise.resolve({})])
+        .then(([list, shares, modeRows]) => {
           if (!active) return;
           setFriends(list);
           setSharedWith(new Set(shares));
+          setModeMap(modeRows);
           setOffline(false);
         })
         .catch(() => {
@@ -78,16 +88,24 @@ export function ShareWithFriendsSection({
       return () => {
         active = false;
       };
-    }, [signedIn, entityId, listShares])
+    }, [signedIn, entityId, listShares, modes?.load])
   );
 
   if (!signedIn) return null;
 
   const toggle = async (friend: Friend) => {
     if (busyId) return;
-    const on = sharedWith.has(friend.id);
+    const shared = sharedWith.has(friend.id);
+    const mode = modeMap[friend.id] ?? true;
+    const on = shared && (!modes || mode === modes.active);
     setBusyId(friend.id);
     try {
+      if (shared && modes && mode !== modes.active) {
+        // Already shared in the other mode: switch it, don't unshare.
+        await modes.assign(entityId, friend.id, modes.active);
+        setModeMap((prev) => ({ ...prev, [friend.id]: modes.active }));
+        return;
+      }
       if (on) {
         await unshare(entityId, friend.id);
       } else {
@@ -98,6 +116,10 @@ export function ShareWithFriendsSection({
           if (toSharingError(e).code !== notSyncedCode) throw e;
           await syncNow();
           await share(entityId, friend.id);
+        }
+        if (modes) {
+          await modes.assign(entityId, friend.id, modes.active);
+          setModeMap((prev) => ({ ...prev, [friend.id]: modes.active }));
         }
       }
       setSharedWith((prev) => {
@@ -130,7 +152,9 @@ export function ShareWithFriendsSection({
       ) : (
         <View style={styles.chips}>
           {friends.map((f) => {
-            const on = sharedWith.has(f.id);
+            const shared = sharedWith.has(f.id);
+            const other = !!modes && shared && (modeMap[f.id] ?? true) !== modes.active;
+            const on = shared && !other;
             const name = f.displayName ?? t('friends.unknownName');
             return (
               <Pressable
@@ -145,6 +169,7 @@ export function ShareWithFriendsSection({
                 <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>
                   {on ? '✓ ' : ''}
                   {name}
+                  {other ? ` · ${t(modes!.active ? 'group.modeNowView' : 'group.modeNowTogether')}` : ''}
                 </Text>
               </Pressable>
             );

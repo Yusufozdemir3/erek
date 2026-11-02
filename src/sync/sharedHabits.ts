@@ -113,23 +113,31 @@ export async function unshareHabit(habitId: string, friendId: string): Promise<v
   }
 }
 
-// "Just watch" (false) or "do it together" (true) for every share of this habit.
-export async function setHabitShareMode(habitId: string, together: boolean): Promise<void> {
+// "Just watch" (false) or "do it together" (true) for one friend's share (no friend = all of them).
+export async function setHabitShareMode(habitId: string, together: boolean, friendId?: string): Promise<void> {
   try {
-    const { error } = await client().rpc('set_habit_share_mode', { p_habit_id: habitId, p_together: together });
+    const { error } = await client().rpc('set_habit_share_mode', {
+      p_habit_id: habitId,
+      p_together: together,
+      p_friend: friendId ?? null,
+    });
     if (error) throw error;
   } catch (e) {
     throw toSharingError(e);
   }
 }
 
-// The mode of this habit's shares; null when it isn't shared with anyone.
-export async function getHabitShareMode(habitId: string): Promise<boolean | null> {
+// friend uid -> true = "do it together", false = "just watch".
+export async function listHabitShareModes(habitId: string): Promise<Record<string, boolean>> {
   try {
-    const { data, error } = await client().from('habit_shares').select('together').eq('habit_id', habitId);
+    const { data, error } = await client()
+      .from('habit_shares')
+      .select('shared_with_id, together')
+      .eq('habit_id', habitId);
     if (error) throw error;
-    if (!data || data.length === 0) return null;
-    return data.some((r: any) => r.together !== false);
+    const out: Record<string, boolean> = {};
+    for (const r of data ?? []) out[(r as any).shared_with_id as string] = (r as any).together !== false;
+    return out;
   } catch (e) {
     throw toSharingError(e);
   }

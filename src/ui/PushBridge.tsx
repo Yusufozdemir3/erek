@@ -57,7 +57,7 @@ export function PushBridge() {
         const route = celebrationRoute(celebration);
         // A finished notice opens the friend's item (from the cached shared
         // lists, so no local check); a congratulation needs my own copy.
-        const mine = celebration.type === 'congrats';
+        const mine = celebration.type === 'congrats' || celebration.type === 'group_done';
         const exists =
           !mine || (celebration.kind === 'habit' ? habitRepo.getById(celebration.itemId) : goalRepo.getById(celebration.itemId));
         if (route && exists) router.push(route as Href);

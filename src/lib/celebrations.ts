@@ -9,7 +9,7 @@ import type { Goal, Habit } from '@/types/models';
 export type CelebrationKind = 'habit' | 'goal' | 'task';
 
 export interface CelebrationTarget {
-  type: 'finished' | 'congrats';
+  type: 'finished' | 'congrats' | 'invite' | 'group_done';
   kind: CelebrationKind;
   itemId: string;
 }
@@ -18,7 +18,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isCelebrationData(data: unknown): boolean {
   const type = data && typeof data === 'object' ? (data as Record<string, unknown>).type : null;
-  return type === 'finished' || type === 'congrats';
+  return type === 'finished' || type === 'congrats' || type === 'invite' || type === 'group_done';
 }
 
 // Same trust rules as a nudge tap (lib/nudgePayload.ts): a well-formed payload
@@ -31,12 +31,18 @@ export function parseCelebrationData(data: unknown, recipientUid: string | null)
   if (typeof d.itemId !== 'string' || !UUID.test(d.itemId)) return null;
   // "Finished" notices only exist for habits and goals.
   if (d.type === 'finished' && d.kind === 'task') return null;
-  return { type: d.type as 'finished' | 'congrats', kind: d.kind, itemId: d.itemId };
+  // Shared-habit pushes are about habits only.
+  if ((d.type === 'invite' || d.type === 'group_done') && d.kind !== 'habit') return null;
+  return { type: d.type as CelebrationTarget['type'], kind: d.kind, itemId: d.itemId };
 }
 
 // Where a tapped push opens: the friend's finished item (they can congratulate
 // there), or my own item when somebody congratulated me.
 export function celebrationRoute(target: CelebrationTarget): string | null {
+  // An invitation opens the founder's shared habit (where Join is); "everyone finished" opens
+  // my own copy at its group section.
+  if (target.type === 'invite') return `/shared-habit/${target.itemId}`;
+  if (target.type === 'group_done') return `/habit/${target.itemId}?section=group`;
   if (target.type === 'finished') {
     return target.kind === 'task' ? null : `/shared-${target.kind}/${target.itemId}`;
   }

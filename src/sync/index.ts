@@ -26,13 +26,13 @@ export {
   type Invite,
 } from './friends';
 export { SharingError, sharingErrorKey, toSharingError, type SharingErrorCode } from './sharingErrors';
-export { sendCongrats, lastCelebrationStatus, announceFinishedShares, hasPendingFinished } from './celebrations';
+export { sendCongrats, lastCelebrationStatus, announceFinishedShares, hasPendingFinished, sendHabitInvite, sendGroupDone } from './celebrations';
 export { sendNudge, getNudgePrefs, setNudgeMute, setNudgesEnabled, type NudgePrefs } from './nudges';
 export { getInbox, getCachedInbox, getInboxSeenAt, setInboxSeenAt } from './inbox';
 export {
   shareHabit,
   setHabitShareMode,
-  getHabitShareMode,
+  listHabitShareModes,
   unshareHabit,
   listHabitShares,
   getSharedHabits,

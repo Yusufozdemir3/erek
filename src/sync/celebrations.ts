@@ -48,6 +48,17 @@ export async function sendCongrats(kind: CelebrationKind, itemId: string): Promi
   return congratsOutcome(await call({ action: 'congrats', kind, itemId }));
 }
 
+// The owner invites the friends a habit is shared with "to do together" (the server sends one
+// push per friend, once). Fire-and-forget: the invite also shows in their shared list.
+export async function sendHabitInvite(habitId: string): Promise<void> {
+  await call({ action: 'invite', kind: 'habit', itemId: habitId });
+}
+
+// I was the last of my group to mark `day`: tell the others. The server checks that everyone did.
+export async function sendGroupDone(habitId: string, day: string): Promise<void> {
+  await call({ action: 'group_done', kind: 'habit', itemId: habitId, day });
+}
+
 // v2: an earlier build could record items as announced after a refused request.
 const ANNOUNCED_KEY = 'celebrations:announced:v2';
 const KEEP = 200;

@@ -18,6 +18,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   buildCongratsMessages,
   buildFinishedMessages,
+  buildGroupDoneMessages,
+  buildInviteMessages,
   buildMessages,
   deadTokens,
   outcome,
@@ -62,7 +64,24 @@ Deno.serve(async (req) => {
   if (!parsed) return reply('bad_request', 400);
 
   let messages: ExpoMessage[];
-  if (parsed.action === 'finished') {
+  if (parsed.action === 'invite' || parsed.action === 'group_done') {
+    // Shared habits: the owner invites the friends it is shared with "to do together", or
+    // the last member to mark today tells the others. The server verifies both.
+    const group = parsed.action === 'group_done';
+    const { data, error } = await admin.rpc(
+      group ? 'prepare_group_done' : 'prepare_invite',
+      group
+        ? { p_sender: user.id, p_item_id: parsed.itemId, p_day: parsed.day }
+        : { p_owner: user.id, p_item_id: parsed.itemId }
+    );
+    if (error || !data) {
+      console.error('send-nudge: prepare failed', parsed.action, error?.code, error?.message);
+      return reply('error', 500);
+    }
+    const prep = data as PreparedFinished;
+    if (prep.status !== 'ok') return reply(prep.status);
+    messages = group ? buildGroupDoneMessages(prep, parsed.itemId) : buildInviteMessages(prep, parsed.itemId);
+  } else if (parsed.action === 'finished') {
     // The caller is the item's OWNER telling the people it is shared with.
     const { data, error } = await admin.rpc('prepare_finished', {
       p_owner: user.id,

@@ -20,6 +20,8 @@ const ICONS: Record<InboxItem['type'], keyof typeof Feather.glyphMap> = {
   congrats: 'award',
   finished: 'flag',
   nudge: 'bell',
+  invite: 'user-plus',
+  group_done: 'users',
 };
 
 export default function InboxScreen() {

@@ -6,7 +6,9 @@ export type NudgeKind = 'habit' | 'goal';
 // What a request asks for: a reminder to the item's owner (default), the
 // owner telling the people it is shared with that it is finished, or a friend
 // congratulating the owner of a finished item (goals, habits and tasks).
-export type Action = 'nudge' | 'finished' | 'congrats';
+// Shared habits add two more: the owner inviting the friends a habit is shared
+// "to do together" with, and the last member to mark a day telling the others.
+export type Action = 'nudge' | 'finished' | 'congrats' | 'invite' | 'group_done';
 export type CelebrationKind = 'habit' | 'goal' | 'task';
 export type Locale = 'tr' | 'en' | 'de';
 
@@ -26,14 +28,15 @@ export interface ExpoMessage {
   priority: 'high';
   channelId: string;
   ttl: number;
-  data: { type: 'nudge' | 'finished' | 'congrats'; kind: CelebrationKind; itemId: string; to: string };
+  data: { type: 'nudge' | 'finished' | 'congrats' | 'invite' | 'group_done'; kind: CelebrationKind; itemId: string; to: string };
 }
 
 export interface PreparedFinished {
   status: string;
   sender_name?: string | null;
   item_title?: string | null;
-  recipients?: { recipient: string; tokens: { token: string; locale: Locale }[] }[];
+  // item_id: the recipient's OWN habit (group_done); otherwise the request's item.
+  recipients?: { recipient: string; item_id?: string; tokens: { token: string; locale: Locale }[] }[];
 }
 
 export interface ExpoTicket {
@@ -61,7 +64,10 @@ export interface ParsedRequest {
   action: Action;
   kind: CelebrationKind;
   itemId: string;
+  day?: string; // group_done: the sender's local "YYYY-MM-DD"
 }
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function parseRequest(body: unknown): ParsedRequest | null {
   if (!body || typeof body !== 'object') return null;
@@ -69,7 +75,7 @@ export function parseRequest(body: unknown): ParsedRequest | null {
   const action: Action | null =
     b.action === undefined || b.action === 'nudge'
       ? 'nudge'
-      : b.action === 'finished' || b.action === 'congrats'
+      : b.action === 'finished' || b.action === 'congrats' || b.action === 'invite' || b.action === 'group_done'
         ? b.action
         : null;
   if (!action) return null;
@@ -78,7 +84,14 @@ export function parseRequest(body: unknown): ParsedRequest | null {
   const allowed: CelebrationKind[] = action === 'congrats' ? ['habit', 'goal', 'task'] : ['habit', 'goal'];
   const kind = allowed.find((k) => k === b.kind) ?? null;
   const itemId = typeof b.itemId === 'string' && UUID.test(b.itemId) ? b.itemId : null;
-  return kind && itemId ? { action, kind, itemId } : null;
+  if (!kind || !itemId) return null;
+  if (action === 'invite' || action === 'group_done') {
+    if (kind !== 'habit') return null;
+    if (action === 'group_done') {
+      return typeof b.day === 'string' && DAY.test(b.day) ? { action, kind, itemId, day: b.day } : null;
+    }
+  }
+  return { action, kind, itemId };
 }
 
 // Title = WHO reminded you; body = WHAT (the item's title). On a locked screen
@@ -109,6 +122,17 @@ export function firstName(displayName: string | null | undefined): string | null
   return first ? first.slice(0, 40) : null;
 }
 
+const INVITE_TITLE: Record<Locale, (n: string | null) => string> = {
+  tr: (n) => `${n ?? 'Bir arkadaşın'} seni ortak bir alışkanlığa davet etti`,
+  en: (n) => `${n ?? 'A friend'} invited you to do a habit together`,
+  de: (n) => `${n ?? 'Ein Freund'} lädt dich zu einer gemeinsamen Gewohnheit ein`,
+};
+const GROUP_DONE_TITLE: Record<Locale, (n: string | null) => string> = {
+  tr: () => 'Bugün hepiniz tamamladınız 🎉',
+  en: () => 'You all finished today 🎉',
+  de: () => 'Ihr habt heute alle geschafft 🎉',
+};
+
 // A NEW id whenever the channel's settings change: Android never lets an app
 // modify a channel that already exists on the phone ('friend-nudge' was the
 // first version, without the lock-screen setting).
@@ -131,6 +155,20 @@ export function buildCongratsMessages(prep: PreparedNudge, kind: CelebrationKind
 export function buildFinishedMessages(prep: PreparedFinished, kind: NudgeKind, itemId: string): ExpoMessage[] {
   return (prep.recipients ?? []).flatMap((r) =>
     messagesFor('finished', FINISHED_TITLE, prep, r.recipient, r.tokens, kind, itemId)
+  );
+}
+
+// Invitation to the people a habit is shared with "to do together".
+export function buildInviteMessages(prep: PreparedFinished, itemId: string): ExpoMessage[] {
+  return (prep.recipients ?? []).flatMap((r) =>
+    messagesFor('invite', INVITE_TITLE, prep, r.recipient, r.tokens, 'habit', itemId)
+  );
+}
+
+// "Everyone finished today": each recipient's push opens THEIR OWN habit.
+export function buildGroupDoneMessages(prep: PreparedFinished, itemId: string): ExpoMessage[] {
+  return (prep.recipients ?? []).flatMap((r) =>
+    messagesFor('group_done', GROUP_DONE_TITLE, prep, r.recipient, r.tokens, 'habit', r.item_id ?? itemId)
   );
 }
 
